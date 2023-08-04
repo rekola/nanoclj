@@ -7,9 +7,6 @@ endif()
 
 add_definitions(-DNANOCLJ_STANDALONE)
 
-# Uncomment to enable Clang Address Sanitizer
-#set (CMAKE_C_FLAGS "-fsanitize=address -O1 -fno-omit-frame-pointer")
-
 add_compile_options(-Wall -O3 -march=native)
 
 if(DEFINED ENV{WARN_ERROR_BUILD})
@@ -17,8 +14,8 @@ if(DEFINED ENV{WARN_ERROR_BUILD})
 endif()
 
 set(SOURCE_FILES
-    nanoclj.c
-    linenoise.c
+    src/nanoclj.c
+    src/linenoise.c
     )
 
 add_executable(nanoclj ${SOURCE_FILES})
@@ -33,12 +30,12 @@ if(UTF8PROC_LIBRARY)
   target_link_libraries(nanoclj utf8proc)
 endif()
   
-configure_file(init.clj init.clj @ONLY)
-configure_file(bootstrap.clj bootstrap.clj @ONLY)
-configure_file(clojure.core.clj clojure.core.clj @ONLY)
-configure_file(clojure.lang.io.clj clojure.lang.io.clj @ONLY)
-configure_file(clojure.repl.clj clojure.repl.clj @ONLY)
-configure_file(clojure.string.clj clojure.string.clj @ONLY)
-configure_file(Integer.clj Integer.clj @ONLY)
-configure_file(Long.clj Long.clj @ONLY)
-configure_file(Math.clj Math.clj @ONLY)
+configure_file(lib/init.clj init.clj @ONLY)
+configure_file(lib/bootstrap.clj bootstrap.clj @ONLY)
+configure_file(lib/clojure.core.clj clojure.core.clj @ONLY)
+configure_file(lib/clojure.lang.io.clj clojure.lang.io.clj @ONLY)
+configure_file(lib/clojure.repl.clj clojure.repl.clj @ONLY)
+configure_file(lib/clojure.string.clj clojure.string.clj @ONLY)
+configure_file(lib/Integer.clj Integer.clj @ONLY)
+configure_file(lib/Long.clj Long.clj @ONLY)
+configure_file(lib/sparkline.clj sparkline.clj @ONLY)
