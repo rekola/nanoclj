@@ -1,0 +1,29 @@
+# Authors
+
+This file attempts to preserve names of authors mentioned in various
+files taken from
+[https://sourceforge.net/projects/tinyscheme/](https://sourceforge.net/projects/tinyscheme/)
+as of revision [125](https://sourceforge.net/p/tinyscheme/code/125/tree/)
+
+---
+
+_initially it was Mini-Scheme_
+
+Coded by Atsushi Moriwaki (11/5/1989)
+
+This version has been modified by R.C. Secrist.
+
+Mini-Scheme is now maintained by Akira KIDA.
+
+_from here it was Tiny-Scheme_
+
+Copyright (c) 2000, Dimitrios Souflis (commits in sourceforge since 1999)
+
+Kevin Cozens (commits in sourceforge since 2007, chief maintainer as of 2020)
+
+Jonathan S. Shapiro (mentioned as co-author at sourceforge)
+
+Tom Breton (significant amount of commits at sourceforge)
+
+_And other people, please kindly refer to sourceforge commit history._
+
