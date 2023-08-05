@@ -1,6 +1,10 @@
 #ifndef _MURMUR3_H_
 #define _MURMUR3_H_
 
+/* MurmurHash3 was written by Austin Appleby, and is placed in the public
+   domain. The author hereby disclaims copyright to this source code.
+*/
+
 static inline uint32_t murmur3_rotl32(uint32_t x, int_fast8_t r) {
   return (x << r) | (x >> (32 - r));
 }
