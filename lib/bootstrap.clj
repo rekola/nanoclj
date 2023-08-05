@@ -7,8 +7,6 @@
 (def force first)
 (def car first)
 (def cdr rest)
-(def key first)
-(def val rest)
 
 (def cadr (fn [x] (car (cdr x))))
 (def caddr (fn [x] (car (cdr (cdr x)))))

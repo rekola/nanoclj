@@ -198,18 +198,32 @@
 
 ; Maps & Sets
 
+(def key first)
+(def val rest)
+
+(defn keys
+  "Returns the values in the map" 
+  [coll] (map (fn [e] (key e)) coll))
+
+(defn vals
+  "Returns the values in the map" 
+  [coll] (map (fn [e] (val e)) coll))
+
 (def assoc
-  "Add the keyvals in to the map coll"
-  (fn [coll & keyvals]
-    ((fn [coll keyvals] 
-      (if (empty? keyvals)
-        coll
-        (recur (conj- coll
-                      (clojure.lang.MapEntry
-                       (first keyvals)
-                       (first (rest keyvals))
-                       ))
-               (rest (rest keyvals))))) coll keyvals)))
+  "Adds the keys and values to the map"
+  (fn [map key val & kvs]
+    (let [new-map (conj- (or map {}) (clojure.lang.MapEntry key val))]
+      (if kvs
+        (if (next kvs)
+          (recur new-map (first kvs) (second kvs) (nnext kvs))
+          (throw "Value missing for key"))
+        new-map))))
+
+(defn assoc-in
+  "Associates a value in nested data structure."
+  [m [k & ks] v] (if ks
+                   (assoc m k (assoc-in (get m k) ks v))
+                   (assoc m k v)))
   
 (def dissoc
   "Returns new map that does not contain the specified key. Very inefficient."
@@ -468,3 +482,4 @@
   ([f g] (fn [& args] (f (apply g args))))
   ([f g h]) (fn [& args] (f (g (apply h args))))
   )
+
