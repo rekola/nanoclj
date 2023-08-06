@@ -21,10 +21,18 @@
 (def keyword clojure.lang.Keyword)
 (def char java.lang.Character)
 (def short java.lang.Integer)
-(def int java.lang.Integer)
-(def long java.lang.Long)
 (def double java.lang.Double)
 (def float java.lang.Double)
+
+; Casts argument to int
+(def int java.lang.Integer)
+
+; Casts argument to long (or int if it is sufficient)
+(def long java.lang.Long)
+
+(defn num
+  "Casts argument to number"
+  [x] (if (number? x) x (long x)))
 
 (defn vec [coll] (reduce conj- [] coll))
 (defn set [coll] (reduce conj- #() coll))
