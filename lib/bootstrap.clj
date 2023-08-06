@@ -102,7 +102,9 @@
 
 (def number?
   "Returns true if the argument is a number"
-  (fn [x] (is-any-of? (type x) java.lang.Integer java.lang.Long clojure.lang.BigInt java.lang.Double)))
+  (fn [x] (is-any-of? (type x)
+                      java.lang.Integer java.lang.Long java.lang.Double
+                      clojure.lang.BigInt clojure.lang.Ratio)))
 
 (def string? (fn [x] (instance? java.lang.String x)))
 (def symbol? (fn [x] (instance? clojure.lang.Symbol x)))
