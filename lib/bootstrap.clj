@@ -28,33 +28,33 @@
 
 (def initialize-type-
   "Creates a symbol for the argument type"
-  (fn [t] (intern root ((type 'first) t) t)))
+  (fn [t doc] (intern root ((type 'first) t doc) t)))
 
 ; Create symbols for all types
 
-(initialize-type- (type '()))
-(initialize-type- (type true))
-(initialize-type- (type (type 1)))
-(initialize-type- (type '(1)))
-(initialize-type- (type 1))
-(initialize-type- (type 2147483648))
-(initialize-type- (type 1.1))
-(initialize-type- (type ""))
-(initialize-type- (type 'type))
-(initialize-type- (type \a))
-(initialize-type- (type *in*))
-(initialize-type- (type *out*))
-(initialize-type- (type :else))
-(initialize-type- (type initialize-type-))
-(initialize-type- (type type))
-(initialize-type- (type *ns*))
-(initialize-type- (type []))
-(initialize-type- (type (lazy-seq '())))
-(initialize-type- (type {}))
-(initialize-type- (type #{}))
-(initialize-type- (type (rest [ 1 2 ])))
-(initialize-type- (type Math/sin))
-(initialize-type- (type (divide 1 2)))
+(initialize-type- (type '()) "An empty list")
+(initialize-type- (type true) "Constructs a boolean")
+(initialize-type- (type (type 1)) "Constructs a type")
+(initialize-type- (type '(1)) "Constructs a cons cell")
+(initialize-type- (type 1) "Casts argument to int")
+(initialize-type- (type 2147483648) "Casts argument to a long (or int if it is sufficient)")
+(initialize-type- (type 1.1) "Casts argument to a double")
+(initialize-type- (type "") "Casts argument to a string")
+(initialize-type- (type 'type) "Casts argument to a symbol")
+(initialize-type- (type \a) "Casts argument to a character")
+(initialize-type- (type *in*) "Constructs a reader")
+(initialize-type- (type *out*) "Constructs a writer")
+(initialize-type- (type :else) "Constructs a keyword")
+(initialize-type- (type initialize-type-) "Constructs a function closure")
+(initialize-type- (type type) "Constructs a procedure")
+(initialize-type- (type *ns*) "Constructs a namespace")
+(initialize-type- (type []) "Constructs a vector")
+(initialize-type- (type (lazy-seq '())) "Constructs a delay")
+(initialize-type- (type {}) "Constructs an array-map")
+(initialize-type- (type #{}) "Constructs a sorted-set")
+(initialize-type- (type (rest [ 1 2 ])) "Constructs a sequence")
+(initialize-type- (type Math/sin) "Constructs a foreign function")
+(initialize-type- (type (divide 1 2)) "Constructs a ratio")
 ; (initialize-type- (type (first {1 1})))
 
 (def clojure.lang.BigInt (scheme.lang.Type 26))
@@ -69,6 +69,7 @@
 (def seq scheme.lang.Seq)
 (def boolean java.lang.Boolean)
 (def char-array scheme.lang.CharArray)
+(def map-entry clojure.lang.MapEntry)
 
 (def nil?
   "Returns true if the argument is nil"
@@ -201,7 +202,7 @@
 
 ; Implement type and predicate for macros now that we have a macro
 
-(initialize-type- (type quasiquote))
+(initialize-type- (type quasiquote) "Constructs a macro")
 
 (def macro?
   "Returns true if the argument is a macro"
@@ -317,11 +318,15 @@
 
 (defn -
   "Subtracts the arguments"
-  [& args] (reduce minus args))
+  ([x] (minus 0 x))
+  ([x y] (minus x y))
+  ([x y & more] (reduce minus (minus x y) more)))
 
 (defn /
   "Divides the arguments"
-  [& args] (reduce divide args))
+  ([x] (divide 1 x))
+  ([x y] (divide x y))
+  ([x y & more] (reduce divide (divide x y) more)))
 
 (defn bit-or [& args] (reduce bit-or- args))
 (defn bit-and [& args] (reduce bit-and- args))
@@ -403,7 +408,7 @@
               (if (empty? seq)
                 val
                 (recur (conj- val
-                              (clojure.lang.MapEntry
+                              (map-entry
                                (first seq)
                                (first (rest seq))))
                        (rest (rest seq))
