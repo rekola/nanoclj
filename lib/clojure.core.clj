@@ -191,11 +191,11 @@
              ))
                                        
 (defn doall [seq] (if (empty? seq) '() (cons (first seq) (doall (rest seq)))))
-(defn dorun [seq] (if (empty? seq) nil (dorun (rest seq))))
+(defn dorun [seq] (if (empty? seq) nil (recur (rest seq))))
 
 (defn take [n coll] (if (or (<= n 0) (empty? coll)) '() (cons (first coll) (lazy-seq (take (dec n) (rest coll))))))
 
-(defn drop [n coll] (if (zero? n) coll (drop (dec n) (rest coll))))
+(defn drop [n coll] (if (zero? n) coll (recur (dec n) (rest coll))))
 
 (def map
   "Returns a lazy sequence with each element mapped using f"
@@ -217,9 +217,10 @@
   "Returns the values in the map" 
   [coll] (map (fn [e] (val e)) coll))
 
-(def assoc
+(defn assoc
   "Adds the keys and values to the map"
-  (fn [map key val & kvs]
+  ([map key val] (conj- (or map {}) (map-entry key val)))
+  ([map key val & kvs]
     (let [new-map (conj- (or map {}) (map-entry key val))]
       (if kvs
         (if (next kvs)
