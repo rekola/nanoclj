@@ -228,11 +228,15 @@
         new-map))))
 
 (defn assoc-in
-  "Associates a value in nested data structure."
+  "Associates a value in nested data structure"
   [m [k & ks] v] (if ks
                    (assoc m k (assoc-in (get m k) ks v))
                    (assoc m k v)))
-  
+
+(defn get-in
+  "Get a value in a nested data structure"
+  ([m ks] (reduce get m ks)))
+
 (def dissoc
   "Returns new map that does not contain the specified key. Very inefficient."
   (fn
