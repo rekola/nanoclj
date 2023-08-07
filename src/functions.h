@@ -3,6 +3,13 @@
 
 #include <sys/utsname.h>
 #include <stdint.h>
+#include <pwd.h>
+#include <unistd.h>
+
+#ifdef WIN32
+#include <direct.h>
+#define getcwd _getcwd
+#endif
 
 /* Thread */
 
@@ -63,31 +70,97 @@ static clj_value system_getenv(scheme * sc, clj_value args) {
 }
 
 static clj_value system_getProperty(scheme * sc, clj_value args) {
+  const char *user_home = NULL, *user_name = NULL;
+  const char *os_name = NULL, *os_version = NULL, *os_arch = NULL;
+
+#ifndef _WIN32
   struct utsname buf;
-  if (uname(&buf) != 0) {
+  if (uname(&buf) == 0) {
+    os_name = buf.sysname;
+    os_version = buf.version;
+    os_arch = buf.machine;
+  }
+  struct passwd pwd;
+  struct passwd *result;
+    
+  size_t pw_bufsize = sysconf(_SC_GETPW_R_SIZE_MAX);
+  if (pw_bufsize == -1) pw_bufsize = 16384;
+  
+  char * pw_buf = malloc(pw_bufsize);
+  if (!pw_buf) {
     return mk_nil();
   }
+   
+  getpwuid_r(getuid(), &pwd, pw_buf, pw_bufsize, &result);
+  if (result) {
+    user_name = result->pw_name;
+    user_home = result->pw_dir;
+  }
+#endif
+
+  char cwd_buf[FILENAME_MAX];
+  const char * user_dir = getcwd(cwd_buf, FILENAME_MAX);
+
+#ifdef _WIN32
+  const char * file_separator = "\\";
+  const char * path_separator = ";";
+  const char * line_separator = "\r\n";
+#else
+  const char * file_separator = "/";
+  const char * path_separator = ":";
+  const char * line_separator = "\n";
+#endif
+
+  clj_value r;
   if (args.as_uint64 == sc->EMPTY.as_uint64) {
     clj_value l = sc->EMPTY;
-    l = cons(sc, mk_string(sc, buf.sysname), l);
+    l = cons(sc, mk_string(sc, user_name), l);
+    l = cons(sc, mk_string(sc, "user.name"), l);
+    l = cons(sc, mk_string(sc, line_separator), l);
+    l = cons(sc, mk_string(sc, "line.separator"), l);
+    l = cons(sc, mk_string(sc, file_separator), l);
+    l = cons(sc, mk_string(sc, "file.separator"), l);
+    l = cons(sc, mk_string(sc, path_separator), l);
+    l = cons(sc, mk_string(sc, "path.separator"), l);
+    l = cons(sc, mk_string(sc, user_home), l);
+    l = cons(sc, mk_string(sc, "user.home"), l);
+    l = cons(sc, mk_string(sc, user_dir), l);
+    l = cons(sc, mk_string(sc, "user.dir"), l);
+    l = cons(sc, mk_string(sc, os_name), l);
     l = cons(sc, mk_string(sc, "os.name"), l);
-    l = cons(sc, mk_string(sc, buf.version), l);
+    l = cons(sc, mk_string(sc, os_version), l);
     l = cons(sc, mk_string(sc, "os.version"), l);
-    l = cons(sc, mk_string(sc, buf.machine), l);
+    l = cons(sc, mk_string(sc, os_arch), l);
     l = cons(sc, mk_string(sc, "os.arch"), l);
-    return mk_collection(sc, T_ARRAYMAP, l);
+    r = mk_collection(sc, T_ARRAYMAP, l);
   } else {
     const char * pname = strvalue(car(args));
     if (strcmp(pname, "os.name") == 0) {
-      return mk_string(sc, buf.sysname);
+      r = mk_string(sc, os_name);
     } else if (strcmp(pname, "os.version") == 0) {
-      return mk_string(sc, buf.version);
+      r = mk_string(sc, os_version);
     } else if (strcmp(pname, "os.arch") == 0) {
-      return mk_string(sc, buf.machine);
+      r = mk_string(sc, os_arch);
+    } else if (strcmp(pname, "user.home") == 0) {
+      r = mk_string(sc, user_home);
+    } else if (strcmp(pname, "user.dir") == 0) {
+      r = mk_string(sc, user_dir);
+    } else if (strcmp(pname, "user.name") == 0) {
+      r = mk_string(sc, user_name);
+    } else if (strcmp(pname, "path.separator") == 0) {
+      r = mk_string(sc, path_separator);
+    } else if (strcmp(pname, "file.separator") == 0) {
+      r = mk_string(sc, file_separator);
+    } else if (strcmp(pname, "line.separator") == 0) {
+      r = mk_string(sc, line_separator);
     } else {
-      return mk_nil();
+      r = mk_nil();
     }
   }
+
+  free(pw_buf);
+
+  return r;
 }
 
 /* Math */
