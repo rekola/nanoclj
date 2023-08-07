@@ -220,7 +220,7 @@
 (def assoc
   "Adds the keys and values to the map"
   (fn [map key val & kvs]
-    (let [new-map (conj- (or map {}) (clojure.lang.MapEntry key val))]
+    (let [new-map (conj- (or map {}) (map-entry key val))]
       (if kvs
         (if (next kvs)
           (recur new-map (first kvs) (second kvs) (nnext kvs))
@@ -242,7 +242,16 @@
   (fn
     ([map] map)
     ([map k] (reduce conj- {} (filter (fn [e] (not= (key e) k)) map)))))
-      
+
+(defn update
+  "Updates a value in map, where k is the key to be updates,
+  f is a function that takes the old value and extra values starting from x,
+  and returns the new value"
+  ([m k f] (assoc m k (f (get m k))))
+  ([m k f x] (assoc m k (f (get m k) x)))
+  ([m k f x y] (assoc m k (f (get m k) x y)))
+  ([m k f x y z] (assoc m k (f (get m k) x y z))))
+
 (def into
   "Adds elements from collection from to collection to"
   (fn
