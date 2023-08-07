@@ -132,7 +132,7 @@
         (pred (first coll)) (remove pred (rest coll))
         :else (cons (first coll) (remove pred (rest coll)))))
 
-(defn symbols [ns] (doall (map first (reduce concat '() (car ns)))))
+(defn ns-interns [ns] (doall (map first (reduce concat '() (car ns)))))
 
 ; Atoms
 
