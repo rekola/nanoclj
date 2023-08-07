@@ -302,19 +302,27 @@
 
 (defn max
   "Returns the maximum of the arguments"
-  [& args] (reduce (fn [x y] (if (gt x y) x y)) args))
+  ([x] x)
+  ([x y] (if (gt x y) x y))
+  ([x y & more] (reduce (fn [x y] (if (gt x y) x y)) (if (gt x y) x y) more)))
 
 (defn min
   "Returns the minimum of the arguments"
-  [& args] (reduce (fn [x y] (if (lt x y) x y)) args))
+  ([x] x)
+  ([x y] (if (lt x y) x y)) 
+  ([x y & more] (reduce (fn [x y] (if (lt x y) x y)) (if (lt x y) x y) more)))
 
 (defn +
   "Returns the sum of the arguments"
-  [& args] (reduce add args))
+  ([x] x)
+  ([x y] (add x y))
+  ([x y & more] (reduce add (add x y) more)))
 
 (defn *
   "Returns the product of the arguments"
-  [& args] (reduce multiply args))
+  ([x] x)
+  ([x y] (multiply x y))
+  ([x y & more] (reduce multiply (multiply x y) more)))
 
 (defn -
   "Subtracts the arguments"
@@ -328,10 +336,24 @@
   ([x y] (divide x y))
   ([x y & more] (reduce divide (divide x y) more)))
 
-(defn bit-or [& args] (reduce bit-or- args))
-(defn bit-and [& args] (reduce bit-and- args))
-(defn bit-xor [& args] (reduce bit-xor- args))
-(defn bit-not [x] (- 0 (inc x)))
+(defn bit-or
+  "Returns a bitwise or"
+  ([x y] (bit-or- x y))
+  ([x y & more] (reduce bit-or- (bit-or- x y) more)))
+
+(defn bit-and
+  "Returns a bitwise and"
+  ([x y] (bit-and- x y))
+  ([x y & more] (reduce bit-and- (bit-and- x y) more)))
+
+(defn bit-xor
+  "Returns a bitwise xor"
+  ([x y] (bot-xor- x y))
+  ([x y & more] (reduce bit-xor- (bit-xor- x y) args)))
+
+(defn bit-not 
+  "Returns a bitwise not"
+  [x] (- 0 (inc x)))
 
 (defn bit-test
   "Test a bit of x at index n"
@@ -349,53 +371,73 @@
   "Flips a bit of x at index n"
   [x n] (bit-xor- x (bit-shift-left 1 n)))
 
-(defn conj [coll & args] (reduce conj- coll args))
+(defn conj
+  ([coll x] (conj- coll x))
+  ([coll x & xs] (reduce conj- (conj- coll x) xs)))
 
-(defn = [& args] (if (empty? args) true
-                     (if (next args)
-                       (if (equals? (first args) (first (rest args)))
-                         (apply* = (rest args))
-                         false)
-                       true)))
+(defn =
+  "Returns true if the arguments are equal"
+  ([x] true)
+  ([x y] (equals? x y))
+  ([x y & more] (if (equals? x y)
+                  (if (next more)
+                    (recur y (first more) (next more))
+                    (equals? y (first more)))
+                  false)))
   
-(defn == [& args] (if (empty? args) true
-                      (if (next args)
-                        (if (equiv? (first args) (first (rest args)))
-                          (apply* == (rest args))
-                          false)
-                        true)))
+(defn ==
+  "Returns true if the arguments are numerically equal"
+  ([x] true)
+  ([x y] (equiv? x y))
+  ([x y & more] (if (equiv? x y)
+                  (if (next more)
+                    (recur y (first more) (next more))
+                    (equiv? y (first more)))
+                  false)))
 
-(defn < [& args] (if (empty? args) true
-                     (if (next args)
-                       (if (lt (first args) (first (rest args)))
-                         (apply* < (rest args))
-                         false)
-                       true)))
+(defn <
+  "Returns true if the arguments are in ascending order"
+  ([x] true)
+  ([x y] (lt x y))
+  ([x y & more] (if (lt x y)
+                  (if (next more)
+                    (recur y (first more) (next more))
+                    (lt y (first more)))
+                  false)))
 
-(defn > [& args] (if (empty? args) true
-                     (if (next args)
-                       (if (gt (first args) (first (rest args)))
-                         (apply* > (rest args))
-                         false)
-                       true)))
+(defn >
+  "Returns true if the arguments are in descending order"
+  ([x] true)
+  ([x y] (gt x y))
+  ([x y & more] (if (gt x y)
+                  (if (next more)
+                    (recur y (first more) (next more))
+                    (gt y (first more)))
+                  false)))
 
-(defn <= [& args] (if (empty? args) true
-                      (if (next args)
-                        (if (le (first args) (first (rest args)))
-                          (apply* <= (rest args))
-                          false)
-                        true)))
+(defn <=
+  ([x] true)
+  ([x y] (le x y))
+  ([x y & more] (if (le x y)
+                  (if (next more)
+                    (recur y (first more) (next more))
+                    (le y (first more)))
+                  false)))
 
-(defn >= [& args] (if (empty? args) true
-                     (if (next args)
-                       (if (ge (first args) (first (rest args)))
-                         (apply* >= (rest args))
-                         false)
-                       true)))
+(defn >=
+  ([x] true)
+  ([x y] (ge x y))
+  ([x y & more] (if (ge x y)
+                  (if (next more)
+                    (recur y (first more) (next more))
+                    (ge y (first more)))
+                  false)))
 
 (defn not=
   "Returns true if the arguments are not equal"
-  [& args] (not (apply* = args)))
+  ([x] false)
+  ([x y] (not (equals? x y)))
+  ([x y & more] (not (apply equals? x y more))))
 
 (def sorted-set
   "Creates a sorted set from the arguments"
