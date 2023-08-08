@@ -110,6 +110,8 @@
 	     (println (str "Elapsed time: " (- (System/currentTimeMillis) t0) " msecs"))
 	     e)))
 
+(def-macro (comment body) nil)
+
 (defn constantly
   "Creates a function that always returns x and accepts any number of arguments"
   [x] (fn [& args] x))
