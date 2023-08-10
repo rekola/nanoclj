@@ -5647,7 +5647,7 @@ static inline clj_value opexe(scheme * sc, enum scheme_opcodes op) {
       sc->nesting_stack[sc->file_i]--;
       s_return(sc, reverse_in_place(sc, sc->EMPTY, sc->args));
     } else if (sc->tok == TOK_DOT) {
-      s_save(sc, OP_RDAMP, sc->args, sc->EMPTY);
+      s_save(sc, OP_RDDOT, sc->args, sc->EMPTY);
       sc->tok = token(sc, inport);
       s_goto(sc, OP_RDSEXPR);
     } else {
@@ -5699,7 +5699,7 @@ static inline clj_value opexe(scheme * sc, enum scheme_opcodes op) {
       s_goto(sc, OP_RDSEXPR);
     }
 
-  case OP_RDAMP:
+  case OP_RDDOT:
     inport = port_unchecked(get_in_port(sc));
     if (token(sc, inport) != TOK_RPAREN) {
       Error_0(sc, "Error - illegal dot expression");
