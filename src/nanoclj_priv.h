@@ -161,8 +161,10 @@ extern "C" {
     clj_value LAMBDA;             /* pointer to syntax lambda */
     clj_value DO;                 /* pointer to syntax do */
     clj_value QUOTE;              /* pointer to syntax quote */
-    clj_value ARGS;		  /* default args in literal functions */
     clj_value ARG1;		  /* first arg in literal functions */
+    clj_value ARG2;		  /* second arg in literal functions */
+    clj_value ARG3;		  /* third arg in literal functions */
+    clj_value ARG_REST;	  	  /* rest args in literal functions */
     
     clj_value DEREF;		  /* pointer to symbol deref */
     clj_value VAR;		  /* pointer to symbol var */

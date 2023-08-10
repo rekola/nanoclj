@@ -3943,6 +3943,25 @@ static inline bool unpack_args_2_plus(scheme * sc) {
   return false;
 }
 
+static inline int get_literal_fn_arity(scheme * sc, clj_value body, bool * has_rest) {
+  if (is_pair(body)) {
+    int n1 = get_literal_fn_arity(sc, car(body), has_rest);
+    int n2 = get_literal_fn_arity(sc, cdr(body), has_rest);
+    return n1 > n2 ? n1 : n2;
+  } else if (body.as_uint64 == sc->ARG_REST.as_uint64) {
+    *has_rest = true;
+    return 0;
+  } else if (body.as_uint64 == sc->ARG1.as_uint64) {
+    return 1;
+  } else if (body.as_uint64 == sc->ARG2.as_uint64) {
+    return 2;
+  } else if (body.as_uint64 == sc->ARG3.as_uint64) {
+    return 3;
+  } else {
+    return 0;
+  }
+}
+
 static inline clj_value opexe(scheme * sc, enum scheme_opcodes op) {
   clj_value x, y, ns, meta;
   int syn;
@@ -4094,14 +4113,6 @@ static inline clj_value opexe(scheme * sc, enum scheme_opcodes op) {
       } else if (sc->code.as_uint64 == sc->RECUR.as_uint64) {
 	s_return(sc, sc->recur);
 #endif
-      } else if (sc->code.as_uint64 == sc->ARG1.as_uint64) {
-	x = find_slot_in_env(sc, sc->envir, sc->ARGS, 1);
-	if (x.as_uint64 != sc->EMPTY.as_uint64) {
-	  x = slot_value_in_env(x);
-	  s_return(sc, car(x));
-	} else {
-	  Error_0(sc, "Use of undeclared Var");
-	}
       } else {
 	x = find_slot_in_env(sc, sc->envir, sc->code, 1);
 	if (x.as_uint64 != sc->EMPTY.as_uint64) {
@@ -5732,9 +5743,20 @@ static inline clj_value opexe(scheme * sc, enum scheme_opcodes op) {
     s_return(sc, mk_collection(sc, T_VECTOR, sc->value));
   }
 
-  case OP_RDFN:
-    s_return(sc, cons(sc, sc->LAMBDA, cons(sc, sc->ARGS, cons(sc, sc->value, sc->EMPTY))));
-
+  case OP_RDFN:{
+    bool has_rest;
+    int n_args = get_literal_fn_arity(sc, sc->value, &has_rest);
+    struct cell * vec = get_vector_object(sc, n_args + (has_rest ? 2 : 0));
+    if (n_args >= 1) set_vector_elem(vec, 0, sc->ARG1);
+    if (n_args >= 2) set_vector_elem(vec, 1, sc->ARG2);
+    if (n_args >= 3) set_vector_elem(vec, 2, sc->ARG3);
+    if (has_rest) {
+      set_vector_elem(vec, n_args, sc->AMP);
+      set_vector_elem(vec, n_args + 1, sc->ARG_REST);
+    }
+    s_return(sc, cons(sc, sc->LAMBDA, cons(sc, mk_pointer(vec), cons(sc, sc->value, sc->EMPTY))));
+  }
+    
   case OP_RDSET:
     if (sc->value.as_uint64 == sc->EMPTY.as_uint64) {
       struct cell * v = get_vector_object(sc, 0);
@@ -6145,8 +6167,10 @@ int scheme_init_custom_alloc(scheme * sc, func_alloc malloc,
   /* initialization of global clj_values to special symbols */
   sc->LAMBDA = def_symbol(sc, "fn");
   sc->DO = def_symbol(sc, "do");
-  sc->ARGS = def_symbol(sc, "args");
-  sc->ARG1 = def_symbol(sc, "%");
+  sc->ARG1 = def_symbol(sc, "%1");
+  sc->ARG2 = def_symbol(sc, "%2");
+  sc->ARG3 = def_symbol(sc, "%3");
+  sc->ARG_REST = def_symbol(sc, "%&");
   sc->QUOTE = def_symbol(sc, "quote");
   sc->DEREF = def_symbol(sc, "deref");
   sc->VAR = def_symbol(sc, "var");
