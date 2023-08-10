@@ -59,23 +59,24 @@
 ## Missing functionality
 
 - Custom types
-- Atoms
 - Transducers
 - Exception handling
 - Regular expressions
-- Dynamic variables
+- Vars, Refs, Agents and Atoms
 - Queues
 - Arrays
-- Namespaces for keywords and symbols
+- Tagged Literals (e.g. #uuid and #inst)
+- Reader Conditionals
+- Namespace qualifiers for keywords
 - Numeric literals other than decimal (e.g. 0xff, 2r0, 3N, 0.1M, 01)
 - Persistent data structures
-- BitInts and BigDecimals
+- BigInts and BigDecimals
 - Unchecked operations
 - Autopromoting operations
 - StructMaps
-- Multithreading, transactions and refs
+- Multithreading and transactions
 - Threading macros (->, -->, some-> and some->>)
-- Classes (class, class?)
+- Classes (class, class?, cast)
 - *print-length*, *print-level*
 - Missing core functions and macros
   - doseq, for, dotimes
@@ -115,6 +116,7 @@
   - when-not, when-let
   - if-not
   - if-let
+  - realized?
 - clojure.string
   - upper-case
   - clojure.string/capitalize
