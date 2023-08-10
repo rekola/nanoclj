@@ -74,10 +74,6 @@
           (set! *out* prev-outport)
           res)))))
 
-(defn truncate [x] (if (> x 0) (Math/floor x) (Math/ceil x)))
-
-(defn quot [a b] (long (truncate (/ a b))))
-
 ; Random number generator (maximum cycle)
 (def *seed* 1)
 (defn rand- []

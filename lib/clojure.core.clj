@@ -84,6 +84,10 @@
   "Returns the denominator of a Ratio"
   [n] (if (ratio? n) (rest n) 1))
 
+(defn quot
+  "Returns the quotinent of dividing a by b"
+  [a b] (long (/ a b)))
+
 ; Miscellaneous
 
 (defn identity [x] x)
