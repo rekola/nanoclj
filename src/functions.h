@@ -317,11 +317,29 @@ static clj_value numeric_tower_expt(scheme * sc, clj_value args) {
   return mk_real(pow(to_double(x), to_double(y)));
 }
 
+static inline clj_value browse_url(scheme * sc, clj_value args) {
+  const char * url = to_cstr(car(args));
+#ifdef WIN32
+  ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
+  return sc->T;
+#else
+  pid_t r = fork();
+  if (r == 0) {
+    const char * cmd = "xdg-open";
+    execlp(cmd, cmd, url, NULL);
+    exit(1);
+  } else {
+    return r < 0 ? sc->F : sc->T;
+  }
+#endif
+}
+
 static inline void register_functions(scheme * sc) {
   clj_value Thread = def_namespace(sc, "Thread");
   clj_value System = def_namespace(sc, "System");
   clj_value Math = def_namespace(sc, "Math");
   clj_value numeric_tower = def_namespace(sc, "clojure.math.numeric-tower");
+  clj_value clojure_java_browse = def_namespace(sc, "clojure.java.browse");
   
   scheme_define(sc, Thread, def_symbol(sc, "sleep"), mk_foreign_func_with_arity(sc, thread_sleep, 1, 1));
   
@@ -353,6 +371,8 @@ static inline void register_functions(scheme * sc) {
   scheme_define(sc, Math, def_symbol(sc, "SQRT2"), mk_real(M_SQRT2));
 
   scheme_define(sc, numeric_tower, def_symbol(sc, "expt"), mk_foreign_func_with_arity(sc, numeric_tower_expt, 2, 2));
+
+  scheme_define(sc, clojure_java_browse, def_symbol(sc, "browse-url"), mk_foreign_func_with_arity(sc, browse_url, 1, 1));
 }
 
 #endif
