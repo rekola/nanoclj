@@ -172,6 +172,12 @@
                                    (pred (first coll)) (cons (first coll) (lazy-seq (take-while pred (rest coll))))
                                    :else '()))
 
+(defn drop-while
+  "Drops elements until pred is false"
+  [pred coll] (cond (empty? coll) '()
+                    (pred (first coll)) (recur pred (rest coll))
+                    :else coll))
+
 (defn take-last [n coll] (let [cnt (count coll)] (if (< cnt n) coll (drop n coll))))
 (defn drop-last [n coll] (let [cnt (count coll)] (if (< cnt n) '() (take (- cnt n) coll))))
 
