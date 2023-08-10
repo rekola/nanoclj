@@ -7,7 +7,8 @@ endif()
 
 add_definitions(-DNANOCLJ_STANDALONE)
 
-add_compile_options(-Wall -O3 -march=native)
+# The math optimizations are not necessary, but they do not cause harm. Since NaNs are needed -ffast-math or -ffinite-math-only cannot be used.
+add_compile_options(-Wall -O3 -march=native -funsafe-math-optimizations -fno-math-errno -fno-rounding-math -fno-signaling-nans -fcx-limited-range -ffp-contract=fast)
 
 if(DEFINED ENV{WARN_ERROR_BUILD})
     add_compile_options(-Werror)
