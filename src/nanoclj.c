@@ -3281,12 +3281,7 @@ static inline const char * to_cstr(clj_value x) {
   return "";
 }
 
-static inline size_t seq_length(scheme * sc, clj_value a0) {
-  if (!is_cell(a0)) {
-    return 1;
-  }
-
-  struct cell * a = decode_pointer(a0);
+static inline size_t seq_length(scheme * sc, struct cell * a) {
   size_t i = 0;
   
   switch (_type(a)) {
@@ -3327,7 +3322,7 @@ static inline clj_value mk_mapentry(scheme * sc, clj_value key, clj_value val) {
 
 static inline clj_value mk_collection(scheme * sc, int type, clj_value args) {
   int i;
-  int len = seq_length(sc, args);
+  int len = seq_length(sc, decode_pointer(args));
   if (len < 0) {
     return sc->EMPTY;
   }
@@ -3701,16 +3696,19 @@ static inline void dump_stack_mark(scheme * sc) {
 #define s_retbool(tf)    s_return(sc, (tf) ? sc->T : sc->F)
 
 static inline bool is_list(scheme * sc, clj_value a) {
-  return seq_length(sc, a) >= 0;
+  return is_cell(a) && seq_length(sc, decode_pointer(a)) >= 0;
 }
 
-static inline bool destructure(scheme * sc, struct cell * binding, clj_value y0) {
-  if (!is_cell(y0)) {
-    fprintf(stderr, "not a cell\n");
+static inline bool destructure(scheme * sc, struct cell * binding, struct cell * y, size_t num_args) {
+  size_t n = _size_unchecked(binding);
+  bool is_multiarity = n >= 2 && vector_elem(binding, n - 2).as_uint64 == sc->AMP.as_uint64;
+  
+  if (!is_multiarity && num_args != n) {
+    return false;
+  } else if (is_multiarity && num_args < n - 2) {
     return false;
   }
-  struct cell * y = decode_pointer(y0);
-  size_t n = _size_unchecked(binding);
+
   for (size_t i = 0; i < n; i++, y = rest(sc, y)) {
     clj_value e = vector_elem(binding, i);
     if (e.as_uint64 == sc->AMP.as_uint64) {
@@ -3718,8 +3716,11 @@ static inline bool destructure(scheme * sc, struct cell * binding, clj_value y0)
 	e = vector_elem(binding, i);
 	if (is_primitive(e)) {
 	  new_slot_in_env(sc, vector_elem(binding, i), mk_pointer(y != &sc->_EMPTY ? y : NULL));
-	} else if (!destructure(sc, decode_pointer(e), mk_pointer(rest(sc, y)))) {
-	  return false;
+	} else {
+	  struct cell * y2 = rest(sc, y);
+	  if (!destructure(sc, decode_pointer(e), y2, seq_length(sc, y2))) {
+	    return false;
+	  }
 	}
       }
       y = &(sc->_EMPTY);
@@ -3730,8 +3731,14 @@ static inline bool destructure(scheme * sc, struct cell * binding, clj_value y0)
       } else if (is_primitive(e)) {
 	new_slot_in_env(sc, e, first(sc, y));
       } else {
-	if (!destructure(sc, decode_pointer(e), first(sc, y))) {
+	clj_value y2 = first(sc, y);
+	if (!is_cell(y2)) {
 	  return false;
+	} else {
+	  struct cell * y3 = decode_pointer(y2);
+	  if (!destructure(sc, decode_pointer(e), y3, seq_length(sc, y3))) {
+	    return false;
+	  }
 	}
       }
     } else {
@@ -4250,7 +4257,7 @@ static inline clj_value opexe(scheme * sc, enum scheme_opcodes op) {
 	/* Keep nested calls from GC'ing the arglist */
 	retain(sc, sc->args, sc->EMPTY);
 	if (_min_arity_unchecked(code_cell) > 0 || _max_arity_unchecked(code_cell) < 0x7fffffff) {
-	  int n = seq_length(sc, sc->args);
+	  int n = seq_length(sc, decode_pointer(sc->args));
 	  if (n < _min_arity_unchecked(code_cell) || n > _max_arity_unchecked(code_cell)) {
 	    Error_0(sc, "Error - Wrong number of args passed (1)");
 	  }
@@ -4309,17 +4316,18 @@ static inline clj_value opexe(scheme * sc, enum scheme_opcodes op) {
 	params = decode_pointer(params0);
 
 	if (_type(params) == T_VECTOR) { /* Clojure style arguments */	  
-	  if (!destructure(sc, params, y)) {
+	  if (!is_cell(y) || !destructure(sc, params, decode_pointer(y), seq_length(sc, decode_pointer(y)))) {
 	    Error_0(sc, "Error - Wrong number of args passed (2)");	   
 	  }
 	  sc->code = cdr(x);
 	} else if (_type(params) == T_PAIR && is_vector(_car(params))) { /* Clojure style multi-arity arguments */
-	  // size_t needed_args = seq_length(sc, y);
+	  struct cell * yy = decode_pointer(y);
+	  size_t needed_args = seq_length(sc, yy);
 	  bool found_match = false;
 	  for ( ; x.as_uint64 != sc->EMPTY.as_uint64; x = cdr(x)) {
 	    clj_value vec = caar(x);
 
-	    if (destructure(sc, decode_pointer(vec), y)) {
+	    if (destructure(sc, decode_pointer(vec), yy, needed_args)) {
 	      found_match = true;
 	      sc->code = cdar(x);
 	      break;
@@ -5805,8 +5813,8 @@ static inline clj_value opexe(scheme * sc, enum scheme_opcodes op) {
     if (!is_cell(x)) {
       s_return(sc, x);
     }
-    size_t l = seq_length(sc, x);
     struct cell * seq = decode_pointer(x);
+    size_t l = seq_length(sc, seq);
     struct cell * vec = get_vector_object(sc, l);
     for (size_t i = 0; i < l; i++, seq = rest(sc, seq)) {
       set_vector_elem(vec, i, first(sc, seq));
