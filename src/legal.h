@@ -2,7 +2,7 @@
 
 static inline void legal() {
   printf("\n"
-	 "Nanoclj\n"
+	 "nanoclj\n"
 	 "-----------\n"
 	 "\n"
 	 "Copyright (c) 1989, Atsushi Moriwaki\n"
