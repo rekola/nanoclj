@@ -90,6 +90,10 @@
 
 ; Miscellaneous
 
+(defn new [t & args]
+  "Creates an object"
+  (apply* t args))
+
 (defn identity [x] x)
 
 (def count
