@@ -45,4 +45,14 @@
 
 ))
 
-                 
+(defn triml
+  [s] (apply str (drop-while (fn [c] (case c
+                                       \space true
+                                       \newline true
+                                       \return true
+                                       \tab true
+                                       \formfeed true
+                                       \backspace true
+                                       false
+                                       )) s)))
+
