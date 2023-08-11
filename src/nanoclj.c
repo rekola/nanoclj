@@ -7,7 +7,7 @@
  * http://tinyscheme.sourceforge.net/credits.html
  */
 
-#define _SCHEME_SOURCE
+#define _NANOCLJ_SOURCE
 #include "nanoclj_priv.h"
 
 #ifndef WIN32
@@ -122,7 +122,7 @@
 #define FIRST_CELLSEGS 3
 #endif
 
-enum scheme_types {
+enum nanoclj_types {
   T_CELL = -1,
   T_NIL = 0,
   T_BOOLEAN = 1,
@@ -262,7 +262,7 @@ static inline clj_value mk_keyword(const char * ptr) {
   return v;
 }
 
-static inline clj_value mk_symbol(scheme * sc, const char * name, int_fast16_t syntax) {
+static inline clj_value mk_symbol(nanoclj * sc, const char * name, int_fast16_t syntax) {
   struct symbol * s = sc->malloc(sizeof(struct symbol));
   s->name = name;
   s->syntax = syntax;
@@ -701,13 +701,13 @@ static inline void setimmutable(clj_value p) {
 
 #define IS_ASCII(C) (((C) & ~0x7F) == 0)
 
-static void gc(scheme * sc, clj_value a, clj_value b);
-static void putstr(scheme * sc, const char *s, clj_value port);
-static void dump_stack_mark(scheme *);
-static void Eval_Cycle(scheme * sc, enum scheme_opcodes op);
-static clj_value get_err_port(scheme * sc);
-static clj_value get_out_port(scheme * sc);
-static clj_value get_in_port(scheme * sc);
+static void gc(nanoclj * sc, clj_value a, clj_value b);
+static void putstr(nanoclj * sc, const char *s, clj_value port);
+static void dump_stack_mark(nanoclj *);
+static void Eval_Cycle(nanoclj * sc, enum nanoclj_opcodes op);
+static clj_value get_err_port(nanoclj * sc);
+static clj_value get_out_port(nanoclj * sc);
+static clj_value get_in_port(nanoclj * sc);
 
 static inline const char* get_version() {
   return VERSION;
@@ -784,7 +784,7 @@ static inline clj_value mk_nil() {
 }
 
 /* allocate new cell segment */
-static inline int alloc_cellseg(scheme * sc, int n) {
+static inline int alloc_cellseg(nanoclj * sc, int n) {
   clj_value newp;
   clj_value last;
   clj_value p;
@@ -846,7 +846,7 @@ static inline int alloc_cellseg(scheme * sc, int n) {
 
 /* get new cell.  parameter a, b is marked by gc. */
 
-static inline struct cell * get_cell_x(scheme * sc, clj_value a, clj_value b) {
+static inline struct cell * get_cell_x(nanoclj * sc, clj_value a, clj_value b) {
   if (sc->no_memory) {
     return &(sc->_sink);
   }
@@ -872,7 +872,7 @@ static inline struct cell * get_cell_x(scheme * sc, clj_value a, clj_value b) {
 /* To retain recent allocs before interpreter knows about them -
    Tehom */
 
-static inline void retain(scheme * sc, clj_value recent, clj_value extra) {
+static inline void retain(nanoclj * sc, clj_value recent, clj_value extra) {
   struct cell * holder = get_cell_x(sc, recent, extra);
   _typeflag(holder) = T_PAIR | T_IMMUTABLE;
   _car(holder) = recent;
@@ -881,7 +881,7 @@ static inline void retain(scheme * sc, clj_value recent, clj_value extra) {
   car(sc->sink) = mk_pointer(holder);
 }
 
-static inline struct cell * get_cell(scheme * sc, int flags, clj_value a, clj_value b, clj_value meta) {
+static inline struct cell * get_cell(nanoclj * sc, int flags, clj_value a, clj_value b, clj_value meta) {
   struct cell * cell = get_cell_x(sc, a, b);
 
   /* For right now, include "a" and "b" in "cell" so that gc doesn't
@@ -895,7 +895,7 @@ static inline struct cell * get_cell(scheme * sc, int flags, clj_value a, clj_va
   return cell;
 }
 
-static inline clj_value mk_reader(scheme * sc, port * p) {
+static inline clj_value mk_reader(nanoclj * sc, port * p) {
   struct cell * x = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
 
   _typeflag(x) = T_READER | T_ATOM;
@@ -905,7 +905,7 @@ static inline clj_value mk_reader(scheme * sc, port * p) {
   return mk_pointer(x);
 }
 
-static inline clj_value mk_writer(scheme * sc, port * p) {
+static inline clj_value mk_writer(nanoclj * sc, port * p) {
   struct cell * x = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
 
   _typeflag(x) = T_WRITER | T_ATOM;
@@ -915,7 +915,7 @@ static inline clj_value mk_writer(scheme * sc, port * p) {
   return mk_pointer(x);
 }
 
-static inline clj_value mk_foreign_func(scheme * sc, foreign_func f) {
+static inline clj_value mk_foreign_func(nanoclj * sc, foreign_func f) {
   struct cell * x = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
 
   _typeflag(x) = (T_FOREIGN_FUNCTION | T_ATOM);
@@ -927,7 +927,7 @@ static inline clj_value mk_foreign_func(scheme * sc, foreign_func f) {
   return mk_pointer(x);
 }
 
-static inline clj_value mk_foreign_object(scheme * sc, void * o) {
+static inline clj_value mk_foreign_object(nanoclj * sc, void * o) {
   struct cell * x = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
 
   _typeflag(x) = (T_FOREIGN_OBJECT | T_ATOM);
@@ -939,7 +939,7 @@ static inline clj_value mk_foreign_object(scheme * sc, void * o) {
   return mk_pointer(x);
 }
 
-static inline clj_value mk_foreign_func_with_arity(scheme * sc, foreign_func f, int min_arity, int max_arity) {
+static inline clj_value mk_foreign_func_with_arity(nanoclj * sc, foreign_func f, int min_arity, int max_arity) {
   struct cell * x = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
 
   _typeflag(x) = (T_FOREIGN_FUNCTION | T_ATOM);
@@ -975,7 +975,7 @@ static inline clj_value mk_type(int t) {
   return v;
 }
 
-static inline clj_value mk_proc(enum scheme_opcodes op) {
+static inline clj_value mk_proc(enum nanoclj_opcodes op) {
   clj_value v;
   v.as_uint64 = SIGNATURE_PROC | (uint32_t)op;
   return v;
@@ -992,7 +992,7 @@ static inline clj_value mk_real(double n) {
   return v;
 }
 
-static inline clj_value mk_long(scheme * sc, long long num) {
+static inline clj_value mk_long(nanoclj * sc, long long num) {
   struct cell * x = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
   _typeflag(x) = (T_LONG | T_ATOM);
   _lvalue_unchecked(x) = num;
@@ -1001,7 +1001,7 @@ static inline clj_value mk_long(scheme * sc, long long num) {
 }
 
 /* get number atom (integer) */
-static inline clj_value mk_integer(scheme * sc, long long num) {
+static inline clj_value mk_integer(nanoclj * sc, long long num) {
   if (num >= -2147483648LL && num <= 2147483647LL) {
     return mk_int(num);
   } else {
@@ -1062,7 +1062,7 @@ static inline long long get_ratio(clj_value n, long long * den) {
   return 0;
 }
 
-static inline clj_value mk_ratio(scheme * sc, clj_value num, clj_value den) {  
+static inline clj_value mk_ratio(nanoclj * sc, clj_value num, clj_value den) {  
   struct cell * x = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
   _typeflag(x) = (T_RATIO | T_ATOM);
   _car(x) = num;
@@ -1072,7 +1072,7 @@ static inline clj_value mk_ratio(scheme * sc, clj_value num, clj_value den) {
   return mk_pointer(x);
 }
 
-static inline clj_value mk_ratio_long(scheme * sc, long long num, long long den) {
+static inline clj_value mk_ratio_long(nanoclj * sc, long long num, long long den) {
   return mk_ratio(sc, mk_integer(sc, num), mk_integer(sc, den));
 }
 
@@ -1094,7 +1094,7 @@ static inline int_fast8_t number_of_trailing_zeros(uint64_t a) {
 }
 
 /* Creates an exact rational representation of a (normalized) double (or overflows) */
-static inline clj_value mk_ratio_from_double(scheme * sc, clj_value a) {
+static inline clj_value mk_ratio_from_double(nanoclj * sc, clj_value a) {
   if (isnan(a.as_double)) {
     return mk_ratio_long(sc, 0, 0);
   } else if (!isfinite(a.as_double)) {
@@ -1117,7 +1117,7 @@ static inline clj_value mk_ratio_from_double(scheme * sc, clj_value a) {
 }
 
 /* allocate name to string area */
-static inline char *store_string(scheme * sc, int len, const char *str) {
+static inline char *store_string(nanoclj * sc, int len, const char *str) {
   char * q = (char *) sc->malloc(len + 1);
   if (q == 0) {
     sc->no_memory = 1;
@@ -1130,7 +1130,7 @@ static inline char *store_string(scheme * sc, int len, const char *str) {
   return (q);
 }
 
-static inline clj_value mk_counted_string(scheme * sc, const char *str, size_t len) {
+static inline clj_value mk_counted_string(nanoclj * sc, const char *str, size_t len) {
   struct cell * x = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
   _metadata_unchecked(x) = mk_nil();
 
@@ -1151,7 +1151,7 @@ static inline clj_value mk_counted_string(scheme * sc, const char *str, size_t l
 }
 
 /* get new string */
-static inline clj_value mk_string(scheme * sc, const char *str) {
+static inline clj_value mk_string(nanoclj * sc, const char *str) {
   if (str) {
     return mk_counted_string(sc, str, strlen(str));
   } else {
@@ -1159,7 +1159,7 @@ static inline clj_value mk_string(scheme * sc, const char *str) {
   }
 }
 
-static inline struct cell * mk_seq(scheme * sc, struct cell * origin, size_t position) {
+static inline struct cell * mk_seq(nanoclj * sc, struct cell * origin, size_t position) {
   struct cell * x = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
   _typeflag(x) = (T_SEQ | T_ATOM);
   _origin_unchecked(x) = origin;
@@ -1200,7 +1200,7 @@ static inline int utf8_inchar(port *pt) {
 }
 
 /* get new character from input file */
-static inline int inchar(scheme * sc, port * pt) {
+static inline int inchar(nanoclj * sc, port * pt) {
   int c;
   if (pt->backchar >= 0) {
     c = pt->backchar;
@@ -1232,15 +1232,15 @@ static inline void backchar(int c, port * pt) {
 /* Medium level cell allocation */
 
 /* get new cons cell */
-static inline clj_value cons(scheme * sc, clj_value a, clj_value b) {
+static inline clj_value cons(nanoclj * sc, clj_value a, clj_value b) {
   return mk_pointer(get_cell(sc, T_PAIR, a, b, mk_nil()));
 }
 
-static inline clj_value immutable_cons(scheme * sc, clj_value a, clj_value b) {
+static inline clj_value immutable_cons(nanoclj * sc, clj_value a, clj_value b) {
   return mk_pointer(get_cell(sc, T_PAIR | T_IMMUTABLE, a, b, mk_nil()));
 }
 
-static inline struct cell * get_vector_object(scheme * sc, size_t len) {
+static inline struct cell * get_vector_object(nanoclj * sc, size_t len) {
   clj_value * data = (clj_value*)sc->malloc(len * sizeof(clj_value));
   if (!data) {
     sc->no_memory = 1;
@@ -1291,7 +1291,7 @@ static inline int hash_fn(const char *key, int table_size) {
  * speed to out-weigh the cost of making a new vector.
  */
 
-static inline void new_frame_in_env(scheme * sc, clj_value old_env) {
+static inline void new_frame_in_env(nanoclj * sc, clj_value old_env) {
   clj_value new_frame;
 
   /* The interaction-environment has about 300 variables in it. */
@@ -1307,7 +1307,7 @@ static inline void new_frame_in_env(scheme * sc, clj_value old_env) {
   
 }
 
-static inline void new_slot_spec_in_env(scheme * sc, clj_value env,
+static inline void new_slot_spec_in_env(nanoclj * sc, clj_value env,
 					clj_value variable, clj_value value) {
   clj_value slot = immutable_cons(sc, variable, value);
 
@@ -1321,7 +1321,7 @@ static inline void new_slot_spec_in_env(scheme * sc, clj_value env,
   }
 }
 
-static inline clj_value find_slot_in_env(scheme * sc, clj_value env, clj_value hdl, bool all) {
+static inline clj_value find_slot_in_env(nanoclj * sc, clj_value env, clj_value hdl, bool all) {
   clj_value x, y;
 
   for (x = env; x.as_uint64 != sc->EMPTY.as_uint64; x = cdr(x)) {
@@ -1365,16 +1365,16 @@ static inline clj_value find_slot_in_env(scheme * sc, clj_value env, clj_value h
 
 #else /* USE_ALIST_ENV */
 
-static inline void new_frame_in_env(scheme * sc, clj_value old_env) {
+static inline void new_frame_in_env(nanoclj * sc, clj_value old_env) {
   sc->envir = mk_pointer(get_cell(sc, T_ENVIRONMENT | T_IMMUTABLE, sc->EMPTY, old_env))
 }
 
-static inline void new_slot_spec_in_env(scheme * sc, clj_value env,
+static inline void new_slot_spec_in_env(nanoclj * sc, clj_value env,
     clj_value variable, clj_value value) {
   car(env) = immutable_cons(sc, immutable_cons(sc, variable, value), car(env));
 }
 
-static inline clj_value find_slot_in_env(scheme * sc, clj_value env, clj_value hdl,
+static inline clj_value find_slot_in_env(nanoclj * sc, clj_value env, clj_value hdl,
     int all) {
   clj_value x, y;
   for (x = env; x.as_uint64 != sc->EMPTY.as_uint64; x = cdr(x)) {
@@ -1398,7 +1398,7 @@ static inline clj_value find_slot_in_env(scheme * sc, clj_value env, clj_value h
 
 #endif /* USE_ALIST_ENV else */
 
-static inline void new_slot_in_env(scheme * sc, clj_value variable, clj_value value) {
+static inline void new_slot_in_env(nanoclj * sc, clj_value variable, clj_value value) {
   new_slot_spec_in_env(sc, sc->envir, variable, value);
 }
 
@@ -1413,7 +1413,7 @@ static inline clj_value slot_value_in_env(clj_value slot) {
 
 /* Sequence handling */
 
-static inline bool is_empty(scheme * sc, struct cell * coll) {
+static inline bool is_empty(nanoclj * sc, struct cell * coll) {
   if (!coll || coll == &(sc->_EMPTY)) {
     return true;
   }
@@ -1463,11 +1463,11 @@ static inline bool is_empty(scheme * sc, struct cell * coll) {
   return false;
 }
 
-static inline struct cell * rest(scheme * sc, struct cell * coll) {
+static inline struct cell * rest(nanoclj * sc, struct cell * coll) {
   int typ = _type(coll);
   if (typ == T_PROMISE) {
     clj_value code = cons(sc, sc->DEREF, cons(sc, mk_pointer(coll), sc->EMPTY));
-    clj_value r = scheme_eval(sc, code);
+    clj_value r = nanoclj_eval(sc, code);
     if (is_primitive(r)) {
       return &(sc->_EMPTY);
     } else {
@@ -1536,7 +1536,7 @@ static inline struct cell * rest(scheme * sc, struct cell * coll) {
   return &(sc->_EMPTY);
 }
 
-static inline clj_value first(scheme * sc, struct cell * coll) {
+static inline clj_value first(nanoclj * sc, struct cell * coll) {
   if (coll == NULL || coll == &(sc->_EMPTY)) {
     return mk_nil();
   }
@@ -1544,7 +1544,7 @@ static inline clj_value first(scheme * sc, struct cell * coll) {
   if (_type(coll) == T_PROMISE) {
 #if 0
     clj_value code = cons(sc, sc->DEREF, cons(sc, mk_pointer(coll), sc->EMPTY));
-    clj_value r = scheme_eval(sc, code);
+    clj_value r = nanoclj_eval(sc, code);
 #else
     clj_value x = find_slot_in_env(sc, sc->envir, sc->DEREF, 1);
     clj_value r;
@@ -1554,7 +1554,7 @@ static inline clj_value first(scheme * sc, struct cell * coll) {
       clj_value tmp_args = sc->args;
       clj_value tmp_code = sc->code;
 
-      r = scheme_call(sc, x, cons(sc, mk_pointer(coll), sc->EMPTY));
+      r = nanoclj_call(sc, x, cons(sc, mk_pointer(coll), sc->EMPTY));
 
       sc->args = tmp_args;
       sc->code = tmp_code;
@@ -1751,7 +1751,7 @@ static inline void sort_vector_in_place(struct cell * vec) {
   qsort(_data_unchecked(vec), _size_unchecked(vec), sizeof(clj_value), _compare);
 }
 
-static inline bool equals(scheme * sc, clj_value a0, clj_value b0) {
+static inline bool equals(nanoclj * sc, clj_value a0, clj_value b0) {
   if (a0.as_uint64 == b0.as_uint64) {
     return true;
   } else if (is_primitive(a0) && is_primitive(b0)) {
@@ -1880,7 +1880,7 @@ static int hasheq(clj_value v) {
   return 0;
 }
 
-static inline void ok_to_freely_gc(scheme * sc) {
+static inline void ok_to_freely_gc(nanoclj * sc) {
   car(sc->sink) = sc->EMPTY;
 }
 
@@ -1908,19 +1908,19 @@ static void check_range_alloced(clj_value p, int n, int expect_alloced) {
 
 /* ========== oblist implementation  ========== */
 
-static inline struct cell * oblist_initial_value(scheme * sc) {
+static inline struct cell * oblist_initial_value(nanoclj * sc) {
   struct cell * vec = get_vector_object(sc, OBJ_LIST_SIZE);
   fill_vector(vec, sc->EMPTY);
   return vec;
 }
 
-static inline void oblist_add_item(scheme * sc, const char * name, clj_value v) {
+static inline void oblist_add_item(nanoclj * sc, const char * name, clj_value v) {
   int location = hash_fn(name, _size_unchecked(sc->oblist));
   set_vector_elem(sc->oblist, location, immutable_cons(sc, v, vector_elem(sc->oblist, location)));
 }
 
 /* returns the new symbol */
-static inline clj_value oblist_add_symbol_by_name(scheme * sc, const char *name) {
+static inline clj_value oblist_add_symbol_by_name(nanoclj * sc, const char *name) {
   /* This is leaked intentionally for now */
   char * str = (char*)sc->malloc(strlen(name) + 1);
   memcpy(str, name, strlen(name) + 1);
@@ -1932,7 +1932,7 @@ static inline clj_value oblist_add_symbol_by_name(scheme * sc, const char *name)
 }
 
 /* returns the new keyword */
-static inline clj_value oblist_add_keyword_by_name(scheme * sc, const char *name) {
+static inline clj_value oblist_add_keyword_by_name(nanoclj * sc, const char *name) {
   /* This is leaked intentionally for now */
   char * str = (char*)malloc(strlen(name) + 1);
   memcpy(str, name, strlen(name) + 1);
@@ -1943,7 +1943,7 @@ static inline clj_value oblist_add_keyword_by_name(scheme * sc, const char *name
   return x;
 }
 
-static inline clj_value oblist_find_symbol_by_name(scheme * sc, const char *name) {
+static inline clj_value oblist_find_symbol_by_name(nanoclj * sc, const char *name) {
   int location = hash_fn(name, _size_unchecked(sc->oblist));
   clj_value x = vector_elem(sc->oblist, location);
   for (; x.as_uint64 != sc->EMPTY.as_uint64; x = cdr(x)) {
@@ -1958,7 +1958,7 @@ static inline clj_value oblist_find_symbol_by_name(scheme * sc, const char *name
   return sc->EMPTY;
 }
 
-static inline clj_value oblist_find_keyword_by_name(scheme * sc, const char *name) {
+static inline clj_value oblist_find_keyword_by_name(nanoclj * sc, const char *name) {
   int location = hash_fn(name, _size_unchecked(sc->oblist));
   clj_value x = vector_elem(sc->oblist, location);
   for (; x.as_uint64 != sc->EMPTY.as_uint64; x = cdr(x)) {
@@ -1989,11 +1989,11 @@ static inline int utf8_get_codepoint_pos(const char * s, int ci) {
   return (int)(p - s);
 }
 
-static inline clj_value mk_vector(scheme * sc, size_t len) {
+static inline clj_value mk_vector(nanoclj * sc, size_t len) {
   return mk_pointer(get_vector_object(sc, len));
 }
 
-static inline struct cell * resize_vector(scheme * sc, struct cell * vec, int len) {
+static inline struct cell * resize_vector(nanoclj * sc, struct cell * vec, int len) {
   int old_len = _size_unchecked(vec);
   struct cell * new_vec = get_vector_object(sc, len);
   if (old_len > len) old_len = len;
@@ -2003,13 +2003,13 @@ static inline struct cell * resize_vector(scheme * sc, struct cell * vec, int le
   return new_vec;
 }	
 
-static inline clj_value mk_sorted_set(scheme * sc, int len) {
+static inline clj_value mk_sorted_set(nanoclj * sc, int len) {
   struct cell * x = get_vector_object(sc, len);
   _typeflag(x) = (T_SORTED_SET | T_ATOM);
   return mk_pointer(x);
 }
 
-static inline struct cell * mk_seq_2(scheme * sc, struct cell * coll) {
+static inline struct cell * mk_seq_2(nanoclj * sc, struct cell * coll) {
   if (coll == NULL) {
     return &(sc->_EMPTY);
   }
@@ -2040,7 +2040,7 @@ static inline struct cell * mk_seq_2(scheme * sc, struct cell * coll) {
   return &(sc->_EMPTY);
 }
 
-static inline bool get_elem(scheme * sc, struct cell * coll, clj_value key, clj_value * result) {
+static inline bool get_elem(nanoclj * sc, struct cell * coll, clj_value key, clj_value * result) {
   switch (_type(coll)) {
   case T_VECTOR:
     if (is_number(key)) {
@@ -2097,7 +2097,7 @@ static inline bool get_elem(scheme * sc, struct cell * coll, clj_value key, clj_
 }
 
 /* get new keyword */
-static inline clj_value def_keyword(scheme * sc, const char *name) {
+static inline clj_value def_keyword(nanoclj * sc, const char *name) {
   /* first check oblist */
   clj_value x = oblist_find_keyword_by_name(sc, name);
   if (x.as_uint64 != sc->EMPTY.as_uint64) {
@@ -2108,7 +2108,7 @@ static inline clj_value def_keyword(scheme * sc, const char *name) {
 }
 
 /* get new symbol */
-static inline clj_value def_symbol(scheme * sc, const char *name) {
+static inline clj_value def_symbol(nanoclj * sc, const char *name) {
   /* first check oblist */
   clj_value x = oblist_find_symbol_by_name(sc, name);
   if (x.as_uint64 != sc->EMPTY.as_uint64) {
@@ -2119,22 +2119,22 @@ static inline clj_value def_symbol(scheme * sc, const char *name) {
 }
 
 /* get new symbol or keyword */
-static inline clj_value def_symbol_or_keyword(scheme * sc, const char *name) {
+static inline clj_value def_symbol_or_keyword(nanoclj * sc, const char *name) {
   if (name[0] == ':') return def_keyword(sc, name + 1);
   else return def_symbol(sc, name);
 }
 
-static inline clj_value def_namespace_with_sym(scheme *sc, clj_value sym) {
+static inline clj_value def_namespace_with_sym(nanoclj *sc, clj_value sym) {
   clj_value ns = mk_pointer(get_cell(sc, T_ENVIRONMENT | T_IMMUTABLE, sc->EMPTY, sc->root_env, mk_string(sc, symname(sym))));
-  scheme_define(sc, sc->global_env, sym, ns);
+  nanoclj_define(sc, sc->global_env, sym, ns);
   return ns;
 }
 
-static inline clj_value def_namespace(scheme * sc, const char *name) {
+static inline clj_value def_namespace(nanoclj * sc, const char *name) {
   return def_namespace_with_sym(sc, def_symbol(sc, name));
 }
 
-static inline clj_value gensym(scheme * sc) {
+static inline clj_value gensym(nanoclj * sc) {
   clj_value x;
   char name[40];
 
@@ -2155,7 +2155,7 @@ static inline clj_value gensym(scheme * sc) {
 }
 
 /* make symbol or number atom from string */
-static inline clj_value mk_atom(scheme * sc, char *q) {
+static inline clj_value mk_atom(nanoclj * sc, char *q) {
   bool has_dec_point = false;
   bool has_fp_exp = false;
   char *div = 0;
@@ -2239,7 +2239,7 @@ static inline clj_value mk_atom(scheme * sc, char *q) {
   return mk_integer(sc, atoll(q));
 }
 
-static inline clj_value mk_char_const(scheme * sc, char *name) {
+static inline clj_value mk_char_const(nanoclj * sc, char *name) {
   if (*name == '\\') {   /* \w (character) */
     int c = 0;
     if (str_eq(name + 1, "space")) {
@@ -2274,7 +2274,7 @@ static inline clj_value mk_char_const(scheme * sc, char *name) {
   }
 }
 
-static inline clj_value mk_sharp_const(scheme * sc, char *name) {
+static inline clj_value mk_sharp_const(nanoclj * sc, char *name) {
   if (str_eq(name, "Inf")) {
     return mk_real(INFINITY);
   } else if (str_eq(name, "-Inf")) {
@@ -2363,7 +2363,7 @@ E6:                            /* up.  Undo the link switching from steps E4 and
   }
 }
 
-static inline void port_close(scheme * sc, port * pt) {
+static inline void port_close(nanoclj * sc, port * pt) {
   pt->kind &= ~port_input;
   pt->kind &= ~port_output;
   if (pt->kind & port_file) {
@@ -2380,7 +2380,7 @@ static inline void port_close(scheme * sc, port * pt) {
   pt->kind = port_free;
 }
 
-static inline void finalize_cell(scheme * sc, struct cell * a) {
+static inline void finalize_cell(nanoclj * sc, struct cell * a) {
   switch (_type(a)) {
   case T_STRING:
     if (!_is_small(a)) {
@@ -2403,7 +2403,7 @@ static inline void finalize_cell(scheme * sc, struct cell * a) {
 }
 
 /* garbage collection. parameter a, b is marked. */
-static void gc(scheme * sc, clj_value a, clj_value b) {
+static void gc(nanoclj * sc, clj_value a, clj_value b) {
 #if GC_VERBOSE
   putstr(sc, "gc...", get_err_port(sc));
 #endif
@@ -2491,7 +2491,7 @@ static void gc(scheme * sc, clj_value a, clj_value b) {
 
 /* ========== Routines for Reading ========== */
 
-static inline int file_push(scheme * sc, const char *fname) {
+static inline int file_push(nanoclj * sc, const char *fname) {
   FILE *fin = NULL;
 
   if (sc->file_i == MAXFIL - 1)
@@ -2516,7 +2516,7 @@ static inline int file_push(scheme * sc, const char *fname) {
   return fin != 0;
 }
 
-static inline void file_pop(scheme * sc) {
+static inline void file_pop(nanoclj * sc) {
   if (sc->file_i != 0) {
     sc->nesting = sc->nesting_stack[sc->file_i];
     port_close(sc, port_unchecked(sc->loadport));
@@ -2525,7 +2525,7 @@ static inline void file_pop(scheme * sc) {
   }
 }
 
-static inline int file_interactive(scheme * sc) {
+static inline int file_interactive(nanoclj * sc) {
   clj_value in = get_in_port(sc);
     
   return sc->interactive_repl
@@ -2533,14 +2533,14 @@ static inline int file_interactive(scheme * sc) {
     && (port_unchecked(in)->kind & port_file || port_unchecked(in)->kind & port_callback);
 }
 
-static inline int needs_prompt(scheme * sc) {
+static inline int needs_prompt(nanoclj * sc) {
   clj_value in = get_in_port(sc);
   
   return sc->interactive_repl && sc->file_i == 0 && sc->load_stack[0].rep.stdio.file == stdin
     && port_unchecked(in)->kind & port_file;
 }
 
-static inline port *port_rep_from_file(scheme * sc, FILE * f, int prop) {
+static inline port *port_rep_from_file(nanoclj * sc, FILE * f, int prop) {
   port *pt;
 
   pt = (port *) sc->malloc(sizeof *pt);
@@ -2554,7 +2554,7 @@ static inline port *port_rep_from_file(scheme * sc, FILE * f, int prop) {
   return pt;
 }
 
-static inline port *port_rep_from_filename(scheme * sc, const char *fn, int prop) {
+static inline port *port_rep_from_filename(nanoclj * sc, const char *fn, int prop) {
   FILE *f;
   char *rw;
   port *pt;
@@ -2581,7 +2581,7 @@ static inline port *port_rep_from_filename(scheme * sc, const char *fn, int prop
   return pt;
 }
 
-static inline clj_value port_from_filename(scheme * sc, const char *fn, int prop) {
+static inline clj_value port_from_filename(nanoclj * sc, const char *fn, int prop) {
   port *pt = port_rep_from_filename(sc, fn, prop);
   if (!pt) {
     return mk_nil();
@@ -2592,7 +2592,7 @@ static inline clj_value port_from_filename(scheme * sc, const char *fn, int prop
   }
 }
 
-static inline port *port_rep_from_callback(scheme * sc,
+static inline port *port_rep_from_callback(nanoclj * sc,
 				    void (*func) (const char *, size_t, void *),
 				    int prop) {
   port *pt = (port *) sc->malloc(sizeof *pt);
@@ -2605,7 +2605,7 @@ static inline port *port_rep_from_callback(scheme * sc,
   return pt;
 }
 
-static inline clj_value port_from_file(scheme * sc, FILE * f, int prop) {
+static inline clj_value port_from_file(nanoclj * sc, FILE * f, int prop) {
   port *pt = port_rep_from_file(sc, f, prop);
   if (!pt) {
     return mk_nil();
@@ -2616,7 +2616,7 @@ static inline clj_value port_from_file(scheme * sc, FILE * f, int prop) {
   }
 }
 
-static inline clj_value port_from_callback(scheme * sc,
+static inline clj_value port_from_callback(nanoclj * sc,
 					   void (*func) (const char *, size_t, void *),
 					   int prop) {
   port *pt = port_rep_from_callback(sc, func, prop);
@@ -2626,7 +2626,7 @@ static inline clj_value port_from_callback(scheme * sc,
   return mk_writer(sc, pt);
 }
 
-static inline port *port_rep_from_string(scheme * sc, char *start,
+static inline port *port_rep_from_string(nanoclj * sc, char *start,
     char *past_the_end, int prop) {
   port *pt;
   pt = (port *) sc->malloc(sizeof(port));
@@ -2641,7 +2641,7 @@ static inline port *port_rep_from_string(scheme * sc, char *start,
   return pt;
 }
 
-static inline clj_value port_from_string(scheme * sc, char *start, char *past_the_end, int prop) {
+static inline clj_value port_from_string(nanoclj * sc, char *start, char *past_the_end, int prop) {
   port *pt = port_rep_from_string(sc, start, past_the_end, prop);
   if (pt == 0) {
     return sc->EMPTY;
@@ -2655,7 +2655,7 @@ static inline clj_value port_from_string(scheme * sc, char *start, char *past_th
 
 #define BLOCK_SIZE 256
 
-static inline port *port_rep_from_scratch(scheme * sc) {
+static inline port *port_rep_from_scratch(nanoclj * sc) {
   port *pt;
   char *start;
   pt = (port *) sc->malloc(sizeof(port));
@@ -2676,7 +2676,7 @@ static inline port *port_rep_from_scratch(scheme * sc) {
   return pt;
 }
 
-static inline clj_value port_from_scratch(scheme * sc) {
+static inline clj_value port_from_scratch(nanoclj * sc) {
   port *pt;
   pt = port_rep_from_scratch(sc);
   if (pt == 0) {
@@ -2685,7 +2685,7 @@ static inline clj_value port_from_scratch(scheme * sc) {
   return mk_writer(sc, pt);
 }
 
-static inline int realloc_port_string(scheme * sc, port * p) {
+static inline int realloc_port_string(nanoclj * sc, port * p) {
   char *start = p->rep.string.start;
   size_t new_size = p->rep.string.past_the_end - start + 1 + BLOCK_SIZE;
   char *str = sc->malloc(new_size);
@@ -2727,7 +2727,7 @@ static inline void char_to_utf8(int c, char *p, int *plen) {
   if (plen) *plen = strlen(p);
 }
 
-static inline void putstr(scheme * sc, const char *s, clj_value dest_port) {
+static inline void putstr(nanoclj * sc, const char *s, clj_value dest_port) {
   assert(s);
   assert(is_writer(dest_port));
 	 
@@ -2750,7 +2750,7 @@ static inline void putstr(scheme * sc, const char *s, clj_value dest_port) {
   }
 }
 
-static inline void putchars(scheme * sc, const char *s, int len, clj_value out) {
+static inline void putchars(nanoclj * sc, const char *s, int len, clj_value out) {
   port * pt = port_unchecked(out);
   if (pt->kind & port_file) {
     fwrite(s, 1, len, pt->rep.stdio.file);
@@ -2767,7 +2767,7 @@ static inline void putchars(scheme * sc, const char *s, int len, clj_value out) 
   }
 }
 
-static inline void putcharacter(scheme * sc, int c) {
+static inline void putcharacter(nanoclj * sc, int c) {
   port *pt = port_unchecked(get_out_port(sc));
 
   int len;
@@ -2789,7 +2789,7 @@ static inline void putcharacter(scheme * sc, int c) {
   }
 }
 
-static inline int check_strbuff_size(scheme * sc, char **p) {
+static inline int check_strbuff_size(nanoclj * sc, char **p) {
   char *t;
   int len = *p - sc->strbuff;
   if (len + 4 < sc->strbuff_size) {
@@ -2819,7 +2819,7 @@ static inline int is_one_of(char *s, int c) {
 }
 
 /* read characters up to delimiter, but cater to character constants */
-static inline char *readstr_upto(scheme * sc, char *delim) {
+static inline char *readstr_upto(nanoclj * sc, char *delim) {
   char *p = sc->strbuff;
   int c, len;
   port * inport = port_unchecked(get_in_port(sc));
@@ -2851,7 +2851,7 @@ static inline char *readstr_upto(scheme * sc, char *delim) {
 }
 
 /* read string expression "xxx...xxx" */
-static inline clj_value readstrexp(scheme * sc) {
+static inline clj_value readstrexp(nanoclj * sc) {
   char *p = sc->strbuff;
   int c, len;
   int c1 = 0;
@@ -2964,7 +2964,7 @@ static inline clj_value readstrexp(scheme * sc) {
 }
 
 /* skip white characters */
-static inline int skipspace(scheme * sc) {
+static inline int skipspace(nanoclj * sc) {
   int c = 0, curr_line = 0;
   port * inport = port_unchecked(get_in_port(sc));
 
@@ -2991,7 +2991,7 @@ static inline int skipspace(scheme * sc) {
 }
 
 /* get token */
-static inline int token(scheme * sc, port * inport) {
+static inline int token(nanoclj * sc, port * inport) {
   int c;
   c = skipspace(sc);
   if (c == EOF) {
@@ -3104,7 +3104,7 @@ static inline int token(scheme * sc, port * inport) {
 
 /* ========== Routines for Printing ========== */
 
-static inline void printslashstring(scheme * sc, const char *p, int len, clj_value out) {
+static inline void printslashstring(nanoclj * sc, const char *p, int len, clj_value out) {
   assert(is_writer(out));
   
   int c, d;
@@ -3148,7 +3148,7 @@ static inline void printslashstring(scheme * sc, const char *p, int len, clj_val
 }
 
 /* Uses internal buffer unless string pointer is already available */
-static inline void printatom(scheme * sc, clj_value l, int print_flag, clj_value out) {
+static inline void printatom(nanoclj * sc, clj_value l, int print_flag, clj_value out) {
   const char *p = 0;
   int plen = -1;
   
@@ -3281,7 +3281,7 @@ static inline const char * to_cstr(clj_value x) {
   return "";
 }
 
-static inline size_t seq_length(scheme * sc, struct cell * a) {
+static inline size_t seq_length(nanoclj * sc, struct cell * a) {
   size_t i = 0;
   
   switch (_type(a)) {
@@ -3308,19 +3308,19 @@ static inline size_t seq_length(scheme * sc, struct cell * a) {
   return 1;
 }
 
-static inline struct cell * mk_arraymap(scheme * sc, size_t len) {
+static inline struct cell * mk_arraymap(nanoclj * sc, size_t len) {
   struct cell * coll = get_vector_object(sc, len);
   _typeflag(coll) = (T_ARRAYMAP | T_ATOM);
   return coll;
 }
 
-static inline clj_value mk_mapentry(scheme * sc, clj_value key, clj_value val) {
+static inline clj_value mk_mapentry(nanoclj * sc, clj_value key, clj_value val) {
   clj_value x = cons(sc, key, val);
   typeflag(x) = T_MAPENTRY;
   return x;
 }
 
-static inline clj_value mk_collection(scheme * sc, int type, clj_value args) {
+static inline clj_value mk_collection(nanoclj * sc, int type, clj_value args) {
   int i;
   int len = seq_length(sc, decode_pointer(args));
   if (len < 0) {
@@ -3365,7 +3365,7 @@ static inline clj_value mk_collection(scheme * sc, int type, clj_value args) {
   return mk_pointer(coll);
 }
 
-static inline clj_value mk_format_va(scheme * sc, const char *fmt, ...) {
+static inline clj_value mk_format_va(nanoclj * sc, const char *fmt, ...) {
   va_list ap;
 
   /* Determine required size */
@@ -3396,7 +3396,7 @@ static inline clj_value mk_format_va(scheme * sc, const char *fmt, ...) {
   return r;
 }
 
-static inline clj_value mk_format(scheme * sc, const char * fmt, clj_value args) {
+static inline clj_value mk_format(nanoclj * sc, const char * fmt, clj_value args) {
   int n_args = 0;
   long long arg0l = 0, arg1l = 0;
   double arg0d = 0.0, arg1d = 0.0;
@@ -3490,12 +3490,12 @@ static inline clj_value mk_format(scheme * sc, const char * fmt, clj_value args)
 /* ========== Routines for Evaluation Cycle ========== */
 
 /* make closure. c is code. e is environment */
-static inline clj_value mk_closure(scheme * sc, clj_value c, clj_value e) {
+static inline clj_value mk_closure(nanoclj * sc, clj_value c, clj_value e) {
   return mk_pointer(get_cell(sc, T_CLOSURE, c, e, mk_nil()));
 }
 
 /* reverse list --- in-place */
-static inline clj_value reverse_in_place(scheme * sc, clj_value term, clj_value list) {
+static inline clj_value reverse_in_place(nanoclj * sc, clj_value term, clj_value list) {
   clj_value p = list, result = term, q;
 
   while (p.as_uint64 != sc->EMPTY.as_uint64) {
@@ -3509,7 +3509,7 @@ static inline clj_value reverse_in_place(scheme * sc, clj_value term, clj_value 
 
 /* ========== Evaluation Cycle ========== */
 
-static clj_value get_err_port(scheme * sc) {
+static clj_value get_err_port(nanoclj * sc) {
   clj_value x = find_slot_in_env(sc, sc->envir, sc->ERR, 1);
   if (x.as_uint64 != sc->EMPTY.as_uint64) {
     x = slot_value_in_env(x);
@@ -3520,7 +3520,7 @@ static clj_value get_err_port(scheme * sc) {
   return mk_nil();
 }
 
-static clj_value get_out_port(scheme * sc) {
+static clj_value get_out_port(nanoclj * sc) {
   clj_value x = find_slot_in_env(sc, sc->envir, sc->OUT, 1);
   if (x.as_uint64 != sc->EMPTY.as_uint64) {
     x = slot_value_in_env(x);
@@ -3531,7 +3531,7 @@ static clj_value get_out_port(scheme * sc) {
   return mk_nil();
 }
 
-static clj_value get_in_port(scheme * sc) {
+static clj_value get_in_port(nanoclj * sc) {
   clj_value x = find_slot_in_env(sc, sc->envir, sc->IN, 1);
   if (x.as_uint64 != sc->EMPTY.as_uint64) {
     x = slot_value_in_env(x);
@@ -3543,7 +3543,7 @@ static clj_value get_in_port(scheme * sc) {
   return mk_nil();
 }
 
-static inline clj_value _Error_1(scheme * sc, const char *s, int a) {
+static inline clj_value _Error_1(nanoclj * sc, const char *s, int a) {
   const char *str = s;
 #if USE_ERROR_HOOK
   clj_value x;
@@ -3602,7 +3602,7 @@ static inline clj_value _Error_1(scheme * sc, const char *s, int a) {
 
 /* this structure holds all the interpreter's registers */
 struct dump_stack_frame {
-  enum scheme_opcodes op;
+  enum nanoclj_opcodes op;
   clj_value args;
   clj_value envir;
   clj_value code;
@@ -3611,7 +3611,7 @@ struct dump_stack_frame {
 #endif
 };
 
-static inline void s_save(scheme * sc, enum scheme_opcodes op, clj_value args,
+static inline void s_save(nanoclj * sc, enum nanoclj_opcodes op, clj_value args,
 			  clj_value code) {
   int nframes = decode_integer(sc->dump);
   struct dump_stack_frame *next_frame;
@@ -3636,7 +3636,7 @@ static inline void s_save(scheme * sc, enum scheme_opcodes op, clj_value args,
   sc->dump = mk_int(nframes + 1);
 }
 
-static inline clj_value _s_return(scheme * sc, clj_value a) { 
+static inline clj_value _s_return(nanoclj * sc, clj_value a) { 
   int nframes = decode_integer(sc->dump);
 
   sc->value = (a);
@@ -3657,7 +3657,7 @@ static inline clj_value _s_return(scheme * sc, clj_value a) {
   return sc->T;
 }
 
-static inline void s_set_return_envir(scheme * sc, clj_value env) {
+static inline void s_set_return_envir(nanoclj * sc, clj_value env) {
   int nframes = decode_integer(sc->dump);
   if (nframes >= 1) {
     struct dump_stack_frame * frame = (struct dump_stack_frame *) sc->dump_base + nframes - 1;
@@ -3665,25 +3665,25 @@ static inline void s_set_return_envir(scheme * sc, clj_value env) {
   }  
 }
 
-static inline void dump_stack_reset(scheme * sc) {
+static inline void dump_stack_reset(nanoclj * sc) {
   /* in this implementation, sc->dump is the number of frames on the stack */
   sc->dump = mk_int(0);
 }
 
-static inline void dump_stack_initialize(scheme * sc) {
+static inline void dump_stack_initialize(nanoclj * sc) {
   sc->dump_size = 256;
   sc->dump_base = (struct dump_stack_frame *)sc->malloc(sizeof(struct dump_stack_frame) * sc->dump_size);
   dump_stack_reset(sc);
 }
 
-static inline void dump_stack_free(scheme * sc) {
+static inline void dump_stack_free(nanoclj * sc) {
   free(sc->dump_base);
   sc->dump_base = NULL;
   sc->dump = mk_int(0);
   sc->dump_size = 0;
 }
 
-static inline void dump_stack_mark(scheme * sc) {
+static inline void dump_stack_mark(nanoclj * sc) {
   int nframes = decode_integer(sc->dump);
   for (int i = 0; i < nframes; i++) {
     struct dump_stack_frame *frame = (struct dump_stack_frame *) sc->dump_base + i;
@@ -3695,11 +3695,11 @@ static inline void dump_stack_mark(scheme * sc) {
 
 #define s_retbool(tf)    s_return(sc, (tf) ? sc->T : sc->F)
 
-static inline bool is_list(scheme * sc, clj_value a) {
+static inline bool is_list(nanoclj * sc, clj_value a) {
   return is_cell(a) && seq_length(sc, decode_pointer(a)) >= 0;
 }
 
-static inline bool destructure(scheme * sc, struct cell * binding, struct cell * y, size_t num_args) {
+static inline bool destructure(nanoclj * sc, struct cell * binding, struct cell * y, size_t num_args) {
   size_t n = _size_unchecked(binding);
   bool is_multiarity = n >= 2 && vector_elem(binding, n - 2).as_uint64 == sc->AMP.as_uint64;
   
@@ -3751,7 +3751,7 @@ static inline bool destructure(scheme * sc, struct cell * binding, struct cell *
   return true;
 }
 
-static inline clj_value construct_by_type(scheme * sc, int type_id, clj_value args) {
+static inline clj_value construct_by_type(nanoclj * sc, int type_id, clj_value args) {
   clj_value x, y;
   
   switch (type_id) {
@@ -3897,7 +3897,7 @@ static op_code_info dispatch_table[] = {
   {0}
 };
 
-static inline bool unpack_args_1(scheme * sc) {
+static inline bool unpack_args_1(nanoclj * sc) {
  if (sc->args.as_uint64 != sc->EMPTY.as_uint64) {
     struct cell * c = decode_pointer(sc->args);
     sc->arg0 = _car(c);
@@ -3907,7 +3907,7 @@ static inline bool unpack_args_1(scheme * sc) {
  return false;
 }
 
-static inline bool unpack_args_1_plus(scheme * sc) {
+static inline bool unpack_args_1_plus(nanoclj * sc) {
  if (sc->args.as_uint64 != sc->EMPTY.as_uint64) {
     struct cell * c = decode_pointer(sc->args);
     sc->arg0 = _car(c);
@@ -3918,7 +3918,7 @@ static inline bool unpack_args_1_plus(scheme * sc) {
  return false;
 }
 
-static inline bool unpack_args_2(scheme * sc) {
+static inline bool unpack_args_2(nanoclj * sc) {
   if (sc->args.as_uint64 != sc->EMPTY.as_uint64) {
     struct cell * c = decode_pointer(sc->args);
     sc->arg0 = _car(c);
@@ -3934,7 +3934,7 @@ static inline bool unpack_args_2(scheme * sc) {
   return false;
 }
 
-static inline bool unpack_args_2_plus(scheme * sc) {
+static inline bool unpack_args_2_plus(nanoclj * sc) {
   if (sc->args.as_uint64 != sc->EMPTY.as_uint64) {
     struct cell * c = decode_pointer(sc->args);
     sc->arg0 = _car(c);
@@ -3950,7 +3950,7 @@ static inline bool unpack_args_2_plus(scheme * sc) {
   return false;
 }
 
-static inline int get_literal_fn_arity(scheme * sc, clj_value body, bool * has_rest) {
+static inline int get_literal_fn_arity(nanoclj * sc, clj_value body, bool * has_rest) {
   if (is_pair(body)) {
     int n1 = get_literal_fn_arity(sc, car(body), has_rest);
     int n2 = get_literal_fn_arity(sc, cdr(body), has_rest);
@@ -3969,7 +3969,7 @@ static inline int get_literal_fn_arity(scheme * sc, clj_value body, bool * has_r
   }
 }
 
-static inline clj_value opexe(scheme * sc, enum scheme_opcodes op) {
+static inline clj_value opexe(nanoclj * sc, enum nanoclj_opcodes op) {
   clj_value x, y, ns, meta;
   int syn;
   clj_value params0;
@@ -4045,7 +4045,7 @@ static inline clj_value opexe(scheme * sc, enum scheme_opcodes op) {
     /* Set up another iteration of REPL */
     sc->nesting = 0;
     sc->save_inport = get_in_port(sc);
-    scheme_define(sc, sc->root_env, sc->IN, sc->loadport);
+    nanoclj_define(sc, sc->root_env, sc->IN, sc->loadport);
       
     s_save(sc, OP_T0LVL, sc->EMPTY, sc->EMPTY);
     s_save(sc, OP_VALUEPRINT, sc->EMPTY, sc->EMPTY);
@@ -4056,7 +4056,7 @@ static inline clj_value opexe(scheme * sc, enum scheme_opcodes op) {
 
   case OP_T1LVL:               /* top level */
     sc->code = sc->value;
-    scheme_define(sc, sc->root_env, sc->IN, sc->save_inport);
+    nanoclj_define(sc, sc->root_env, sc->IN, sc->save_inport);
     s_goto(sc, OP_EVAL);
 
   case OP_READ:{                /* read */
@@ -4083,7 +4083,7 @@ static inline clj_value opexe(scheme * sc, enum scheme_opcodes op) {
       putstr(sc, "\nGives: ", get_err_port(sc));
     }
     if (file_interactive(sc)) {
-      scheme_define(sc, sc->root_env, sc->VAL1, sc->value);
+      nanoclj_define(sc, sc->root_env, sc->VAL1, sc->value);
 
       clj_value p0 = find_slot_in_env(sc, sc->envir, sc->PRINT_HOOK, 1);
       if (p0.as_uint64 != sc->EMPTY.as_uint64) {	
@@ -5900,11 +5900,11 @@ static inline const char *procname(clj_value x) {
 }
 
 /* kernel of this interpreter */
-static void Eval_Cycle(scheme * sc, enum scheme_opcodes op) {
+static void Eval_Cycle(nanoclj * sc, enum nanoclj_opcodes op) {
   sc->op = op;
   for (;;) {    
     ok_to_freely_gc(sc);
-    if (opexe(sc, (enum scheme_opcodes) sc->op).as_uint64 == sc->EMPTY.as_uint64) {
+    if (opexe(sc, (enum nanoclj_opcodes) sc->op).as_uint64 == sc->EMPTY.as_uint64) {
       return;
     }
     if (sc->no_memory) {
@@ -5917,19 +5917,19 @@ static void Eval_Cycle(scheme * sc, enum scheme_opcodes op) {
 
 /* ========== Initialization of internal keywords ========== */
 
-static inline void assign_syntax(scheme * sc, const char *name, unsigned int syntax) {
+static inline void assign_syntax(nanoclj * sc, const char *name, unsigned int syntax) {
   clj_value x = mk_symbol(sc, name, syntax);
   oblist_add_item(sc, name, x);
 }
 
-static inline void assign_proc(scheme * sc, enum scheme_opcodes op, const char *name) {
+static inline void assign_proc(nanoclj * sc, enum nanoclj_opcodes op, const char *name) {
   clj_value x = def_symbol(sc, name);
   clj_value y = mk_proc(op);
   new_slot_in_env(sc, x, y);
 }
 
 
-/* initialization of TinyScheme */
+/* initialization of nanoclj */
 #if USE_INTERFACE
 static const char * checked_strvalue(clj_value p) {
   if (type(p) == T_STRING) {
@@ -5973,7 +5973,7 @@ static void set_vector_elem_checked(clj_value vec, size_t ielem, clj_value newel
     set_vector_elem(decode_pointer(vec), ielem, newel);
   }
 }
-static clj_value first_checked(scheme * sc, clj_value coll) {
+static clj_value first_checked(nanoclj * sc, clj_value coll) {
   if (is_cell(coll)) {
     return first(sc, decode_pointer(coll));
   } else {
@@ -5981,14 +5981,14 @@ static clj_value first_checked(scheme * sc, clj_value coll) {
   }
 }
 
-static bool is_empty_checked(scheme * sc, clj_value coll) {
+static bool is_empty_checked(nanoclj * sc, clj_value coll) {
   if (is_cell(coll)) {
     return is_empty(sc, decode_pointer(coll));
   } else {
     return false;
   }
 }
-static clj_value rest_checked(scheme * sc, clj_value coll) {
+static clj_value rest_checked(nanoclj * sc, clj_value coll) {
   if (is_cell(coll)) {
     return mk_pointer(rest(sc, decode_pointer(coll)));
   } else {
@@ -5996,7 +5996,7 @@ static clj_value rest_checked(scheme * sc, clj_value coll) {
   }
 }
 
-static size_t size_checked(scheme * sc, clj_value coll) {
+static size_t size_checked(nanoclj * sc, clj_value coll) {
   if (is_cell(coll)) {
     return seq_length(sc, decode_pointer(coll));
   } else {
@@ -6004,8 +6004,8 @@ static size_t size_checked(scheme * sc, clj_value coll) {
   }
 }
    
-static struct scheme_interface vtbl = {
-  scheme_define,
+static struct nanoclj_interface vtbl = {
+  nanoclj_define,
   cons,
   mk_integer,
   mk_real,
@@ -6062,15 +6062,15 @@ static struct scheme_interface vtbl = {
   is_promise,
   is_environment,
   
-  scheme_load_file,
-  scheme_load_string,
-  scheme_eval_string
+  nanoclj_load_file,
+  nanoclj_load_string,
+  nanoclj_eval_string
 };
 #endif
 
-scheme *scheme_init_new() {
-  scheme *sc = (scheme *) malloc(sizeof(scheme));
-  if (!scheme_init(sc)) {
+nanoclj *nanoclj_init_new() {
+  nanoclj *sc = (nanoclj *) malloc(sizeof(nanoclj));
+  if (!nanoclj_init(sc)) {
     free(sc);
     return 0;
   } else {
@@ -6078,9 +6078,9 @@ scheme *scheme_init_new() {
   }
 }
 
-scheme *scheme_init_new_custom_alloc(func_alloc malloc, func_dealloc free) {
-  scheme *sc = (scheme *) malloc(sizeof(scheme));
-  if (!scheme_init_custom_alloc(sc, malloc, free)) {
+nanoclj *nanoclj_init_new_custom_alloc(func_alloc malloc, func_dealloc free) {
+  nanoclj *sc = (nanoclj *) malloc(sizeof(nanoclj));
+  if (!nanoclj_init_custom_alloc(sc, malloc, free)) {
     free(sc);
     return 0;
   } else {
@@ -6089,13 +6089,13 @@ scheme *scheme_init_new_custom_alloc(func_alloc malloc, func_dealloc free) {
 }
 
 
-int scheme_init(scheme * sc) {
-  return scheme_init_custom_alloc(sc, malloc, free);
+int nanoclj_init(nanoclj * sc) {
+  return nanoclj_init_custom_alloc(sc, malloc, free);
 }
 
 #include "functions.h"
  
-int scheme_init_custom_alloc(scheme * sc, func_alloc malloc,
+int nanoclj_init_custom_alloc(nanoclj * sc, func_alloc malloc,
     func_dealloc free) {
   
   int i, n = sizeof(dispatch_table) / sizeof(dispatch_table[0]);
@@ -6170,7 +6170,7 @@ int scheme_init_custom_alloc(scheme * sc, func_alloc malloc,
 
   for (i = 0; i < n; i++) {
     if (dispatch_table[i].name != 0) {
-      assign_proc(sc, (enum scheme_opcodes) i, dispatch_table[i].name);
+      assign_proc(sc, (enum nanoclj_opcodes) i, dispatch_table[i].name);
     }
   }
 
@@ -6215,62 +6215,62 @@ int scheme_init_custom_alloc(scheme * sc, func_alloc malloc,
   sc->REGEX = def_symbol(sc, "regex");
   sc->EMPTYSTR = mk_string(sc, "");  
 
-  scheme_define(sc, sc->global_env, def_symbol(sc, "root"), sc->root_env);
-  scheme_define(sc, sc->global_env, def_symbol(sc, "nil"), mk_nil());
+  nanoclj_define(sc, sc->global_env, def_symbol(sc, "root"), sc->root_env);
+  nanoclj_define(sc, sc->global_env, def_symbol(sc, "nil"), mk_nil());
 
   register_functions(sc);
   
   return !sc->no_memory;
 }
 
-void scheme_set_input_port_file(scheme * sc, FILE * fin) {
+void nanoclj_set_input_port_file(nanoclj * sc, FILE * fin) {
   clj_value inport = port_from_file(sc, fin, port_input);
-  scheme_define(sc, sc->global_env, sc->IN, inport);
+  nanoclj_define(sc, sc->global_env, sc->IN, inport);
 }
 
-void scheme_set_input_port_string(scheme * sc, char *start, char *past_the_end) {
+void nanoclj_set_input_port_string(nanoclj * sc, char *start, char *past_the_end) {
   clj_value inport = port_from_string(sc, start, past_the_end, port_input);
-  scheme_define(sc, sc->global_env, sc->IN, inport);
+  nanoclj_define(sc, sc->global_env, sc->IN, inport);
 }
 
-void scheme_set_output_port_file(scheme * sc, FILE * fout) {
+void nanoclj_set_output_port_file(nanoclj * sc, FILE * fout) {
   clj_value p = port_from_file(sc, fout, port_output);
-  scheme_define(sc, sc->root_env, sc->OUT, p);
+  nanoclj_define(sc, sc->root_env, sc->OUT, p);
 }
 
-void scheme_set_output_port_callback(scheme * sc,
+void nanoclj_set_output_port_callback(nanoclj * sc,
 				     void (*func) (const char *, size_t, void *)
 				     ) {
   clj_value p = port_from_callback(sc, func, port_output);
-  scheme_define(sc, sc->root_env, sc->OUT, p);
+  nanoclj_define(sc, sc->root_env, sc->OUT, p);
 }
 
-void scheme_set_error_port_callback(scheme * sc,
+void nanoclj_set_error_port_callback(nanoclj * sc,
 				    void (*func) (const char *, size_t, void *)
 				    ) {
   clj_value p = port_from_callback(sc, func, port_output);
-  scheme_define(sc, sc->global_env, sc->ERR, p);
+  nanoclj_define(sc, sc->global_env, sc->ERR, p);
 }
 
-void scheme_set_error_port_file(scheme * sc, FILE * fout) {
+void nanoclj_set_error_port_file(nanoclj * sc, FILE * fout) {
   clj_value p = port_from_file(sc, fout, port_output);
-  scheme_define(sc, sc->global_env, sc->ERR, p);
+  nanoclj_define(sc, sc->global_env, sc->ERR, p);
 }
 
-void scheme_set_output_port_string(scheme * sc, char *start, char *past_the_end) {
+void nanoclj_set_output_port_string(nanoclj * sc, char *start, char *past_the_end) {
   clj_value p = port_from_string(sc, start, past_the_end, port_output);
-  scheme_define(sc, sc->root_env, sc->OUT, p);
+  nanoclj_define(sc, sc->root_env, sc->OUT, p);
 }
 
-void scheme_set_external_data(scheme * sc, void *p) {
+void nanoclj_set_external_data(nanoclj * sc, void *p) {
   sc->ext_data = p;
 }
 
-void scheme_set_object_invoke_callback(scheme * sc, clj_value (*func) (scheme *, void *, clj_value)) {
+void nanoclj_set_object_invoke_callback(nanoclj * sc, clj_value (*func) (nanoclj *, void *, clj_value)) {
   sc->object_invoke_callback = func;
 }
 
-void scheme_deinit(scheme * sc) {
+void nanoclj_deinit(nanoclj * sc) {
   int i;
 
 #if SHOW_ERROR_LINE
@@ -6316,11 +6316,11 @@ void scheme_deinit(scheme * sc) {
 #endif
 }
 
-void scheme_load_file(scheme * sc, FILE * fin) {
-  scheme_load_named_file(sc, fin, 0);
+void nanoclj_load_file(nanoclj * sc, FILE * fin) {
+  nanoclj_load_named_file(sc, fin, 0);
 }
 
-void scheme_load_named_file(scheme * sc, FILE * fin, const char *filename) {
+void nanoclj_load_named_file(nanoclj * sc, FILE * fin, const char *filename) {
   if (fin == NULL) {
     fprintf(stderr, "File clj_value can not be NULL when loading a file\n");
     return;
@@ -6353,7 +6353,7 @@ void scheme_load_named_file(scheme * sc, FILE * fin, const char *filename) {
   }
 }
 
-clj_value scheme_eval_string(scheme * sc, const char *cmd) {
+clj_value nanoclj_eval_string(nanoclj * sc, const char *cmd) {
   dump_stack_reset(sc);
   sc->envir = sc->global_env;
   sc->file_i = 0;
@@ -6375,7 +6375,7 @@ clj_value scheme_eval_string(scheme * sc, const char *cmd) {
   return sc->value;
 }
  
-void scheme_load_string(scheme * sc, const char *cmd) {
+void nanoclj_load_string(nanoclj * sc, const char *cmd) {
   dump_stack_reset(sc);
   sc->envir = sc->global_env;
   sc->file_i = 0;
@@ -6399,7 +6399,7 @@ void scheme_load_string(scheme * sc, const char *cmd) {
   }
 }
 
-void scheme_define(scheme * sc, clj_value envir, clj_value symbol, clj_value value) {
+void nanoclj_define(nanoclj * sc, clj_value envir, clj_value symbol, clj_value value) {
   clj_value x = find_slot_in_env(sc, envir, symbol, 0);
   if (x.as_uint64 != sc->EMPTY.as_uint64) {
     set_slot_in_env(x, value);
@@ -6408,7 +6408,7 @@ void scheme_define(scheme * sc, clj_value envir, clj_value symbol, clj_value val
   }
 }
 
-static inline void save_from_C_call(scheme * sc) {
+static inline void save_from_C_call(nanoclj * sc) {
   clj_value saved_data = cons(sc,
 			      car(sc->sink),
 			      cons(sc,
@@ -6421,7 +6421,7 @@ static inline void save_from_C_call(scheme * sc) {
   dump_stack_reset(sc);
 }
  
-static inline void restore_from_C_call(scheme * sc) {
+static inline void restore_from_C_call(nanoclj * sc) {
   car(sc->sink) = caar(sc->c_nest);
   sc->envir = cadar(sc->c_nest);
   sc->dump = cdr(cdar(sc->c_nest));
@@ -6430,7 +6430,7 @@ static inline void restore_from_C_call(scheme * sc) {
 }
 
 /* "func" and "args" are assumed to be already eval'ed. */
-clj_value scheme_call(scheme * sc, clj_value func, clj_value args) {
+clj_value nanoclj_call(nanoclj * sc, clj_value func, clj_value args) {
   fprintf(stderr, "dump = %d\n", decode_integer(sc->dump));
 
   int old_repl = sc->interactive_repl;
@@ -6450,26 +6450,26 @@ clj_value scheme_call(scheme * sc, clj_value func, clj_value args) {
 }
 
 #if !NANOCLJ_STANDALONE
-void scheme_register_foreign_func(scheme * sc, scheme_registerable * sr) {
-  scheme_define(sc,
+void nanoclj_register_foreign_func(nanoclj * sc, nanoclj_registerable * sr) {
+  nanoclj_define(sc,
       sc->global_env, def_symbol(sc, sr->name), mk_foreign_func(sc, sr->f));
 }
 
-void scheme_register_foreign_func_list(scheme * sc,
-    scheme_registerable * list, int count) {
+void nanoclj_register_foreign_func_list(nanoclj * sc,
+    nanoclj_registerable * list, int count) {
   int i;
   for (i = 0; i < count; i++) {
-    scheme_register_foreign_func(sc, list + i);
+    nanoclj_register_foreign_func(sc, list + i);
   }
 }
 
-clj_value scheme_apply0(scheme * sc, const char *procname) {
-  return scheme_eval(sc, cons(sc, def_symbol(sc, procname), sc->EMPTY));
+clj_value nanoclj_apply0(nanoclj * sc, const char *procname) {
+  return nanoclj_eval(sc, cons(sc, def_symbol(sc, procname), sc->EMPTY));
 }
 
 #endif
 
-clj_value scheme_eval(scheme * sc, clj_value obj) {
+clj_value nanoclj_eval(nanoclj * sc, clj_value obj) {
   int old_repl = sc->interactive_repl;
   sc->interactive_repl = 0;
   save_from_C_call(sc);
@@ -6495,13 +6495,13 @@ static inline FILE *open_file(const char *fname) {
 
 #define MAX_COMPLETION_SYMBOLS 65535
 
-static scheme * repl_sc = NULL;
+static nanoclj * repl_sc = NULL;
 static int num_completion_symbols = 0;
 static const char * completion_symbols[MAX_COMPLETION_SYMBOLS];
  
 static void completion(const char *input, linenoiseCompletions *lc) {
   if (!num_completion_symbols) {
-    clj_value sym = scheme_eval_string(repl_sc, "(ns-interns *ns*)");
+    clj_value sym = nanoclj_eval_string(repl_sc, "(ns-interns *ns*)");
     for ( ; sym.as_uint64 != repl_sc->EMPTY.as_uint64 && num_completion_symbols < MAX_COMPLETION_SYMBOLS; sym = cdr(sym)) {
       clj_value v = car(sym);
       if (is_symbol(v)) {
@@ -6597,16 +6597,16 @@ int main(int argc, const char **argv) {
     return 1;
   }
 
-  scheme sc;
-  if (!scheme_init(&sc)) {
+  nanoclj sc;
+  if (!nanoclj_init(&sc)) {
     fprintf(stderr, "Could not initialize!\n");
     return 2;
   }
-  scheme_set_input_port_file(&sc, stdin);
-  scheme_set_output_port_file(&sc, stdout);
-  scheme_set_error_port_file(&sc, stderr);
+  nanoclj_set_input_port_file(&sc, stdin);
+  nanoclj_set_output_port_file(&sc, stdout);
+  nanoclj_set_error_port_file(&sc, stderr);
 #if USE_DL
-  scheme_define(&sc, sc.global_env, def_symbol(&sc, "load-extension"),
+  nanoclj_define(&sc, sc.global_env, def_symbol(&sc, "load-extension"),
 		mk_foreign_func(&sc, scm_load_ext));
 #endif
 
@@ -6615,10 +6615,10 @@ int main(int argc, const char **argv) {
     clj_value value = mk_string(&sc, argv[i]);
     args = cons(&sc, value, args);
   }
-  scheme_define(&sc, sc.global_env, def_symbol(&sc, "*command-line-args*"), args);
+  nanoclj_define(&sc, sc.global_env, def_symbol(&sc, "*command-line-args*"), args);
   
   FILE * fh = open_file(InitFile);
-  scheme_load_named_file(&sc, fh, InitFile);
+  nanoclj_load_named_file(&sc, fh, InitFile);
   if (sc.retcode != 0) {
     fprintf(stderr, "Errors encountered reading %s\n", InitFile);
     exit(1);
@@ -6627,7 +6627,7 @@ int main(int argc, const char **argv) {
 
   if (argc >= 2) {
     fh = open_file(argv[1]);
-    scheme_load_named_file(&sc, fh, argv[1]);
+    nanoclj_load_named_file(&sc, fh, argv[1]);
     if (sc.retcode != 0) {
       fprintf(stderr, "Errors encountered reading %s\n", argv[1]);
       exit(1);
@@ -6639,7 +6639,7 @@ int main(int argc, const char **argv) {
     clj_value x = find_slot_in_env(&sc, sc.envir, main, 1);
     if (x.as_uint64 != sc.EMPTY.as_uint64) {
       x = slot_value_in_env(x);
-      x = scheme_call(&sc, x, sc.EMPTY);
+      x = nanoclj_call(&sc, x, sc.EMPTY);
       return to_int(x);
     }
   } else {
@@ -6659,24 +6659,24 @@ int main(int argc, const char **argv) {
       
       char * missing_parens = complete_parens(line);
       if (!missing_parens) {
-	scheme_load_string(&sc, line);
+	nanoclj_load_string(&sc, line);
       } else {
 	int l1 = strlen(line), l2 = strlen(missing_parens);
 	char * tmp = (char *)malloc(l1 + l2 + 1);
 	strcpy(tmp, line);
 	strcpy(tmp + l1, missing_parens);
 	free(missing_parens);
-	scheme_load_string(&sc, tmp);
+	nanoclj_load_string(&sc, tmp);
 	free(tmp);
       }
       free(line);
     }
 #else
-    scheme_load_named_file(&sc, stdin, "-");
+    nanoclj_load_named_file(&sc, stdin, "-");
 #endif
   }
   int retcode = sc.retcode;
-  scheme_deinit(&sc);
+  nanoclj_deinit(&sc);
 
   return retcode;
 }

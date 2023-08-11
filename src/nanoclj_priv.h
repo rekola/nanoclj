@@ -1,5 +1,5 @@
-#ifndef _SCHEME_PRIVATE_H
-#define _SCHEME_PRIVATE_H
+#ifndef _NANOCLJ_PRIVATE_H
+#define _NANOCLJ_PRIVATE_H
 
 #include "nanoclj.h"
 
@@ -36,7 +36,7 @@
 extern "C" {
 #endif
 
-  enum scheme_port_kind {
+  enum nanoclj_port_kind {
     port_free = 0,
     port_file = 1,
     port_string = 2,
@@ -116,7 +116,7 @@ extern "C" {
     } _object;
   };
 
-  struct scheme {
+  struct nanoclj {
 /* arrays for segments */
     func_alloc malloc;
     func_dealloc free;
@@ -224,17 +224,17 @@ extern "C" {
     int op;
 
     void *ext_data;             /* For the benefit of foreign functions */
-    clj_value (*object_invoke_callback) (scheme *, void *, clj_value);
+    clj_value (*object_invoke_callback) (nanoclj *, void *, clj_value);
 
     long gensym_cnt;
 
-    struct scheme_interface *vptr;
+    struct nanoclj_interface *vptr;
     void *dump_base;            /* pointer to base of allocated dump stack */
     int dump_size;              /* number of frames allocated for dump stack */
   };
 
 /* operator code */
-  enum scheme_opcodes {
+  enum nanoclj_opcodes {
 #define _OP_DEF(A,B,C,OP) OP,
 #include "nanoclj_opdf.h"
     OP_MAXDEFINED

@@ -1,5 +1,5 @@
-#ifndef _SCHEME_H_
-#define _SCHEME_H_
+#ifndef _NANOCLJ_H_
+#define _NANOCLJ_H_
 
 #include <stdio.h>
 #include <stdint.h>
@@ -21,12 +21,12 @@ extern "C" {
 #endif
 
 #ifndef _MSC_VER
-#define SCHEME_EXPORT
+#define NANOCLJ_EXPORT
 #else
-#ifdef _SCHEME_SOURCE
-#define SCHEME_EXPORT __declspec(dllexport)
+#ifdef _NANOCLJ_SOURCE
+#define NANOCLJ_EXPORT __declspec(dllexport)
 #else
-#define SCHEME_EXPORT __declspec(dllimport)
+#define NANOCLJ_EXPORT __declspec(dllimport)
 #endif
 #endif
 
@@ -63,7 +63,7 @@ extern "C" {
 #define SHOW_ERROR_LINE 1
 #endif
 
-  typedef struct scheme scheme;
+  typedef struct nanoclj nanoclj;
   typedef union {
     uint64_t as_uint64;
     double as_double;
@@ -72,64 +72,64 @@ extern "C" {
   typedef void *(*func_alloc) (size_t);
   typedef void (*func_dealloc) (void *);
   
-  SCHEME_EXPORT scheme *scheme_init_new(void);
-  SCHEME_EXPORT scheme *scheme_init_new_custom_alloc(func_alloc malloc,
+  NANOCLJ_EXPORT nanoclj *nanoclj_init_new(void);
+  NANOCLJ_EXPORT nanoclj *nanoclj_init_new_custom_alloc(func_alloc malloc,
       func_dealloc free);
-  SCHEME_EXPORT int scheme_init(scheme * sc);
-  SCHEME_EXPORT int scheme_init_custom_alloc(scheme * sc, func_alloc,
+  NANOCLJ_EXPORT int nanoclj_init(nanoclj * sc);
+  NANOCLJ_EXPORT int nanoclj_init_custom_alloc(nanoclj * sc, func_alloc,
       func_dealloc);
-  SCHEME_EXPORT void scheme_deinit(scheme * sc);
-  void scheme_set_input_port_file(scheme * sc, FILE * fin);
-  void scheme_set_input_port_string(scheme * sc, char *start,
+  NANOCLJ_EXPORT void nanoclj_deinit(nanoclj * sc);
+  void nanoclj_set_input_port_file(nanoclj * sc, FILE * fin);
+  void nanoclj_set_input_port_string(nanoclj * sc, char *start,
       char *past_the_end);
-  SCHEME_EXPORT void scheme_set_output_port_file(scheme * sc, FILE * fin);
-  SCHEME_EXPORT void scheme_set_output_port_callback(scheme * sc, void (*func) (const char *, size_t, void *));
-  SCHEME_EXPORT void scheme_set_error_port_callback(scheme * sc, void (*func) (const char *, size_t, void *));
-  void scheme_set_output_port_string(scheme * sc, char *start,
+  NANOCLJ_EXPORT void nanoclj_set_output_port_file(nanoclj * sc, FILE * fin);
+  NANOCLJ_EXPORT void nanoclj_set_output_port_callback(nanoclj * sc, void (*func) (const char *, size_t, void *));
+  NANOCLJ_EXPORT void nanoclj_set_error_port_callback(nanoclj * sc, void (*func) (const char *, size_t, void *));
+  void nanoclj_set_output_port_string(nanoclj * sc, char *start,
       char *past_the_end);
-  SCHEME_EXPORT void scheme_load_file(scheme * sc, FILE * fin);
-  SCHEME_EXPORT void scheme_load_named_file(scheme * sc, FILE * fin,
+  NANOCLJ_EXPORT void nanoclj_load_file(nanoclj * sc, FILE * fin);
+  NANOCLJ_EXPORT void nanoclj_load_named_file(nanoclj * sc, FILE * fin,
       const char *filename);
-  SCHEME_EXPORT clj_value scheme_eval_string(scheme * sc, const char *cmd);
-  SCHEME_EXPORT void scheme_load_string(scheme * sc, const char *cmd);
-  SCHEME_EXPORT clj_value scheme_apply0(scheme * sc, const char *procname);
-  SCHEME_EXPORT clj_value scheme_call(scheme * sc, clj_value func, clj_value args);
-  SCHEME_EXPORT clj_value scheme_eval(scheme * sc, clj_value obj);
-  void scheme_set_external_data(scheme * sc, void *p);
-  void scheme_set_object_invoke_callback(scheme * sc, clj_value (*func) (scheme *, void *, clj_value));
-  SCHEME_EXPORT void scheme_define(scheme * sc, clj_value env, clj_value symbol,
+  NANOCLJ_EXPORT clj_value nanoclj_eval_string(nanoclj * sc, const char *cmd);
+  NANOCLJ_EXPORT void nanoclj_load_string(nanoclj * sc, const char *cmd);
+  NANOCLJ_EXPORT clj_value nanoclj_apply0(nanoclj * sc, const char *procname);
+  NANOCLJ_EXPORT clj_value nanoclj_call(nanoclj * sc, clj_value func, clj_value args);
+  NANOCLJ_EXPORT clj_value nanoclj_eval(nanoclj * sc, clj_value obj);
+  void nanoclj_set_external_data(nanoclj * sc, void *p);
+  void nanoclj_set_object_invoke_callback(nanoclj * sc, clj_value (*func) (nanoclj *, void *, clj_value));
+  NANOCLJ_EXPORT void nanoclj_define(nanoclj * sc, clj_value env, clj_value symbol,
       clj_value value);
 
-  typedef clj_value(*foreign_func) (scheme *, clj_value);
+  typedef clj_value(*foreign_func) (nanoclj *, clj_value);
 
 #if 0
-  clj_value _cons(scheme * sc, clj_value a, clj_value b, int immutable);
-  clj_value mk_boolean(scheme * sc, int v);
-  clj_value mk_integer(scheme * sc, long long num);
-  clj_value mk_real(scheme * sc, double num);
-  clj_value mk_symbol(scheme * sc, const char *name);
-  clj_value gensym(scheme * sc);
-  clj_value mk_string(scheme * sc, const char *str);
-  clj_value mk_counted_string(scheme * sc, const char *str, int len);
-  clj_value mk_character(scheme * sc, int c);
-  clj_value mk_foreign_func(scheme * sc, foreign_func f);
-  int list_length(scheme * sc, clj_value a);
+  clj_value _cons(nanoclj * sc, clj_value a, clj_value b, int immutable);
+  clj_value mk_boolean(nanoclj * sc, int v);
+  clj_value mk_integer(nanoclj * sc, long long num);
+  clj_value mk_real(nanoclj * sc, double num);
+  clj_value mk_symbol(nanoclj * sc, const char *name);
+  clj_value gensym(nanoclj * sc);
+  clj_value mk_string(nanoclj * sc, const char *str);
+  clj_value mk_counted_string(nanoclj * sc, const char *str, int len);
+  clj_value mk_character(nanoclj * sc, int c);
+  clj_value mk_foreign_func(nanoclj * sc, foreign_func f);
+  int list_length(nanoclj * sc, clj_value a);
 #endif
 
 #if USE_INTERFACE
-  struct scheme_interface {
-    void (*scheme_define) (scheme * sc, clj_value env, clj_value symbol,
+  struct nanoclj_interface {
+    void (*nanoclj_define) (nanoclj * sc, clj_value env, clj_value symbol,
 			   clj_value value);
-    clj_value(*cons) (scheme * sc, clj_value a, clj_value b);
-    clj_value(*mk_integer) (scheme * sc, long long num);
+    clj_value(*cons) (nanoclj * sc, clj_value a, clj_value b);
+    clj_value(*mk_integer) (nanoclj * sc, long long num);
     clj_value(*mk_real) (double num);
-    clj_value(*mk_symbol) (scheme * sc, const char *name);
-    clj_value(*gensym) (scheme * sc);
-    clj_value(*mk_string) (scheme * sc, const char *str);
-    clj_value(*mk_counted_string) (scheme * sc, const char *str, size_t len);
+    clj_value(*mk_symbol) (nanoclj * sc, const char *name);
+    clj_value(*gensym) (nanoclj * sc);
+    clj_value(*mk_string) (nanoclj * sc, const char *str);
+    clj_value(*mk_counted_string) (nanoclj * sc, const char *str, size_t len);
     clj_value(*mk_character) (int c);
-    clj_value(*mk_vector) (scheme * sc, size_t len);
-    clj_value(*mk_foreign_func) (scheme * sc, foreign_func f);
+    clj_value(*mk_vector) (nanoclj * sc, size_t len);
+    clj_value(*mk_foreign_func) (nanoclj * sc, foreign_func f);
     
     bool (*is_string) (clj_value p);
     const char *(*string_value) (clj_value p);
@@ -140,9 +140,9 @@ extern "C" {
     bool (*is_real) (clj_value p);
     bool (*is_character) (clj_value p);
     int (*to_int) (clj_value p);
-    bool (*is_list) (scheme * sc, clj_value p);
+    bool (*is_list) (nanoclj * sc, clj_value p);
     bool (*is_vector) (clj_value p);
-    size_t (*size) (scheme * sc, clj_value vec);
+    size_t (*size) (nanoclj * sc, clj_value vec);
     void (*fill_vector) (clj_value vec, clj_value elem);
     clj_value(*vector_elem) (clj_value vec, size_t ielem);
     void(*set_vector_elem) (clj_value vec, size_t ielem, clj_value newel);
@@ -153,9 +153,9 @@ extern "C" {
     clj_value(*pair_car) (clj_value p);
     clj_value(*pair_cdr) (clj_value p);
 
-    clj_value (*first)(scheme * sc, clj_value coll);
-    bool (*is_empty)(scheme * sc, clj_value coll);
-    clj_value (*rest)(scheme * sc, clj_value coll);
+    clj_value (*first)(nanoclj * sc, clj_value coll);
+    bool (*is_empty)(nanoclj * sc, clj_value coll);
+    clj_value (*rest)(nanoclj * sc, clj_value coll);
 
     bool (*is_symbol) (clj_value p);
     bool (*is_keyword) (clj_value p);
@@ -175,20 +175,20 @@ extern "C" {
 #endif
     bool (*is_promise) (clj_value p);
     bool (*is_environment) (clj_value p);
-    void (*load_file) (scheme * sc, FILE * fin);
-    void (*load_string) (scheme * sc, const char *input);
-    clj_value (*eval_string) (scheme * sc, const char *input);
+    void (*load_file) (nanoclj * sc, FILE * fin);
+    void (*load_string) (nanoclj * sc, const char *input);
+    clj_value (*eval_string) (nanoclj * sc, const char *input);
   };
 #endif
   
 #if !STANDALONE
-  typedef struct scheme_registerable {
+  typedef struct nanoclj_registerable {
     foreign_func f;
     const char *name;
-  } scheme_registerable;
+  } nanoclj_registerable;
   
-  void scheme_register_foreign_func_list(scheme * sc,
-					 scheme_registerable * list, int n);
+  void nanoclj_register_foreign_func_list(nanoclj * sc,
+					  nanoclj_registerable * list, int n);
 
 #endif                          /* !STANDALONE */
 
