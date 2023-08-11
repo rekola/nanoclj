@@ -3,7 +3,7 @@
 /* Modifications for NT and dl_* interface, scm_load_ext: D. Souflis */
 /* Refurbished by Stephen Gildea */
 
-#define _SCHEME_SOURCE
+#define _NANOCLJ_SOURCE
 #include "dynload.h"
 #include <string.h>
 #include <stdio.h>
@@ -37,7 +37,7 @@ static void display_w32_error_msg(const char *additional_message) {
   
   FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_ALLOCATE_BUFFER,
 		NULL, GetLastError(), 0, (LPTSTR) & msg_buf, 0, NULL);
-  fprintf(stderr, "scheme load-extension: %s: %s", additional_message,
+  fprintf(stderr, "nanoclj load-extension: %s: %s", additional_message,
 	  msg_buf);
   LocalFree(msg_buf);
 }
@@ -70,7 +70,7 @@ static void dl_detach(HMODULE mo) {
 static HMODULE dl_attach(const char *module) {
   HMODULE so = dlopen(module, RTLD_LAZY);
   if (!so) {
-    fprintf(stderr, "Error loading scheme extension \"%s\": %s\n", module,
+    fprintf(stderr, "Error loading nanoclj extension \"%s\": %s\n", module,
 	    dlerror());
   }
   return so;
@@ -84,7 +84,7 @@ static FARPROC dl_proc(HMODULE mo, const char *proc) {
   if ((errmsg = dlerror()) == 0) {
     return fp;
   }
-  fprintf(stderr, "Error initializing scheme module \"%s\": %s\n", proc,
+  fprintf(stderr, "Error initializing nanoclj module \"%s\": %s\n", proc,
 	  errmsg);
   return 0;
 }
@@ -96,12 +96,12 @@ static void dl_detach(HMODULE mo) {
 
 static HMODULE dll_handle;
 
-pointer scm_load_ext(scheme * sc, pointer args) {
-  pointer first_arg;
-  pointer retval;
+clj_value scm_load_ext(nanoclj * sc, clj_value args) {
+  clj_value first_arg;
+  clj_value retval;
   char filename[MAXPATHLEN], init_fn[MAXPATHLEN + 6];
   char *name;
-  void (*module_init) (scheme * sc);
+  void (*module_init) (nanoclj * sc);
   
   if ((args != sc->NIL) && is_string((first_arg = pair_car(args)))) {
     name = string_value(first_arg);
@@ -111,7 +111,7 @@ pointer scm_load_ext(scheme * sc, pointer args) {
     if (dll_handle == 0) {
       retval = sc->F;
     } else {
-      module_init = (void (*)(scheme *)) dl_proc(dll_handle, init_fn);
+      module_init = (void (*)(nanoclj *)) dl_proc(dll_handle, init_fn);
       if (module_init != 0) {
         (*module_init) (sc);
         retval = sc->T;
@@ -126,7 +126,7 @@ pointer scm_load_ext(scheme * sc, pointer args) {
   return (retval);
 }
 
-void scm_unload_ext(pointer ptr) {
+void scm_unload_ext(clj_value ptr) {
   // todo: this is not supposed to work yet, but probably not greatly needed anyway
   dl_detach(dll_handle);
 }
