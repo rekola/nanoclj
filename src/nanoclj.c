@@ -5995,11 +5995,18 @@ static clj_value rest_checked(scheme * sc, clj_value coll) {
     return mk_nil();
   }
 }
+
+static size_t size_checked(scheme * sc, clj_value coll) {
+  if (is_cell(coll)) {
+    return seq_length(sc, decode_pointer(coll));
+  } else {
+    return 0;
+  }
+}
    
 static struct scheme_interface vtbl = {
   scheme_define,
   cons,
-  immutable_cons,
   mk_integer,
   mk_real,
   def_symbol,
@@ -6021,14 +6028,12 @@ static struct scheme_interface vtbl = {
   to_int,
   is_list,
   is_vector,
-  seq_length,
-  to_long,
+  size_checked,
   fill_vector_checked,
   vector_elem_checked,
   set_vector_elem_checked,
-#if 0
-  is_port,
-#endif
+  is_reader,
+  is_writer,
   is_pair,
   checked_car,
   checked_cdr,
@@ -6048,6 +6053,7 @@ static struct scheme_interface vtbl = {
   is_foreign_function,
   is_closure,
   is_macro,
+  is_mapentry,
 #if 0
   closure_code,
   closure_env,
@@ -6055,10 +6061,6 @@ static struct scheme_interface vtbl = {
   
   is_promise,
   is_environment,
-#if 0
-  is_immutable,
-  setimmutable,
-#endif
   
   scheme_load_file,
   scheme_load_string,

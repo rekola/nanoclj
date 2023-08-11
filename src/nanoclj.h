@@ -121,7 +121,6 @@ extern "C" {
     void (*scheme_define) (scheme * sc, clj_value env, clj_value symbol,
 			   clj_value value);
     clj_value(*cons) (scheme * sc, clj_value a, clj_value b);
-    clj_value(*immutable_cons) (scheme * sc, clj_value a, clj_value b);
     clj_value(*mk_integer) (scheme * sc, long long num);
     clj_value(*mk_real) (double num);
     clj_value(*mk_symbol) (scheme * sc, const char *name);
@@ -143,14 +142,12 @@ extern "C" {
     int (*to_int) (clj_value p);
     bool (*is_list) (scheme * sc, clj_value p);
     bool (*is_vector) (clj_value p);
-    size_t (*list_length) (scheme * sc, clj_value vec);
-    long long (*vector_length) (clj_value vec);
+    size_t (*size) (scheme * sc, clj_value vec);
     void (*fill_vector) (clj_value vec, clj_value elem);
     clj_value(*vector_elem) (clj_value vec, size_t ielem);
     void(*set_vector_elem) (clj_value vec, size_t ielem, clj_value newel);
-#if 0
-    bool (*is_port) (clj_value p);
-#endif
+    bool (*is_reader) (clj_value p);
+    bool (*is_writer) (clj_value p);
     
     bool (*is_pair) (clj_value p);
     clj_value(*pair_car) (clj_value p);
@@ -171,6 +168,7 @@ extern "C" {
     bool (*is_foreign) (clj_value p);
     bool (*is_closure) (clj_value p);
     bool (*is_macro) (clj_value p);
+    bool (*is_mapentry) (clj_value p);
 #if 0
     clj_value(*closure_code) (clj_value p);
     clj_value(*closure_env) (clj_value p);
