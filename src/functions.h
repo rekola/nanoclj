@@ -13,7 +13,7 @@
 
 /* Thread */
 
-static clj_value thread_sleep(nanoclj * sc, clj_value args) {
+static clj_value thread_sleep(nanoclj_t * sc, clj_value args) {
   long long ms = to_long(car(args));
   if (ms > 0) {
     struct timespec t, t2;
@@ -26,24 +26,24 @@ static clj_value thread_sleep(nanoclj * sc, clj_value args) {
 
 /* System */
 
-static clj_value system_exit(nanoclj * sc, clj_value args) {
+static clj_value system_exit(nanoclj_t * sc, clj_value args) {
   exit(to_int(car(args)));
 }
 
-static clj_value system_currentTimeMillis(nanoclj * sc, clj_value args) {
+static clj_value system_currentTimeMillis(nanoclj_t * sc, clj_value args) {
   return mk_long(sc, system_time() / 1000);
 }
 
-static clj_value system_nanoTime(nanoclj * sc, clj_value args) {
+static clj_value system_nanoTime(nanoclj_t * sc, clj_value args) {
   return mk_long(sc, 1000 * system_time());
 }
 
-static clj_value system_gc(nanoclj * sc, clj_value args) {
+static clj_value system_gc(nanoclj_t * sc, clj_value args) {
   gc(sc, sc->EMPTY, sc->EMPTY);
   return sc->T;
 }
 
-static clj_value system_getenv(nanoclj * sc, clj_value args) {
+static clj_value system_getenv(nanoclj_t * sc, clj_value args) {
   if (args.as_uint64 != sc->EMPTY.as_uint64) {
     const char * v = getenv(strvalue(car(args)));
     return v ? mk_string(sc, v) : mk_nil();
@@ -69,7 +69,7 @@ static clj_value system_getenv(nanoclj * sc, clj_value args) {
   }
 }
 
-static clj_value system_getProperty(nanoclj * sc, clj_value args) {
+static clj_value system_getProperty(nanoclj_t * sc, clj_value args) {
   const char *user_home = NULL, *user_name = NULL;
   const char *os_name = NULL, *os_version = NULL, *os_arch = NULL;
 
@@ -165,39 +165,39 @@ static clj_value system_getProperty(nanoclj * sc, clj_value args) {
 
 /* Math */
 
-static clj_value math_sin(nanoclj * sc, clj_value args) {
+static clj_value math_sin(nanoclj_t * sc, clj_value args) {
   return mk_real(sin(to_double(car(args))));
 }
 
-static clj_value math_cos(nanoclj * sc, clj_value args) {
+static clj_value math_cos(nanoclj_t * sc, clj_value args) {
   return mk_real(cos(to_double(car(args))));
 }
 
-static clj_value math_exp(nanoclj * sc, clj_value args) {
+static clj_value math_exp(nanoclj_t * sc, clj_value args) {
   return mk_real(exp(to_double(car(args))));
 }
 
-static clj_value math_log(nanoclj * sc, clj_value args) {
+static clj_value math_log(nanoclj_t * sc, clj_value args) {
   return mk_real(log(to_double(car(args))));
 }
 
-static clj_value math_log10(nanoclj * sc, clj_value args) {
+static clj_value math_log10(nanoclj_t * sc, clj_value args) {
   return mk_real(log10(to_double(car(args))));
 }
 
-static clj_value math_tan(nanoclj * sc, clj_value args) {
+static clj_value math_tan(nanoclj_t * sc, clj_value args) {
   return mk_real(tan(to_double(car(args))));
 }
 
-static clj_value math_asin(nanoclj * sc, clj_value args) {
+static clj_value math_asin(nanoclj_t * sc, clj_value args) {
   return mk_real(asin(to_double(car(args))));
 }
 
-static clj_value math_acos(nanoclj * sc, clj_value args) {
+static clj_value math_acos(nanoclj_t * sc, clj_value args) {
   return mk_real(acos(to_double(car(args))));
 }
 
-static clj_value math_atan(nanoclj * sc, clj_value args) {
+static clj_value math_atan(nanoclj_t * sc, clj_value args) {
   if (cdr(args).as_uint64 != sc->EMPTY.as_uint64) {
     clj_value x = car(sc->args);
     clj_value y = cadr(sc->args);
@@ -208,27 +208,27 @@ static clj_value math_atan(nanoclj * sc, clj_value args) {
   }
 }
 
-static clj_value math_sqrt(nanoclj * sc, clj_value args) {
+static clj_value math_sqrt(nanoclj_t * sc, clj_value args) {
   return mk_real(sqrt(to_double(car(args))));
 }
 
-static clj_value math_cbrt(nanoclj * sc, clj_value args) {
+static clj_value math_cbrt(nanoclj_t * sc, clj_value args) {
   return mk_real(cbrt(to_double(car(args))));
 }
 
-static clj_value math_pow(nanoclj * sc, clj_value args) {
+static clj_value math_pow(nanoclj_t * sc, clj_value args) {
   return mk_real(pow(to_double(car(sc->args)), to_double(cadr(sc->args))));
 }
 
-static clj_value math_floor(nanoclj * sc, clj_value args) {
+static clj_value math_floor(nanoclj_t * sc, clj_value args) {
   return mk_real(floor(to_double(car(args))));
 }
 
-static clj_value math_ceil(nanoclj * sc, clj_value args) {
+static clj_value math_ceil(nanoclj_t * sc, clj_value args) {
   return mk_real(ceil(to_double(car(args))));
 }
 
-static clj_value math_round(nanoclj * sc, clj_value args) {
+static clj_value math_round(nanoclj_t * sc, clj_value args) {
   return mk_real(round(to_double(car(args))));
 }
 
@@ -264,7 +264,7 @@ static inline bool ipow_overflow(long long base, int_fast8_t exp, long long * re
   return false;
 }
 
-static clj_value numeric_tower_expt(nanoclj * sc, clj_value args) {
+static clj_value numeric_tower_expt(nanoclj_t * sc, clj_value args) {
   clj_value x = car(sc->args);
   clj_value y = cadr(sc->args);
 
@@ -317,7 +317,7 @@ static clj_value numeric_tower_expt(nanoclj * sc, clj_value args) {
   return mk_real(pow(to_double(x), to_double(y)));
 }
 
-static inline clj_value browse_url(nanoclj * sc, clj_value args) {
+static inline clj_value browse_url(nanoclj_t * sc, clj_value args) {
   const char * url = to_cstr(car(args));
 #ifdef WIN32
   ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
@@ -334,7 +334,7 @@ static inline clj_value browse_url(nanoclj * sc, clj_value args) {
 #endif
 }
 
-static inline void register_functions(nanoclj * sc) {
+static inline void register_functions(nanoclj_t * sc) {
   clj_value Thread = def_namespace(sc, "Thread");
   clj_value System = def_namespace(sc, "System");
   clj_value Math = def_namespace(sc, "Math");

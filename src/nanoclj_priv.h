@@ -116,7 +116,7 @@ extern "C" {
     } _object;
   };
 
-  struct nanoclj {
+  struct nanoclj_s {
 /* arrays for segments */
     func_alloc malloc;
     func_dealloc free;
@@ -224,7 +224,7 @@ extern "C" {
     int op;
 
     void *ext_data;             /* For the benefit of foreign functions */
-    clj_value (*object_invoke_callback) (nanoclj *, void *, clj_value);
+    clj_value (*object_invoke_callback) (nanoclj_t *, void *, clj_value);
 
     long gensym_cnt;
 
