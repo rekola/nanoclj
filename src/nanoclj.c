@@ -154,7 +154,8 @@ enum nanoclj_types {
   T_INPUT_STREAM = 28,
   T_OUTPUT_STREAM = 29,
   T_RATIO = 30,
-  T_IMAGE = 31
+  T_IMAGE = 31,
+  T_LIST = 32
 };
 
 struct symbol {
@@ -164,9 +165,9 @@ struct symbol {
 };
 
 /* ADJ is enough slack to align cells in a TYPE_BITS-bit boundary */
-#define ADJ		32
-#define TYPE_BITS	 5
-#define T_MASKTYPE      31      /* 0000000000011111 */
+#define ADJ		64
+#define TYPE_BITS	 6
+#define T_MASKTYPE      63      /* 0000000000111111 */
 #define T_REVERSE     2048      /* 0000100000000000 */
 #define T_SMALL	      4096      /* 0001000000000000 */
 #define T_IMMUTABLE   8192      /* 0010000000000000 */
@@ -262,10 +263,17 @@ static inline clj_value mk_keyword(const char * ptr) {
   return v;
 }
 
+static inline clj_value mk_nil() {
+  clj_value v;
+  v.as_uint64 = NIL;
+  return v;
+}
+
 static inline clj_value mk_symbol(nanoclj_t * sc, const char * name, int_fast16_t syntax) {
   struct symbol * s = sc->malloc(sizeof(struct symbol));
   s->name = name;
   s->syntax = syntax;
+  s->metadata = mk_nil();
   
   clj_value v;
   v.as_uint64 = SIGNATURE_SYMBOL | (uint64_t)s;
@@ -775,12 +783,6 @@ static inline int_fast32_t utf8_decode(const char *p) {
     c = (c << 6) | (*(++s) & 0x3F);
   }
   return c;
-}
-
-static inline clj_value mk_nil() {
-  clj_value v;
-  v.as_uint64 = NIL;
-  return v;
 }
 
 /* allocate new cell segment */
