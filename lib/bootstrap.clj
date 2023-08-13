@@ -35,7 +35,8 @@
 (initialize-type- (type '()) "An empty list")
 (initialize-type- (type true) "Constructs a boolean")
 (initialize-type- (type (type 1)) "Constructs a type")
-(initialize-type- (type '(1)) "Constructs a cons cell")
+(initialize-type- (type '(1)) "Constructs a list")
+; (initialize-type- (type '(1 . 2)) "Constructs a cons pair")
 (initialize-type- (type 1) "Casts argument to int")
 (initialize-type- (type 2147483648) "Casts argument to a long (or int if it is sufficient)")
 (initialize-type- (type 1.1) "Casts argument to a double")
@@ -57,6 +58,7 @@
 (initialize-type- (type (divide 1 2)) "Constructs a ratio")
 ; (initialize-type- (type (first {1 1})))
 
+(def clojure.lang.Cons (scheme.lang.Type 8))
 (def clojure.lang.BigInt (scheme.lang.Type 26))
 (def clojure.lang.MapEntry (scheme.lang.Type 21))
 (def scheme.lang.CharArray (scheme.lang.Type 27))
@@ -81,8 +83,8 @@
 
 (def instance? (fn [t v] (identical? t (type v))))
 
-(def list? (fn [x] (instance? clojure.lang.Cons x)))
-(def pair? (fn [x] (instance? clojure.lang.Cons x)))
+(def list? (fn [x] (instance? clojure.lang.PersistentList x)))
+(def pair? (fn [x] (or (instance? clojure.lang.Cons x) (instance? clojure.lang.PersistentList x))))
 (def zero? (fn [n] (equiv? n 0)))
 
 (def is-any-of? (fn [x & args] (cond (empty? args) false

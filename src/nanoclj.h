@@ -140,7 +140,7 @@ extern "C" {
     bool (*is_real) (clj_value p);
     bool (*is_character) (clj_value p);
     int (*to_int) (clj_value p);
-    bool (*is_list) (nanoclj_t * sc, clj_value p);
+    bool (*is_list) (clj_value p);
     bool (*is_vector) (clj_value p);
     size_t (*size) (nanoclj_t * sc, clj_value vec);
     void (*fill_vector) (clj_value vec, clj_value elem);

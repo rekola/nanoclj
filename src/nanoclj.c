@@ -154,8 +154,8 @@ enum nanoclj_types {
   T_INPUT_STREAM = 28,
   T_OUTPUT_STREAM = 29,
   T_RATIO = 30,
-  T_IMAGE = 31,
-  T_LIST = 32
+  T_LIST = 31,
+  T_IMAGE = 32,
 };
 
 struct symbol {
@@ -246,9 +246,10 @@ static inline int_fast16_t type(clj_value value) {
 }
 
 static inline bool is_pair(clj_value value) {
-  uint64_t signature = value.as_uint64 & MASK_SIGNATURE;
-  if (signature != SIGNATURE_POINTER) return false;
-  return _type((struct cell *)(value.as_uint64 & MASK_PAYLOAD_PTR)) == T_PAIR;
+  if (!is_cell(value)) return false;
+  struct cell * c = decode_pointer(value);
+  uint64_t t = _type(c);
+  return t == T_PAIR || t == T_LIST;
 }
 
 static inline clj_value mk_pointer(struct cell * ptr) {
@@ -383,6 +384,7 @@ static inline bool is_seq(clj_value p) {
 static inline bool is_coll_type(int_fast16_t type_id) {
   switch (type_id) {
   case T_PAIR:
+  case T_LIST:
   case T_VECTOR:
   case T_MAPENTRY:
   case T_ARRAYMAP:
@@ -591,21 +593,6 @@ static inline bool is_mapentry(clj_value p) {
   return _type(c) == T_MAPENTRY;
 }
 
-static inline bool is_pair_like(clj_value p) {
-  switch (type(p)) {
-  case T_PAIR:
-  case T_MAPENTRY:
-  case T_ENVIRONMENT:
-  case T_CLOSURE:
-  case T_PROMISE:
-  case T_MACRO:
-  case T_SEQ:
-    return 1;
-  default:
-    return 0;
-  }  
-}
-
 static inline const char *symname(clj_value p) {
   return decode_symbol(p)->name;
 }
@@ -753,6 +740,8 @@ static inline const char * typename_from_id(int_fast16_t id) {
   case 28: return "java.io.InputStream";
   case 29: return "java.io.OutputStream";
   case 30: return "clojure.lang.Ratio";
+  case 31: return "clojure.lang.PersistentList";
+  case 32: return "scheme.lang.Image";
   }
   return "";
 }
@@ -1235,11 +1224,13 @@ static inline void backchar(int c, port * pt) {
 
 /* get new cons cell */
 static inline clj_value cons(nanoclj_t * sc, clj_value a, clj_value b) {
-  return mk_pointer(get_cell(sc, T_PAIR, a, b, mk_nil()));
+  int t = b.as_uint64 == sc->EMPTY.as_uint64 || type(b) == T_LIST ? T_LIST : T_PAIR;
+  return mk_pointer(get_cell(sc, t, a, b, mk_nil()));
 }
 
 static inline clj_value immutable_cons(nanoclj_t * sc, clj_value a, clj_value b) {
-  return mk_pointer(get_cell(sc, T_PAIR | T_IMMUTABLE, a, b, mk_nil()));
+  int t = b.as_uint64 == sc->EMPTY.as_uint64 || type(b) == T_LIST ? T_LIST : T_PAIR;
+  return mk_pointer(get_cell(sc, t | T_IMMUTABLE, a, b, mk_nil())); 
 }
 
 static inline struct cell * get_vector_object(nanoclj_t * sc, size_t len) {
@@ -1416,14 +1407,15 @@ static inline clj_value slot_value_in_env(clj_value slot) {
 /* Sequence handling */
 
 static inline bool is_empty(nanoclj_t * sc, struct cell * coll) {
-  if (!coll || coll == &(sc->_EMPTY)) {
+  if (!coll) {
     return true;
   }
   int c;
   switch (_type(coll)) {
   case T_NIL:
-    return 1;
+    return true;
   case T_PAIR:
+  case T_LIST:
   case T_MAPENTRY:
   case T_ENVIRONMENT:
   case T_CLOSURE:
@@ -1480,8 +1472,9 @@ static inline struct cell * rest(nanoclj_t * sc, struct cell * coll) {
   
   switch (typ) {
   case T_NIL:
-    break;
+    break;    
   case T_PAIR:
+  case T_LIST:
     return decode_pointer(_cdr(coll));
   case T_VECTOR:
   case T_ARRAYMAP:
@@ -1583,6 +1576,7 @@ static inline clj_value first(nanoclj_t * sc, struct cell * coll) {
   case T_ENVIRONMENT:
   case T_RATIO:
   case T_PAIR:
+  case T_LIST:
     return _car(coll);
   case T_VECTOR:
   case T_ARRAYMAP:
@@ -1716,6 +1710,7 @@ static inline int compare(clj_value a, clj_value b) {
 	break;
 	
       case T_PAIR:
+      case T_LIST:
       case T_MAPENTRY:
       case T_CLOSURE:
       case T_PROMISE:
@@ -1781,6 +1776,7 @@ static inline bool equals(nanoclj_t * sc, clj_value a0, clj_value b0) {
       }
 	break;
       case T_PAIR:
+      case T_LIST:
       case T_MAPENTRY:
       case T_CLOSURE:
       case T_PROMISE:
@@ -1811,7 +1807,7 @@ static inline bool equals(nanoclj_t * sc, clj_value a0, clj_value b0) {
   return false;
 }
 
-static int hasheq(clj_value v) {
+static int hasheq(clj_value v) { 
   switch (prim_type(v)) {
   case T_BOOLEAN:
   case T_CHARACTER:
@@ -1868,6 +1864,7 @@ static int hasheq(clj_value v) {
       return murmur3_hash_coll(hash, n);
     }
 
+    case T_LIST:
     case T_PAIR:{
       uint32_t hash = 31 + hasheq(_car(c));
       size_t n = 1;
@@ -2035,6 +2032,7 @@ static inline struct cell * mk_seq_2(nanoclj_t * sc, struct cell * coll) {
   }
   case T_NIL:
   case T_PAIR:
+  case T_LIST:
   case T_PROMISE:
   case T_SEQ:
     return coll;
@@ -3289,6 +3287,9 @@ static inline size_t seq_length(nanoclj_t * sc, struct cell * a) {
   switch (_type(a)) {
   case T_NIL:
     return 0;
+
+  case T_PAIR:
+    return 2;
     
   case T_SEQ:
     for (; !is_empty(sc, a); a = rest(sc, a), i++) { }
@@ -3297,7 +3298,7 @@ static inline size_t seq_length(nanoclj_t * sc, struct cell * a) {
   case T_VECTOR:
     return _size_unchecked(a);
     
-  case T_PAIR:
+  case T_LIST:
     while ( 1 ) {
       if (a == &(sc->_EMPTY)) return i;
       clj_value b = _cdr(a);
@@ -3697,8 +3698,8 @@ static inline void dump_stack_mark(nanoclj_t * sc) {
 
 #define s_retbool(tf)    s_return(sc, (tf) ? sc->T : sc->F)
 
-static inline bool is_list(nanoclj_t * sc, clj_value a) {
-  return is_cell(a) && seq_length(sc, decode_pointer(a)) >= 0;
+static inline bool is_list(clj_value a) {
+  return is_cell(a) && _type(decode_pointer(a)) == T_LIST;
 }
 
 static inline bool destructure(nanoclj_t * sc, struct cell * binding, struct cell * y, size_t num_args) {
@@ -3817,13 +3818,15 @@ static inline clj_value construct_by_type(nanoclj_t * sc, int type_id, clj_value
     fill_vector(vec, sc->EMPTY);
     return mk_pointer(get_cell(sc, T_ENVIRONMENT | T_IMMUTABLE, mk_pointer(vec), parent, name));
   }
-  case T_PAIR:{
+  case T_PAIR:
+  case T_LIST:{
     clj_value x = cadr(args);
     if (is_cell(x)) {
       struct cell * coll = decode_pointer(x);
       cdr(args) = mk_pointer(mk_seq_2(sc, coll));
     } else {
       cdr(args) = x;
+      typeflag(args) = T_PAIR;
     }
     return args;
   }
@@ -4136,6 +4139,7 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       struct cell * code_cell = decode_pointer(sc->code);
       switch (_type(code_cell)) {
       case T_PAIR:
+      case T_LIST:
 	if ((syn = syntaxnum(_car(code_cell))) != 0) {       /* SYNTAX */
 	  sc->code = _cdr(code_cell);
 	  s_goto(sc, syn);
@@ -4322,7 +4326,7 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	    Error_0(sc, "Error - Wrong number of args passed (2)");	   
 	  }
 	  sc->code = cdr(x);
-	} else if (_type(params) == T_PAIR && is_vector(_car(params))) { /* Clojure style multi-arity arguments */
+	} else if (_type(params) == T_LIST && is_vector(_car(params))) { /* Clojure style multi-arity arguments */
 	  struct cell * yy = decode_pointer(y);
 	  size_t needed_args = seq_length(sc, yy);
 	  bool found_match = false;
@@ -4644,7 +4648,7 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       for (x = cadr(sc->code), sc->args = sc->EMPTY; x.as_uint64 != sc->EMPTY.as_uint64; x = cdr(x)) {
         if (!is_pair(x))
           Error_0(sc, "Error - Bad syntax of binding in let");
-        if (!is_list(sc, car(x)))
+        if (!is_list(car(x)))
           Error_0(sc, "Error - Bad syntax of binding in let");
         sc->args = cons(sc, caar(x), sc->args);
       }
@@ -5118,7 +5122,7 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       Error_0(sc, "Error - value is not ISeqable");
     } else {
       struct cell * x2 = decode_pointer(sc->arg0);
-      if (x2 && _type(x2) == T_PAIR) {
+      if (x2 && _type(x2) == T_LIST) {
 	x = _cdr(x2);
 	if (is_promise(x)) {
 	  sc->code = x;
@@ -5248,6 +5252,7 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       }
       /* Empty list */
     case T_PAIR:
+    case T_LIST:
       s_return(sc, cons(sc, y, x));
       
     default:
@@ -5944,6 +5949,7 @@ static clj_value checked_car(clj_value p) {
   switch (type(p)) {
   case T_NIL:
   case T_PAIR:
+  case T_LIST:
     return car(p);
   default:
     return mk_nil();
@@ -5953,6 +5959,7 @@ static clj_value checked_cdr(clj_value p) {
   switch (type(p)) {
   case T_NIL:
   case T_PAIR:
+  case T_LIST:
     return cdr(p);
   default:
     return mk_nil();
