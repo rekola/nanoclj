@@ -270,7 +270,7 @@ extern "C" {
   clj_value closure_code(clj_value p);
   clj_value closure_env(clj_value p);
 
-  int is_promise(clj_value p);
+  int is_delay(clj_value p);
   int is_environment(clj_value p);
 #if 0
   int is_immutable(clj_value p);

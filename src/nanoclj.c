@@ -142,7 +142,7 @@ enum nanoclj_types {
   T_WRITER = 14,
   T_VECTOR = 15,
   T_MACRO = 16,
-  T_PROMISE = 17,
+  T_DELAY = 17,
   T_ENVIRONMENT = 18,
   T_TYPE = 19,
   T_KEYWORD = 20,
@@ -636,10 +636,10 @@ static inline clj_value closure_env(struct cell * p) {
 }
 
 /* To do: promise should be forced ONCE only */
-static inline bool is_promise(clj_value p) {
+static inline bool is_delay(clj_value p) {
   if (!is_cell(p)) return false;
   struct cell * c = decode_pointer(p);
-  return _type(c) == T_PROMISE;
+  return _type(c) == T_DELAY;
 }
 
 static inline bool is_environment(clj_value p) {
@@ -1418,7 +1418,7 @@ static inline bool is_empty(nanoclj_t * sc, struct cell * coll) {
   case T_ENVIRONMENT:
   case T_CLOSURE:
   case T_MACRO:
-  case T_PROMISE:
+  case T_DELAY:
     return false; /* empty was tested already */
   case T_STRING:
     return _strlength(coll) == 0;
@@ -1457,7 +1457,7 @@ static inline bool is_empty(nanoclj_t * sc, struct cell * coll) {
 
 static inline struct cell * rest(nanoclj_t * sc, struct cell * coll) {
   int typ = _type(coll);
-  if (typ == T_PROMISE) {
+  if (typ == T_DELAY) {
     clj_value code = cons(sc, sc->DEREF, cons(sc, mk_pointer(coll), sc->EMPTY));
     clj_value r = nanoclj_eval(sc, code);
     if (is_primitive(r)) {
@@ -1534,7 +1534,7 @@ static inline clj_value first(nanoclj_t * sc, struct cell * coll) {
     return mk_nil();
   }
 
-  if (_type(coll) == T_PROMISE) {
+  if (_type(coll) == T_DELAY) {
 #if 0
     clj_value code = cons(sc, sc->DEREF, cons(sc, mk_pointer(coll), sc->EMPTY));
     clj_value r = nanoclj_eval(sc, code);
@@ -1711,7 +1711,7 @@ static inline int compare(clj_value a, clj_value b) {
       case T_LIST:
       case T_MAPENTRY:
       case T_CLOSURE:
-      case T_PROMISE:
+      case T_DELAY:
       case T_MACRO:
       case T_ENVIRONMENT:{
 	int r = compare(_car(a2), _car(b2));
@@ -1777,7 +1777,7 @@ static inline bool equals(nanoclj_t * sc, clj_value a0, clj_value b0) {
       case T_LIST:
       case T_MAPENTRY:
       case T_CLOSURE:
-      case T_PROMISE:
+      case T_DELAY:
       case T_MACRO:
       case T_ENVIRONMENT:
 	if (equals(sc, _car(a), _car(b))) {
@@ -2031,7 +2031,7 @@ static inline struct cell * mk_seq_2(nanoclj_t * sc, struct cell * coll) {
   case T_NIL:
   case T_PAIR:
   case T_LIST:
-  case T_PROMISE:
+  case T_DELAY:
   case T_SEQ:
     return coll;
   }
@@ -3855,9 +3855,9 @@ static inline clj_value construct_by_type(nanoclj_t * sc, int type_id, clj_value
     }
     return mk_nil();
 
-  case T_PROMISE:
+  case T_DELAY:
     x = mk_closure(sc, cons(sc, sc->EMPTY, car(args)), sc->envir);
-    typeflag(x) = T_PROMISE;
+    typeflag(x) = T_DELAY;
     return x;
 
   case T_READER:
@@ -4150,7 +4150,7 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	}
 
 #if 0
-      case T_PROMISE:
+      case T_DELAY:
 	fprintf(stderr, "evaling promise\n");
 	s_save(sc, OP_SAVE_FORCED, sc->EMPTY, sc->code);                            
 	sc->args = sc->EMPTY;                                  
@@ -4297,7 +4297,7 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       }
       case T_CLOSURE:
       case T_MACRO:
-      case T_PROMISE:
+      case T_DELAY:
 	/* Should not accept promise */
 	/* make environment */
 	new_frame_in_env(sc, closure_env(code_cell));
@@ -4699,7 +4699,7 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     
   case OP_LAZYSEQ:               /* lazy-seq */
     x = mk_closure(sc, cons(sc, sc->EMPTY, sc->code), sc->envir);
-    typeflag(x) = T_PROMISE;
+    typeflag(x) = T_DELAY;
     s_return(sc, x);    
 
   case OP_AND0:                /* and */
@@ -5122,7 +5122,7 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       struct cell * x2 = decode_pointer(sc->arg0);
       if (x2 && _type(x2) == T_LIST) {
 	x = _cdr(x2);
-	if (is_promise(x)) {
+	if (is_delay(x)) {
 	  sc->code = x;
 	  /* Should change type to closure here */	  
 	  s_save(sc, op == OP_REST ? OP_SAVE_FORCED : OP_SAVE_FORCED_NEXT, sc->EMPTY, sc->code);
@@ -5348,7 +5348,7 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 
   case OP_DEREF:
     sc->code = car(sc->args);
-    if (is_promise(sc->code)) {
+    if (is_delay(sc->code)) {
       /* Should change type to closure here */
       s_save(sc, OP_SAVE_FORCED, sc->EMPTY, sc->code);
       sc->args = sc->EMPTY;
@@ -6066,7 +6066,7 @@ static struct nanoclj_interface vtbl = {
   closure_env,
 #endif
   
-  is_promise,
+  is_delay,
   is_environment,
   
   nanoclj_load_file,
