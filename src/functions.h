@@ -40,7 +40,7 @@ static clj_value system_nanoTime(nanoclj_t * sc, clj_value args) {
 
 static clj_value system_gc(nanoclj_t * sc, clj_value args) {
   gc(sc, sc->EMPTY, sc->EMPTY);
-  return sc->T;
+  return (clj_value)kTRUE;
 }
 
 static clj_value system_getenv(nanoclj_t * sc, clj_value args) {
@@ -321,7 +321,7 @@ static inline clj_value browse_url(nanoclj_t * sc, clj_value args) {
   const char * url = to_cstr(car(args));
 #ifdef WIN32
   ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
-  return sc->T;
+  return (clj_value)kTRUE;
 #else
   pid_t r = fork();
   if (r == 0) {
@@ -329,7 +329,7 @@ static inline clj_value browse_url(nanoclj_t * sc, clj_value args) {
     execlp(cmd, cmd, url, NULL);
     exit(1);
   } else {
-    return r < 0 ? sc->F : sc->T;
+    return r < 0 ? (clj_value)kFALSE : (clj_value)kTRUE;
   }
 #endif
 }

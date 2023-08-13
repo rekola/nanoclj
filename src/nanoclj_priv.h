@@ -149,8 +149,6 @@ extern "C" {
     clj_value sink;               /* when mem. alloc. fails */
     struct cell _EMPTY;
     clj_value EMPTY;              /* special cell representing empty list */
-    clj_value T;                  /* a true value */
-    clj_value F;                  /* a false value */
     struct cell * oblist;         /* pointer to symbol table */
     clj_value global_env;         /* pointer to global environment */
     clj_value target_env;

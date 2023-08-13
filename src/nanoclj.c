@@ -37,7 +37,9 @@
 #include "murmur3.h"
 #include "legal.h"
 
-#define NIL		  18444492273895866368ULL
+#define kNIL		  UINT64_C(18444492273895866368)
+#define kTRUE		  UINT64_C(9221683186994511873)
+#define kFALSE		  UINT64_C(9221683186994511872)
 
 /* Masks for NaN packing */
 #define MASK_SIGN         0x8000000000000000
@@ -266,7 +268,7 @@ static inline clj_value mk_keyword(const char * ptr) {
 
 static inline clj_value mk_nil() {
   clj_value v;
-  v.as_uint64 = NIL;
+  v.as_uint64 = kNIL;
   return v;
 }
 
@@ -282,7 +284,7 @@ static inline clj_value mk_symbol(nanoclj_t * sc, const char * name, int_fast16_
 }
 
 static inline bool is_nil(clj_value v) {
-  return v.as_uint64 == NIL;
+  return v.as_uint64 == kNIL;
 }
 
 #define _typeflag(p)	 ((p)->_flag)
@@ -650,11 +652,7 @@ static inline bool is_environment(clj_value p) {
 /* () is #t in R5RS, but nil is false in clojure */
 
 static inline bool is_false(clj_value p) {
-  switch (prim_type(p)) {
-  case T_CELL: return decode_pointer(p) == NULL;
-  case T_BOOLEAN: return bool_unchecked(p) == 0;
-  }
-  return false;
+  return p.as_uint64 == kFALSE || p.as_uint64 == kNIL;
 }
 
 static inline bool is_true(clj_value p) {
@@ -2862,7 +2860,7 @@ static inline clj_value readstrexp(nanoclj_t * sc) {
   for (;;) {
     c = inchar(sc, inport);
     if (c == EOF || !check_strbuff_size(sc, &p)) {
-      return sc->F;
+      return (clj_value)kFALSE;
     }
     switch (state) {
     case st_ok:
@@ -2935,7 +2933,7 @@ static inline clj_value readstrexp(nanoclj_t * sc) {
           state = st_ok;
         }
       } else {
-        return sc->F;
+        return (clj_value)kFALSE;
       }
       break;
     case st_oct1:
@@ -2946,7 +2944,7 @@ static inline clj_value readstrexp(nanoclj_t * sc) {
         state = st_ok;
       } else {
         if (state == st_oct2 && c1 >= 32)
-          return sc->F;
+          return (clj_value)kFALSE;
 
         c1 = (c1 << 3) + (c - '0');
 
@@ -3581,14 +3579,14 @@ static inline clj_value _Error_1(nanoclj_t * sc, const char *s, int a) {
     setimmutable(car(sc->code));
     sc->code = cons(sc, slot_value_in_env(x), sc->code);
     sc->op = (int) OP_EVAL;
-    return sc->T;
+    return (clj_value)kTRUE;
   }
 #endif
 
   sc->args = cons(sc, mk_string(sc, str), sc->EMPTY);
   setimmutable(car(sc->args));
   sc->op = (int) OP_ERR0;
-  return sc->T;
+  return (clj_value)kTRUE;
 }
 
 #define Error_1(sc,s, a) return _Error_1(sc,s,a)
@@ -3599,7 +3597,7 @@ static inline clj_value _Error_1(nanoclj_t * sc, const char *s, int a) {
 #define  END  } while (0)
 #define s_goto(sc,a) BEGIN                                  \
     sc->op = (int)(a);                                      \
-    return sc->T; END
+    return (clj_value)kTRUE; END
 
 #define s_return(sc,a) return _s_return(sc,a)
 
@@ -3657,7 +3655,7 @@ static inline clj_value _s_return(nanoclj_t * sc, clj_value a) {
 #endif
 
   sc->dump = mk_int(nframes);
-  return sc->T;
+  return (clj_value)kTRUE;
 }
 
 static inline void s_set_return_envir(nanoclj_t * sc, clj_value env) {
@@ -3696,7 +3694,7 @@ static inline void dump_stack_mark(nanoclj_t * sc) {
   }
 }
 
-#define s_retbool(tf)    s_return(sc, (tf) ? sc->T : sc->F)
+#define s_retbool(tf)    s_return(sc, (tf) ? (clj_value)kTRUE : (clj_value)kFALSE)
 
 static inline bool is_list(clj_value a) {
   return is_cell(a) && _type(decode_pointer(a)) == T_LIST;
@@ -3762,7 +3760,7 @@ static inline clj_value construct_by_type(nanoclj_t * sc, int type_id, clj_value
     return sc->EMPTY;
     
   case T_BOOLEAN:;
-    return is_true(car(args)) ? sc->T : sc->F;
+    return is_true(car(args)) ? (clj_value)kTRUE : (clj_value)kFALSE;
 
   case T_STRING:
     return mk_string(sc, to_cstr(car(args)));
@@ -4280,7 +4278,7 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       case T_ENVIRONMENT:{
 	fprintf(stderr, "trying to change env\n");
 	sc->global_env = sc->code;
-	s_return(sc, sc->T);
+	s_return(sc, (clj_value)kTRUE);
       }
       case T_VECTOR:
       case T_ARRAYMAP:
@@ -4706,7 +4704,7 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 
   case OP_AND0:                /* and */
     if (sc->code.as_uint64 == sc->EMPTY.as_uint64) {
-      s_return(sc, sc->T);
+      s_return(sc, (clj_value)kTRUE);
     }
     s_save(sc, OP_AND1, sc->EMPTY, cdr(sc->code));
     sc->code = car(sc->code);
@@ -4725,7 +4723,7 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 
   case OP_OR0:                 /* or */
     if (sc->code.as_uint64 == sc->EMPTY.as_uint64) {
-      s_return(sc, sc->F);
+      s_return(sc, (clj_value)kFALSE);
     }
     s_save(sc, OP_OR1, sc->EMPTY, cdr(sc->code));
     sc->code = car(sc->code);
@@ -5172,9 +5170,9 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     }
     
     if (is_cell(sc->arg0) && get_elem(sc, decode_pointer(sc->arg0), sc->arg1, NULL)) {
-      s_return(sc, sc->T);
+      s_return(sc, (clj_value)kTRUE);
     } else {
-      s_return(sc, sc->F);
+      s_return(sc, (clj_value)kFALSE);
     }
     
   case OP_CONJ:             /* conj- */
@@ -5894,7 +5892,7 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     sprintf(sc->strbuff, "%d: illegal operator", sc->op);
     Error_0(sc, sc->strbuff);
   }
-  return sc->T;                 /* NOTREACHED */
+  return (clj_value)kTRUE;                 /* NOTREACHED */
 }
  
 static inline const char *procname(clj_value x) {
@@ -6146,10 +6144,6 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc,
   /* init sc->EMPTY */
   typeflag(sc->EMPTY) = (T_NIL | T_ATOM | MARK);
   car(sc->EMPTY) = cdr(sc->EMPTY) = sc->EMPTY;
-  /* init T */
-  sc->T = mk_boolean(1);
-  /* init F */
-  sc->F = mk_boolean(0); 
   /* init sink */
   typeflag(sc->sink) = (T_PAIR | MARK);
   car(sc->sink) = sc->EMPTY;
@@ -6593,7 +6587,7 @@ static void free_hints(void * ptr) {
   free(ptr);
 }
 
-int main(int argc, const char **argv) {      
+int main(int argc, const char **argv) {
   if (argc == 1) {
     printf("%s\n", get_version());
   }
