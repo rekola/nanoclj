@@ -123,15 +123,20 @@
   "Creates a list from the given args"
   (fn [& args] args))
 
-(def list* (fn
-             ([args] (seq args))
-             ([a args] (cons a args))
-             ([a b args] (cons a (cons b args)))
-             ([a b c args] (cons a (cons b (cons c args))))
-             ([a b c d args] (cons a (cons b (cons c (cons d args)))))
-             ([a b c d e args] (cons a (cons b (cons c (cons d (cons e args))))))
-             ([a b c d e f args] (cons a (cons b (cons c (cons d (cons e (cons f args)))))))
-             ))
+(def spread
+  (fn [args] (cond
+               (nil? args) nil
+               (nil? (next args)) (seq (first args))
+               :else (cons (first args) (spread (next args))))))
+
+(def list*
+  "Creates a list with the initial arguments prepended to the last argument"
+  (fn
+    ([args] (seq args))
+    ([a args] (cons a args))
+    ([a b args] (cons a (cons b args)))
+    ([a b c args] (cons a (cons b (cons c args))))
+    ([a b c d & more] (cons a (cons b (cons c (cons d (spread more))))))))
 
 (def apply
   "Calls the function f with the given args"
@@ -140,10 +145,7 @@
     ([f a args] (apply* f (list* a args)))
     ([f a b args] (apply* f (list* a b args)))
     ([f a b c args] (apply* f (list* a b c args)))
-    ([f a b c d args] (apply* f (list* a b c d args)))
-    ([f a b c d e args] (apply* f (list* a b c d e args)))
-    ([f a b c d e f args] (apply* f (list* a b c d e f args)))
-    ))
+    ([f a b c d & args] (apply* f (cons a (cons b (cons c (cons d (spread args)))))))))
              
 ;; The following quasiquote macro is due to Eric S. Tiedemann.
 ;;   Copyright 1988 by Eric S. Tiedemann; all rights reserved.
