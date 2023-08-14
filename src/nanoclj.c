@@ -160,6 +160,11 @@ enum nanoclj_types {
   T_IMAGE = 32,
 };
 
+typedef struct strview_s {
+  char * ptr;
+  size_t size;
+} strview_t;
+
 struct symbol {
   int_fast16_t syntax;
   const char * name;
@@ -456,6 +461,23 @@ static inline bool is_integer(clj_value p) {
 static inline bool is_character(clj_value p) {
   return prim_type(p) == T_CHARACTER;
 }
+
+static inline strview_t to_strview(clj_value v) {
+  if (is_cell(v)) {
+    struct cell * s = decode_pointer(v);   
+    switch (_type(s))
+    case T_STRING:
+    case T_CHAR_ARRAY:
+      if (_is_small(s)) {	
+	return (strview_t){ _smallstrvalue_unchecked(s), _smallstrlength_unchecked(s) };
+      } else {
+	return (strview_t){ _strvalue_unchecked(s), _strlength_unchecked(s) };
+      }
+  }
+
+  return (strview_t){ "", 0 };
+}
+
 static inline char *mutable_strvalue(struct cell * s) {
   if (_is_small(s)) {
     return _smallstrvalue_unchecked(s);
@@ -2380,6 +2402,7 @@ static inline void port_close(nanoclj_t * sc, port * pt) {
 static inline void finalize_cell(nanoclj_t * sc, struct cell * a) {
   switch (_type(a)) {
   case T_STRING:
+  case T_CHAR_ARRAY:
     if (!_is_small(a)) {
       sc->free(_strvalue_unchecked(a));
     }
@@ -2724,7 +2747,7 @@ static inline void char_to_utf8(int c, char *p, int *plen) {
   if (plen) *plen = strlen(p);
 }
 
-static inline void putchars(nanoclj_t * sc, const char *s, int len, clj_value out) {
+static inline void putchars(nanoclj_t * sc, const char *s, size_t len, clj_value out) {
   assert(s);
   assert(is_writer(dest_port));
 
@@ -2977,8 +3000,7 @@ static inline int skipspace(nanoclj_t * sc) {
 
 /* get token */
 static inline int token(nanoclj_t * sc, port * inport) {
-  int c;
-  c = skipspace(sc);
+  int c = skipspace(sc);
   if (c == EOF) {
     return (TOK_EOF);
   }  
@@ -3753,8 +3775,9 @@ static inline clj_value construct_by_type(nanoclj_t * sc, int type_id, clj_value
     return mk_string(sc, to_cstr(car(args)));
 
   case T_CHAR_ARRAY:{
-    clj_value a = mk_string(sc, to_cstr(car(args)));
-    typeflag(a) = T_CHAR_ARRAY | T_ATOM;
+    strview_t sv = to_strview(car(args));
+    clj_value a = mk_counted_string(sc, sv.ptr, sv.size);
+    typeflag(a) = T_CHAR_ARRAY | T_ATOM | (typeflag(a) & T_SMALL);
     return a;
   }
   case T_VECTOR:
@@ -3852,9 +3875,10 @@ static inline clj_value construct_by_type(nanoclj_t * sc, int type_id, clj_value
     if (is_string(x)) {
       return port_from_filename(sc, strvalue(x), port_input);
     } else if (is_char_array(x)) {
+      strview_t sv = to_strview(x);
       return port_from_string(sc,
-			      mutable_strvalue(decode_pointer(x)),
-			      mutable_strvalue(decode_pointer(x)) + strlength(x),
+			      sv.ptr,
+			      sv.ptr + sv.size,
 			      port_input);
     }
     break;
@@ -3964,7 +3988,6 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   int syn;
   clj_value params0;
   struct cell * params;
-  struct port * inport;
 
   if (sc->nesting != 0) {
     sc->nesting = 0;
@@ -4043,18 +4066,18 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     nanoclj_define(sc, sc->root_env, sc->IN, sc->save_inport);
     s_goto(sc, OP_EVAL);
 
-  case OP_READ:{                /* read */
-    clj_value p = get_in_port(sc);
-    if (!is_reader(p)) {
-      Error_0(sc, "Not a reader");
+  case OP_READ:                /* read */
+    x = get_in_port(sc);
+    if (!is_reader(x)) {
+      Error_0(sc, "Error - not a reader");
+    } else {
+      struct port * pt = port_unchecked(x);
+      sc->tok = token(sc, pt);
+      if (sc->tok == TOK_EOF) {
+	s_return(sc, mk_character(EOF));
+      }
+      s_goto(sc, OP_RDSEXPR);
     }
-    struct port * pt = port_unchecked(p);
-    sc->tok = token(sc, pt);
-    if (sc->tok == TOK_EOF) {
-      s_return(sc, mk_character(EOF));
-    }
-    s_goto(sc, OP_RDSEXPR);
-  }
     
   case OP_GENSYM:
     s_return(sc, gensym(sc, sc->args.as_uint64 != sc->EMPTY.as_uint64 ?
@@ -5431,7 +5454,8 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     {
       clj_value err = get_err_port(sc);
       assert(is_writer(err));
-      putstr(sc, strvalue(car(sc->args)), err);
+      strview_t sv = to_strview(car(sc->args));
+      putchars(sc, sv.ptr, sv.size, err);
       putchars(sc, "\n", 1, err);
     }
     reset_colors(stderr);
@@ -5478,229 +5502,255 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     /* ========== reading part ========== */
     
   case OP_RDSEXPR:
-    inport = port_unchecked(get_in_port(sc));
+    x = get_in_port(sc);
+    if (!is_reader(x)) {
+      Error_0(sc, "Error - not a reader");
+    } else {
+      struct port * inport = port_unchecked(x);
 
-    switch (sc->tok) {
-    case TOK_EOF:
-      s_return(sc, mk_character(EOF));
-
-    case TOK_FN:
-    case TOK_LPAREN:
-      if (sc->tok == TOK_FN) {
-	s_save(sc, OP_RDFN, sc->EMPTY, sc->EMPTY);
-      }
-      sc->tok = token(sc, inport);
-      if (sc->tok == TOK_RPAREN) {       /* Empty list */
-        s_return(sc, sc->EMPTY);
-      } else if (sc->tok == TOK_DOT) {
-        Error_0(sc, "Error - illegal dot expression");
-      } else {
-        sc->nesting_stack[sc->file_i]++;
-        s_save(sc, OP_RDLIST, sc->EMPTY, sc->EMPTY);
-        s_goto(sc, OP_RDSEXPR);
-      }
-
-    case TOK_VEC:
-      s_save(sc, OP_RDVEC, sc->EMPTY, sc->EMPTY);      
-      sc->tok = token(sc, inport);
-      if (sc->tok == TOK_RSQUARE) {	/* Empty vector */
-        s_return(sc, sc->EMPTY);
-      } else if (sc->tok == TOK_DOT) {
-        Error_0(sc, "Error - illegal dot expression");
-      } else {
-        sc->nesting_stack[sc->file_i]++;
-        s_save(sc, OP_RDVEC_ELEMENT, sc->EMPTY, sc->EMPTY);
-        s_goto(sc, OP_RDSEXPR);
-      }      
-      
-    case TOK_SET:
-    case TOK_MAP:
-      if (sc->tok == TOK_SET) {
-	s_save(sc, OP_RDSET, sc->EMPTY, sc->EMPTY);
-      } else {
-	s_save(sc, OP_RDMAP, sc->EMPTY, sc->EMPTY);
-      }
-      sc->tok = token(sc, inport);
-      if (sc->tok == TOK_RCURLY) {     /* Empty map or set */
-        s_return(sc, sc->EMPTY);
-      } else if (sc->tok == TOK_DOT) {
-        Error_0(sc, "Error - illegal dot expression");
-      } else {
-        sc->nesting_stack[sc->file_i]++;
-        s_save(sc, OP_RDMAP_ELEMENT, sc->EMPTY, sc->EMPTY);
-        s_goto(sc, OP_RDSEXPR);
-      }
-
-    case TOK_QUOTE:
-      s_save(sc, OP_RDQUOTE, sc->EMPTY, sc->EMPTY);
-      sc->tok = token(sc, inport);
-      s_goto(sc, OP_RDSEXPR);
-
-    case TOK_DEREF:
-      s_save(sc, OP_RDDEREF, sc->EMPTY, sc->EMPTY);
-      sc->tok = token(sc, inport);
-      s_goto(sc, OP_RDSEXPR);
-
-    case TOK_VAR:
-      s_save(sc, OP_RDDEREF, sc->EMPTY, sc->EMPTY);
-      sc->tok = token(sc, inport);
-      s_goto(sc, OP_RDSEXPR);      
-      
-    case TOK_BQUOTE:
-      sc->tok = token(sc, inport);
-      if (sc->tok == TOK_VEC) {
-        s_save(sc, OP_RDQQUOTEVEC, sc->EMPTY, sc->EMPTY);
-        sc->tok = TOK_LPAREN; // ?
-        s_goto(sc, OP_RDSEXPR);
-      } else {
-        s_save(sc, OP_RDQQUOTE, sc->EMPTY, sc->EMPTY);
-      }
-      s_goto(sc, OP_RDSEXPR);
-
-    case TOK_COMMA:
-      s_save(sc, OP_RDUNQUOTE, sc->EMPTY, sc->EMPTY);
-      sc->tok = token(sc, inport);
-      s_goto(sc, OP_RDSEXPR);
-    case TOK_ATMARK:
-      s_save(sc, OP_RDUQTSP, sc->EMPTY, sc->EMPTY);
-      sc->tok = token(sc, inport);
-      s_goto(sc, OP_RDSEXPR);
-    case TOK_ATOM:
-      s_return(sc, mk_atom(sc, readstr_upto(sc, DELIMITERS)));
-    case TOK_DQUOTE:
-      x = readstrexp(sc);
-      if (is_false(x)) {
-        Error_0(sc, "Error - reading string");
-      }
-      setimmutable(x);
-      s_return(sc, x);
-
-    case TOK_REGEX:
-      x = readstrexp(sc);
-      if (is_false(x)) {
-	Error_0(sc, "Error - reading regex");
-      }
-      setimmutable(x);
-      s_return(sc, cons(sc, sc->REGEX, cons(sc, x, sc->EMPTY)));
-
-    case TOK_CHAR_CONST:
-      if ((x = mk_char_const(sc, readstr_upto(sc, DELIMITERS))).as_uint64 == sc->EMPTY.as_uint64) {
-        Error_0(sc, "Error - undefined character literal");
-      } else {
-        s_return(sc, x);
-      }
-
-    case TOK_TAG:{
-      const char * tag = readstr_upto(sc, DELIMITERS);
-      clj_value f = find_slot_in_env(sc, sc->envir, sc->TAG_HOOK, 1);
-      if (f.as_uint64 != sc->EMPTY.as_uint64) {
-	clj_value hook = slot_value_in_env(f);
-	if (!is_nil(hook)) {
-	  sc->code = cons(sc, hook, cons(sc, mk_string(sc, tag), sc->EMPTY));
-	  s_goto(sc, OP_EVAL);
+      switch (sc->tok) {
+      case TOK_EOF:
+	s_return(sc, mk_character(EOF));
+	
+      case TOK_FN:
+      case TOK_LPAREN:
+	if (sc->tok == TOK_FN) {
+	  s_save(sc, OP_RDFN, sc->EMPTY, sc->EMPTY);
 	}
+	sc->tok = token(sc, inport);
+	if (sc->tok == TOK_RPAREN) {       /* Empty list */
+	  s_return(sc, sc->EMPTY);
+	} else if (sc->tok == TOK_DOT) {
+	  Error_0(sc, "Error - illegal dot expression");
+	} else {
+	  sc->nesting_stack[sc->file_i]++;
+	  s_save(sc, OP_RDLIST, sc->EMPTY, sc->EMPTY);
+	  s_goto(sc, OP_RDSEXPR);
+	}
+	
+      case TOK_VEC:
+	s_save(sc, OP_RDVEC, sc->EMPTY, sc->EMPTY);      
+	sc->tok = token(sc, inport);
+	if (sc->tok == TOK_RSQUARE) {	/* Empty vector */
+	  s_return(sc, sc->EMPTY);
+	} else if (sc->tok == TOK_DOT) {
+	  Error_0(sc, "Error - illegal dot expression");
+	} else {
+	  sc->nesting_stack[sc->file_i]++;
+	  s_save(sc, OP_RDVEC_ELEMENT, sc->EMPTY, sc->EMPTY);
+	  s_goto(sc, OP_RDSEXPR);
+	}      
+	
+      case TOK_SET:
+      case TOK_MAP:
+	if (sc->tok == TOK_SET) {
+	  s_save(sc, OP_RDSET, sc->EMPTY, sc->EMPTY);
+	} else {
+	  s_save(sc, OP_RDMAP, sc->EMPTY, sc->EMPTY);
+	}
+	sc->tok = token(sc, inport);
+	if (sc->tok == TOK_RCURLY) {     /* Empty map or set */
+	  s_return(sc, sc->EMPTY);
+	} else if (sc->tok == TOK_DOT) {
+	  Error_0(sc, "Error - illegal dot expression");
+	} else {
+	  sc->nesting_stack[sc->file_i]++;
+	  s_save(sc, OP_RDMAP_ELEMENT, sc->EMPTY, sc->EMPTY);
+	  s_goto(sc, OP_RDSEXPR);
+	}
+	
+      case TOK_QUOTE:
+	s_save(sc, OP_RDQUOTE, sc->EMPTY, sc->EMPTY);
+	sc->tok = token(sc, inport);
+	s_goto(sc, OP_RDSEXPR);
+	
+      case TOK_DEREF:
+	s_save(sc, OP_RDDEREF, sc->EMPTY, sc->EMPTY);
+	sc->tok = token(sc, inport);
+	s_goto(sc, OP_RDSEXPR);
+	
+      case TOK_VAR:
+	s_save(sc, OP_RDDEREF, sc->EMPTY, sc->EMPTY);
+	sc->tok = token(sc, inport);
+	s_goto(sc, OP_RDSEXPR);      
+	
+      case TOK_BQUOTE:
+	sc->tok = token(sc, inport);
+	if (sc->tok == TOK_VEC) {
+	  s_save(sc, OP_RDQQUOTEVEC, sc->EMPTY, sc->EMPTY);
+	  sc->tok = TOK_LPAREN; // ?
+	  s_goto(sc, OP_RDSEXPR);
+	} else {
+	  s_save(sc, OP_RDQQUOTE, sc->EMPTY, sc->EMPTY);
+	}
+	s_goto(sc, OP_RDSEXPR);
+	
+      case TOK_COMMA:
+	s_save(sc, OP_RDUNQUOTE, sc->EMPTY, sc->EMPTY);
+	sc->tok = token(sc, inport);
+	s_goto(sc, OP_RDSEXPR);
+      case TOK_ATMARK:
+	s_save(sc, OP_RDUQTSP, sc->EMPTY, sc->EMPTY);
+	sc->tok = token(sc, inport);
+	s_goto(sc, OP_RDSEXPR);
+      case TOK_ATOM:
+	s_return(sc, mk_atom(sc, readstr_upto(sc, DELIMITERS)));
+      case TOK_DQUOTE:
+	x = readstrexp(sc);
+	if (is_false(x)) {
+	  Error_0(sc, "Error - reading string");
+	}
+	setimmutable(x);
+	s_return(sc, x);
+	
+      case TOK_REGEX:
+	x = readstrexp(sc);
+	if (is_false(x)) {
+	  Error_0(sc, "Error - reading regex");
+	}
+	setimmutable(x);
+	s_return(sc, cons(sc, sc->REGEX, cons(sc, x, sc->EMPTY)));
+	
+      case TOK_CHAR_CONST:
+	if ((x = mk_char_const(sc, readstr_upto(sc, DELIMITERS))).as_uint64 == sc->EMPTY.as_uint64) {
+	  Error_0(sc, "Error - undefined character literal");
+	} else {
+	  s_return(sc, x);
+	}
+	
+      case TOK_TAG:{
+	const char * tag = readstr_upto(sc, DELIMITERS);
+	clj_value f = find_slot_in_env(sc, sc->envir, sc->TAG_HOOK, 1);
+	if (f.as_uint64 != sc->EMPTY.as_uint64) {
+	  clj_value hook = slot_value_in_env(f);
+	  if (!is_nil(hook)) {
+	    sc->code = cons(sc, hook, cons(sc, mk_string(sc, tag), sc->EMPTY));
+	    s_goto(sc, OP_EVAL);
+	  }
+	}
+	sprintf(sc->errbuff, "No reader function for tag %s", tag);
+	Error_0(sc, sc->errbuff);
       }
-      sprintf(sc->errbuff, "No reader function for tag %s", tag);
-      Error_0(sc, sc->errbuff);
+	
+      case TOK_IGNORE:
+	readstr_upto(sc, DELIMITERS);
+	sc->tok = token(sc, inport);
+	if (sc->tok == TOK_EOF) {
+	  s_return(sc, mk_character(EOF));
+	}
+	s_goto(sc, OP_RDSEXPR);      
+	
+      case TOK_SHARP_CONST:
+	if ((x = mk_sharp_const(sc, readstr_upto(sc, DELIMITERS))).as_uint64 == sc->EMPTY.as_uint64) {
+	  Error_0(sc, "Error - undefined sharp expression");
+	} else {
+	  s_return(sc, x);
+	}
+	
+      default:
+	Error_0(sc, "Error - illegal token");
+      }
+      break;
     }
-
-    case TOK_IGNORE:
-      readstr_upto(sc, DELIMITERS);
+    
+  case OP_RDLIST:
+    x = get_in_port(sc);
+    if (!is_reader(x)) {
+      Error_0(sc, "Error - not a reader");
+    } else {
+      struct port * inport = port_unchecked(x);
+      sc->args = cons(sc, sc->value, sc->args);
       sc->tok = token(sc, inport);
       if (sc->tok == TOK_EOF) {
 	s_return(sc, mk_character(EOF));
-      }
-      s_goto(sc, OP_RDSEXPR);      
-
-    case TOK_SHARP_CONST:
-      if ((x = mk_sharp_const(sc, readstr_upto(sc, DELIMITERS))).as_uint64 == sc->EMPTY.as_uint64) {
-        Error_0(sc, "Error - undefined sharp expression");
-      } else {
-        s_return(sc, x);
-      }
-      
-    default:
-      Error_0(sc, "Error - illegal token");
-    }
-    break;
-
-  case OP_RDLIST:
-    inport = port_unchecked(get_in_port(sc));
-    sc->args = cons(sc, sc->value, sc->args);
-    sc->tok = token(sc, inport);
-    if (sc->tok == TOK_EOF) {
-      s_return(sc, mk_character(EOF));
-    } else if (sc->tok == TOK_RPAREN) {
-      port * inport = port_unchecked(get_in_port(sc));
-      int c = inchar(sc, inport);
-      if (c != '\n')
-	backchar(c, inport);
+      } else if (sc->tok == TOK_RPAREN) {
+	port * inport = port_unchecked(get_in_port(sc));
+	int c = inchar(sc, inport);
+	if (c != '\n')
+	  backchar(c, inport);
 #if SHOW_ERROR_LINE
-      else if (sc->load_stack[sc->file_i].kind & port_file)
-	sc->load_stack[sc->file_i].rep.stdio.curr_line++;
+	else if (sc->load_stack[sc->file_i].kind & port_file)
+	  sc->load_stack[sc->file_i].rep.stdio.curr_line++;
 #endif
-      sc->nesting_stack[sc->file_i]--;
-      s_return(sc, reverse_in_place(sc, sc->EMPTY, sc->args));
-    } else if (sc->tok == TOK_DOT) {
-      s_save(sc, OP_RDDOT, sc->args, sc->EMPTY);
-      sc->tok = token(sc, inport);
-      s_goto(sc, OP_RDSEXPR);
-    } else {
-      s_save(sc, OP_RDLIST, sc->args, sc->EMPTY);
-      s_goto(sc, OP_RDSEXPR);
+	sc->nesting_stack[sc->file_i]--;
+	s_return(sc, reverse_in_place(sc, sc->EMPTY, sc->args));
+      } else if (sc->tok == TOK_DOT) {
+	s_save(sc, OP_RDDOT, sc->args, sc->EMPTY);
+	sc->tok = token(sc, inport);
+	s_goto(sc, OP_RDSEXPR);
+      } else {
+	s_save(sc, OP_RDLIST, sc->args, sc->EMPTY);
+	s_goto(sc, OP_RDSEXPR);
+      }
+
     }
     
   case OP_RDVEC_ELEMENT:
-    inport = port_unchecked(get_in_port(sc));
-    sc->args = cons(sc, sc->value, sc->args);
-    sc->tok = token(sc, inport);
-    if (sc->tok == TOK_EOF) {
-      s_return(sc, mk_character(EOF));
-    } else if (sc->tok == TOK_RSQUARE) {
-      port * inport = port_unchecked(get_in_port(sc));
-      int c = inchar(sc, inport);
-      if (c != '\n')
-	backchar(c, inport);
-#if SHOW_ERROR_LINE
-      else if (sc->load_stack[sc->file_i].kind & port_file)
-	sc->load_stack[sc->file_i].rep.stdio.curr_line++;
-#endif
-      sc->nesting_stack[sc->file_i]--;
-      s_return(sc, reverse_in_place(sc, sc->EMPTY, sc->args));
+    x = get_in_port(sc);
+    if (!is_reader(x)) {
+      Error_0(sc, "Error - not a reader");
     } else {
-      s_save(sc, OP_RDVEC_ELEMENT, sc->args, sc->EMPTY);
-      s_goto(sc, OP_RDSEXPR);
-    }     
-
-  case OP_RDMAP_ELEMENT:
-    inport = port_unchecked(get_in_port(sc));
-    sc->args = cons(sc, sc->value, sc->args);
-    sc->tok = token(sc, inport);
-    if (sc->tok == TOK_EOF) {
-      s_return(sc, mk_character(EOF));
-    } else if (sc->tok == TOK_RCURLY) {
-      port * inport = port_unchecked(get_in_port(sc));
-      int c = inchar(sc, inport);
-      if (c != '\n')
-	backchar(c, inport);
+      struct port * inport = port_unchecked(x);
+      sc->args = cons(sc, sc->value, sc->args);
+      sc->tok = token(sc, inport);
+      if (sc->tok == TOK_EOF) {
+	s_return(sc, mk_character(EOF));
+      } else if (sc->tok == TOK_RSQUARE) {
+	port * inport = port_unchecked(get_in_port(sc));
+	int c = inchar(sc, inport);
+	if (c != '\n')
+	  backchar(c, inport);
 #if SHOW_ERROR_LINE
-      else if (sc->load_stack[sc->file_i].kind & port_file)
-	sc->load_stack[sc->file_i].rep.stdio.curr_line++;
+	else if (sc->load_stack[sc->file_i].kind & port_file)
+	  sc->load_stack[sc->file_i].rep.stdio.curr_line++;
 #endif
-      sc->nesting_stack[sc->file_i]--;
-      s_return(sc, reverse_in_place(sc, sc->EMPTY, sc->args));
-    } else {
-      s_save(sc, OP_RDMAP_ELEMENT, sc->args, sc->EMPTY);
-      s_goto(sc, OP_RDSEXPR);
+	sc->nesting_stack[sc->file_i]--;
+	s_return(sc, reverse_in_place(sc, sc->EMPTY, sc->args));
+      } else {
+	s_save(sc, OP_RDVEC_ELEMENT, sc->args, sc->EMPTY);
+	s_goto(sc, OP_RDSEXPR);
+      }
     }
 
-  case OP_RDDOT:
-    inport = port_unchecked(get_in_port(sc));
-    if (token(sc, inport) != TOK_RPAREN) {
-      Error_0(sc, "Error - illegal dot expression");
+  case OP_RDMAP_ELEMENT:
+    x = get_in_port(sc);
+    if (!is_reader(x)) {
+      Error_0(sc, "Error - not a reader");
     } else {
-      sc->nesting_stack[sc->file_i]--;
-      s_return(sc, reverse_in_place(sc, sc->value, sc->args));
+      struct port * inport = port_unchecked(x);
+      sc->args = cons(sc, sc->value, sc->args);
+      sc->tok = token(sc, inport);
+      if (sc->tok == TOK_EOF) {
+	s_return(sc, mk_character(EOF));
+      } else if (sc->tok == TOK_RCURLY) {
+	port * inport = port_unchecked(get_in_port(sc));
+	int c = inchar(sc, inport);
+	if (c != '\n')
+	  backchar(c, inport);
+#if SHOW_ERROR_LINE
+	else if (sc->load_stack[sc->file_i].kind & port_file)
+	  sc->load_stack[sc->file_i].rep.stdio.curr_line++;
+#endif
+	sc->nesting_stack[sc->file_i]--;
+	s_return(sc, reverse_in_place(sc, sc->EMPTY, sc->args));
+      } else {
+	s_save(sc, OP_RDMAP_ELEMENT, sc->args, sc->EMPTY);
+	s_goto(sc, OP_RDSEXPR);
+      }
+    }
+    
+  case OP_RDDOT:
+    x = get_in_port(sc);
+    if (!is_reader(x)) {
+      Error_0(sc, "Error - not a reader");
+    } else {
+      struct port * inport = port_unchecked(x);
+      if (token(sc, inport) != TOK_RPAREN) {
+	Error_0(sc, "Error - illegal dot expression");
+      } else {
+	sc->nesting_stack[sc->file_i]--;
+	s_return(sc, reverse_in_place(sc, sc->value, sc->args));
+      }
     }
 
   case OP_RDQUOTE:
