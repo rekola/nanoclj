@@ -138,6 +138,7 @@ extern "C" {
     clj_value recur;		  /* recursion point */
 #endif
 
+/* Temporary registers for argument unpacking */
     clj_value arg0;
     clj_value arg1;
     clj_value arg2;
