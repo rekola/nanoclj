@@ -124,7 +124,6 @@ extern "C" {
     clj_value(*mk_integer) (nanoclj_t * sc, long long num);
     clj_value(*mk_real) (double num);
     clj_value(*mk_symbol) (nanoclj_t * sc, const char *name);
-    clj_value(*gensym) (nanoclj_t * sc);
     clj_value(*mk_string) (nanoclj_t * sc, const char *str);
     clj_value(*mk_counted_string) (nanoclj_t * sc, const char *str, size_t len);
     clj_value(*mk_character) (int c);

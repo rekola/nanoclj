@@ -2132,12 +2132,12 @@ static inline clj_value def_namespace(nanoclj_t * sc, const char *name) {
   return def_namespace_with_sym(sc, def_symbol(sc, name));
 }
 
-static inline clj_value gensym(nanoclj_t * sc) {
+static inline clj_value gensym(nanoclj_t * sc, const char * prefix) {
   clj_value x;
-  char name[40];
+  char name[256];
 
   for (; sc->gensym_cnt < LONG_MAX; sc->gensym_cnt++) {
-    snprintf(name, 40, "gensym-%ld", sc->gensym_cnt);
+    snprintf(name, 256, "%s%ld", prefix, sc->gensym_cnt);
 
     /* first check oblist */
     x = oblist_find_symbol_by_name(sc, name);
@@ -4076,7 +4076,8 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   }
     
   case OP_GENSYM:
-    s_return(sc, gensym(sc));
+    s_return(sc, gensym(sc, sc->args.as_uint64 != sc->EMPTY.as_uint64 ?
+			strvalue(car(sc->args)) : "G__"));
 
   case OP_VALUEPRINT:          /* print evaluation result */
     /* OP_VALUEPRINT is always pushed, because when changing from
@@ -6017,7 +6018,6 @@ static struct nanoclj_interface vtbl = {
   mk_integer,
   mk_real,
   def_symbol,
-  gensym,
   mk_string,
   mk_counted_string,
   mk_character,
