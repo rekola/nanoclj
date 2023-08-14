@@ -387,11 +387,12 @@
 (def-macro (with-in-str s body)
   `(let ((prev-inport *in*)
          (new-inport (clojure.lang.io/reader (char-array ,s)))
-         ) (set! *in* new-inport)
-        (let ((r ,body))
-          (set! *in* prev-inport)
-          r
-          )))
+         )
+     (set! *in* new-inport)
+     (let ((r ,body))
+       (set! *in* prev-inport)
+       r
+       )))
 
 (defn pr-str [& xs] (with-out-str (apply pr xs)))
 (defn prn-str [& xs] (with-out-str (apply prn xs)))
