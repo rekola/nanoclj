@@ -10,15 +10,18 @@
      (println ',name)
      (println (:doc (meta ,name)))))
 
-(defn apropos [pattern]
+(defn apropos
   "Returns a list of functions whose name contains str"
-  (filter (fn [s] (clojure.string/includes? (str s) pattern)) (symbols root)))
+  [pattern] (filter (fn [s] (clojure.string/includes? (str s) pattern)) (symbols root)))
     
 (defn repl
   "Starts the REPL"
-  [] (print "user> ")
-     (let [r (eval (read-string (read-line)))]
-       (prn r)
-       (repl)))
+  [] (let [prompt "user> "
+           line (linenoise/read-line prompt)]
+       (if line (let [r (eval (read-string line))]
+                  (prn r)
+                  (def *1 r)
+                  (recur))
+           nil)))
 
 ))
