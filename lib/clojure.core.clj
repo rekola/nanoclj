@@ -327,8 +327,6 @@
                                             (print \space)
                                             (pr (val x))
                                             (print \]))
-                         (closure? x) nil
-                         (macro? x) nil
                          (set? x) (cond (empty? x) (print "#{}")
                                         (and *print-length* (<= *print-length* 0)) (print "#{...}")
                                         :else (do (print "#{")
