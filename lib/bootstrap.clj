@@ -155,54 +155,55 @@
 (macro
  quasiquote
  (fn [l]
-   (def mcons (fn [f l r]
-     (if (and (pair? r)
-              (equals? (car r) 'quote)
-              (equals? (car (cdr r)) (cdr f))
-              (pair? l)
-              (equals? (car l) 'quote)
-              (equals? (car (cdr l)) (car f)))
-         (if (or (procedure? f) (number? f) (string? f))
-               f
-               (list 'quote f))
-         (if (equals? l vector)
-               (apply l (eval r))
-               (list 'cons l r)
-               ))))
-   (def mappend (fn [f l r]
-     (if (or (empty? (cdr f))
-             (and (pair? r)
-                  (equals? (car r) 'quote)
-                  (equals? (car (cdr r)) '())))
-         l
-         (list 'concat l r))))
-   (def foo (fn [level form]
-     (cond (not (pair? form))
-               (if (or (procedure? form) (number? form) (string? form))
-                    form
-                    (list 'quote form))
+   (let [mcons (fn [f l r]
+                 (if (and (pair? r)
+                          (equals? (car r) 'quote)
+                          (equals? (car (cdr r)) (cdr f))
+                          (pair? l)
+                          (equals? (car l) 'quote)
+                          (equals? (car (cdr l)) (car f)))
+                   (if (or (procedure? f) (number? f) (string? f))
+                     f
+                     (list 'quote f))
+                   (if (equals? l vector)
+                     (apply l (eval r))
+                     (list 'cons l r)
+                     )))
+         mappend (fn [f l r]
+                   (if (or (empty? (cdr f))
+                           (and (pair? r)
+                                (equals? (car r) 'quote)
+                                (equals? (car (cdr r)) '())))
+                     l
+                     (list 'concat l r)))
+         foo (fn [level form]
+               (cond (not (pair? form))
+                     (if (or (procedure? form) (number? form) (string? form))
+                       form
+                       (list 'quote form))
                
-           (equals? 'quasiquote (car form))
-            (mcons form ''quasiquote (foo (+ level 1) (cdr form)))
-           :else (if (zero? level)
-                   (cond (equals? (car form) 'unquote) (car (cdr form))
-                         (equals? (car form) 'unquote-splicing)
-                          (throw (str "Unquote-splicing wasn't in a list:" form))
-                         (and (pair? (car form))
-                               (equals? (car (car form)) 'unquote-splicing))
-                          (mappend form (car (cdr (car form)))
-                                   (foo level (cdr form)))
-                         :else (mcons form (foo level (car form))
-                                         (foo level (cdr form))))
-                   (cond (equals? (car form) 'unquote)
-                          (mcons form ''unquote (foo (- level 1)
-                                                     (cdr form)))
-                         (equals? (car form) 'unquote-splicing)
-                          (mcons form ''unquote-splicing
-                                      (foo (- level 1) (cdr form)))
-                         :else (mcons form (foo level (car form))
-                                         (foo level (cdr form))))))))
-   (foo 0 (car (cdr l)))))
+                     (equals? 'quasiquote (car form))
+                     (mcons form ''quasiquote (foo (+ level 1) (cdr form)))
+                     :else (if (zero? level)
+                             (cond (equals? (car form) 'unquote) (car (cdr form))
+                                   (equals? (car form) 'unquote-splicing)
+                                   (throw (str "Unquote-splicing wasn't in a list:" form))
+                                   (and (pair? (car form))
+                                        (equals? (car (car form)) 'unquote-splicing))
+                                   (mappend form (car (cdr (car form)))
+                                            (foo level (cdr form)))
+                                   :else (mcons form (foo level (car form))
+                                                (foo level (cdr form))))
+                             (cond (equals? (car form) 'unquote)
+                                   (mcons form ''unquote (foo (- level 1)
+                                                              (cdr form)))
+                                   (equals? (car form) 'unquote-splicing)
+                                   (mcons form ''unquote-splicing
+                                          (foo (- level 1) (cdr form)))
+                                   :else (mcons form (foo level (car form))
+                                                (foo level (cdr form)))))))
+         ]
+     (foo 0 (car (cdr l))))))
 
 ; Implement type and predicate for macros now that we have a macro
 

@@ -4429,14 +4429,14 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       /* TODO: should value be copied before settings the meta */
       metadata_unchecked(sc->value) = sc->args;
     }
-    x = find_slot_in_env(sc, sc->envir, sc->code, 0);
+    x = find_slot_in_env(sc, sc->global_env, sc->code, 0);
     if (x.as_uint64 != sc->EMPTY.as_uint64) {
 #if 0
       fprintf(stderr, "%s already refers to a value\n", symname(sc->code));
 #endif
       set_slot_in_env(x, sc->value);
     } else {
-      new_slot_in_env(sc, sc->code, sc->value);
+      new_slot_spec_in_env(sc, sc->global_env, sc->code, sc->value);
     }
     s_return(sc, sc->code);
 
@@ -6548,7 +6548,7 @@ static void free_hints(void * ptr) {
   free(ptr);
 }
 
-clj_value linenoise_readline(nanoclj_t * sc, clj_value args) {
+static clj_value linenoise_readline(nanoclj_t * sc, clj_value args) {
   char * line = linenoise(to_cstr(car(args)));
   if (line == NULL) return mk_nil();
   
