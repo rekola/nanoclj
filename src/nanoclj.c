@@ -4169,7 +4169,6 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 #if USE_TRACING
     if (sc->tracing) {
       s_save(sc, OP_REAL_APPLY, sc->args, sc->code);
-      sc->print_flag = 1;
       /*  sc->args=cons(sc,sc->code,sc->args); */
       putstr(sc, "\nApply to: ", get_err_port(sc));
       s_goto(sc, OP_P0LIST);

@@ -212,9 +212,7 @@ extern "C" {
     char *errbuff;
     size_t errbuff_size;
 
-    FILE *tmpfp;
     int tok;
-    int print_flag;
     clj_value value;
     int op;
 
