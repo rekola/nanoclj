@@ -16,8 +16,9 @@
     
 (defn repl
   "Starts the REPL"
-  []
-  (eval (read-string (read-line)))
-  (repl))
+  [] (print "user> ")
+     (let [r (eval (read-string (read-line)))]
+       (prn r)
+       (repl)))
 
 ))
