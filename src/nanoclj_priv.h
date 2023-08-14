@@ -181,13 +181,6 @@ extern "C" {
     clj_value UNDERSCORE;         /* _ */
     clj_value DOC;		  /* :doc */
 
-    clj_value GREEN;		  /* :green */
-    clj_value RED;		  /* :red */
-    clj_value MAGENTA;            /* :magenta */
-    clj_value BLUE;		  /* :blue */
-    clj_value YELLOW;		  /* :yellow */
-    clj_value BOLD;		  /* :bold */
-
     clj_value SORTED_SET;	  /* sorted-set */
     clj_value ARRAY_MAP;	  /* array-map */
     clj_value REGEX;		  /* regex */

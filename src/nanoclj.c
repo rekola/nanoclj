@@ -32,10 +32,10 @@
 #include <assert.h>
 
 #include "linenoise.h"
-#include "termcolor-c.h"
 #include "clock.h"
 #include "murmur3.h"
 #include "legal.h"
+#include "term.h"
 
 #define kNIL		  UINT64_C(18444492273895866368)
 #define kTRUE		  UINT64_C(9221683186994511873)
@@ -2782,6 +2782,27 @@ static inline void putcharacter(nanoclj_t * sc, int c) {
   }
 }
 
+static inline void set_styles(nanoclj_t * sc, clj_value out, clj_value x) {
+#ifndef WIN32
+  if (!is_writer(out)) {
+    return;
+  }
+  port * pt = port_unchecked(out);
+  if (pt->kind & port_file) {
+    FILE * fh = pt->rep.stdio.file;
+    if (isatty(fileno(fh))) {
+      if (x.as_uint64 == sc->EMPTY.as_uint64) {
+	reset_color(fh);
+      } else {
+	for (; x.as_uint64 != sc->EMPTY.as_uint64; x = cdr(x)) {
+	  set_basic_style(fh, to_int(car(x)));
+	}
+      }
+    }
+  }
+#endif
+}
+
 static inline int check_strbuff_size(nanoclj_t * sc, char **p) {
   char *t;
   int len = *p - sc->strbuff;
@@ -5348,31 +5369,9 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     printatom(sc, sc->arg0, op == OP_PR, get_out_port(sc));
     s_return(sc, mk_nil());
 
-  case OP_COLOR:{
-    clj_value out = get_out_port(sc);
-    port * pt = port_unchecked(out);
-    if (pt->kind & port_file) {
-      FILE * fh = pt->rep.stdio.file;
-      x = sc->args;
-      if (x.as_uint64 == sc->EMPTY.as_uint64) {
-	reset_colors(pt->rep.stdio.file);
-      } else {
-	for (; x.as_uint64 != sc->EMPTY.as_uint64; x = cdr(x)) {
-	  y = car(x);
-	  if (y.as_uint64 == sc->GREEN.as_uint64) {
-	    text_green(fh);
-	  } else if (y.as_uint64 == sc->RED.as_uint64) {
-	    text_red(fh);
-	  } else if (y.as_uint64 == sc->YELLOW.as_uint64) {
-	    text_yellow(fh);
-	  } else if (y.as_uint64 == sc->BOLD.as_uint64) {
-	    text_bold(fh);
-	  }
-	}
-      }
-    }
-    s_return(sc, mk_nil());
-  }
+  case OP_COLOR:
+    set_styles(sc, get_out_port(sc), sc->args);
+    s_return(sc, mk_nil());  
     
   case OP_FORMAT:{
     if (!unpack_args_1_plus(sc)) {
@@ -5388,8 +5387,8 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       sc->args = cons(sc, mk_string(sc, " -- "), sc->args);
       setimmutable(car(sc->args));
     }
-    text_bold(stderr);
-    text_red(stderr);
+    set_basic_style(stderr, 1);
+    set_basic_style(stderr, 31);
     {
       clj_value err = get_err_port(sc);
       assert(is_writer(err));
@@ -5397,7 +5396,7 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       putchars(sc, sv.ptr, sv.size, err);
       putchars(sc, "\n", 1, err);
     }
-    reset_colors(stderr);
+    reset_color(stderr);
 #if 1
     s_goto(sc, OP_T0LVL);
 #else
@@ -6172,13 +6171,6 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc,
   sc->AMP = def_symbol(sc, "&");
   sc->UNDERSCORE = def_symbol(sc, "_");
   sc->DOC = def_keyword(sc, "doc");
-
-  sc->GREEN = def_keyword(sc, "green");
-  sc->RED = def_keyword(sc, "red");
-  sc->MAGENTA = def_keyword(sc, "magenta");
-  sc->BLUE = def_keyword(sc, "blue");
-  sc->YELLOW = def_keyword(sc, "yellow");
-  sc->BOLD = def_keyword(sc, "bold");
 
   sc->SORTED_SET = def_symbol(sc, "sorted-set");
   sc->ARRAY_MAP = def_symbol(sc, "array-map");
