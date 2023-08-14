@@ -2545,21 +2545,6 @@ static inline void file_pop(nanoclj_t * sc) {
   }
 }
 
-static inline int file_interactive(nanoclj_t * sc) {
-  clj_value in = get_in_port(sc);
-    
-  return sc->interactive_repl
-    && sc->file_i == 0 && (1 || sc->load_stack[0].rep.stdio.file == stdin)
-    && (port_unchecked(in)->kind & port_file || port_unchecked(in)->kind & port_callback);
-}
-
-static inline int needs_prompt(nanoclj_t * sc) {
-  clj_value in = get_in_port(sc);
-  
-  return sc->interactive_repl && sc->file_i == 0 && sc->load_stack[0].rep.stdio.file == stdin
-    && port_unchecked(in)->kind & port_file;
-}
-
 static inline port *port_rep_from_file(nanoclj_t * sc, FILE * f, int prop) {
   port *pt;
 
@@ -3997,13 +3982,6 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 
   switch (op) {
   case OP_LOAD:                /* load */
-    if (file_interactive(sc)) {
-#if 0
-      /* FIX ME*/
-      fprintf(sc->outport->_object._port->rep.stdio.file,
-          "Loading %s\n", strvalue(car(sc->args)));
-#endif
-    }
     if (!unpack_args_1(sc)) {
       Error_0(sc, "Error - Invalid arity");
     }
@@ -4028,7 +4006,7 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
         sc->args = sc->EMPTY;
         s_goto(sc, OP_QUIT);
 #else
-	return (sc->EMPTY);
+	return sc->EMPTY;
 #endif
       } else {
         file_pop(sc);
@@ -4036,26 +4014,13 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       }
       /* NOTREACHED */
     }
-
-    /* If interactive, be nice to user. */
-    if (file_interactive(sc) && needs_prompt(sc)) {
-      fprintf(stderr, "resetting env\n");
-
-      clj_value p = get_out_port(sc);
-      
-      sc->envir = sc->global_env;
-      dump_stack_reset(sc);
-      putstr(sc, strvalue(metadata_unchecked(sc->envir)), p);
-      putstr(sc, "=> ", p);
-    }
-
+    
     /* Set up another iteration of REPL */
     sc->nesting = 0;
     sc->save_inport = get_in_port(sc);
     nanoclj_define(sc, sc->root_env, sc->IN, sc->loadport);
       
     s_save(sc, OP_T0LVL, sc->EMPTY, sc->EMPTY);
-    s_save(sc, OP_VALUEPRINT, sc->EMPTY, sc->EMPTY);
     s_save(sc, OP_T1LVL, sc->EMPTY, sc->EMPTY);
 
     sc->args = sc->EMPTY;
@@ -4082,32 +4047,7 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   case OP_GENSYM:
     s_return(sc, gensym(sc, sc->args.as_uint64 != sc->EMPTY.as_uint64 ?
 			strvalue(car(sc->args)) : "G__"));
-
-  case OP_VALUEPRINT:          /* print evaluation result */
-    /* OP_VALUEPRINT is always pushed, because when changing from
-       non-interactive to interactive mode, it needs to be
-       already on the stack */
-    if (sc->tracing) {
-      putstr(sc, "\nGives: ", get_err_port(sc));
-    }
-    if (file_interactive(sc)) {
-      nanoclj_define(sc, sc->root_env, sc->VAL1, sc->value);
-
-      clj_value p0 = find_slot_in_env(sc, sc->envir, sc->PRINT_HOOK, 1);
-      if (p0.as_uint64 != sc->EMPTY.as_uint64) {	
-	sc->code = slot_value_in_env(p0);
-	sc->args = cons(sc, sc->value, sc->EMPTY);
-	s_goto(sc, OP_APPLY);
-      } else {
-	clj_value out = get_out_port(sc);
-	printatom(sc, sc->value, 1, out);
-	putchars(sc, "\n", 1, out);
-	s_return(sc, sc->value);	
-      }
-    } else {
-      s_return(sc, sc->value);
-    }
-
+    
   case OP_EVAL:                /* main part of evaluation */
 #if USE_TRACING
     if (sc->tracing) {
@@ -5459,11 +5399,11 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       putchars(sc, "\n", 1, err);
     }
     reset_colors(stderr);
-    if (sc->interactive_repl) {
-      s_goto(sc, OP_T0LVL);
-    } else {
-      return sc->EMPTY;
-    }
+#if 1
+    s_goto(sc, OP_T0LVL);
+#else
+    return sc->EMPTY;
+#endif
     
   case OP_VERSION:
     s_return(sc, mk_string(sc, get_version()));
@@ -6159,8 +6099,7 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc,
   sc->save_inport = sc->EMPTY;
   sc->loadport = sc->EMPTY;
   sc->nesting = 0;
-  sc->interactive_repl = 0;
-
+  
   if (alloc_cellseg(sc, FIRST_CELLSEGS) != FIRST_CELLSEGS) {
     sc->no_memory = 1;
     return 0;
@@ -6225,12 +6164,10 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc,
   sc->ERROR_HOOK = def_symbol(sc, "*error-hook*");
   sc->TAG_HOOK = def_symbol(sc, "*default-data-reader-fn*");
   sc->COMPILE_HOOK = def_symbol(sc, "*compile-hook*");
-  sc->PRINT_HOOK = def_symbol(sc, "*print-hook*");
 
   sc->IN = def_symbol(sc, "*in*");
   sc->OUT = def_symbol(sc, "*out*");
   sc->ERR = def_symbol(sc, "*err*");
-  sc->VAL1 = def_symbol(sc, "*1");
   sc->NS = def_symbol(sc, "*ns*");  
   sc->RECUR = def_symbol(sc, "recur");
   sc->AMP = def_symbol(sc, "&");
@@ -6367,9 +6304,7 @@ void nanoclj_load_named_file(nanoclj_t * sc, FILE * fin, const char *filename) {
   sc->load_stack[0].rep.stdio.file = fin;
   sc->loadport = mk_reader(sc, sc->load_stack);
   sc->retcode = 0;
-  if (fin == stdin && (filename && !str_eq(filename, "--"))) {
-    sc->interactive_repl = 1;
-  }
+
 #if SHOW_ERROR_LINE
   sc->load_stack[0].rep.stdio.curr_line = 0;
   if (fin != stdin && filename)
@@ -6389,6 +6324,7 @@ void nanoclj_load_named_file(nanoclj_t * sc, FILE * fin, const char *filename) {
 
 clj_value nanoclj_eval_string(nanoclj_t * sc, const char *cmd) {
   dump_stack_reset(sc);
+
   sc->envir = sc->global_env;
   sc->file_i = 0;
   sc->load_stack[0].kind = port_input | port_string;
@@ -6398,8 +6334,8 @@ clj_value nanoclj_eval_string(nanoclj_t * sc, const char *cmd) {
   sc->load_stack[0].rep.string.curr = (char *) cmd;
   sc->loadport = mk_reader(sc, sc->load_stack);
   sc->retcode = 0;
-  sc->interactive_repl = 0;
   sc->args = mk_integer(sc, sc->file_i);
+  
   Eval_Cycle(sc, OP_T0LVL);
   fprintf(stderr, "eval sycle ret\n");
   typeflag(sc->loadport) = T_ATOM;
@@ -6411,6 +6347,7 @@ clj_value nanoclj_eval_string(nanoclj_t * sc, const char *cmd) {
  
 void nanoclj_load_string(nanoclj_t * sc, const char *cmd) {
   dump_stack_reset(sc);
+
   sc->envir = sc->global_env;
   sc->file_i = 0;
   sc->load_stack[0].kind = port_input | port_string;
@@ -6420,12 +6357,8 @@ void nanoclj_load_string(nanoclj_t * sc, const char *cmd) {
   sc->load_stack[0].rep.string.curr = (char *) cmd;
   sc->loadport = mk_reader(sc, sc->load_stack);
   sc->retcode = 0;
-#if 1
-  sc->interactive_repl = 1;
-#else
-  sc->interactive_repl = 0;
-#endif
   sc->args = mk_integer(sc, sc->file_i);
+  
   Eval_Cycle(sc, OP_T0LVL);
   typeflag(sc->loadport) = T_ATOM;
   if (sc->retcode == 0) {
@@ -6467,15 +6400,12 @@ static inline void restore_from_C_call(nanoclj_t * sc) {
 clj_value nanoclj_call(nanoclj_t * sc, clj_value func, clj_value args) {
   fprintf(stderr, "dump = %d\n", decode_integer(sc->dump));
 
-  int old_repl = sc->interactive_repl;
-  sc->interactive_repl = 0;
   save_from_C_call(sc);
   sc->envir = sc->global_env;
   sc->args = args;
   sc->code = func;
   sc->retcode = 0;
   Eval_Cycle(sc, OP_APPLY);
-  sc->interactive_repl = old_repl;
   restore_from_C_call(sc);
 
   fprintf(stderr, "dump after = %d\n", decode_integer(sc->dump));
@@ -6504,14 +6434,13 @@ clj_value nanoclj_apply0(nanoclj_t * sc, const char *procname) {
 #endif
 
 clj_value nanoclj_eval(nanoclj_t * sc, clj_value obj) {
-  int old_repl = sc->interactive_repl;
-  sc->interactive_repl = 0;
   save_from_C_call(sc);
+
   sc->args = sc->EMPTY;
   sc->code = obj;
   sc->retcode = 0;
+
   Eval_Cycle(sc, OP_EVAL);
-  sc->interactive_repl = old_repl;
   restore_from_C_call(sc);
   return sc->value;
 }
@@ -6527,6 +6456,7 @@ static inline FILE *open_file(const char *fname) {
     return fopen(fname, "r");
 }
 
+#ifdef USE_LINENOISE
 #define MAX_COMPLETION_SYMBOLS 65535
 
 static nanoclj_t * repl_sc = NULL;
@@ -6618,6 +6548,32 @@ static void free_hints(void * ptr) {
   free(ptr);
 }
 
+clj_value linenoise_readline(nanoclj_t * sc, clj_value args) {
+  char * line = linenoise(to_cstr(car(args)));
+  if (line == NULL) return mk_nil();
+  
+  linenoiseHistoryAdd(line);
+  linenoiseHistorySave(".nanoclj_history");
+
+  clj_value r;
+  char * missing_parens = complete_parens(line);
+  if (!missing_parens) {
+    r = mk_string(sc, line);
+  } else {
+    int l1 = strlen(line), l2 = strlen(missing_parens);
+    char * tmp = (char *)malloc(l1 + l2 + 1);
+    strcpy(tmp, line);
+    strcpy(tmp + l1, missing_parens);
+    free(missing_parens);
+    r = mk_string(sc, tmp);
+    free(tmp);
+  }
+  free(line);
+
+  return r;
+}
+#endif
+
 int main(int argc, const char **argv) {
   if (argc == 1) {
     printf("%s\n", get_version());
@@ -6684,30 +6640,12 @@ int main(int argc, const char **argv) {
     linenoiseSetFreeHintsCallback(free_hints);
     linenoiseHistorySetMaxLen(10000);
     linenoiseHistoryLoad(".nanoclj_history");
-    
-    while ( 1 ) {
-      char * line = linenoise("user> ");
-      if (line == NULL) break;
-      linenoiseHistoryAdd(line);
-      linenoiseHistorySave(".nanoclj_history");
-      
-      char * missing_parens = complete_parens(line);
-      if (!missing_parens) {
-	nanoclj_load_string(&sc, line);
-      } else {
-	int l1 = strlen(line), l2 = strlen(missing_parens);
-	char * tmp = (char *)malloc(l1 + l2 + 1);
-	strcpy(tmp, line);
-	strcpy(tmp + l1, missing_parens);
-	free(missing_parens);
-	nanoclj_load_string(&sc, tmp);
-	free(tmp);
-      }
-      free(line);
-    }
-#else
-    nanoclj_load_named_file(&sc, stdin, "-");
+
+    clj_value linenoise = def_namespace(&sc, "linenoise");
+    nanoclj_define(&sc, linenoise, def_symbol(&sc, "read-line"), mk_foreign_func_with_arity(&sc, linenoise_readline, 1, 1));
 #endif
+    
+    nanoclj_load_string(&sc, "(clojure.repl/repl)");
   }
   int retcode = sc.retcode;
   nanoclj_deinit(&sc);

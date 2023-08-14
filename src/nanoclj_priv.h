@@ -144,8 +144,6 @@ extern "C" {
     clj_value arg2;
     clj_value arg_rest;
     
-    int interactive_repl;       /* are we in an interactive REPL? */
-
     struct cell _sink;
     clj_value sink;               /* when mem. alloc. fails */
     struct cell _EMPTY;
@@ -174,11 +172,9 @@ extern "C" {
     clj_value ERROR_HOOK;         /* *error-hook* */
     clj_value TAG_HOOK;           /* *default-data-reader-fn* */
     clj_value COMPILE_HOOK;       /* *compile-hook* */
-    clj_value PRINT_HOOK;         /* *print-hook* */
     clj_value IN;		  /* *in* */
     clj_value OUT;		  /* *out* */
     clj_value ERR;		  /* *err* */
-    clj_value VAL1;               /* *1 */
     clj_value NS;		  /* *ns* */
     clj_value RECUR;		  /* recur */
     clj_value AMP;		  /* & */

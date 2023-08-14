@@ -3,7 +3,6 @@ _OP_DEF(0, 0, 0, OP_T0LVL)
 _OP_DEF(0, 0, 0, OP_T1LVL)
 _OP_DEF("read", 0, 0, OP_READ)
 _OP_DEF("gensym", 0, 0, OP_GENSYM)
-_OP_DEF(0, 0, 0, OP_VALUEPRINT)
 _OP_DEF(0, 0, 0, OP_EVAL)
 #if USE_TRACING
 _OP_DEF(0, 0, 0, OP_REAL_EVAL)
