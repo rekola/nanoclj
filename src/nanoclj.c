@@ -697,7 +697,6 @@ static inline void setimmutable(clj_value p) {
 static void gc(nanoclj_t * sc, clj_value a, clj_value b);
 static void putstr(nanoclj_t * sc, const char *s, clj_value port);
 static void dump_stack_mark(nanoclj_t *);
-static void Eval_Cycle(nanoclj_t * sc, enum nanoclj_opcodes op);
 static clj_value get_err_port(nanoclj_t * sc);
 static clj_value get_out_port(nanoclj_t * sc);
 static clj_value get_in_port(nanoclj_t * sc);
@@ -2725,30 +2724,14 @@ static inline void char_to_utf8(int c, char *p, int *plen) {
   if (plen) *plen = strlen(p);
 }
 
-static inline void putstr(nanoclj_t * sc, const char *s, clj_value dest_port) {
+static inline void putchars(nanoclj_t * sc, const char *s, int len, clj_value out) {
   assert(s);
   assert(is_writer(dest_port));
-	 
-  if (!is_nil(dest_port) || !is_writer(dest_port) || dest_port.as_uint64 == sc->EMPTY.as_uint64) {
+
+  if (is_nil(out) || !is_writer(out)) {
     return;
   }
-  port *pt = port_unchecked(dest_port);
-  if (pt->kind & port_file) {
-    fputs(s, pt->rep.stdio.file);
-  } else if (pt->kind & port_callback) {
-    pt->rep.callback.func(s, strlen(s), sc->ext_data);
-  } else {
-    for (; *s; s++) {
-      if (pt->rep.string.curr != pt->rep.string.past_the_end) {
-        *pt->rep.string.curr++ = *s;
-      } else if (realloc_port_string(sc, pt)) {
-        *pt->rep.string.curr++ = *s;
-      }
-    }
-  }
-}
 
-static inline void putchars(nanoclj_t * sc, const char *s, int len, clj_value out) {
   port * pt = port_unchecked(out);
   if (pt->kind & port_file) {
     fwrite(s, 1, len, pt->rep.stdio.file);
@@ -2763,6 +2746,10 @@ static inline void putchars(nanoclj_t * sc, const char *s, int len, clj_value ou
       }
     }
   }
+}
+
+static inline void putstr(nanoclj_t * sc, const char *s, clj_value dest_port) {
+  putchars(sc, s, strlen(s), dest_port);
 }
 
 static inline void putcharacter(nanoclj_t * sc, int c) {
@@ -3131,12 +3118,12 @@ static inline void printslashstring(nanoclj_t * sc, const char *p, int len, clj_
         putcharacter(sc, '\\');
         break;
       default:{
-	  putstr(sc, "u00", out);
-          d = c / 16;
-	  putcharacter(sc, d + (d < 10 ? '0' : 'A' - 10));
-	  d = c % 16;
-	  putcharacter(sc, d + (d < 10 ? '0' : 'A' - 10));          
-        }
+	putchars(sc, "u00", 3, out);
+	d = c / 16;
+	putcharacter(sc, d + (d < 10 ? '0' : 'A' - 10));
+	d = c % 16;
+	putcharacter(sc, d + (d < 10 ? '0' : 'A' - 10));          
+      }
       }
     } else {
       putcharacter(sc, c);
@@ -4006,12 +3993,6 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     }
 
   case OP_T0LVL:               /* top level */
-#if 0
-    if (file_interactive(sc)) { /* flush previous valueprint */
-      putstr(sc, "\n", get_out_port(sc));
-    }
-#endif
-
       /* If we reached the end of file, this loop is done. */
     if (port_unchecked(sc->loadport)->kind & port_saw_EOF) {
       if (sc->global_env.as_uint64 != sc->root_env.as_uint64) {
@@ -5447,11 +5428,11 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     }
     text_bold(stderr);
     text_red(stderr);
-    fprintf(stderr, "error: %s\n", strvalue(car(sc->args)));
     {
       clj_value err = get_err_port(sc);
       assert(is_writer(err));
       putstr(sc, strvalue(car(sc->args)), err);
+      putchars(sc, "\n", 1, err);
     }
     reset_colors(stderr);
     if (sc->interactive_repl) {
