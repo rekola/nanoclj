@@ -47,10 +47,6 @@ extern "C" {
 #define USE_ERROR_HOOK 1
 #endif
 
-#ifndef USE_SLASH_HOOK          /* Enable qualified qualifier */
-#define USE_SLASH_HOOK 1
-#endif
-
 #ifndef STDIO_ADDS_CR           /* Define if DOS/Windows */
 #define STDIO_ADDS_CR 0
 #endif

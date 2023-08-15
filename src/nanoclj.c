@@ -175,9 +175,8 @@ struct symbol {
 #define ADJ		64
 #define TYPE_BITS	 6
 #define T_MASKTYPE      63      /* 0000000000111111 */
-#define T_REVERSE     2048      /* 0000100000000000 */
-#define T_SMALL	      4096      /* 0001000000000000 */
-#define T_IMMUTABLE   8192      /* 0010000000000000 */
+#define T_REVERSE     4096      /* 0001000000000000 */
+#define T_SMALL       8192      /* 0010000000000000 */
 #define T_ATOM       16384      /* 0100000000000000 */    /* only for gc */
 #define CLRATOM      49151      /* 1011111111111111 */    /* only for gc */
 #define MARK         32768      /* 1000000000000000 */
@@ -684,24 +683,6 @@ static inline bool is_true(clj_value p) {
 #define is_mark(p)       (typeflag(p)&MARK)
 #define clrmark(p)       typeflag(p) &= UNMARK
 
-static inline bool is_immutable(clj_value p) {
-  if (!is_cell(p)) {
-    return false;
-  } else {
-    return typeflag(p) & T_IMMUTABLE;
-  }
-}
-
-/*#define setimmutable(p)  typeflag(p) |= T_IMMUTABLE*/
-static inline void setimmutable(clj_value p) {
-  if (!is_cell(p)) {
-    fprintf(stderr, "cannot set immutable\n");
-    *(char*)0 = 1;
-  } else {
-    typeflag(p) |= T_IMMUTABLE;
-  }
-}
-
 #define caar(p)          car(car(p))
 #define caadr(p)         car(car(cdr(p)))
 #define cadr(p)          car(cdr(p))
@@ -884,7 +865,7 @@ static inline struct cell * get_cell_x(nanoclj_t * sc, clj_value a, clj_value b)
 
 static inline void retain(nanoclj_t * sc, clj_value recent, clj_value extra) {
   struct cell * holder = get_cell_x(sc, recent, extra);
-  _typeflag(holder) = T_PAIR | T_IMMUTABLE;
+  _typeflag(holder) = T_PAIR;
   _car(holder) = recent;
   _cdr(holder) = car(sc->sink);
   _metadata_unchecked(holder) = mk_nil();
@@ -1145,14 +1126,14 @@ static inline clj_value mk_counted_string(nanoclj_t * sc, const char *str, size_
   _metadata_unchecked(x) = mk_nil();
 
   if (len <= 14) {
-    _typeflag(x) = (T_STRING | T_ATOM | T_SMALL | T_IMMUTABLE);
+    _typeflag(x) = T_STRING | T_ATOM | T_SMALL;
     if (str) {
       memcpy(_smallstrvalue_unchecked(x), str, len);
       _smallstrvalue_unchecked(x)[len] = 0;
     }
     _smallstrlength_unchecked(x) = len;
   } else {
-    _typeflag(x) = (T_STRING | T_ATOM | T_IMMUTABLE);
+    _typeflag(x) = T_STRING | T_ATOM;
     _strvalue_unchecked(x) = store_string(sc, len, str);
     _strlength_unchecked(x) = len;
   } 
@@ -1247,12 +1228,7 @@ static inline clj_value cons(nanoclj_t * sc, clj_value a, clj_value b) {
   return mk_pointer(get_cell(sc, t, a, b, mk_nil()));
 }
 
-static inline clj_value immutable_cons(nanoclj_t * sc, clj_value a, clj_value b) {
-  int t = b.as_uint64 == sc->EMPTY.as_uint64 || type(b) == T_LIST ? T_LIST : T_PAIR;
-  return mk_pointer(get_cell(sc, t | T_IMMUTABLE, a, b, mk_nil())); 
-}
-
-static inline struct cell * get_vector_object(nanoclj_t * sc, size_t len) {
+static inline struct cell * get_vector_object(nanoclj_t * sc, int_fast16_t t, size_t len) {
   clj_value * data = (clj_value*)sc->malloc(len * sizeof(clj_value));
   if (!data) {
     sc->no_memory = 1;
@@ -1266,7 +1242,7 @@ static inline struct cell * get_vector_object(nanoclj_t * sc, size_t len) {
   }
   
   /* Record it as a vector so that gc understands it. */
-  _typeflag(main_cell) = T_VECTOR | T_ATOM;
+  _typeflag(main_cell) = t | T_ATOM;
   _size_unchecked(main_cell) = len;
   _metadata_unchecked(main_cell) = mk_nil();
   _data_unchecked(main_cell) = data;
@@ -1308,28 +1284,27 @@ static inline void new_frame_in_env(nanoclj_t * sc, clj_value old_env) {
 
   /* The interaction-environment has about 300 variables in it. */
   if (old_env.as_uint64 == sc->EMPTY.as_uint64) {
-    struct cell * vec = get_vector_object(sc, 461);
+    struct cell * vec = get_vector_object(sc, T_VECTOR, 461);
     fill_vector(vec, sc->EMPTY);
     new_frame = mk_pointer(vec);
   } else {
     new_frame = sc->EMPTY;
   }
 
-  sc->envir = mk_pointer(get_cell(sc, T_ENVIRONMENT | T_IMMUTABLE, new_frame, old_env, mk_nil()));
-  
+  sc->envir = mk_pointer(get_cell(sc, T_ENVIRONMENT, new_frame, old_env, mk_nil()));
 }
 
 static inline void new_slot_spec_in_env(nanoclj_t * sc, clj_value env,
 					clj_value variable, clj_value value) {
-  clj_value slot = immutable_cons(sc, variable, value);
-
+  clj_value slot = cons(sc, variable, value);
   clj_value x = car(env);
+  
   if (is_vector(x)) {
     struct cell * vec = decode_pointer(x);
     int location = hash_fn(symname(variable), _size_unchecked(vec));
-    set_vector_elem(vec, location, immutable_cons(sc, slot, vector_elem(vec, location)));
+    set_vector_elem(vec, location, cons(sc, slot, vector_elem(vec, location)));
   } else {     
-    car(env) = immutable_cons(sc, slot, car(env));
+    car(env) = cons(sc, slot, car(env));
   }
 }
 
@@ -1378,12 +1353,12 @@ static inline clj_value find_slot_in_env(nanoclj_t * sc, clj_value env, clj_valu
 #else /* USE_ALIST_ENV */
 
 static inline void new_frame_in_env(nanoclj_t * sc, clj_value old_env) {
-  sc->envir = mk_pointer(get_cell(sc, T_ENVIRONMENT | T_IMMUTABLE, sc->EMPTY, old_env))
+  sc->envir = mk_pointer(get_cell(sc, T_ENVIRONMENT, sc->EMPTY, old_env))
 }
 
 static inline void new_slot_spec_in_env(nanoclj_t * sc, clj_value env,
-    clj_value variable, clj_value value) {
-  car(env) = immutable_cons(sc, immutable_cons(sc, variable, value), car(env));
+					clj_value variable, clj_value value) {
+  car(env) = cons(sc, cons(sc, variable, value), car(env));
 }
 
 static inline clj_value find_slot_in_env(nanoclj_t * sc, clj_value env, clj_value hdl,
@@ -1927,14 +1902,14 @@ static void check_range_alloced(clj_value p, int n, int expect_alloced) {
 /* ========== oblist implementation  ========== */
 
 static inline struct cell * oblist_initial_value(nanoclj_t * sc) {
-  struct cell * vec = get_vector_object(sc, OBJ_LIST_SIZE);
+  struct cell * vec = get_vector_object(sc, T_VECTOR, OBJ_LIST_SIZE);
   fill_vector(vec, sc->EMPTY);
   return vec;
 }
 
 static inline void oblist_add_item(nanoclj_t * sc, const char * name, clj_value v) {
   int location = hash_fn(name, _size_unchecked(sc->oblist));
-  set_vector_elem(sc->oblist, location, immutable_cons(sc, v, vector_elem(sc->oblist, location)));
+  set_vector_elem(sc->oblist, location, cons(sc, v, vector_elem(sc->oblist, location)));
 }
 
 /* returns the new symbol */
@@ -2008,12 +1983,12 @@ static inline int utf8_get_codepoint_pos(const char * s, int ci) {
 }
 
 static inline clj_value mk_vector(nanoclj_t * sc, size_t len) {
-  return mk_pointer(get_vector_object(sc, len));
+  return mk_pointer(get_vector_object(sc, T_VECTOR, len));
 }
 
 static inline struct cell * resize_vector(nanoclj_t * sc, struct cell * vec, int len) {
   int old_len = _size_unchecked(vec);
-  struct cell * new_vec = get_vector_object(sc, len);
+  struct cell * new_vec = get_vector_object(sc, _type(vec), len);
   if (old_len > len) old_len = len;
   for (int i = 0; i < old_len; i++) {
     set_vector_elem(new_vec, i, vector_elem(vec, i));
@@ -2022,9 +1997,7 @@ static inline struct cell * resize_vector(nanoclj_t * sc, struct cell * vec, int
 }	
 
 static inline clj_value mk_sorted_set(nanoclj_t * sc, int len) {
-  struct cell * x = get_vector_object(sc, len);
-  _typeflag(x) = (T_SORTED_SET | T_ATOM);
-  return mk_pointer(x);
+  return mk_pointer(get_vector_object(sc, T_SORTED_SET, len));
 }
 
 static inline struct cell * mk_seq_2(nanoclj_t * sc, struct cell * coll) {
@@ -2144,7 +2117,7 @@ static inline clj_value def_symbol_or_keyword(nanoclj_t * sc, const char *name) 
 }
 
 static inline clj_value def_namespace_with_sym(nanoclj_t *sc, clj_value sym) {
-  clj_value ns = mk_pointer(get_cell(sc, T_ENVIRONMENT | T_IMMUTABLE, sc->EMPTY, sc->root_env, mk_string(sc, symname(sym))));
+  clj_value ns = mk_pointer(get_cell(sc, T_ENVIRONMENT, sc->EMPTY, sc->root_env, mk_string(sc, symname(sym))));
   nanoclj_define(sc, sc->global_env, sym, ns);
   return ns;
 }
@@ -2179,9 +2152,9 @@ static inline clj_value mk_atom(nanoclj_t * sc, char *q) {
   bool has_fp_exp = false;
   char *div = 0;
   char *p;
-  
-#if USE_SLASH_HOOK
-  if (!isdigit(q[0]) && q[0] != '-' && (p = strstr(q, "/")) != 0 && p != q) {
+
+  /* Parse namespace qualifier such as Math/sin */
+  if (!isdigit(q[0]) && q[0] != '-' && (p = strchr(q, '/')) != 0 && p != q) {
     *p = 0;
     return cons(sc, sc->SLASH_HOOK,
         cons(sc,
@@ -2190,7 +2163,6 @@ static inline clj_value mk_atom(nanoclj_t * sc, char *q) {
                 cons(sc, mk_atom(sc, p + 1), sc->EMPTY)),
             cons(sc, def_symbol(sc, q), sc->EMPTY)));
   }
-#endif
 
   p = q;
   char c = *p++;
@@ -3325,15 +3297,11 @@ static inline size_t seq_length(nanoclj_t * sc, struct cell * a) {
 }
 
 static inline struct cell * mk_arraymap(nanoclj_t * sc, size_t len) {
-  struct cell * coll = get_vector_object(sc, len);
-  _typeflag(coll) = (T_ARRAYMAP | T_ATOM);
-  return coll;
+  return get_vector_object(sc, T_ARRAYMAP, len);
 }
 
 static inline clj_value mk_mapentry(nanoclj_t * sc, clj_value key, clj_value val) {
-  clj_value x = cons(sc, key, val);
-  typeflag(x) = T_MAPENTRY;
-  return x;
+  return mk_pointer(get_cell(sc, T_MAPENTRY, key, val, mk_nil()));
 }
 
 static inline clj_value mk_collection(nanoclj_t * sc, int type, clj_value args) {
@@ -3346,16 +3314,14 @@ static inline clj_value mk_collection(nanoclj_t * sc, int type, clj_value args) 
   struct cell * coll;
   switch (type) {
   case T_VECTOR:
-    coll = get_vector_object(sc, len);
+    coll = get_vector_object(sc, T_VECTOR, len);
     break;
   case T_ARRAYMAP:
     len /= 2;
-    coll = get_vector_object(sc, len);
-    _typeflag(coll) = (T_ARRAYMAP | T_ATOM);
+    coll = get_vector_object(sc, T_ARRAYMAP, len);
     break;
   case T_SORTED_SET:
-    coll = get_vector_object(sc, len);
-    _typeflag(coll) = (T_SORTED_SET | T_ATOM);
+    coll = get_vector_object(sc, T_SORTED_SET, len);
     break;
   default:
     return sc->EMPTY;
@@ -3365,9 +3331,7 @@ static inline clj_value mk_collection(nanoclj_t * sc, int type, clj_value args) 
   }
   if (type == T_ARRAYMAP) {    
     for (x = args, i = 0; cdr(x).as_uint64 != sc->EMPTY.as_uint64; x = cddr(x), i++) {
-      clj_value mapentry = immutable_cons(sc, car(x), cadr(x));
-      typeflag(mapentry) = T_MAPENTRY;
-      set_vector_elem(coll, i, mapentry);
+      set_vector_elem(coll, i, mk_mapentry(sc, car(x), cadr(x)));
     }
   } else {
     for (x = args, i = 0; x.as_uint64 != sc->EMPTY.as_uint64; x = cdr(x), i++) {
@@ -3591,7 +3555,6 @@ static inline clj_value _Error_1(nanoclj_t * sc, const char *s, int a) {
   x = find_slot_in_env(sc, sc->envir, hdl, 1);
   if (x.as_uint64 != sc->EMPTY.as_uint64) {
     sc->code = cons(sc, mk_string(sc, str), sc->EMPTY);
-    setimmutable(car(sc->code));
     sc->code = cons(sc, slot_value_in_env(x), sc->code);
     sc->op = (int) OP_EVAL;
     return (clj_value)kTRUE;
@@ -3599,7 +3562,6 @@ static inline clj_value _Error_1(nanoclj_t * sc, const char *s, int a) {
 #endif
 
   sc->args = cons(sc, mk_string(sc, str), sc->EMPTY);
-  setimmutable(car(sc->args));
   sc->op = (int) OP_ERR0;
   return (clj_value)kTRUE;
 }
@@ -3828,9 +3790,9 @@ static inline clj_value construct_by_type(nanoclj_t * sc, int type_id, clj_value
 	name = cadr(args);
       }
     } 
-    struct cell * vec = get_vector_object(sc, 461);
+    struct cell * vec = get_vector_object(sc, T_VECTOR, 461);
     fill_vector(vec, sc->EMPTY);
-    return mk_pointer(get_cell(sc, T_ENVIRONMENT | T_IMMUTABLE, mk_pointer(vec), parent, name));
+    return mk_pointer(get_cell(sc, T_ENVIRONMENT, mk_pointer(vec), parent, name));
   }
   case T_PAIR:
   case T_LIST:{
@@ -4422,11 +4384,7 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     }
     s_return(sc, x);  
     
-  case OP_DEF0:                /* define */
-    if (is_immutable(car(sc->code))) {
-      Error_0(sc, "Error - unable to alter immutable");
-    }
-    
+  case OP_DEF0:                /* define */    
     x = car(sc->code);
     if (caddr(sc->code).as_uint64 != sc->EMPTY.as_uint64) {
       struct cell * meta = mk_arraymap(sc, 1);
@@ -4530,7 +4488,7 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     size_t n = _size_unchecked(input_vec) / 2;
 
     clj_value values = sc->EMPTY;
-    struct cell * args = get_vector_object(sc, n);
+    struct cell * args = get_vector_object(sc, T_VECTOR, n);
 
     for (int i = (int)n - 1; i >= 0; i--) {
       set_vector_elem(args, i, vector_elem(input_vec, 2 * i + 0));
@@ -4616,7 +4574,7 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
         sc->args = cons(sc, caar(x), sc->args);
       }
       x = mk_closure(sc, cons(sc, reverse_in_place(sc, sc->EMPTY, sc->args),
-              cddr(sc->code)), sc->envir);
+			      cddr(sc->code)), sc->envir);
       new_slot_in_env(sc, car(sc->code), x);
       sc->code = cddr(sc->code);
       sc->args = sc->EMPTY;
@@ -4708,8 +4666,7 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   case OP_MACRO0:              /* macro */
     if (is_pair(car(sc->code))) {
       x = caar(sc->code);
-      sc->code =
-          cons(sc, sc->LAMBDA, cons(sc, cdar(sc->code), cdr(sc->code)));
+      sc->code = cons(sc, sc->LAMBDA, cons(sc, cdar(sc->code), cdr(sc->code)));
     } else {
       x = car(sc->code);
       sc->code = cadr(sc->code);
@@ -5192,7 +5149,6 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       }
       /* Not found */
       vec = resize_vector(sc, vec, vector_len + 1);
-      _typeflag(vec) = (T_ARRAYMAP | T_ATOM);
       set_vector_elem(vec, vector_len, y);
       s_return(sc, mk_pointer(vec));
     }
@@ -5202,7 +5158,6 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       if (!get_elem(sc, vec, y, NULL)) {
 	size_t vector_len = _size_unchecked(vec);
 	vec = resize_vector(sc, vec, vector_len + 1);
-	_typeflag(vec) = (T_SORTED_SET | T_ATOM);
 	set_vector_elem(vec, vector_len, y);
 	sort_vector_in_place(vec);
       }
@@ -5383,10 +5338,6 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 
   case OP_ERR0:                /* throw */
     sc->retcode = -1;
-    if (!is_string(car(sc->args))) {
-      sc->args = cons(sc, mk_string(sc, " -- "), sc->args);
-      setimmutable(car(sc->args));
-    }
     set_basic_style(stderr, 1);
     set_basic_style(stderr, 31);
     {
@@ -5538,7 +5489,6 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	if (is_false(x)) {
 	  Error_0(sc, "Error - reading string");
 	}
-	setimmutable(x);
 	s_return(sc, x);
 	
       case TOK_REGEX:
@@ -5546,7 +5496,6 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	if (is_false(x)) {
 	  Error_0(sc, "Error - reading regex");
 	}
-	setimmutable(x);
 	s_return(sc, cons(sc, sc->REGEX, cons(sc, x, sc->EMPTY)));
 	
       case TOK_CHAR_CONST:
@@ -5705,10 +5654,10 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     
   case OP_RDQQUOTEVEC:
     s_return(sc, cons(sc, def_symbol(sc, "apply"),
-            cons(sc, def_symbol(sc, "vector"),
-                cons(sc, cons(sc, sc->QQUOTE,
-                        cons(sc, sc->value, sc->EMPTY)), sc->EMPTY))));
-
+		      cons(sc, def_symbol(sc, "vector"),
+			   cons(sc, cons(sc, sc->QQUOTE,
+					 cons(sc, sc->value, sc->EMPTY)), sc->EMPTY))));
+    
   case OP_RDUNQUOTE:
     s_return(sc, cons(sc, sc->UNQUOTE, cons(sc, sc->value, sc->EMPTY)));
 
@@ -5729,7 +5678,7 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   case OP_RDFN:{
     bool has_rest;
     int n_args = get_literal_fn_arity(sc, sc->value, &has_rest);
-    struct cell * vec = get_vector_object(sc, n_args + (has_rest ? 2 : 0));
+    struct cell * vec = get_vector_object(sc, T_VECTOR, n_args + (has_rest ? 2 : 0));
     if (n_args >= 1) set_vector_elem(vec, 0, sc->ARG1);
     if (n_args >= 2) set_vector_elem(vec, 1, sc->ARG2);
     if (n_args >= 3) set_vector_elem(vec, 2, sc->ARG3);
@@ -5742,18 +5691,14 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     
   case OP_RDSET:
     if (sc->value.as_uint64 == sc->EMPTY.as_uint64) {
-      struct cell * v = get_vector_object(sc, 0);
-      _typeflag(v) = (T_SORTED_SET | T_ATOM);
-      s_return(sc, mk_pointer(v));
+      s_return(sc, mk_sorted_set(sc, 0));
     } else {
       s_return(sc, cons(sc, sc->SORTED_SET, sc->value));
     }
     
   case OP_RDMAP:
     if (sc->value.as_uint64 == sc->EMPTY.as_uint64) {
-      struct cell * v = get_vector_object(sc, 0);
-      _typeflag(v) = (T_ARRAYMAP | T_ATOM);
-      s_return(sc, mk_pointer(v));
+      s_return(sc, mk_pointer(mk_arraymap(sc, 0)));
     } else {
       s_return(sc, cons(sc, sc->ARRAY_MAP, sc->value));
     }
@@ -5790,7 +5735,7 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     }
     struct cell * seq = decode_pointer(x);
     size_t l = seq_length(sc, seq);
-    struct cell * vec = get_vector_object(sc, l);
+    struct cell * vec = get_vector_object(sc, T_VECTOR, l);
     for (size_t i = 0; i < l; i++, seq = rest(sc, seq)) {
       set_vector_elem(vec, i, first(sc, seq));
     }

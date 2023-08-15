@@ -52,8 +52,7 @@ static clj_value system_getenv(nanoclj_t * sc, clj_value args) {
     
     int l = 0;
     for ( ; environ[l]; l++) { }
-    struct cell * map = get_vector_object(sc, l);
-    _typeflag(map) = (T_ARRAYMAP | T_ATOM);
+    struct cell * map = mk_arraymap(sc, l);
     for (int i = 0; i < l; i++) {
       char * p = environ[i];
       int j = 0;
