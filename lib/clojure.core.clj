@@ -302,6 +302,15 @@
 
 (def *print-length* nil)
 
+(def styles- {
+              :scalar { :ansi 32 }
+              :boolean { :ansi 34 }
+              :nil { :ansi 34 }
+              :char { :ansi 35 }
+              :string { :ansi 31 }
+              :keyword { :ansi 93 :bold true }
+              })
+
 (defn pr
   "Prints values to *out* in a format understandable by the Reader"
   [& more] (run! (fn [x]
@@ -348,24 +357,27 @@
                                                   (pr (first x))
                                                   (run! (fn [x] (print \space) (pr x)) (rest x))
                                                   (print \))))
-                         (ratio? x) (do (color :green)
+                         (ratio? x) (do (color (styles- :scalar))
                                         (pr- (numerator x))
                                         (print \/)
                                         (pr- (denominator x))
                                         (color))
-                         (or (nil? x) (boolean? x)) (do (color :blue)
-                                                        (pr- x)
-                                                        (color))
-                         (char? x) (do (color :magenta)
+                         (nil? x) (do (color (styles- :nil))
+                                      (pr- x)
+                                      (color))
+                         (boolean? x) (do (color (styles- :boolean))
+                                          (pr- x)
+                                          (color))
+                         (char? x) (do (color (styles- :char))
                                        (pr- x)
                                        (color))
-                         (number? x) (do (color :green)
+                         (number? x) (do (color (styles- :scalar))
                                          (pr- x)
                                          (color))
-                         (string? x) (do (color :red)
+                         (string? x) (do (color (styles- :string))
                                          (pr- x)
                                          (color))
-                         (keyword? x) (do (color :bold :yellow)
+                         (keyword? x) (do (color (styles- :keyword))
                                           (pr- x)
                                           (color))
                          :else (pr- x))

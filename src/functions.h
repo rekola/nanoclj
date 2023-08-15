@@ -11,6 +11,9 @@
 #define getcwd _getcwd
 #endif
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 /* Thread */
 
 static clj_value thread_sleep(nanoclj_t * sc, clj_value args) {
@@ -333,12 +336,29 @@ static inline clj_value browse_url(nanoclj_t * sc, clj_value args) {
 #endif
 }
 
+static inline clj_value Image_load(nanoclj_t * sc, clj_value args) {
+  const char * filename = to_cstr(car(args));
+  
+  int w, h, channels;
+  unsigned char * data = stbi_load(filename, &w, &h, &channels, 0);
+  if (!data) {
+    return mk_nil();
+  }
+  
+  clj_value image = mk_image(sc, w, h, channels, data);
+  
+  stbi_image_free(data);
+
+  return image;
+}
+
 static inline void register_functions(nanoclj_t * sc) {
   clj_value Thread = def_namespace(sc, "Thread");
   clj_value System = def_namespace(sc, "System");
   clj_value Math = def_namespace(sc, "Math");
   clj_value numeric_tower = def_namespace(sc, "clojure.math.numeric-tower");
   clj_value clojure_java_browse = def_namespace(sc, "clojure.java.browse");
+  clj_value Image = def_namespace(sc, "Image");
   
   nanoclj_define(sc, Thread, def_symbol(sc, "sleep"), mk_foreign_func_with_arity(sc, thread_sleep, 1, 1));
   
@@ -372,6 +392,8 @@ static inline void register_functions(nanoclj_t * sc) {
   nanoclj_define(sc, numeric_tower, def_symbol(sc, "expt"), mk_foreign_func_with_arity(sc, numeric_tower_expt, 2, 2));
 
   nanoclj_define(sc, clojure_java_browse, def_symbol(sc, "browse-url"), mk_foreign_func_with_arity(sc, browse_url, 1, 1));
+
+  nanoclj_define(sc, Image, def_symbol(sc, "load"), mk_foreign_func_with_arity(sc, Image_load, 1, 1));
 }
 
 #endif

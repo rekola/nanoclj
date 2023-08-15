@@ -306,6 +306,7 @@ static inline bool is_nil(clj_value v) {
 
 #define _data_unchecked(p)	  ((p)->_object._collection._data)
 #define _port_unchecked(p)	  ((p)->_object._port)
+#define _image_unchecked(p)	  ((p)->_object._image)
 #define _size_unchecked(p)	  ((p)->_object._collection._size)
 #define _metadata_unchecked(p)     ((p)->_metadata)
 #define _origin_unchecked(p)	  ((p)->_object._seq._origin)
@@ -985,7 +986,7 @@ static inline clj_value mk_real(double n) {
 
 static inline clj_value mk_long(nanoclj_t * sc, long long num) {
   struct cell * x = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
-  _typeflag(x) = (T_LONG | T_ATOM);
+  _typeflag(x) = T_LONG | T_ATOM;
   _lvalue_unchecked(x) = num;
   _metadata_unchecked(x) = mk_nil();
   return mk_pointer(x);
@@ -998,6 +999,25 @@ static inline clj_value mk_integer(nanoclj_t * sc, long long num) {
   } else {
     return mk_long(sc, num);
   }
+}
+
+static inline clj_value mk_image(nanoclj_t * sc, int32_t width, int32_t height,
+				 int32_t channels, unsigned char * data) {
+  struct cell * x = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
+  clj_image * image = (clj_image*)malloc(sizeof(clj_image));
+  _typeflag(x) = T_IMAGE | T_ATOM;
+  _image_unchecked(x) = image;
+  _metadata_unchecked(x) = mk_nil();
+
+  size_t size = width * height * channels;
+  image->data = (unsigned char *)malloc(size);
+  image->width = width;
+  image->height = height;
+  image->channels = channels;
+  
+  memcpy(image->data, data, size);
+  
+  return mk_pointer(x);
 }
 
 static inline long long gcd_int64(long long a, long long b) {
@@ -2298,7 +2318,9 @@ static inline void mark(clj_value a) {
 
 E2:_setmark(p);
   switch (_type(p)) {
-  case T_VECTOR:{
+  case T_VECTOR:
+  case T_ARRAYMAP:
+  case T_SORTED_SET:{
     size_t num = _size_unchecked(p);
     for (size_t i = 0; i < num; i++) {
       /* Vector cells will be treated like ordinary cells */
@@ -2389,6 +2411,12 @@ static inline void finalize_cell(nanoclj_t * sc, struct cell * a) {
       port_close(sc, pt);
     }
     sc->free(pt);
+  }
+    break;
+  case T_IMAGE:{
+    clj_image * image = _image_unchecked(a);
+    sc->free(image->data);
+    sc->free(image);
   }
     break;
   }
@@ -2680,6 +2708,37 @@ static inline int realloc_port_string(nanoclj_t * sc, port * p) {
   }
 }
 
+static inline const char * to_cstr(clj_value x) {
+  switch (prim_type(x)) {
+  case T_SYMBOL: return symname(x);
+  case T_KEYWORD: return keywordname(x);
+  case T_TYPE: return typename_from_id(type_unchecked(x));
+  case T_CELL: {
+    struct cell * c = decode_pointer(x);
+    switch (_type(c)) {
+    case T_STRING: return mutable_strvalue(c);
+    case T_READER:{
+      port * pt = port_unchecked(x);
+      if (pt->kind & port_string) {
+	return pt->rep.string.start;
+      }
+      break;
+    }
+      break;
+    case T_WRITER:{
+      port * pt = port_unchecked(x);
+      if (pt->kind & port_string) {
+	*pt->rep.string.curr = 0; /* terminate the string */
+	return pt->rep.string.start;
+      }
+      break;
+    }
+    }
+  }
+  }
+  return "";
+}
+
 static inline void char_to_utf8(int c, char *p, int *plen) {
   unsigned char *s = (unsigned char *) p;
   int bytes;
@@ -2756,18 +2815,34 @@ static inline void putcharacter(nanoclj_t * sc, int c) {
 
 static inline void set_styles(nanoclj_t * sc, clj_value out, clj_value x) {
 #ifndef WIN32
-  if (!is_writer(out)) {
+  if (!is_writer(out) || !is_cell(x)) {
     return;
   }
+  struct cell * coll = decode_pointer(x);
   port * pt = port_unchecked(out);
   if (pt->kind & port_file) {
     FILE * fh = pt->rep.stdio.file;
     if (isatty(fileno(fh))) {
-      if (x.as_uint64 == sc->EMPTY.as_uint64) {
+      if (is_empty(sc, coll) || _type(coll) != T_ARRAYMAP) {
 	reset_color(fh);
       } else {
-	for (; x.as_uint64 != sc->EMPTY.as_uint64; x = cdr(x)) {
-	  set_basic_style(fh, to_int(car(x)));
+	for (int i = 0, n = _size_unchecked(coll); i < n; i++) {
+	  clj_value y = vector_elem(coll, i);
+	  clj_value key = car(y);
+	  clj_value value = cdr(y);
+
+	  if (key.as_uint64 == sc->BOLD.as_uint64) {
+	    if (is_true(value)) {
+	      set_basic_style(fh, 1);
+	    }
+	  } else if (key.as_uint64 == sc->UNDERLINE.as_uint64) {
+	    if (is_true(value)) {
+	      set_basic_style(fh, 4);
+	    }
+	  } else if (key.as_uint64 == sc->ANSI.as_uint64) {
+	    int c = to_int(value);
+	    set_basic_style(fh, c);
+	  }
 	}
       }
     }
@@ -3220,6 +3295,12 @@ static inline void printatom(nanoclj_t * sc, clj_value l, int print_flag, clj_va
 	printslashstring(sc, strvalue(l), strlength(l), out);
 	return;
       }
+    case T_IMAGE:{
+      clj_image * img = _image_unchecked(c);
+      p = sc->strbuff;
+      snprintf(sc->strbuff, sc->strbuff_size, "#object[%s %p %d %d %d]", typename_from_id(type(l)), (void *)c, img->width, img->height, img->channels);
+    }
+      break;
     }
   }
 
@@ -3233,37 +3314,6 @@ static inline void printatom(nanoclj_t * sc, clj_value l, int print_flag, clj_va
   }
 
   putchars(sc, p, plen, out);
-}
-
-static inline const char * to_cstr(clj_value x) {
-  switch (prim_type(x)) {
-  case T_SYMBOL: return symname(x);
-  case T_KEYWORD: return keywordname(x);
-  case T_TYPE: return typename_from_id(type_unchecked(x));
-  case T_CELL: {
-    struct cell * c = decode_pointer(x);
-    switch (_type(c)) {
-    case T_STRING: return mutable_strvalue(c);
-    case T_READER:{
-      port * pt = port_unchecked(x);
-      if (pt->kind & port_string) {
-	return pt->rep.string.start;
-      }
-      break;
-    }
-      break;
-    case T_WRITER:{
-      port * pt = port_unchecked(x);
-      if (pt->kind & port_string) {
-	*pt->rep.string.curr = 0; /* terminate the string */
-	return pt->rep.string.start;
-      }
-      break;
-    }
-    }
-  }
-  }
-  return "";
 }
 
 static inline size_t seq_length(nanoclj_t * sc, struct cell * a) {
@@ -5325,7 +5375,7 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     s_return(sc, mk_nil());
 
   case OP_COLOR:
-    set_styles(sc, get_out_port(sc), sc->args);
+    set_styles(sc, get_out_port(sc), car(sc->args));
     s_return(sc, mk_nil());  
     
   case OP_FORMAT:{
@@ -6116,6 +6166,9 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc,
   sc->AMP = def_symbol(sc, "&");
   sc->UNDERSCORE = def_symbol(sc, "_");
   sc->DOC = def_keyword(sc, "doc");
+  sc->ANSI = def_keyword(sc, "ansi");
+  sc->BOLD = def_keyword(sc, "bold");
+  sc->UNDERLINE = def_keyword(sc, "underline");
 
   sc->SORTED_SET = def_symbol(sc, "sorted-set");
   sc->ARRAY_MAP = def_symbol(sc, "array-map");

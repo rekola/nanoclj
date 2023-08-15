@@ -71,7 +71,7 @@ extern "C" {
   } port;
 
   typedef struct clj_image {
-    unsigned int width, height, channels;
+    int32_t width, height, channels;
     unsigned char * data;
   } clj_image;
 
@@ -180,6 +180,9 @@ extern "C" {
     clj_value AMP;		  /* & */
     clj_value UNDERSCORE;         /* _ */
     clj_value DOC;		  /* :doc */
+    clj_value ANSI;		  /* :ansi */
+    clj_value BOLD;		  /* :bold */
+    clj_value UNDERLINE;	  /* :underline */
 
     clj_value SORTED_SET;	  /* sorted-set */
     clj_value ARRAY_MAP;	  /* array-map */
