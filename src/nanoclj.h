@@ -125,6 +125,7 @@ extern "C" {
     clj_value(*mk_character) (int c);
     clj_value(*mk_vector) (nanoclj_t * sc, size_t len);
     clj_value(*mk_foreign_func) (nanoclj_t * sc, foreign_func f);
+    clj_value(*mk_boolean) (bool b);
     
     bool (*is_string) (clj_value p);
     const char *(*string_value) (clj_value p);

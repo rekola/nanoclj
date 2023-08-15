@@ -6,6 +6,8 @@
 #include <pwd.h>
 #include <unistd.h>
 
+#include "linenoise.h"
+
 #ifdef WIN32
 #include <direct.h>
 #define getcwd _getcwd
@@ -336,6 +338,34 @@ static inline clj_value browse_url(nanoclj_t * sc, clj_value args) {
 #endif
 }
 
+static inline clj_value shell_sh(nanoclj_t * sc, clj_value args0) {
+  struct cell * args = decode_pointer(args0);
+  size_t n = seq_length(sc, args);
+  if (n >= 1) {
+#ifdef WIN32
+    /* TODO */
+    return mk_nil();
+#else
+    pid_t r = fork();
+    if (r == 0) {
+      const char * cmd = to_cstr(first(sc, args));
+      args = rest(sc, args);
+      n--;
+      char ** output_args = (char **)malloc(n * sizeof(char*));
+      for (size_t i = 0; i < n; i++, args = rest(sc, args)) {
+	output_args[i] = to_cstr(first(sc, args));
+      }
+      execvp(cmd, output_args);
+      exit(1);
+    } else {
+      return r < 0 ? (clj_value)kFALSE : (clj_value)kTRUE;
+    }
+  } else {
+    return mk_nil();
+  }
+#endif
+}
+
 static inline clj_value Image_load(nanoclj_t * sc, clj_value args) {
   const char * filename = to_cstr(car(args));
   
@@ -352,12 +382,140 @@ static inline clj_value Image_load(nanoclj_t * sc, clj_value args) {
   return image;
 }
 
+#ifdef USE_LINENOISE
+#define MAX_COMPLETION_SYMBOLS 65535
+
+static nanoclj_t * linenoise_sc = NULL;
+static int num_completion_symbols = 0;
+static const char * completion_symbols[MAX_COMPLETION_SYMBOLS];
+ 
+static void completion(const char *input, linenoiseCompletions *lc) {
+  if (!num_completion_symbols) {
+    clj_value sym = nanoclj_eval_string(linenoise_sc, "(ns-interns *ns*)");
+    for ( ; sym.as_uint64 != linenoise_sc->EMPTY.as_uint64 && num_completion_symbols < MAX_COMPLETION_SYMBOLS; sym = cdr(sym)) {
+      clj_value v = car(sym);
+      if (is_symbol(v)) {
+	completion_symbols[num_completion_symbols++] = symname(v);
+      } else if (is_mapentry(v)) {
+	completion_symbols[num_completion_symbols++] = symname(car(v));
+      }
+    }
+  }
+
+  int i, n = strlen(input);
+  for (i = n; i > 0 && !(isspace(input[i - 1]) ||
+			 input[i - 1] == '(' ||
+			 input[i - 1] == '[' ||
+			 input[i - 1] == '{'); i--) { }
+  char buffer[1024];
+  int prefix_len = 0;
+  if (i > 0) {
+    prefix_len = i;
+    strncpy(buffer, input, i);
+    buffer[prefix_len] = 0;
+    input += i;
+    n -= i;
+  }
+  for (i = 0; i < num_completion_symbols; i++) {
+    const char * s = completion_symbols[i];
+    if (strncmp(input, s, n) == 0) {
+      strncpy(buffer + prefix_len, s, 1024 - prefix_len);
+      buffer[1023] = 0;
+      linenoiseAddCompletion(lc, buffer);
+    }
+  }
+}
+
+static char *complete_parens(const char * input) {
+  char nest[1024];
+  int si = 0;
+  for (int i = 0, n = strlen(input); i < n; i++) {
+    if (input[i] == '(') {
+      nest[si++] = ')';
+    } else if (input[i] == '[') {
+      nest[si++] = ']';
+    } else if (input[i] == '{') {
+      nest[si++] = '}';
+    } else if (input[i] == '"' && (si == 0 || nest[si - 1] != '"')) {
+      nest[si++] = '"';
+    } else if (input[i] == ')' || input[i] == ']' || input[i] == '}' || input[i] == '"') {
+      if (si > 0 && nest[si - 1] == input[i]) {
+	si--;
+      } else {
+	return NULL;
+      }
+    } else if (input[i] == '\\' && i + 1 < n && input[i + 1] == '"') {
+      i++;
+    }
+  }
+  if (si == 0) {
+    return NULL;
+  }
+  char * h = (char *)malloc(si);
+  int hi = 0;
+  for (int i = si - 1; i >= 0; i--) {
+    h[hi++] = nest[i];
+  }
+  h[hi] = 0;
+
+  return h;
+}
+ 
+static char *hints(const char *input, int *color, int *bold) {
+  char * h = complete_parens(input);
+  if (!h) return NULL;
+  
+  *color = 35;
+  *bold = 0;
+  return h;  
+}
+
+static void free_hints(void * ptr) {
+  free(ptr);
+}
+
+static clj_value linenoise_readline(nanoclj_t * sc, clj_value args) {
+  if (!linenoise_sc) {
+    linenoise_sc = sc;
+  
+    linenoiseSetCompletionCallback(completion);
+    linenoiseSetHintsCallback(hints);
+    linenoiseSetFreeHintsCallback(free_hints);
+    linenoiseHistorySetMaxLen(10000);
+    linenoiseHistoryLoad(".nanoclj_history");
+  }
+  char * line = linenoise(to_cstr(car(args)));
+  if (line == NULL) return mk_nil();
+  
+  linenoiseHistoryAdd(line);
+  linenoiseHistorySave(".nanoclj_history");
+
+  clj_value r;
+  char * missing_parens = complete_parens(line);
+  if (!missing_parens) {
+    r = mk_string(sc, line);
+  } else {
+    int l1 = strlen(line), l2 = strlen(missing_parens);
+    char * tmp = (char *)malloc(l1 + l2 + 1);
+    strcpy(tmp, line);
+    strcpy(tmp + l1, missing_parens);
+    free(missing_parens);
+    r = mk_string(sc, tmp);
+    free(tmp);
+  }
+  free(line);
+
+  return r;
+}
+#endif
+
 static inline void register_functions(nanoclj_t * sc) {
   clj_value Thread = def_namespace(sc, "Thread");
   clj_value System = def_namespace(sc, "System");
   clj_value Math = def_namespace(sc, "Math");
   clj_value numeric_tower = def_namespace(sc, "clojure.math.numeric-tower");
   clj_value clojure_java_browse = def_namespace(sc, "clojure.java.browse");
+  clj_value clojure_java_shell = def_namespace(sc, "clojure.java.shell");
   clj_value Image = def_namespace(sc, "Image");
   
   nanoclj_define(sc, Thread, def_symbol(sc, "sleep"), mk_foreign_func_with_arity(sc, thread_sleep, 1, 1));
@@ -393,7 +551,14 @@ static inline void register_functions(nanoclj_t * sc) {
 
   nanoclj_define(sc, clojure_java_browse, def_symbol(sc, "browse-url"), mk_foreign_func_with_arity(sc, browse_url, 1, 1));
 
+  nanoclj_define(sc, clojure_java_shell, def_symbol(sc, "sh"), mk_foreign_func(sc, shell_sh));
+
   nanoclj_define(sc, Image, def_symbol(sc, "load"), mk_foreign_func_with_arity(sc, Image_load, 1, 1));
+
+#ifdef USE_LINENOISE
+  clj_value linenoise = def_namespace(sc, "linenoise");
+  nanoclj_define(sc, linenoise, def_symbol(sc, "read-line"), mk_foreign_func_with_arity(sc, linenoise_readline, 1, 1));
+#endif  
 }
 
 #endif

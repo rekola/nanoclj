@@ -31,7 +31,6 @@
 
 #include <assert.h>
 
-#include "linenoise.h"
 #include "clock.h"
 #include "murmur3.h"
 #include "legal.h"
@@ -5987,6 +5986,7 @@ static struct nanoclj_interface vtbl = {
   mk_character,
   mk_vector,
   mk_foreign_func,
+  mk_boolean,
 
   is_string,
   checked_strvalue,
@@ -6445,124 +6445,6 @@ static inline FILE *open_file(const char *fname) {
     return fopen(fname, "r");
 }
 
-#ifdef USE_LINENOISE
-#define MAX_COMPLETION_SYMBOLS 65535
-
-static nanoclj_t * repl_sc = NULL;
-static int num_completion_symbols = 0;
-static const char * completion_symbols[MAX_COMPLETION_SYMBOLS];
- 
-static void completion(const char *input, linenoiseCompletions *lc) {
-  if (!num_completion_symbols) {
-    clj_value sym = nanoclj_eval_string(repl_sc, "(ns-interns *ns*)");
-    for ( ; sym.as_uint64 != repl_sc->EMPTY.as_uint64 && num_completion_symbols < MAX_COMPLETION_SYMBOLS; sym = cdr(sym)) {
-      clj_value v = car(sym);
-      if (is_symbol(v)) {
-	completion_symbols[num_completion_symbols++] = symname(v);
-      } else if (is_mapentry(v)) {
-	completion_symbols[num_completion_symbols++] = symname(car(v));
-      }
-    }
-  }
-
-  int i, n = strlen(input);
-  for (i = n; i > 0 && !(isspace(input[i - 1]) ||
-			 input[i - 1] == '(' ||
-			 input[i - 1] == '[' ||
-			 input[i - 1] == '{'); i--) { }
-  char buffer[1024];
-  int prefix_len = 0;
-  if (i > 0) {
-    prefix_len = i;
-    strncpy(buffer, input, i);
-    buffer[prefix_len] = 0;
-    input += i;
-    n -= i;
-  }
-  for (i = 0; i < num_completion_symbols; i++) {
-    const char * s = completion_symbols[i];
-    if (strncmp(input, s, n) == 0) {
-      strncpy(buffer + prefix_len, s, 1024 - prefix_len);
-      buffer[1023] = 0;
-      linenoiseAddCompletion(lc, buffer);
-    }
-  }
-}
-
-static char *complete_parens(const char * input) {
-  char nest[1024];
-  int si = 0;
-  for (int i = 0, n = strlen(input); i < n; i++) {
-    if (input[i] == '(') {
-      nest[si++] = ')';
-    } else if (input[i] == '[') {
-      nest[si++] = ']';
-    } else if (input[i] == '{') {
-      nest[si++] = '}';
-    } else if (input[i] == '"' && (si == 0 || nest[si - 1] != '"')) {
-      nest[si++] = '"';
-    } else if (input[i] == ')' || input[i] == ']' || input[i] == '}' || input[i] == '"') {
-      if (si > 0 && nest[si - 1] == input[i]) {
-	si--;
-      } else {
-	return NULL;
-      }
-    } else if (input[i] == '\\' && i + 1 < n && input[i + 1] == '"') {
-      i++;
-    }
-  }
-  if (si == 0) {
-    return NULL;
-  }
-  char * h = (char *)malloc(si);
-  int hi = 0;
-  for (int i = si - 1; i >= 0; i--) {
-    h[hi++] = nest[i];
-  }
-  h[hi] = 0;
-
-  return h;
-}
- 
-static char *hints(const char *input, int *color, int *bold) {
-  char * h = complete_parens(input);
-  if (!h) return NULL;
-  
-  *color = 35;
-  *bold = 0;
-  return h;  
-}
-
-static void free_hints(void * ptr) {
-  free(ptr);
-}
-
-static clj_value linenoise_readline(nanoclj_t * sc, clj_value args) {
-  char * line = linenoise(to_cstr(car(args)));
-  if (line == NULL) return mk_nil();
-  
-  linenoiseHistoryAdd(line);
-  linenoiseHistorySave(".nanoclj_history");
-
-  clj_value r;
-  char * missing_parens = complete_parens(line);
-  if (!missing_parens) {
-    r = mk_string(sc, line);
-  } else {
-    int l1 = strlen(line), l2 = strlen(missing_parens);
-    char * tmp = (char *)malloc(l1 + l2 + 1);
-    strcpy(tmp, line);
-    strcpy(tmp + l1, missing_parens);
-    free(missing_parens);
-    r = mk_string(sc, tmp);
-    free(tmp);
-  }
-  free(line);
-
-  return r;
-}
-#endif
-
 int main(int argc, const char **argv) {
   if (argc == 1) {
     printf("%s\n", get_version());
@@ -6622,18 +6504,6 @@ int main(int argc, const char **argv) {
       return to_int(x);
     }
   } else {
-#ifdef USE_LINENOISE
-    repl_sc = &sc;
-    linenoiseSetCompletionCallback(completion);
-    linenoiseSetHintsCallback(hints);
-    linenoiseSetFreeHintsCallback(free_hints);
-    linenoiseHistorySetMaxLen(10000);
-    linenoiseHistoryLoad(".nanoclj_history");
-
-    clj_value linenoise = def_namespace(&sc, "linenoise");
-    nanoclj_define(&sc, linenoise, def_symbol(&sc, "read-line"), mk_foreign_func_with_arity(&sc, linenoise_readline, 1, 1));
-#endif
-    
     nanoclj_load_string(&sc, "(clojure.repl/repl)");
   }
   int retcode = sc.retcode;
