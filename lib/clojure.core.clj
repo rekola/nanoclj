@@ -306,10 +306,10 @@
               :scalar { :ansi 92 :rgb [ 127 158 127 ] }
               :boolean { :ansi 95 :rgb [ 220 140 195 ] }
               :nil { :ansi 95 :rgb [ 220 140 195 ] }
-              :symbol { :ansi 93 :rgb [ 240 223 175 ] }
               :char { :ansi 91 :rgb [ 204 147 147 ] }
               :string { :ansi 91 :rgb [ 204 147 147 ] }
-              :keyword { :ansi 96 :rgb [ 140 208 211 ] }
+              :symbol { :weight 0 :ansi 93 :rgb [ 240 223 175 ] }
+              :keyword { :weight 1 :ansi 93 :rgb [ 240 223 175 ] }
               })
 
 (defn pr
