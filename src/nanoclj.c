@@ -6037,7 +6037,8 @@ static struct nanoclj_interface vtbl = {
   
   nanoclj_load_file,
   nanoclj_load_string,
-  nanoclj_eval_string
+  nanoclj_eval_string,
+  def_symbol
 };
 #endif
 

@@ -165,6 +165,7 @@ extern "C" {
     void (*load_file) (nanoclj_t * sc, FILE * fin);
     void (*load_string) (nanoclj_t * sc, const char *input);
     nanoclj_val_t (*eval_string) (nanoclj_t * sc, const char *input);
+    nanoclj_val_t (*def_symbol) (nanoclj_t * sc, const char *name);
   };
 #endif
   
