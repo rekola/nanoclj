@@ -5,10 +5,10 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
-add_definitions(-DNANOCLJ_STANDALONE)
+add_definitions(-DNANOCLJ_STANDALONE -DNANOCLJ_USE_LINENOISE)
 
 # The math optimizations are not necessary, but they do not cause harm. Since NaNs are needed -ffast-math or -ffinite-math-only cannot be used.
-add_compile_options(-Wall -O3 -march=native -funsafe-math-optimizations -fno-math-errno -fno-rounding-math -fno-signaling-nans -fcx-limited-range -ffp-contract=fast)
+add_compile_options(-std=gnu99 -Wall -O3 -march=native -funsafe-math-optimizations -fno-math-errno -fno-rounding-math -fno-signaling-nans -fcx-limited-range -ffp-contract=fast -Wno-unused-value -Wno-unused-variable -Wno-unused-function)
 
 if(DEFINED ENV{WARN_ERROR_BUILD})
     add_compile_options(-Werror)
