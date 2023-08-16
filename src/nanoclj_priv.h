@@ -180,7 +180,9 @@ extern "C" {
     clj_value AMP;		  /* & */
     clj_value UNDERSCORE;         /* _ */
     clj_value DOC;		  /* :doc */
+    
     clj_value ANSI;		  /* :ansi */
+    clj_value RGB;		  /* :rgb */
     clj_value BOLD;		  /* :bold */
     clj_value UNDERLINE;	  /* :underline */
 
@@ -220,6 +222,8 @@ extern "C" {
     struct nanoclj_interface *vptr;
     void *dump_base;            /* pointer to base of allocated dump stack */
     int dump_size;              /* number of frames allocated for dump stack */
+
+    bool truecolor_term;
   };
 
 /* operator code */

@@ -308,7 +308,7 @@
               :nil { :ansi 34 }
               :char { :ansi 35 }
               :string { :ansi 31 }
-              :keyword { :ansi 93 :bold true }
+              :keyword { :ansi 92 :rgb [ 127 158 127 ] }
               })
 
 (defn pr

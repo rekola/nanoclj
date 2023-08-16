@@ -2831,6 +2831,9 @@ static inline void set_styles(nanoclj_t * sc, clj_value out, clj_value x) {
       if (is_empty(sc, coll) || _type(coll) != T_ARRAYMAP) {
 	reset_color(fh);
       } else {
+	int ansi_color = 0;
+	struct cell * rgb = NULL;
+	
 	for (int i = 0, n = _size_unchecked(coll); i < n; i++) {
 	  clj_value y = vector_elem(coll, i);
 	  clj_value key = car(y);
@@ -2845,9 +2848,21 @@ static inline void set_styles(nanoclj_t * sc, clj_value out, clj_value x) {
 	      set_basic_style(fh, 4);
 	    }
 	  } else if (key.as_uint64 == sc->ANSI.as_uint64) {
-	    int c = to_int(value);
-	    set_basic_style(fh, c);
+	    ansi_color = to_int(value);
+	  } else if (key.as_uint64 == sc->RGB.as_uint64) {
+	    if (is_vector(value)) {
+	      rgb = decode_pointer(value);
+	    }	    
 	  }
+	}
+
+	if (sc->truecolor_term && rgb) {
+	  set_truecolor(fh,
+			to_int(vector_elem(rgb, 0)),
+			to_int(vector_elem(rgb, 1)),
+			to_int(vector_elem(rgb, 2)));
+	} else if (ansi_color) {
+	  set_basic_style(fh, ansi_color);
 	}
       }
     }
@@ -6172,7 +6187,9 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc,
   sc->AMP = def_symbol(sc, "&");
   sc->UNDERSCORE = def_symbol(sc, "_");
   sc->DOC = def_keyword(sc, "doc");
+  
   sc->ANSI = def_keyword(sc, "ansi");
+  sc->RGB = def_keyword(sc, "rgb");
   sc->BOLD = def_keyword(sc, "bold");
   sc->UNDERLINE = def_keyword(sc, "underline");
 
@@ -6185,6 +6202,8 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc,
   nanoclj_define(sc, sc->global_env, def_symbol(sc, "nil"), mk_nil());
 
   register_functions(sc);
+
+  sc->truecolor_term = has_truecolor();
   
   return !sc->no_memory;
 }
