@@ -537,3 +537,27 @@
   ([f g h]) (fn [& args] (f (g (apply h args))))
   )
 
+; Plotting
+
+(defn plot
+  "Plots a series"
+  ([x y] (let [width 500
+               height 250
+               min-x (apply min x)
+               min-y (apply min y)
+               range-x (- (apply max x) min-x)
+               range-y (- (apply max y) min-y)
+               cnv (Canvas/create width height)
+               fit-x (fn [x] (* (/ (- x min-y) range-x) width))
+               fit-y (fn [y] (* (/ (- y min-y) range-y) height))
+               draw (fn [cnv x y] (if (or (empty? x) (empty? y))
+                                       nil
+                                       (do
+                                         (Canvas/line-to cnv (fit-x (first x)) (fit-y (first y)))
+                                         (recur cnv (rest x) (rest y)))))
+               ]
+           (Canvas/move-to cnv (fit-x (first x)) (fit-y (first y)))
+           (draw cnv (rest x) (rest y))
+           (Canvas/stroke cnv)
+           (Canvas/create-image cnv)
+           )))
