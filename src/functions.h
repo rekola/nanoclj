@@ -394,7 +394,7 @@ static inline nanoclj_val_t shell_sh(nanoclj_t * sc, nanoclj_val_t args0) {
 
 static inline nanoclj_val_t Image_load(nanoclj_t * sc, nanoclj_val_t args) {
   const char * filename = to_cstr(car(args));
-  
+	    
   int w, h, channels;
   unsigned char * data = stbi_load(filename, &w, &h, &channels, 0);
   if (!data) {
@@ -417,7 +417,7 @@ static inline nanoclj_val_t Image_resize(nanoclj_t * sc, nanoclj_val_t args) {
   
   int target_width = to_int(target_width0), target_height = to_int(target_height0);  
   struct cell * image0 = decode_pointer(image00);
-  clj_image * image = _image_unchecked(image0);
+  nanoclj_image_t * image = _image_unchecked(image0);
   
   size_t target_size = target_width * target_height * image->channels;
 

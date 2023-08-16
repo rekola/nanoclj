@@ -1006,9 +1006,9 @@ static inline nanoclj_val_t mk_integer(nanoclj_t * sc, long long num) {
 }
 
 static inline nanoclj_val_t mk_image(nanoclj_t * sc, int32_t width, int32_t height,
-				 int32_t channels, unsigned char * data) {
+				     int32_t channels, unsigned char * data) {
   struct cell * x = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
-  clj_image * image = (clj_image*)malloc(sizeof(clj_image));
+  nanoclj_image_t * image = (nanoclj_image_t*)malloc(sizeof(nanoclj_image_t));
   _typeflag(x) = T_IMAGE | T_GC_ATOM;
   _image_unchecked(x) = image;
   _metadata_unchecked(x) = mk_nil();
@@ -2418,7 +2418,7 @@ static inline void finalize_cell(nanoclj_t * sc, struct cell * a) {
   }
     break;
   case T_IMAGE:{
-    clj_image * image = _image_unchecked(a);
+    nanoclj_image_t * image = _image_unchecked(a);
     sc->free(image->data);
     sc->free(image);
   }
@@ -2613,9 +2613,10 @@ static inline nanoclj_val_t port_from_file(nanoclj_t * sc, FILE * f, int prop) {
 }
 
 static inline nanoclj_val_t port_from_callback(nanoclj_t * sc,
-					       void (*print) (const char *, size_t, void *),
-					       void (*color) (int r, int g, int b, void *),
+					       void (*text) (const char *, size_t, void *),
+					       void (*color) (int, int, int, void *),
 					       void (*reset_color) (void *),
+					       void (*image) (nanoclj_image_t*, void*),
 					       int prop) {
   port *pt = (port *) sc->malloc(sizeof *pt);
   if (!pt) {
@@ -2623,9 +2624,10 @@ static inline nanoclj_val_t port_from_callback(nanoclj_t * sc,
   }
   pt->kind = port_callback | prop;
   pt->backchar = -1;
-  pt->rep.callback.print = print;
+  pt->rep.callback.text = text;
   pt->rep.callback.color = color;
   pt->rep.callback.reset_color = reset_color;
+  pt->rep.callback.image = image;
 
   return mk_writer(sc, pt);
 }
@@ -2738,8 +2740,8 @@ static inline const char * to_cstr(nanoclj_val_t x) {
   return "";
 }
 
-static inline void char_to_utf8(int c, char *p, int *plen) {
-  unsigned char *s = (unsigned char *) p;
+static inline size_t char_to_utf8(int c, char *p) {
+  unsigned char *s = (unsigned char *)p;
   int bytes;
   if (c < 0 || c > 0x10FFFF) {
     fprintf(stderr, "char_to_utf8: bad char %d\n", c);
@@ -2748,6 +2750,7 @@ static inline void char_to_utf8(int c, char *p, int *plen) {
   if (c < 0x80) {
     *s++ = (unsigned char) c;
     *s = 0;
+    return 1;
   } else {
     bytes = (c < 0x800) ? 2 : ((c < 0x10000) ? 3 : 4);
     s[bytes] = 0;
@@ -2758,15 +2761,15 @@ static inline void char_to_utf8(int c, char *p, int *plen) {
       c >>= 6;
     }
     s[0] |= (unsigned char) c;
+    return strlen(p);
   }
-  if (plen) *plen = strlen(p);
 }
 
 static inline void putchars(nanoclj_t * sc, const char *s, size_t len, nanoclj_val_t out) {
   assert(s);
   assert(is_writer(dest_port));
 
-  if (is_nil(out) || !is_writer(out)) {
+  if (!is_writer(out)) {
     return;
   }
 
@@ -2774,7 +2777,7 @@ static inline void putchars(nanoclj_t * sc, const char *s, size_t len, nanoclj_v
   if (pt->kind & port_file) {
     fwrite(s, 1, len, pt->rep.stdio.file);
   } else if (pt->kind & port_callback) {
-    pt->rep.callback.print(s, len, sc->ext_data);
+    pt->rep.callback.text(s, len, sc->ext_data);
   } else {
     for (; len; len--) {
       if (pt->rep.string.curr != pt->rep.string.past_the_end) {
@@ -2790,26 +2793,10 @@ static inline void putstr(nanoclj_t * sc, const char *s, nanoclj_val_t dest_port
   putchars(sc, s, strlen(s), dest_port);
 }
 
-static inline void putcharacter(nanoclj_t * sc, int c) {
-  port *pt = port_unchecked(get_out_port(sc));
-
-  int len;
-  char_to_utf8(c, sc->strbuff, &len);
-
-  if (pt->kind & port_file) {
-    fwrite(sc->strbuff, 1, len, pt->rep.stdio.file);
-  } else if (pt->kind & port_callback) {
-    pt->rep.callback.print(sc->strbuff, len, sc->ext_data);
-  } else {
-    for (int i = 0; i < len; i++) {
-      unsigned char ch = sc->strbuff[i];
-      if (pt->rep.string.curr != pt->rep.string.past_the_end) {
-	*pt->rep.string.curr++ = ch;
-      } else if (realloc_port_string(sc, pt)) {
-	*pt->rep.string.curr++ = ch;
-      }
-    }
-  }
+static inline void putcharacter(nanoclj_t * sc, int c, nanoclj_val_t out) {
+  port *pt = port_unchecked(out);
+  size_t len = char_to_utf8(c, sc->strbuff);
+  putchars(sc, sc->strbuff, len, out);
 }
 
 static inline void set_styles(nanoclj_t * sc, nanoclj_val_t x) {
@@ -2911,7 +2898,7 @@ static inline int is_one_of(char *s, int c) {
 /* read characters up to delimiter, but cater to character constants */
 static inline char *readstr_upto(nanoclj_t * sc, char *delim) {
   char *p = sc->strbuff;
-  int c, len;
+  int c;
   port * inport = port_unchecked(get_in_port(sc));
 
   while (1) {
@@ -2923,8 +2910,7 @@ static inline char *readstr_upto(nanoclj_t * sc, char *delim) {
     }
 #endif
     if (check_strbuff_size(sc, &p)) {
-      char_to_utf8(c, p, &len);
-      p += len;
+      p += char_to_utf8(c, p);
     }
     if (is_one_of(delim, c)) {
       break;
@@ -2943,7 +2929,7 @@ static inline char *readstr_upto(nanoclj_t * sc, char *delim) {
 /* read string expression "xxx...xxx" */
 static inline nanoclj_val_t readstrexp(nanoclj_t * sc) {
   char *p = sc->strbuff;
-  int c, len;
+  int c;
   int c1 = 0;
   enum { st_ok, st_bsl, st_x1, st_x2, st_oct1, st_oct2 } state = st_ok;
 
@@ -2964,8 +2950,7 @@ static inline nanoclj_val_t readstrexp(nanoclj_t * sc) {
         *p = 0;
         return mk_counted_string(sc, sc->strbuff, p - sc->strbuff);
       default:
-        char_to_utf8(c, p, &len);
-        p += len;
+        p += char_to_utf8(c, p);
         break;
       }
       break;
@@ -3193,47 +3178,64 @@ static inline int token(nanoclj_t * sc, port * inport) {
 
 /* ========== Routines for Printing ========== */
 
-static inline void printslashstring(nanoclj_t * sc, const char *p, int len, nanoclj_val_t out) {
+static inline void print_slashstring(nanoclj_t * sc, const char *p, int len, nanoclj_val_t out) {
   assert(is_writer(out));
   
   int c, d;
-  putcharacter(sc, '"');
+  putcharacter(sc, '"', out);
   const char * end = p + len;
   while (p < end) {
     c = utf8_decode(p);
     p = utf8_next(p);
     
     if (c == '"' || c < ' ' || c == '\\') {
-      putcharacter(sc, '\\');
+      putcharacter(sc, '\\', out);
       switch (c) {
       case '"':
-        putcharacter(sc, '"');
+        putcharacter(sc, '"', out);
         break;
       case '\n':
-        putcharacter(sc, 'n');
+        putcharacter(sc, 'n', out);
         break;
       case '\t':
-        putcharacter(sc, 't');
+        putcharacter(sc, 't', out);
         break;
       case '\r':
-        putcharacter(sc, 'r');
+        putcharacter(sc, 'r', out);
         break;
       case '\\':
-        putcharacter(sc, '\\');
+        putcharacter(sc, '\\', out);
         break;
       default:{
 	putchars(sc, "u00", 3, out);
 	d = c / 16;
-	putcharacter(sc, d + (d < 10 ? '0' : 'A' - 10));
+	putcharacter(sc, d + (d < 10 ? '0' : 'A' - 10), out);
 	d = c % 16;
-	putcharacter(sc, d + (d < 10 ? '0' : 'A' - 10));          
+	putcharacter(sc, d + (d < 10 ? '0' : 'A' - 10), out);
       }
       }
     } else {
-      putcharacter(sc, c);
+      putcharacter(sc, c, out);
     }
   }
-  putcharacter(sc, '"');
+  putcharacter(sc, '"', out);
+}
+
+static inline void print_image(nanoclj_t * sc, nanoclj_image_t * img, nanoclj_val_t out) {
+  assert(is_writer(out));
+  if (!is_writer(out)) {
+    return;
+  }
+
+  port * pt = port_unchecked(out);
+
+  if ((pt->kind & port_callback) && pt->rep.callback.image) {
+    pt->rep.callback.image(img, sc->ext_data);
+  } else {
+    char * p = sc->strbuff;
+    snprintf(sc->strbuff, sc->strbuff_size, "#object[%s %p %d %d %d]", typename_from_id(T_IMAGE), (void *)img, img->width, img->height, img->channels);
+    putstr(sc, p, out);
+  }
 }
 
 /* Uses internal buffer unless string pointer is already available */
@@ -3264,7 +3266,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
     int c = char_unchecked(l);
     p = sc->strbuff;
     if (!print_flag) {
-      char_to_utf8(c, sc->strbuff, &plen);
+      plen = char_to_utf8(c, sc->strbuff);
     } else {
       switch (c) {
       case -1:
@@ -3293,7 +3295,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
           sprintf(sc->strbuff, "\\u%04x", c);
         } else {
 	  sc->strbuff[0] = '\\';
-	  char_to_utf8(c, sc->strbuff + 1, NULL);
+	  char_to_utf8(c, sc->strbuff + 1);
 	}
         break;
       }
@@ -3322,15 +3324,12 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
 	plen = _strlength(c);
 	break;
       } else {
-	printslashstring(sc, strvalue(l), strlength(l), out);
+	print_slashstring(sc, strvalue(l), strlength(l), out);
 	return;
       }
-    case T_IMAGE:{
-      clj_image * img = _image_unchecked(c);
-      p = sc->strbuff;
-      snprintf(sc->strbuff, sc->strbuff_size, "#object[%s %p %d %d %d]", typename_from_id(type(l)), (void *)c, img->width, img->height, img->channels);
-    }
-      break;
+    case T_IMAGE:
+      print_image(sc, _image_unchecked(c), out);
+      return;
     }
   }
 
@@ -6215,20 +6214,17 @@ void nanoclj_set_output_port_file(nanoclj_t * sc, FILE * fout) {
 }
 
 void nanoclj_set_output_port_callback(nanoclj_t * sc,
-				      void (*print) (const char *, size_t, void *),
-				      void (*color) (int r, int g, int b, void *),
-				      void (*reset_color) (void *)
+				      void (*text) (const char *, size_t, void *),
+				      void (*color) (int, int, int, void *),
+				      void (*reset_color) (void *),
+				      void (*image) (nanoclj_image_t *, void *)
 				      ) {
-  nanoclj_val_t p = port_from_callback(sc, print, color, reset_color, port_output);
+  nanoclj_val_t p = port_from_callback(sc, text, color, reset_color, image, port_output);
   nanoclj_intern(sc, sc->root_env, sc->OUT, p);
 }
 
-void nanoclj_set_error_port_callback(nanoclj_t * sc,
-				     void (*print) (const char *, size_t, void *),
-				     void (*color) (int r, int g, int b, void *),
-				     void (*reset_color) (void *)
-				     ) {
-  nanoclj_val_t p = port_from_callback(sc, print, color, reset_color, port_output);
+void nanoclj_set_error_port_callback(nanoclj_t * sc, void (*text) (const char *, size_t, void *)) {
+  nanoclj_val_t p = port_from_callback(sc, text, NULL, NULL, NULL, port_output);
   nanoclj_intern(sc, sc->global_env, sc->ERR, p);
 }
 

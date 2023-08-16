@@ -62,7 +62,12 @@ extern "C" {
     uint64_t as_uint64;
     double as_double;
   } nanoclj_val_t;
-  
+
+  typedef struct {
+    int32_t width, height, channels;
+    unsigned char * data;
+  } nanoclj_image_t;
+
   typedef void *(*func_alloc) (size_t);
   typedef void (*func_dealloc) (void *);
   
@@ -75,13 +80,11 @@ extern "C" {
   void nanoclj_set_input_port_string(nanoclj_t * sc, char *start, char *past_the_end);
   NANOCLJ_EXPORT void nanoclj_set_output_port_file(nanoclj_t * sc, FILE * fin);
   NANOCLJ_EXPORT void nanoclj_set_output_port_callback(nanoclj_t * sc,
-						       void (*print) (const char *, size_t, void *),
-						       void (*color) (int r, int g, int b, void *),
-						       void (*reset_color) (void *));
-  NANOCLJ_EXPORT void nanoclj_set_error_port_callback(nanoclj_t * sc,
-						      void (*print) (const char *, size_t, void *),
-						      void (*color) (int r, int g, int b, void *),
-						      void (*reset_color) (void *));  
+						       void (*text) (const char*, size_t, void*),
+						       void (*color) (int, int, int, void*),
+						       void (*reset_color) (void*),
+						       void (*image) (nanoclj_image_t*, void*));
+  NANOCLJ_EXPORT void nanoclj_set_error_port_callback(nanoclj_t * sc, void (*text) (const char *, size_t, void *));
   void nanoclj_set_output_port_string(nanoclj_t * sc, char *start, char *past_the_end);
   NANOCLJ_EXPORT void nanoclj_load_file(nanoclj_t * sc, FILE * fin);
   NANOCLJ_EXPORT void nanoclj_load_named_file(nanoclj_t * sc, FILE * fin, const char *filename);
@@ -143,8 +146,8 @@ extern "C" {
     bool (*is_writer) (nanoclj_val_t p);
     
     bool (*is_pair) (nanoclj_val_t p);
-    nanoclj_val_t(*pair_car) (nanoclj_val_t p);
-    nanoclj_val_t(*pair_cdr) (nanoclj_val_t p);
+    nanoclj_val_t (*pair_car) (nanoclj_val_t p);
+    nanoclj_val_t (*pair_cdr) (nanoclj_val_t p);
 
     nanoclj_val_t (*first)(nanoclj_t * sc, nanoclj_val_t coll);
     bool (*is_empty)(nanoclj_t * sc, nanoclj_val_t coll);
@@ -162,10 +165,6 @@ extern "C" {
     bool (*is_closure) (nanoclj_val_t p);
     bool (*is_macro) (nanoclj_val_t p);
     bool (*is_mapentry) (nanoclj_val_t p);
-#if 0
-    nanoclj_val_t(*closure_code) (nanoclj_val_t p);
-    nanoclj_val_t(*closure_env) (nanoclj_val_t p);
-#endif
     bool (*is_promise) (nanoclj_val_t p);
     bool (*is_environment) (nanoclj_val_t p);
     void (*load_file) (nanoclj_t * sc, FILE * fin);
@@ -189,4 +188,3 @@ extern "C" {
 }
 #endif
 #endif
-

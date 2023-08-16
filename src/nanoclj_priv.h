@@ -65,17 +65,13 @@ extern "C" {
         char *curr;
       } string;
       struct {
-	void (*print) (const char *, size_t, void*);
+	void (*text) (const char *, size_t, void*);
 	void (*color) (int r, int g, int b, void*);
 	void (*reset_color) (void*);
+	void (*image) (nanoclj_image_t*, void*);
       } callback;
     } rep;
   } port;
-
-  typedef struct clj_image {
-    int32_t width, height, channels;
-    unsigned char * data;
-  } clj_image;
 
 /* cell structure */
   struct cell {
@@ -96,7 +92,7 @@ extern "C" {
       } _collection;
       long long _lvalue;
       port *_port;
-      clj_image * _image;
+      nanoclj_image_t * _image;
       struct {
 	int _min_arity;
 	int _max_arity;
