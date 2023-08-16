@@ -411,7 +411,7 @@ static inline nanoclj_val_t Image_resize(nanoclj_t * sc, nanoclj_val_t args) {
   return target_image;
 }
 
-#ifdef NANOCLJ_USE_LINENOISE
+#if NANOCLJ_USE_LINENOISE
 #define MAX_COMPLETION_SYMBOLS 65535
 
 static nanoclj_t * linenoise_sc = NULL;
@@ -585,7 +585,7 @@ static inline void register_functions(nanoclj_t * sc) {
   nanoclj_intern(sc, Image, def_symbol(sc, "load"), mk_foreign_func_with_arity(sc, Image_load, 1, 1));
   nanoclj_intern(sc, Image, def_symbol(sc, "resize"), mk_foreign_func_with_arity(sc, Image_resize, 3, 3));
 
-#ifdef NANOCLJ_USE_LINENOISE
+#if NANOCLJ_USE_LINENOISE
   nanoclj_val_t linenoise = def_namespace(sc, "linenoise");
   nanoclj_intern(sc, linenoise, def_symbol(sc, "read-line"), mk_foreign_func_with_arity(sc, linenoise_readline, 1, 1));
 #endif  
