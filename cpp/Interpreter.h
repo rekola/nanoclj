@@ -32,6 +32,14 @@ namespace nanoclj {
     virtual void print(std::string_view s) { }
     virtual void print_error(std::string_view s) { }
 
+    virtual void set_color(int r, int g, int b) { }
+    virtual void reset_color() { }
+
+    void flush() {
+      print(out_buffer);
+      out_buffer.clear();
+    }
+    
     void add_chars(std::string_view s) {
       out_buffer += s;
       for (int i = static_cast<int>(out_buffer.size()) - 1; i >= 0; i--) {

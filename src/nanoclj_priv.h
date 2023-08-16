@@ -65,7 +65,9 @@ extern "C" {
         char *curr;
       } string;
       struct {
-	void (*func) (const char *, size_t, void*);
+	void (*print) (const char *, size_t, void*);
+	void (*color) (int r, int g, int b, void*);
+	void (*reset_color) (void*);
       } callback;
     } rep;
   } port;
@@ -267,10 +269,6 @@ extern "C" {
 
   int is_delay(nanoclj_val_t p);
   int is_environment(nanoclj_val_t p);
-#if 0
-  int is_immutable(nanoclj_val_t p);
-  void setimmutable(nanoclj_val_t p);
-#endif
 #endif
 
 #ifdef __cplusplus

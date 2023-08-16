@@ -4,12 +4,27 @@
 
 using namespace nanoclj;
 
-static void out_callback(const char * s, size_t len, void * data) {
-  fprintf(stderr, "out callback %d\n", (int)len);
-  if (len > 0) {
-    auto clojure = reinterpret_cast<Interpreter *>(data);
-    clojure->add_chars(std::string_view(s, len));
+static void out_print_callback(const char * s, size_t len, void * data) {
+  if (data && len > 0) {
+    auto interpreter = reinterpret_cast<Interpreter *>(data);
+    interpreter->add_chars(std::string_view(s, len));
   }
+}
+
+static void out_color_callback(int r, int g, int b, void * data) {
+  if (data) {
+    auto interpreter = reinterpret_cast<Interpreter *>(data);
+    interpreter->flush();
+    interpreter->set_color(r, g, b);
+  }
+}
+
+static void out_reset_color_callback(void * data) {
+  if (data) {
+    auto interpreter = reinterpret_cast<Interpreter *>(data);
+    interpreter->flush();
+    interpreter->reset_color();
+  }  
 }
 
 static void error_callback(const char * s, size_t len, void * data) {
@@ -31,8 +46,8 @@ Interpreter::Interpreter() {
     sc_ = sc;
 
     nanoclj_set_input_port_file(sc, stdin);
-    nanoclj_set_output_port_callback(sc, &out_callback);
-    nanoclj_set_error_port_callback(sc, &error_callback);
+    nanoclj_set_output_port_callback(sc, &out_print_callback, &out_color_callback, &out_reset_color_callback);
+    nanoclj_set_error_port_callback(sc, &error_callback, NULL, NULL);
     nanoclj_set_external_data(sc, this);
     nanoclj_set_object_invoke_callback(sc, &object_invoke_callback);
     

@@ -303,12 +303,13 @@
 (def *print-length* nil)
 
 (def styles- {
-              :scalar { :ansi 32 }
-              :boolean { :ansi 34 }
-              :nil { :ansi 34 }
-              :char { :ansi 35 }
-              :string { :ansi 31 }
-              :keyword { :ansi 92 :rgb [ 127 158 127 ] }
+              :scalar { :ansi 92 :rgb [ 127 158 127 ] }
+              :boolean { :ansi 95 :rgb [ 220 140 195 ] }
+              :nil { :ansi 95 :rgb [ 220 140 195 ] }
+              :symbol { :ansi 93 :rgb [ 240 223 175 ] }
+              :char { :ansi 91 :rgb [ 204 147 147 ] }
+              :string { :ansi 91 :rgb [ 204 147 147 ] }
+              :keyword { :ansi 96 :rgb [ 140 208 211 ] }
               })
 
 (defn pr
@@ -380,6 +381,9 @@
                          (keyword? x) (do (color (styles- :keyword))
                                           (pr- x)
                                           (color))
+                         (symbol? x) (do (color (styles- :symbol))
+                                         (pr- x)
+                                         (color))
                          :else (pr- x))
                    ) more))
 

@@ -2601,19 +2601,6 @@ static inline nanoclj_val_t port_from_filename(nanoclj_t * sc, const char *fn, i
   }
 }
 
-static inline port *port_rep_from_callback(nanoclj_t * sc,
-				    void (*func) (const char *, size_t, void *),
-				    int prop) {
-  port *pt = (port *) sc->malloc(sizeof *pt);
-  if (pt == NULL) {
-    return NULL;
-  }
-  pt->kind = port_callback | prop;
-  pt->backchar = -1;
-  pt->rep.callback.func = func;
-  return pt;
-}
-
 static inline nanoclj_val_t port_from_file(nanoclj_t * sc, FILE * f, int prop) {
   port *pt = port_rep_from_file(sc, f, prop);
   if (!pt) {
@@ -2626,12 +2613,20 @@ static inline nanoclj_val_t port_from_file(nanoclj_t * sc, FILE * f, int prop) {
 }
 
 static inline nanoclj_val_t port_from_callback(nanoclj_t * sc,
-					   void (*func) (const char *, size_t, void *),
-					   int prop) {
-  port *pt = port_rep_from_callback(sc, func, prop);
-  if (pt == 0) {
+					       void (*print) (const char *, size_t, void *),
+					       void (*color) (int r, int g, int b, void *),
+					       void (*reset_color) (void *),
+					       int prop) {
+  port *pt = (port *) sc->malloc(sizeof *pt);
+  if (!pt) {
     return sc->EMPTY;
   }
+  pt->kind = port_callback | prop;
+  pt->backchar = -1;
+  pt->rep.callback.print = print;
+  pt->rep.callback.color = color;
+  pt->rep.callback.reset_color = reset_color;
+
   return mk_writer(sc, pt);
 }
 
@@ -2779,7 +2774,7 @@ static inline void putchars(nanoclj_t * sc, const char *s, size_t len, nanoclj_v
   if (pt->kind & port_file) {
     fwrite(s, 1, len, pt->rep.stdio.file);
   } else if (pt->kind & port_callback) {
-    pt->rep.callback.func(s, len, sc->ext_data);
+    pt->rep.callback.print(s, len, sc->ext_data);
   } else {
     for (; len; len--) {
       if (pt->rep.string.curr != pt->rep.string.past_the_end) {
@@ -2804,7 +2799,7 @@ static inline void putcharacter(nanoclj_t * sc, int c) {
   if (pt->kind & port_file) {
     fwrite(sc->strbuff, 1, len, pt->rep.stdio.file);
   } else if (pt->kind & port_callback) {
-    pt->rep.callback.func(sc->strbuff, len, sc->ext_data);
+    pt->rep.callback.print(sc->strbuff, len, sc->ext_data);
   } else {
     for (int i = 0; i < len; i++) {
       unsigned char ch = sc->strbuff[i];
@@ -2817,56 +2812,65 @@ static inline void putcharacter(nanoclj_t * sc, int c) {
   }
 }
 
-static inline void set_styles(nanoclj_t * sc, nanoclj_val_t out, nanoclj_val_t x) {
-#ifndef WIN32
-  if (!is_writer(out) || !is_cell(x)) {
-    return;
-  }
+static inline void set_styles(nanoclj_t * sc, nanoclj_val_t x) {
+  port *pt = port_unchecked(get_out_port(sc));
   struct cell * coll = decode_pointer(x);
-  port * pt = port_unchecked(out);
-  if (pt->kind & port_file) {
-    FILE * fh = pt->rep.stdio.file;
-    if (isatty(fileno(fh))) {
-      if (is_empty(sc, coll) || _type(coll) != T_ARRAYMAP) {
-	reset_color(fh);
-      } else {
-	int ansi_color = 0;
-	struct cell * rgb = NULL;
-	
-	for (int i = 0, n = _size_unchecked(coll); i < n; i++) {
-	  nanoclj_val_t y = vector_elem(coll, i);
-	  nanoclj_val_t key = car(y);
-	  nanoclj_val_t value = cdr(y);
 
-	  if (key.as_uint64 == sc->BOLD.as_uint64) {
-	    if (is_true(value)) {
-	      set_basic_style(fh, 1);
-	    }
-	  } else if (key.as_uint64 == sc->UNDERLINE.as_uint64) {
-	    if (is_true(value)) {
-	      set_basic_style(fh, 4);
-	    }
-	  } else if (key.as_uint64 == sc->ANSI.as_uint64) {
-	    ansi_color = to_int(value);
-	  } else if (key.as_uint64 == sc->RGB.as_uint64) {
-	    if (is_vector(value)) {
-	      rgb = decode_pointer(value);
-	    }	    
-	  }
-	}
+  int ansi_color = 0;
+  struct cell * rgb = NULL;
 
-	if (sc->truecolor_term && rgb) {
-	  set_truecolor(fh,
-			to_int(vector_elem(rgb, 0)),
-			to_int(vector_elem(rgb, 1)),
-			to_int(vector_elem(rgb, 2)));
-	} else if (ansi_color) {
-	  set_basic_style(fh, ansi_color);
-	}
+  if (!is_empty(sc, coll) && _type(coll) == T_ARRAYMAP) {
+    for (int i = 0, n = _size_unchecked(coll); i < n; i++) {
+      nanoclj_val_t y = vector_elem(coll, i);
+      nanoclj_val_t key = car(y);
+      nanoclj_val_t value = cdr(y);
+      
+      if (key.as_uint64 == sc->BOLD.as_uint64) {
+	/* TODO */
+      } else if (key.as_uint64 == sc->UNDERLINE.as_uint64) {
+	/* TODO */
+      } else if (key.as_uint64 == sc->ANSI.as_uint64) {
+	ansi_color = to_int(value);
+      } else if (key.as_uint64 == sc->RGB.as_uint64) {
+	if (is_vector(value)) {
+	  rgb = decode_pointer(value);
+	}	    
       }
     }
   }
+
+#ifndef WIN32
+  if (pt->kind & port_file) {
+    FILE * fh = pt->rep.stdio.file;
+    if (isatty(fileno(fh))) {
+      if (sc->truecolor_term && rgb) {
+	set_truecolor(fh,
+		      to_int(vector_elem(rgb, 0)),
+		      to_int(vector_elem(rgb, 1)),
+		      to_int(vector_elem(rgb, 2)));
+      } else if (ansi_color) {
+	set_basic_style(fh, ansi_color);
+      } else {
+	reset_color(fh);
+      }          
+    }
+  }
 #endif
+  if (pt->kind & port_callback) {
+    if (rgb) {
+      if (pt->rep.callback.color) {
+	pt->rep.callback.color(to_int(vector_elem(rgb, 0)),
+			       to_int(vector_elem(rgb, 1)),
+			       to_int(vector_elem(rgb, 2)),
+			       sc->ext_data
+			       );
+      }
+    } else {
+      if (pt->rep.callback.reset_color) {
+	pt->rep.callback.reset_color(sc->ext_data);
+      }
+    }
+  }
 }
 
 static inline int check_strbuff_size(nanoclj_t * sc, char **p) {
@@ -5395,7 +5399,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     s_return(sc, mk_nil());
 
   case OP_COLOR:
-    set_styles(sc, get_out_port(sc), car(sc->args));
+    set_styles(sc, car(sc->args));
     s_return(sc, mk_nil());  
     
   case OP_FORMAT:{
@@ -6206,16 +6210,20 @@ void nanoclj_set_output_port_file(nanoclj_t * sc, FILE * fout) {
 }
 
 void nanoclj_set_output_port_callback(nanoclj_t * sc,
-				     void (*func) (const char *, size_t, void *)
-				     ) {
-  nanoclj_val_t p = port_from_callback(sc, func, port_output);
+				      void (*print) (const char *, size_t, void *),
+				      void (*color) (int r, int g, int b, void *),
+				      void (*reset_color) (void *)
+				      ) {
+  nanoclj_val_t p = port_from_callback(sc, print, color, reset_color, port_output);
   nanoclj_intern(sc, sc->root_env, sc->OUT, p);
 }
 
 void nanoclj_set_error_port_callback(nanoclj_t * sc,
-				    void (*func) (const char *, size_t, void *)
-				    ) {
-  nanoclj_val_t p = port_from_callback(sc, func, port_output);
+				     void (*print) (const char *, size_t, void *),
+				     void (*color) (int r, int g, int b, void *),
+				     void (*reset_color) (void *)
+				     ) {
+  nanoclj_val_t p = port_from_callback(sc, print, color, reset_color, port_output);
   nanoclj_intern(sc, sc->global_env, sc->ERR, p);
 }
 

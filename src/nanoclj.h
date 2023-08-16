@@ -74,8 +74,14 @@ extern "C" {
   void nanoclj_set_input_port_file(nanoclj_t * sc, FILE * fin);
   void nanoclj_set_input_port_string(nanoclj_t * sc, char *start, char *past_the_end);
   NANOCLJ_EXPORT void nanoclj_set_output_port_file(nanoclj_t * sc, FILE * fin);
-  NANOCLJ_EXPORT void nanoclj_set_output_port_callback(nanoclj_t * sc, void (*func) (const char *, size_t, void *));
-  NANOCLJ_EXPORT void nanoclj_set_error_port_callback(nanoclj_t * sc, void (*func) (const char *, size_t, void *));
+  NANOCLJ_EXPORT void nanoclj_set_output_port_callback(nanoclj_t * sc,
+						       void (*print) (const char *, size_t, void *),
+						       void (*color) (int r, int g, int b, void *),
+						       void (*reset_color) (void *));
+  NANOCLJ_EXPORT void nanoclj_set_error_port_callback(nanoclj_t * sc,
+						      void (*print) (const char *, size_t, void *),
+						      void (*color) (int r, int g, int b, void *),
+						      void (*reset_color) (void *));  
   void nanoclj_set_output_port_string(nanoclj_t * sc, char *start, char *past_the_end);
   NANOCLJ_EXPORT void nanoclj_load_file(nanoclj_t * sc, FILE * fin);
   NANOCLJ_EXPORT void nanoclj_load_named_file(nanoclj_t * sc, FILE * fin, const char *filename);
