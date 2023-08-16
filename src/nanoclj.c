@@ -26,7 +26,6 @@
 #include <ctype.h>
 #include <time.h>
 #include <stdarg.h>
-#include <glob.h>
 #include <utf8proc.h>
 
 #include <assert.h>
@@ -5426,25 +5425,6 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     
   case OP_VERSION:
     s_return(sc, mk_string(sc, get_version()));
-
-  case OP_GLOB:{
-    if (!unpack_args_1(sc)) {
-      Error_0(sc, "Error - Invalid arity");
-    }
-
-    glob_t gstruct;
-    int r = glob(strvalue(sc->arg0), GLOB_ERR, NULL, &gstruct);
-    x = sc->EMPTY;
-    if (r == 0) {
-      for (char ** found = gstruct.gl_pathv; *found; found++) {
-	x = cons(sc, mk_string(sc, *found), x);
-      }
-    }
-    globfree(&gstruct);
-
-    if (r != 0 && r != GLOB_NOMATCH) Error_0(sc, "Error - glob failed");      
-    s_return(sc, x);
-  }
 
   case OP_CLOSE:        /* close */
     if (!unpack_args_1(sc)) {
