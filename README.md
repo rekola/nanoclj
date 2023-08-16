@@ -27,7 +27,6 @@
 - Namespace definition uses TinyScheme syntax
 - License is BSD 2-Clause License instead of EPL
 - No type inheritance
-- list? returns true on a cons cell even if it is not a head of a list
 - No 32 bit floating point numbers or small integers
 - (identical 'a 'a) ; => true
 - All primitives are, in effect, interned (e.g. doubles and 32 bit integers)
@@ -122,11 +121,10 @@
   - clojure.string/capitalize
   - clojure.string/split
   - clojure.string/replace
-  - trim, triml, trimr
+  - trim, trimr, trim-newline
 - ...and lots more...
 
 ## Dependencies
 
 - linenoise (included)
-- termcolor-c (included)
 - utf8proc
