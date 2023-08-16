@@ -34,8 +34,8 @@ extern "C" {
 #define USE_INTERFACE 1
 #endif
 
-#ifndef USE_LINENOISE
-#define USE_LINENOISE 1
+#ifndef NANOCLJ_USE_LINENOISE
+#define NANOCLJ_USE_LINENOISE 0
 #endif
   
 #ifndef USE_TRACING

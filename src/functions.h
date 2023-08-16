@@ -13,8 +13,13 @@
 #define getcwd _getcwd
 #endif
 
+#define STB_IMAGE_STATIC
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
+
+#define STB_IMAGE_RESIZE_STATIC
+#define STB_IMAGE_RESIZE_IMPLEMENTATION
+#include "stb_image_resize.h"
 
 /* Thread */
 
@@ -90,7 +95,7 @@ static clj_value system_getProperty(nanoclj_t * sc, clj_value args) {
   size_t pw_bufsize = sysconf(_SC_GETPW_R_SIZE_MAX);
   if (pw_bufsize == -1) pw_bufsize = 16384;
   
-  char * pw_buf = malloc(pw_bufsize);
+  char * pw_buf = sc->malloc(pw_bufsize);
   if (!pw_buf) {
     return mk_nil();
   }
@@ -162,7 +167,7 @@ static clj_value system_getProperty(nanoclj_t * sc, clj_value args) {
     }
   }
 
-  free(pw_buf);
+  sc->free(pw_buf);
 
   return r;
 }
@@ -351,7 +356,7 @@ static inline clj_value shell_sh(nanoclj_t * sc, clj_value args0) {
       const char * cmd = to_cstr(first(sc, args));
       args = rest(sc, args);
       n--;
-      char ** output_args = (char **)malloc(n * sizeof(char*));
+      char ** output_args = (char **)sc->malloc(n * sizeof(char*));
       for (size_t i = 0; i < n; i++, args = rest(sc, args)) {
 	output_args[i] = to_cstr(first(sc, args));
       }
@@ -382,14 +387,38 @@ static inline clj_value Image_load(nanoclj_t * sc, clj_value args) {
   return image;
 }
 
-#ifdef USE_LINENOISE
+static inline clj_value Image_resize(nanoclj_t * sc, clj_value args) {
+  clj_value image00 = car(args);
+  clj_value target_width0 = cadr(args), target_height0 = caddr(args);
+  if (!is_image(image00) || !is_number(target_width0) || !is_number(target_height0)) {
+    return mk_nil();
+  }
+  
+  int target_width = to_int(target_width0), target_height = to_int(target_height0);  
+  struct cell * image0 = decode_pointer(image00);
+  clj_image * image = _image_unchecked(image0);
+  
+  size_t target_size = target_width * target_height * image->channels;
+
+  unsigned char * tmp = (unsigned char *)sc->malloc(target_size);
+  
+  stbir_resize_uint8(image->data, image->width, image->height, 0, tmp, target_width, target_height, 0, image->channels);
+
+  clj_value target_image = mk_image(sc, target_width, target_height, image->channels, tmp);
+
+  sc->free(tmp);
+  
+  return target_image;
+}
+
+#ifdef NANOCLJ_USE_LINENOISE
 #define MAX_COMPLETION_SYMBOLS 65535
 
 static nanoclj_t * linenoise_sc = NULL;
 static int num_completion_symbols = 0;
 static const char * completion_symbols[MAX_COMPLETION_SYMBOLS];
  
-static void completion(const char *input, linenoiseCompletions *lc) {
+static inline void completion(const char *input, linenoiseCompletions *lc) {
   if (!num_completion_symbols) {
     clj_value sym = nanoclj_eval_string(linenoise_sc, "(ns-interns *ns*)");
     for ( ; sym.as_uint64 != linenoise_sc->EMPTY.as_uint64 && num_completion_symbols < MAX_COMPLETION_SYMBOLS; sym = cdr(sym)) {
@@ -426,7 +455,7 @@ static void completion(const char *input, linenoiseCompletions *lc) {
   }
 }
 
-static char *complete_parens(const char * input) {
+static inline char *complete_parens(const char * input) {
   char nest[1024];
   int si = 0;
   for (int i = 0, n = strlen(input); i < n; i++) {
@@ -451,7 +480,7 @@ static char *complete_parens(const char * input) {
   if (si == 0) {
     return NULL;
   }
-  char * h = (char *)malloc(si);
+  char * h = (char *)linenoise_sc->malloc(si);
   int hi = 0;
   for (int i = si - 1; i >= 0; i--) {
     h[hi++] = nest[i];
@@ -461,7 +490,7 @@ static char *complete_parens(const char * input) {
   return h;
 }
  
-static char *hints(const char *input, int *color, int *bold) {
+static inline char *hints(const char *input, int *color, int *bold) {
   char * h = complete_parens(input);
   if (!h) return NULL;
   
@@ -470,11 +499,11 @@ static char *hints(const char *input, int *color, int *bold) {
   return h;  
 }
 
-static void free_hints(void * ptr) {
-  free(ptr);
+static inline void free_hints(void * ptr) {
+  linenoise_sc->free(ptr);
 }
 
-static clj_value linenoise_readline(nanoclj_t * sc, clj_value args) {
+static inline clj_value linenoise_readline(nanoclj_t * sc, clj_value args) {
   if (!linenoise_sc) {
     linenoise_sc = sc;
   
@@ -496,14 +525,14 @@ static clj_value linenoise_readline(nanoclj_t * sc, clj_value args) {
     r = mk_string(sc, line);
   } else {
     int l1 = strlen(line), l2 = strlen(missing_parens);
-    char * tmp = (char *)malloc(l1 + l2 + 1);
+    char * tmp = (char *)sc->malloc(l1 + l2 + 1);
     strcpy(tmp, line);
     strcpy(tmp + l1, missing_parens);
-    free(missing_parens);
+    sc->free(missing_parens);
     r = mk_string(sc, tmp);
-    free(tmp);
+    sc->free(tmp);
   }
-  free(line);
+  sc->free(line);
 
   return r;
 }
@@ -554,8 +583,9 @@ static inline void register_functions(nanoclj_t * sc) {
   nanoclj_define(sc, clojure_java_shell, def_symbol(sc, "sh"), mk_foreign_func(sc, shell_sh));
 
   nanoclj_define(sc, Image, def_symbol(sc, "load"), mk_foreign_func_with_arity(sc, Image_load, 1, 1));
+  nanoclj_define(sc, Image, def_symbol(sc, "resize"), mk_foreign_func_with_arity(sc, Image_resize, 3, 3));
 
-#ifdef USE_LINENOISE
+#ifdef NANOCLJ_USE_LINENOISE
   clj_value linenoise = def_namespace(sc, "linenoise");
   nanoclj_define(sc, linenoise, def_symbol(sc, "read-line"), mk_foreign_func_with_arity(sc, linenoise_readline, 1, 1));
 #endif  
