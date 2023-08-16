@@ -3295,7 +3295,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
     snprintf(sc->strbuff, sc->strbuff_size, ":%s", keywordname(l));
   } else if (is_type(l)) {
     p = typename_from_id(type_unchecked(l));
-  } else if (is_writer(l) && port_unchecked(l)->kind & port_string) {
+  } else if (is_writer(l) && (port_unchecked(l)->kind & port_string)) {
     port * pt = port_unchecked(l);
     p = pt->rep.string.start;
     plen = pt->rep.string.curr - pt->rep.string.start;
@@ -3310,6 +3310,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
       if (!print_flag) {
 	p = mutable_strvalue(c);
 	plen = _strlength(c);
+	break;
       } else {
 	printslashstring(sc, strvalue(l), strlength(l), out);
 	return;
