@@ -23,7 +23,7 @@
 
 /* Thread */
 
-static clj_value thread_sleep(nanoclj_t * sc, clj_value args) {
+static nanoclj_val_t thread_sleep(nanoclj_t * sc, nanoclj_val_t args) {
   long long ms = to_long(car(args));
   if (ms > 0) {
     struct timespec t, t2;
@@ -36,24 +36,24 @@ static clj_value thread_sleep(nanoclj_t * sc, clj_value args) {
 
 /* System */
 
-static clj_value system_exit(nanoclj_t * sc, clj_value args) {
+static nanoclj_val_t system_exit(nanoclj_t * sc, nanoclj_val_t args) {
   exit(to_int(car(args)));
 }
 
-static clj_value system_currentTimeMillis(nanoclj_t * sc, clj_value args) {
+static nanoclj_val_t system_currentTimeMillis(nanoclj_t * sc, nanoclj_val_t args) {
   return mk_long(sc, system_time() / 1000);
 }
 
-static clj_value system_nanoTime(nanoclj_t * sc, clj_value args) {
+static nanoclj_val_t system_nanoTime(nanoclj_t * sc, nanoclj_val_t args) {
   return mk_long(sc, 1000 * system_time());
 }
 
-static clj_value system_gc(nanoclj_t * sc, clj_value args) {
+static nanoclj_val_t system_gc(nanoclj_t * sc, nanoclj_val_t args) {
   gc(sc, sc->EMPTY, sc->EMPTY);
-  return (clj_value)kTRUE;
+  return (nanoclj_val_t)kTRUE;
 }
 
-static clj_value system_getenv(nanoclj_t * sc, clj_value args) {
+static nanoclj_val_t system_getenv(nanoclj_t * sc, nanoclj_val_t args) {
   if (args.as_uint64 != sc->EMPTY.as_uint64) {
     const char * v = getenv(strvalue(car(args)));
     return v ? mk_string(sc, v) : mk_nil();
@@ -69,8 +69,8 @@ static clj_value system_getenv(nanoclj_t * sc, clj_value args) {
       for (; p[j] != '=' && p[j] != 0; j++) {
 	
       }
-      clj_value key = mk_counted_string(sc, p, j);
-      clj_value val = p[j] == '=' ? mk_string(sc, p + j + 1) : mk_nil();
+      nanoclj_val_t key = mk_counted_string(sc, p, j);
+      nanoclj_val_t val = p[j] == '=' ? mk_string(sc, p + j + 1) : mk_nil();
       set_vector_elem(map, i, cons(sc, key, val));
     }
 
@@ -78,7 +78,7 @@ static clj_value system_getenv(nanoclj_t * sc, clj_value args) {
   }
 }
 
-static clj_value system_getProperty(nanoclj_t * sc, clj_value args) {
+static nanoclj_val_t system_getProperty(nanoclj_t * sc, nanoclj_val_t args) {
   const char *user_home = NULL, *user_name = NULL;
   const char *os_name = NULL, *os_version = NULL, *os_arch = NULL;
 
@@ -120,9 +120,9 @@ static clj_value system_getProperty(nanoclj_t * sc, clj_value args) {
   const char * line_separator = "\n";
 #endif
 
-  clj_value r;
+  nanoclj_val_t r;
   if (args.as_uint64 == sc->EMPTY.as_uint64) {
-    clj_value l = sc->EMPTY;
+    nanoclj_val_t l = sc->EMPTY;
     l = cons(sc, mk_string(sc, user_name), l);
     l = cons(sc, mk_string(sc, "user.name"), l);
     l = cons(sc, mk_string(sc, line_separator), l);
@@ -174,70 +174,70 @@ static clj_value system_getProperty(nanoclj_t * sc, clj_value args) {
 
 /* Math */
 
-static clj_value math_sin(nanoclj_t * sc, clj_value args) {
+static nanoclj_val_t math_sin(nanoclj_t * sc, nanoclj_val_t args) {
   return mk_real(sin(to_double(car(args))));
 }
 
-static clj_value math_cos(nanoclj_t * sc, clj_value args) {
+static nanoclj_val_t math_cos(nanoclj_t * sc, nanoclj_val_t args) {
   return mk_real(cos(to_double(car(args))));
 }
 
-static clj_value math_exp(nanoclj_t * sc, clj_value args) {
+static nanoclj_val_t math_exp(nanoclj_t * sc, nanoclj_val_t args) {
   return mk_real(exp(to_double(car(args))));
 }
 
-static clj_value math_log(nanoclj_t * sc, clj_value args) {
+static nanoclj_val_t math_log(nanoclj_t * sc, nanoclj_val_t args) {
   return mk_real(log(to_double(car(args))));
 }
 
-static clj_value math_log10(nanoclj_t * sc, clj_value args) {
+static nanoclj_val_t math_log10(nanoclj_t * sc, nanoclj_val_t args) {
   return mk_real(log10(to_double(car(args))));
 }
 
-static clj_value math_tan(nanoclj_t * sc, clj_value args) {
+static nanoclj_val_t math_tan(nanoclj_t * sc, nanoclj_val_t args) {
   return mk_real(tan(to_double(car(args))));
 }
 
-static clj_value math_asin(nanoclj_t * sc, clj_value args) {
+static nanoclj_val_t math_asin(nanoclj_t * sc, nanoclj_val_t args) {
   return mk_real(asin(to_double(car(args))));
 }
 
-static clj_value math_acos(nanoclj_t * sc, clj_value args) {
+static nanoclj_val_t math_acos(nanoclj_t * sc, nanoclj_val_t args) {
   return mk_real(acos(to_double(car(args))));
 }
 
-static clj_value math_atan(nanoclj_t * sc, clj_value args) {
+static nanoclj_val_t math_atan(nanoclj_t * sc, nanoclj_val_t args) {
   if (cdr(args).as_uint64 != sc->EMPTY.as_uint64) {
-    clj_value x = car(sc->args);
-    clj_value y = cadr(sc->args);
+    nanoclj_val_t x = car(sc->args);
+    nanoclj_val_t y = cadr(sc->args);
     return mk_real(atan2(to_double(x), to_double(y)));
   } else {
-    clj_value x = car(args);
+    nanoclj_val_t x = car(args);
     return mk_real(atan(to_double(x)));
   }
 }
 
-static clj_value math_sqrt(nanoclj_t * sc, clj_value args) {
+static nanoclj_val_t math_sqrt(nanoclj_t * sc, nanoclj_val_t args) {
   return mk_real(sqrt(to_double(car(args))));
 }
 
-static clj_value math_cbrt(nanoclj_t * sc, clj_value args) {
+static nanoclj_val_t math_cbrt(nanoclj_t * sc, nanoclj_val_t args) {
   return mk_real(cbrt(to_double(car(args))));
 }
 
-static clj_value math_pow(nanoclj_t * sc, clj_value args) {
+static nanoclj_val_t math_pow(nanoclj_t * sc, nanoclj_val_t args) {
   return mk_real(pow(to_double(car(sc->args)), to_double(cadr(sc->args))));
 }
 
-static clj_value math_floor(nanoclj_t * sc, clj_value args) {
+static nanoclj_val_t math_floor(nanoclj_t * sc, nanoclj_val_t args) {
   return mk_real(floor(to_double(car(args))));
 }
 
-static clj_value math_ceil(nanoclj_t * sc, clj_value args) {
+static nanoclj_val_t math_ceil(nanoclj_t * sc, nanoclj_val_t args) {
   return mk_real(ceil(to_double(car(args))));
 }
 
-static clj_value math_round(nanoclj_t * sc, clj_value args) {
+static nanoclj_val_t math_round(nanoclj_t * sc, nanoclj_val_t args) {
   return mk_real(round(to_double(car(args))));
 }
 
@@ -273,9 +273,9 @@ static inline bool ipow_overflow(long long base, int_fast8_t exp, long long * re
   return false;
 }
 
-static clj_value numeric_tower_expt(nanoclj_t * sc, clj_value args) {
-  clj_value x = car(sc->args);
-  clj_value y = cadr(sc->args);
+static nanoclj_val_t numeric_tower_expt(nanoclj_t * sc, nanoclj_val_t args) {
+  nanoclj_val_t x = car(sc->args);
+  nanoclj_val_t y = cadr(sc->args);
 
   int tx = prim_type(x), ty = prim_type(y);
 
@@ -326,11 +326,11 @@ static clj_value numeric_tower_expt(nanoclj_t * sc, clj_value args) {
   return mk_real(pow(to_double(x), to_double(y)));
 }
 
-static inline clj_value browse_url(nanoclj_t * sc, clj_value args) {
+static inline nanoclj_val_t browse_url(nanoclj_t * sc, nanoclj_val_t args) {
   const char * url = to_cstr(car(args));
 #ifdef WIN32
   ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
-  return (clj_value)kTRUE;
+  return (nanoclj_val_t)kTRUE;
 #else
   pid_t r = fork();
   if (r == 0) {
@@ -338,12 +338,12 @@ static inline clj_value browse_url(nanoclj_t * sc, clj_value args) {
     execlp(cmd, cmd, url, NULL);
     exit(1);
   } else {
-    return r < 0 ? (clj_value)kFALSE : (clj_value)kTRUE;
+    return r < 0 ? (nanoclj_val_t)kFALSE : (nanoclj_val_t)kTRUE;
   }
 #endif
 }
 
-static inline clj_value shell_sh(nanoclj_t * sc, clj_value args0) {
+static inline nanoclj_val_t shell_sh(nanoclj_t * sc, nanoclj_val_t args0) {
   struct cell * args = decode_pointer(args0);
   size_t n = seq_length(sc, args);
   if (n >= 1) {
@@ -363,7 +363,7 @@ static inline clj_value shell_sh(nanoclj_t * sc, clj_value args0) {
       execvp(cmd, output_args);
       exit(1);
     } else {
-      return r < 0 ? (clj_value)kFALSE : (clj_value)kTRUE;
+      return r < 0 ? (nanoclj_val_t)kFALSE : (nanoclj_val_t)kTRUE;
     }
   } else {
     return mk_nil();
@@ -371,7 +371,7 @@ static inline clj_value shell_sh(nanoclj_t * sc, clj_value args0) {
 #endif
 }
 
-static inline clj_value Image_load(nanoclj_t * sc, clj_value args) {
+static inline nanoclj_val_t Image_load(nanoclj_t * sc, nanoclj_val_t args) {
   const char * filename = to_cstr(car(args));
   
   int w, h, channels;
@@ -380,16 +380,16 @@ static inline clj_value Image_load(nanoclj_t * sc, clj_value args) {
     return mk_nil();
   }
   
-  clj_value image = mk_image(sc, w, h, channels, data);
+  nanoclj_val_t image = mk_image(sc, w, h, channels, data);
   
   stbi_image_free(data);
 
   return image;
 }
 
-static inline clj_value Image_resize(nanoclj_t * sc, clj_value args) {
-  clj_value image00 = car(args);
-  clj_value target_width0 = cadr(args), target_height0 = caddr(args);
+static inline nanoclj_val_t Image_resize(nanoclj_t * sc, nanoclj_val_t args) {
+  nanoclj_val_t image00 = car(args);
+  nanoclj_val_t target_width0 = cadr(args), target_height0 = caddr(args);
   if (!is_image(image00) || !is_number(target_width0) || !is_number(target_height0)) {
     return mk_nil();
   }
@@ -404,7 +404,7 @@ static inline clj_value Image_resize(nanoclj_t * sc, clj_value args) {
   
   stbir_resize_uint8(image->data, image->width, image->height, 0, tmp, target_width, target_height, 0, image->channels);
 
-  clj_value target_image = mk_image(sc, target_width, target_height, image->channels, tmp);
+  nanoclj_val_t target_image = mk_image(sc, target_width, target_height, image->channels, tmp);
 
   sc->free(tmp);
   
@@ -420,9 +420,9 @@ static const char * completion_symbols[MAX_COMPLETION_SYMBOLS];
  
 static inline void completion(const char *input, linenoiseCompletions *lc) {
   if (!num_completion_symbols) {
-    clj_value sym = nanoclj_eval_string(linenoise_sc, "(ns-interns *ns*)");
+    nanoclj_val_t sym = nanoclj_eval_string(linenoise_sc, "(ns-interns *ns*)");
     for ( ; sym.as_uint64 != linenoise_sc->EMPTY.as_uint64 && num_completion_symbols < MAX_COMPLETION_SYMBOLS; sym = cdr(sym)) {
-      clj_value v = car(sym);
+      nanoclj_val_t v = car(sym);
       if (is_symbol(v)) {
 	completion_symbols[num_completion_symbols++] = symname(v);
       } else if (is_mapentry(v)) {
@@ -503,7 +503,7 @@ static inline void free_hints(void * ptr) {
   linenoise_sc->free(ptr);
 }
 
-static inline clj_value linenoise_readline(nanoclj_t * sc, clj_value args) {
+static inline nanoclj_val_t linenoise_readline(nanoclj_t * sc, nanoclj_val_t args) {
   if (!linenoise_sc) {
     linenoise_sc = sc;
   
@@ -519,7 +519,7 @@ static inline clj_value linenoise_readline(nanoclj_t * sc, clj_value args) {
   linenoiseHistoryAdd(line);
   linenoiseHistorySave(".nanoclj_history");
 
-  clj_value r;
+  nanoclj_val_t r;
   char * missing_parens = complete_parens(line);
   if (!missing_parens) {
     r = mk_string(sc, line);
@@ -539,55 +539,55 @@ static inline clj_value linenoise_readline(nanoclj_t * sc, clj_value args) {
 #endif
 
 static inline void register_functions(nanoclj_t * sc) {
-  clj_value Thread = def_namespace(sc, "Thread");
-  clj_value System = def_namespace(sc, "System");
-  clj_value Math = def_namespace(sc, "Math");
-  clj_value numeric_tower = def_namespace(sc, "clojure.math.numeric-tower");
-  clj_value clojure_java_browse = def_namespace(sc, "clojure.java.browse");
-  clj_value clojure_java_shell = def_namespace(sc, "clojure.java.shell");
-  clj_value Image = def_namespace(sc, "Image");
+  nanoclj_val_t Thread = def_namespace(sc, "Thread");
+  nanoclj_val_t System = def_namespace(sc, "System");
+  nanoclj_val_t Math = def_namespace(sc, "Math");
+  nanoclj_val_t numeric_tower = def_namespace(sc, "clojure.math.numeric-tower");
+  nanoclj_val_t clojure_java_browse = def_namespace(sc, "clojure.java.browse");
+  nanoclj_val_t clojure_java_shell = def_namespace(sc, "clojure.java.shell");
+  nanoclj_val_t Image = def_namespace(sc, "Image");
   
-  nanoclj_define(sc, Thread, def_symbol(sc, "sleep"), mk_foreign_func_with_arity(sc, thread_sleep, 1, 1));
+  nanoclj_intern(sc, Thread, def_symbol(sc, "sleep"), mk_foreign_func_with_arity(sc, thread_sleep, 1, 1));
   
-  nanoclj_define(sc, System, def_symbol(sc, "exit"), mk_foreign_func_with_arity(sc, system_exit, 1, 1));
-  nanoclj_define(sc, System, def_symbol(sc, "currentTimeMillis"), mk_foreign_func_with_arity(sc, system_currentTimeMillis, 0, 0));
-  nanoclj_define(sc, System, def_symbol(sc, "nanoTime"), mk_foreign_func_with_arity(sc, system_nanoTime, 0, 0));
-  nanoclj_define(sc, System, def_symbol(sc, "gc"), mk_foreign_func_with_arity(sc, system_gc, 0, 0));
-  nanoclj_define(sc, System, def_symbol(sc, "getenv"), mk_foreign_func_with_arity(sc, system_getenv, 0, 1));
-  nanoclj_define(sc, System, def_symbol(sc, "getProperty"), mk_foreign_func_with_arity(sc, system_getProperty, 0, 1));
+  nanoclj_intern(sc, System, def_symbol(sc, "exit"), mk_foreign_func_with_arity(sc, system_exit, 1, 1));
+  nanoclj_intern(sc, System, def_symbol(sc, "currentTimeMillis"), mk_foreign_func_with_arity(sc, system_currentTimeMillis, 0, 0));
+  nanoclj_intern(sc, System, def_symbol(sc, "nanoTime"), mk_foreign_func_with_arity(sc, system_nanoTime, 0, 0));
+  nanoclj_intern(sc, System, def_symbol(sc, "gc"), mk_foreign_func_with_arity(sc, system_gc, 0, 0));
+  nanoclj_intern(sc, System, def_symbol(sc, "getenv"), mk_foreign_func_with_arity(sc, system_getenv, 0, 1));
+  nanoclj_intern(sc, System, def_symbol(sc, "getProperty"), mk_foreign_func_with_arity(sc, system_getProperty, 0, 1));
   
-  nanoclj_define(sc, Math, def_symbol(sc, "sin"), mk_foreign_func_with_arity(sc, math_sin, 1, 1));
-  nanoclj_define(sc, Math, def_symbol(sc, "cos"), mk_foreign_func_with_arity(sc, math_cos, 1, 1));
-  nanoclj_define(sc, Math, def_symbol(sc, "exp"), mk_foreign_func_with_arity(sc, math_exp, 1, 1));
-  nanoclj_define(sc, Math, def_symbol(sc, "log"), mk_foreign_func_with_arity(sc, math_log, 1, 1));
-  nanoclj_define(sc, Math, def_symbol(sc, "log10"), mk_foreign_func_with_arity(sc, math_log10, 1, 1));
-  nanoclj_define(sc, Math, def_symbol(sc, "tan"), mk_foreign_func_with_arity(sc, math_tan, 1, 1));
-  nanoclj_define(sc, Math, def_symbol(sc, "asin"), mk_foreign_func_with_arity(sc, math_asin, 1, 1));
-  nanoclj_define(sc, Math, def_symbol(sc, "acos"), mk_foreign_func_with_arity(sc, math_acos, 1, 1));
-  nanoclj_define(sc, Math, def_symbol(sc, "atan"), mk_foreign_func_with_arity(sc, math_atan, 1, 2));
-  nanoclj_define(sc, Math, def_symbol(sc, "sqrt"), mk_foreign_func_with_arity(sc, math_sqrt, 1, 1));
-  nanoclj_define(sc, Math, def_symbol(sc, "cbrt"), mk_foreign_func_with_arity(sc, math_cbrt, 1, 1));
-  nanoclj_define(sc, Math, def_symbol(sc, "pow"), mk_foreign_func_with_arity(sc, math_pow, 2, 2));
-  nanoclj_define(sc, Math, def_symbol(sc, "floor"), mk_foreign_func_with_arity(sc, math_floor, 1, 1));
-  nanoclj_define(sc, Math, def_symbol(sc, "ceil"), mk_foreign_func_with_arity(sc, math_ceil, 1, 1));
-  nanoclj_define(sc, Math, def_symbol(sc, "round"), mk_foreign_func_with_arity(sc, math_round, 1, 1));
+  nanoclj_intern(sc, Math, def_symbol(sc, "sin"), mk_foreign_func_with_arity(sc, math_sin, 1, 1));
+  nanoclj_intern(sc, Math, def_symbol(sc, "cos"), mk_foreign_func_with_arity(sc, math_cos, 1, 1));
+  nanoclj_intern(sc, Math, def_symbol(sc, "exp"), mk_foreign_func_with_arity(sc, math_exp, 1, 1));
+  nanoclj_intern(sc, Math, def_symbol(sc, "log"), mk_foreign_func_with_arity(sc, math_log, 1, 1));
+  nanoclj_intern(sc, Math, def_symbol(sc, "log10"), mk_foreign_func_with_arity(sc, math_log10, 1, 1));
+  nanoclj_intern(sc, Math, def_symbol(sc, "tan"), mk_foreign_func_with_arity(sc, math_tan, 1, 1));
+  nanoclj_intern(sc, Math, def_symbol(sc, "asin"), mk_foreign_func_with_arity(sc, math_asin, 1, 1));
+  nanoclj_intern(sc, Math, def_symbol(sc, "acos"), mk_foreign_func_with_arity(sc, math_acos, 1, 1));
+  nanoclj_intern(sc, Math, def_symbol(sc, "atan"), mk_foreign_func_with_arity(sc, math_atan, 1, 2));
+  nanoclj_intern(sc, Math, def_symbol(sc, "sqrt"), mk_foreign_func_with_arity(sc, math_sqrt, 1, 1));
+  nanoclj_intern(sc, Math, def_symbol(sc, "cbrt"), mk_foreign_func_with_arity(sc, math_cbrt, 1, 1));
+  nanoclj_intern(sc, Math, def_symbol(sc, "pow"), mk_foreign_func_with_arity(sc, math_pow, 2, 2));
+  nanoclj_intern(sc, Math, def_symbol(sc, "floor"), mk_foreign_func_with_arity(sc, math_floor, 1, 1));
+  nanoclj_intern(sc, Math, def_symbol(sc, "ceil"), mk_foreign_func_with_arity(sc, math_ceil, 1, 1));
+  nanoclj_intern(sc, Math, def_symbol(sc, "round"), mk_foreign_func_with_arity(sc, math_round, 1, 1));
 
-  nanoclj_define(sc, Math, def_symbol(sc, "E"), mk_real(M_E));
-  nanoclj_define(sc, Math, def_symbol(sc, "PI"), mk_real(M_PI));
-  nanoclj_define(sc, Math, def_symbol(sc, "SQRT2"), mk_real(M_SQRT2));
+  nanoclj_intern(sc, Math, def_symbol(sc, "E"), mk_real(M_E));
+  nanoclj_intern(sc, Math, def_symbol(sc, "PI"), mk_real(M_PI));
+  nanoclj_intern(sc, Math, def_symbol(sc, "SQRT2"), mk_real(M_SQRT2));
 
-  nanoclj_define(sc, numeric_tower, def_symbol(sc, "expt"), mk_foreign_func_with_arity(sc, numeric_tower_expt, 2, 2));
+  nanoclj_intern(sc, numeric_tower, def_symbol(sc, "expt"), mk_foreign_func_with_arity(sc, numeric_tower_expt, 2, 2));
 
-  nanoclj_define(sc, clojure_java_browse, def_symbol(sc, "browse-url"), mk_foreign_func_with_arity(sc, browse_url, 1, 1));
+  nanoclj_intern(sc, clojure_java_browse, def_symbol(sc, "browse-url"), mk_foreign_func_with_arity(sc, browse_url, 1, 1));
 
-  nanoclj_define(sc, clojure_java_shell, def_symbol(sc, "sh"), mk_foreign_func(sc, shell_sh));
+  nanoclj_intern(sc, clojure_java_shell, def_symbol(sc, "sh"), mk_foreign_func(sc, shell_sh));
 
-  nanoclj_define(sc, Image, def_symbol(sc, "load"), mk_foreign_func_with_arity(sc, Image_load, 1, 1));
-  nanoclj_define(sc, Image, def_symbol(sc, "resize"), mk_foreign_func_with_arity(sc, Image_resize, 3, 3));
+  nanoclj_intern(sc, Image, def_symbol(sc, "load"), mk_foreign_func_with_arity(sc, Image_load, 1, 1));
+  nanoclj_intern(sc, Image, def_symbol(sc, "resize"), mk_foreign_func_with_arity(sc, Image_resize, 3, 3));
 
 #ifdef NANOCLJ_USE_LINENOISE
-  clj_value linenoise = def_namespace(sc, "linenoise");
-  nanoclj_define(sc, linenoise, def_symbol(sc, "read-line"), mk_foreign_func_with_arity(sc, linenoise_readline, 1, 1));
+  nanoclj_val_t linenoise = def_namespace(sc, "linenoise");
+  nanoclj_intern(sc, linenoise, def_symbol(sc, "read-line"), mk_foreign_func_with_arity(sc, linenoise_readline, 1, 1));
 #endif  
 }
 

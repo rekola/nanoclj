@@ -167,7 +167,7 @@ typedef struct strview_s {
 struct symbol {
   int_fast16_t syntax;
   const char * name;
-  clj_value metadata;
+  nanoclj_val_t metadata;
 };
 
 /* ADJ is enough slack to align cells in a TYPE_BITS-bit boundary */
@@ -184,7 +184,7 @@ struct symbol {
 static int cell_segsize = CELL_SEGSIZE;
 static int cell_nsegment = CELL_NSEGMENT;
 
-static int_fast16_t prim_type(clj_value value) {
+static int_fast16_t prim_type(nanoclj_val_t value) {
   uint64_t signature = value.as_uint64 & MASK_SIGNATURE;
   
   /* Short encoded types */
@@ -202,15 +202,15 @@ static int_fast16_t prim_type(clj_value value) {
   return T_REAL;
 }
 
-static inline bool is_real(clj_value value) {
+static inline bool is_real(nanoclj_val_t value) {
   return prim_type(value) == T_REAL;
 }
 
-static inline bool is_cell(clj_value value) {
+static inline bool is_cell(nanoclj_val_t value) {
   return prim_type(value) == T_CELL;
 }
 
-static inline bool is_primitive(clj_value value) {
+static inline bool is_primitive(nanoclj_val_t value) {
   return !is_cell(value);
 }
 
@@ -219,28 +219,28 @@ static inline int_fast16_t _type(struct cell * a) {
   return a->_flag & T_MASKTYPE;
 }
 
-static inline bool is_symbol(clj_value p) {
+static inline bool is_symbol(nanoclj_val_t p) {
   return prim_type(p) == T_SYMBOL;
 }
 
-static inline bool is_keyword(clj_value p) {
+static inline bool is_keyword(nanoclj_val_t p) {
   return prim_type(p) == T_KEYWORD;
 }
 
-static inline struct cell * decode_pointer(clj_value value) {
+static inline struct cell * decode_pointer(nanoclj_val_t value) {
   return (struct cell *)(value.as_uint64 & MASK_PAYLOAD_PTR);
 }
 
-static inline struct symbol * decode_symbol(clj_value value) {
+static inline struct symbol * decode_symbol(nanoclj_val_t value) {
   return (struct symbol *)(value.as_uint64 & MASK_PAYLOAD_PTR);
 }
 
-static inline int_fast16_t expand_type(clj_value value, int_fast16_t primitive_type) {
+static inline int_fast16_t expand_type(nanoclj_val_t value, int_fast16_t primitive_type) {
   if (primitive_type == T_CELL) return _type(decode_pointer(value));
   return primitive_type;
 }
 
-static inline int_fast16_t type(clj_value value) {
+static inline int_fast16_t type(nanoclj_val_t value) {
   int_fast16_t type = prim_type(value);
   if (type == T_CELL) {
     struct cell * c = decode_pointer(value);
@@ -250,43 +250,43 @@ static inline int_fast16_t type(clj_value value) {
   }
 }
 
-static inline bool is_pair(clj_value value) {
+static inline bool is_pair(nanoclj_val_t value) {
   if (!is_cell(value)) return false;
   struct cell * c = decode_pointer(value);
   uint64_t t = _type(c);
   return t == T_PAIR || t == T_LIST;
 }
 
-static inline clj_value mk_pointer(struct cell * ptr) {
-  clj_value v;
+static inline nanoclj_val_t mk_pointer(struct cell * ptr) {
+  nanoclj_val_t v;
   v.as_uint64 = SIGNATURE_POINTER | (uint64_t)ptr;
   return v;
 }
 
-static inline clj_value mk_keyword(const char * ptr) {
-  clj_value v;
+static inline nanoclj_val_t mk_keyword(const char * ptr) {
+  nanoclj_val_t v;
   v.as_uint64 = SIGNATURE_KEYWORD | (uint64_t)ptr;
   return v;
 }
 
-static inline clj_value mk_nil() {
-  clj_value v;
+static inline nanoclj_val_t mk_nil() {
+  nanoclj_val_t v;
   v.as_uint64 = kNIL;
   return v;
 }
 
-static inline clj_value mk_symbol(nanoclj_t * sc, const char * name, int_fast16_t syntax) {
+static inline nanoclj_val_t mk_symbol(nanoclj_t * sc, const char * name, int_fast16_t syntax) {
   struct symbol * s = sc->malloc(sizeof(struct symbol));
   s->name = name;
   s->syntax = syntax;
   s->metadata = mk_nil();
   
-  clj_value v;
+  nanoclj_val_t v;
   v.as_uint64 = SIGNATURE_SYMBOL | (uint64_t)s;
   return v;
 }
 
-static inline bool is_nil(clj_value v) {
+static inline bool is_nil(nanoclj_val_t v) {
   return v.as_uint64 == kNIL;
 }
 
@@ -348,46 +348,46 @@ static inline bool is_nil(clj_value v) {
 #define bool_unchecked(p)	  decode_integer(p)
 #define procnum_unchecked(p)      decode_integer(p)
 
-static inline int32_t decode_integer(clj_value value) {
+static inline int32_t decode_integer(nanoclj_val_t value) {
   return (int32_t)value.as_uint64 & MASK_PAYLOAD_INT;
 }
 
-static inline bool is_boolean(clj_value p) {
+static inline bool is_boolean(nanoclj_val_t p) {
   return (prim_type(p) == T_BOOLEAN);
 }
 
-static inline bool is_string(clj_value p) {
+static inline bool is_string(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
   struct cell * c = decode_pointer(p);
   return _type(c) == T_STRING;
 }
 
-static inline bool is_char_array(clj_value p) {
+static inline bool is_char_array(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
   struct cell * c = decode_pointer(p);
   return _type(c) == T_CHAR_ARRAY;
 }
-static inline bool is_vector(clj_value p) {
+static inline bool is_vector(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
   struct cell * c = decode_pointer(p);
   return _type(c) == T_VECTOR;
 }
-static inline bool is_arraymap(clj_value p) {
+static inline bool is_arraymap(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
   struct cell * c = decode_pointer(p);
   return _type(c) == T_ARRAYMAP;
 }
-static inline bool is_set(clj_value p) {
+static inline bool is_set(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
   struct cell * c = decode_pointer(p);
   return _type(c) == T_SORTED_SET;
 }
-static inline bool is_seq(clj_value p) {
+static inline bool is_seq(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
   struct cell * c = decode_pointer(p);
   return _type(c) == T_SEQ;
 }
-static inline bool is_image(clj_value p) {
+static inline bool is_image(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
   struct cell * c = decode_pointer(p);
   return _type(c) == T_IMAGE;  
@@ -406,21 +406,21 @@ static inline bool is_coll_type(int_fast16_t type_id) {
   }
   return false;
 }
-static inline bool is_coll(clj_value p) {
+static inline bool is_coll(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
   struct cell * c = decode_pointer(p);
   return is_coll_type(_type(c));  
 }
 
-static inline clj_value vector_elem(struct cell * vec, size_t ielem) {
+static inline nanoclj_val_t vector_elem(struct cell * vec, size_t ielem) {
   return _data_unchecked(vec)[ielem];
 }
 
-static inline void set_vector_elem(struct cell * vec, size_t ielem, clj_value a) {
+static inline void set_vector_elem(struct cell * vec, size_t ielem, nanoclj_val_t a) {
   _data_unchecked(vec)[ielem] = a;
 }
 
-static void fill_vector(struct cell * vec, clj_value elem) {
+static void fill_vector(struct cell * vec, nanoclj_val_t elem) {
   size_t num = _size_unchecked(vec);
   for (size_t i = 0; i < num; i++) {
     set_vector_elem(vec, i, elem);
@@ -439,11 +439,11 @@ static inline bool is_integral_type(int_fast16_t type) {
   return false;
 }
 
-static inline bool is_type(clj_value p) {
+static inline bool is_type(nanoclj_val_t p) {
   return prim_type(p) == T_TYPE;
 }
 
-static inline bool is_number(clj_value p) {
+static inline bool is_number(nanoclj_val_t p) {
   switch (type(p)) {
   case T_INTEGER:
   case T_LONG:
@@ -453,7 +453,7 @@ static inline bool is_number(clj_value p) {
     return false;
   }
 }
-static inline bool is_integer(clj_value p) {
+static inline bool is_integer(nanoclj_val_t p) {
   switch (type(p)) {
   case T_INTEGER:
   case T_LONG:
@@ -463,11 +463,11 @@ static inline bool is_integer(clj_value p) {
   }
 }
 
-static inline bool is_character(clj_value p) {
+static inline bool is_character(nanoclj_val_t p) {
   return prim_type(p) == T_CHARACTER;
 }
 
-static inline strview_t to_strview(clj_value v) {
+static inline strview_t to_strview(nanoclj_val_t v) {
   if (is_cell(v)) {
     struct cell * s = decode_pointer(v);   
     switch (_type(s))
@@ -490,7 +490,7 @@ static inline char *mutable_strvalue(struct cell * s) {
     return _strvalue_unchecked(s);
   }
 }
-static inline const char *strvalue(clj_value p) {
+static inline const char *strvalue(nanoclj_val_t p) {
   if (is_cell(p)) {
     struct cell * c = decode_pointer(p);
     if (c && _type(c) == T_STRING) {
@@ -500,7 +500,7 @@ static inline const char *strvalue(clj_value p) {
   return "";
 }
 
-static inline size_t strlength(clj_value p) {
+static inline size_t strlength(nanoclj_val_t p) {
   if (is_small(p)) {
     return smallstrlength_unchecked(p);
   } else {
@@ -516,7 +516,7 @@ static inline size_t _strlength(struct cell * s) {
   }
 }
 
-static inline long long to_long(clj_value p) {
+static inline long long to_long(nanoclj_val_t p) {
   switch (prim_type(p)) {
   case T_INTEGER:
   case T_PROC:
@@ -544,7 +544,7 @@ static inline long long to_long(clj_value p) {
   return 0;
 }
 
-static inline int32_t to_int(clj_value p) {
+static inline int32_t to_int(nanoclj_val_t p) {
   switch (prim_type(p)) {
   case T_CHARACTER:
   case T_PROC:
@@ -571,7 +571,7 @@ static inline int32_t to_int(clj_value p) {
   return 0;
 }
 
-static inline double to_double(clj_value p) {
+static inline double to_double(nanoclj_val_t p) {
   switch (prim_type(p)) {
   case T_INTEGER:
   case T_PROC:
@@ -593,21 +593,21 @@ static inline double to_double(clj_value p) {
 }
 
 #if 0
-inline int_fast16_t typevalue(clj_value p) {
+inline int_fast16_t typevalue(nanoclj_val_t p) {
   return ivalue_unchecked(p);
 }
 #endif
 
-static inline bool is_eof(clj_value p) {
+static inline bool is_eof(nanoclj_val_t p) {
   return is_character(p) && char_unchecked(p) == EOF;
 }
 
-static inline bool is_reader(clj_value p) {
+static inline bool is_reader(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
   struct cell * c = decode_pointer(p);
   return _type(c) == T_READER;
 }
-static inline bool is_writer(clj_value p) {
+static inline bool is_writer(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
   struct cell * c = decode_pointer(p);
   return _type(c) == T_WRITER;
@@ -616,60 +616,60 @@ static inline bool is_binary(port * pt) {
   return pt->kind & port_binary;
 }
 
-static inline bool is_mapentry(clj_value p) {
+static inline bool is_mapentry(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
   struct cell * c = decode_pointer(p);
   return _type(c) == T_MAPENTRY;
 }
 
-static inline const char *symname(clj_value p) {
+static inline const char *symname(nanoclj_val_t p) {
   return decode_symbol(p)->name;
 }
 
-static inline const char *keywordname(clj_value p) {
+static inline const char *keywordname(nanoclj_val_t p) {
   return (const char *)decode_pointer(p);
 }
 
-static inline bool is_proc(clj_value p) {
+static inline bool is_proc(nanoclj_val_t p) {
   return prim_type(p) == T_PROC;
 }
-static inline bool is_foreign_function(clj_value p) {
+static inline bool is_foreign_function(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
   struct cell * c = decode_pointer(p);
   return _type(c) == T_FOREIGN_FUNCTION;
 }
 
-static inline bool is_foreign_object(clj_value p) {
+static inline bool is_foreign_object(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
   struct cell * c = decode_pointer(p);
   return _type(c) == T_FOREIGN_OBJECT;
 }
 
-static inline bool is_closure(clj_value p) {
+static inline bool is_closure(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
   struct cell * c = decode_pointer(p);
   return _type(c) == T_CLOSURE;
 }
-static inline bool is_macro(clj_value p) {
+static inline bool is_macro(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
   struct cell * c = decode_pointer(p);
   return _type(c) == T_MACRO;
 }
-static inline clj_value closure_code(struct cell * p) {
+static inline nanoclj_val_t closure_code(struct cell * p) {
   return _car(p);
 }
-static inline clj_value closure_env(struct cell * p) {
+static inline nanoclj_val_t closure_env(struct cell * p) {
   return _cdr(p);
 }
 
 /* To do: promise should be forced ONCE only */
-static inline bool is_delay(clj_value p) {
+static inline bool is_delay(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
   struct cell * c = decode_pointer(p);
   return _type(c) == T_DELAY;
 }
 
-static inline bool is_environment(clj_value p) {
+static inline bool is_environment(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
   struct cell * c = decode_pointer(p);
   return _type(c) == T_ENVIRONMENT;
@@ -678,11 +678,11 @@ static inline bool is_environment(clj_value p) {
 /* true or false value functions */
 /* () is #t in R5RS, but nil is false in clojure */
 
-static inline bool is_false(clj_value p) {
+static inline bool is_false(nanoclj_val_t p) {
   return p.as_uint64 == kFALSE || p.as_uint64 == kNIL;
 }
 
-static inline bool is_true(clj_value p) {
+static inline bool is_true(nanoclj_val_t p) {
   return !is_false(p);
 }
 
@@ -703,12 +703,12 @@ static inline bool is_true(clj_value p) {
 
 #define IS_ASCII(C) (((C) & ~0x7F) == 0)
 
-static void gc(nanoclj_t * sc, clj_value a, clj_value b);
-static void putstr(nanoclj_t * sc, const char *s, clj_value port);
+static void gc(nanoclj_t * sc, nanoclj_val_t a, nanoclj_val_t b);
+static void putstr(nanoclj_t * sc, const char *s, nanoclj_val_t port);
 static void dump_stack_mark(nanoclj_t *);
-static clj_value get_err_port(nanoclj_t * sc);
-static clj_value get_out_port(nanoclj_t * sc);
-static clj_value get_in_port(nanoclj_t * sc);
+static nanoclj_val_t get_err_port(nanoclj_t * sc);
+static nanoclj_val_t get_out_port(nanoclj_t * sc);
+static nanoclj_val_t get_in_port(nanoclj_t * sc);
 
 static inline const char* get_version() {
   return VERSION;
@@ -752,7 +752,7 @@ static inline const char * typename_from_id(int_fast16_t id) {
   return "";
 }
 
-static inline int_fast16_t syntaxnum(clj_value p) {
+static inline int_fast16_t syntaxnum(nanoclj_val_t p) {
   if (is_symbol(p)) {
     struct symbol * s = decode_symbol(p);
     return s->syntax;
@@ -782,9 +782,9 @@ static inline int_fast32_t utf8_decode(const char *p) {
 
 /* allocate new cell segment */
 static inline int alloc_cellseg(nanoclj_t * sc, int n) {
-  clj_value newp;
-  clj_value last;
-  clj_value p;
+  nanoclj_val_t newp;
+  nanoclj_val_t last;
+  nanoclj_val_t p;
   char *cp;
   long i;
   int k;
@@ -843,7 +843,7 @@ static inline int alloc_cellseg(nanoclj_t * sc, int n) {
 
 /* get new cell.  parameter a, b is marked by gc. */
 
-static inline struct cell * get_cell_x(nanoclj_t * sc, clj_value a, clj_value b) {
+static inline struct cell * get_cell_x(nanoclj_t * sc, nanoclj_val_t a, nanoclj_val_t b) {
   if (sc->no_memory) {
     return &(sc->_sink);
   }
@@ -869,7 +869,7 @@ static inline struct cell * get_cell_x(nanoclj_t * sc, clj_value a, clj_value b)
 /* To retain recent allocs before interpreter knows about them -
    Tehom */
 
-static inline void retain(nanoclj_t * sc, clj_value recent, clj_value extra) {
+static inline void retain(nanoclj_t * sc, nanoclj_val_t recent, nanoclj_val_t extra) {
   struct cell * holder = get_cell_x(sc, recent, extra);
   _typeflag(holder) = T_PAIR;
   _car(holder) = recent;
@@ -878,7 +878,7 @@ static inline void retain(nanoclj_t * sc, clj_value recent, clj_value extra) {
   car(sc->sink) = mk_pointer(holder);
 }
 
-static inline struct cell * get_cell(nanoclj_t * sc, int flags, clj_value a, clj_value b, clj_value meta) {
+static inline struct cell * get_cell(nanoclj_t * sc, int flags, nanoclj_val_t a, nanoclj_val_t b, nanoclj_val_t meta) {
   struct cell * cell = get_cell_x(sc, a, b);
 
   /* For right now, include "a" and "b" in "cell" so that gc doesn't
@@ -892,7 +892,7 @@ static inline struct cell * get_cell(nanoclj_t * sc, int flags, clj_value a, clj
   return cell;
 }
 
-static inline clj_value mk_reader(nanoclj_t * sc, port * p) {
+static inline nanoclj_val_t mk_reader(nanoclj_t * sc, port * p) {
   struct cell * x = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
 
   _typeflag(x) = T_READER | T_GC_ATOM;
@@ -902,7 +902,7 @@ static inline clj_value mk_reader(nanoclj_t * sc, port * p) {
   return mk_pointer(x);
 }
 
-static inline clj_value mk_writer(nanoclj_t * sc, port * p) {
+static inline nanoclj_val_t mk_writer(nanoclj_t * sc, port * p) {
   struct cell * x = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
 
   _typeflag(x) = T_WRITER | T_GC_ATOM;
@@ -912,7 +912,7 @@ static inline clj_value mk_writer(nanoclj_t * sc, port * p) {
   return mk_pointer(x);
 }
 
-static inline clj_value mk_foreign_func(nanoclj_t * sc, foreign_func f) {
+static inline nanoclj_val_t mk_foreign_func(nanoclj_t * sc, foreign_func f) {
   struct cell * x = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
 
   _typeflag(x) = T_FOREIGN_FUNCTION | T_GC_ATOM;
@@ -924,7 +924,7 @@ static inline clj_value mk_foreign_func(nanoclj_t * sc, foreign_func f) {
   return mk_pointer(x);
 }
 
-static inline clj_value mk_foreign_object(nanoclj_t * sc, void * o) {
+static inline nanoclj_val_t mk_foreign_object(nanoclj_t * sc, void * o) {
   struct cell * x = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
 
   _typeflag(x) = T_FOREIGN_OBJECT | T_GC_ATOM;
@@ -936,7 +936,7 @@ static inline clj_value mk_foreign_object(nanoclj_t * sc, void * o) {
   return mk_pointer(x);
 }
 
-static inline clj_value mk_foreign_func_with_arity(nanoclj_t * sc, foreign_func f, int min_arity, int max_arity) {
+static inline nanoclj_val_t mk_foreign_func_with_arity(nanoclj_t * sc, foreign_func f, int min_arity, int max_arity) {
   struct cell * x = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
 
   _typeflag(x) = T_FOREIGN_FUNCTION | T_GC_ATOM;
@@ -948,38 +948,38 @@ static inline clj_value mk_foreign_func_with_arity(nanoclj_t * sc, foreign_func 
   return mk_pointer(x);
 }
 
-static inline clj_value mk_character(int c) {
-  clj_value v;
+static inline nanoclj_val_t mk_character(int c) {
+  nanoclj_val_t v;
   v.as_uint64 = SIGNATURE_CHAR | (uint32_t)c;
   return v;
 }
 
-static inline clj_value mk_boolean(bool b) {
-  clj_value v;
+static inline nanoclj_val_t mk_boolean(bool b) {
+  nanoclj_val_t v;
   v.as_uint64 = SIGNATURE_BOOLEAN | (b ? (uint32_t)1 : (uint32_t)0);
   return v;
 }
 
-static inline clj_value mk_int(int num) {
-  clj_value v;
+static inline nanoclj_val_t mk_int(int num) {
+  nanoclj_val_t v;
   v.as_uint64 = SIGNATURE_INTEGER | (uint32_t)num;
   return v;
 }
 
-static inline clj_value mk_type(int t) {
-  clj_value v;
+static inline nanoclj_val_t mk_type(int t) {
+  nanoclj_val_t v;
   v.as_uint64 = SIGNATURE_TYPE | (uint32_t)t;
   return v;
 }
 
-static inline clj_value mk_proc(enum nanoclj_opcodes op) {
-  clj_value v;
+static inline nanoclj_val_t mk_proc(enum nanoclj_opcodes op) {
+  nanoclj_val_t v;
   v.as_uint64 = SIGNATURE_PROC | (uint32_t)op;
   return v;
 }
 
-static inline clj_value mk_real(double n) {
-  clj_value v;
+static inline nanoclj_val_t mk_real(double n) {
+  nanoclj_val_t v;
   if (isnan(n)) {
     /* Canonize all kinds of NaNs such as -NaN to ##NaN */
     v.as_double = NAN;
@@ -989,7 +989,7 @@ static inline clj_value mk_real(double n) {
   return v;
 }
 
-static inline clj_value mk_long(nanoclj_t * sc, long long num) {
+static inline nanoclj_val_t mk_long(nanoclj_t * sc, long long num) {
   struct cell * x = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
   _typeflag(x) = T_LONG | T_GC_ATOM;
   _lvalue_unchecked(x) = num;
@@ -998,7 +998,7 @@ static inline clj_value mk_long(nanoclj_t * sc, long long num) {
 }
 
 /* get number atom (integer) */
-static inline clj_value mk_integer(nanoclj_t * sc, long long num) {
+static inline nanoclj_val_t mk_integer(nanoclj_t * sc, long long num) {
   if (num >= -2147483648LL && num <= 2147483647LL) {
     return mk_int(num);
   } else {
@@ -1006,7 +1006,7 @@ static inline clj_value mk_integer(nanoclj_t * sc, long long num) {
   }
 }
 
-static inline clj_value mk_image(nanoclj_t * sc, int32_t width, int32_t height,
+static inline nanoclj_val_t mk_image(nanoclj_t * sc, int32_t width, int32_t height,
 				 int32_t channels, unsigned char * data) {
   struct cell * x = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
   clj_image * image = (clj_image*)malloc(sizeof(clj_image));
@@ -1057,7 +1057,7 @@ static inline long long normalize(long long num, long long den, long long * outp
   }
 }
 
-static inline long long get_ratio(clj_value n, long long * den) {
+static inline long long get_ratio(nanoclj_val_t n, long long * den) {
   switch (prim_type(n)) {
   case T_INTEGER:
     *den = 1;
@@ -1078,7 +1078,7 @@ static inline long long get_ratio(clj_value n, long long * den) {
   return 0;
 }
 
-static inline clj_value mk_ratio(nanoclj_t * sc, clj_value num, clj_value den) {  
+static inline nanoclj_val_t mk_ratio(nanoclj_t * sc, nanoclj_val_t num, nanoclj_val_t den) {  
   struct cell * x = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
   _typeflag(x) = T_RATIO | T_GC_ATOM;
   _car(x) = num;
@@ -1088,15 +1088,15 @@ static inline clj_value mk_ratio(nanoclj_t * sc, clj_value num, clj_value den) {
   return mk_pointer(x);
 }
 
-static inline clj_value mk_ratio_long(nanoclj_t * sc, long long num, long long den) {
+static inline nanoclj_val_t mk_ratio_long(nanoclj_t * sc, long long num, long long den) {
   return mk_ratio(sc, mk_integer(sc, num), mk_integer(sc, den));
 }
 
-static inline uint64_t get_mantissa(clj_value a) {
+static inline uint64_t get_mantissa(nanoclj_val_t a) {
   return (1ULL << 52) + (a.as_uint64 & 0xFFFFFFFFFFFFFULL);
 }
 
-static inline int_fast16_t get_exponent(clj_value a) {
+static inline int_fast16_t get_exponent(nanoclj_val_t a) {
   return ((a.as_uint64 & (0x7FFULL << 52)) >> 52) - 1023;
 }
 
@@ -1110,7 +1110,7 @@ static inline int_fast8_t number_of_trailing_zeros(uint64_t a) {
 }
 
 /* Creates an exact rational representation of a (normalized) double (or overflows) */
-static inline clj_value mk_ratio_from_double(nanoclj_t * sc, clj_value a) {
+static inline nanoclj_val_t mk_ratio_from_double(nanoclj_t * sc, nanoclj_val_t a) {
   if (isnan(a.as_double)) {
     return mk_ratio_long(sc, 0, 0);
   } else if (!isfinite(a.as_double)) {
@@ -1146,7 +1146,7 @@ static inline char *store_string(nanoclj_t * sc, int len, const char *str) {
   return (q);
 }
 
-static inline clj_value mk_counted_string(nanoclj_t * sc, const char *str, size_t len) {
+static inline nanoclj_val_t mk_counted_string(nanoclj_t * sc, const char *str, size_t len) {
   struct cell * x = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
   _metadata_unchecked(x) = mk_nil();
 
@@ -1167,7 +1167,7 @@ static inline clj_value mk_counted_string(nanoclj_t * sc, const char *str, size_
 }
 
 /* get new string */
-static inline clj_value mk_string(nanoclj_t * sc, const char *str) {
+static inline nanoclj_val_t mk_string(nanoclj_t * sc, const char *str) {
   if (str) {
     return mk_counted_string(sc, str, strlen(str));
   } else {
@@ -1248,13 +1248,13 @@ static inline void backchar(int c, port * pt) {
 /* Medium level cell allocation */
 
 /* get new cons cell */
-static inline clj_value cons(nanoclj_t * sc, clj_value a, clj_value b) {
+static inline nanoclj_val_t cons(nanoclj_t * sc, nanoclj_val_t a, nanoclj_val_t b) {
   int t = b.as_uint64 == sc->EMPTY.as_uint64 || type(b) == T_LIST ? T_LIST : T_PAIR;
   return mk_pointer(get_cell(sc, t, a, b, mk_nil()));
 }
 
 static inline struct cell * get_vector_object(nanoclj_t * sc, int_fast16_t t, size_t len) {
-  clj_value * data = (clj_value*)sc->malloc(len * sizeof(clj_value));
+  nanoclj_val_t * data = (nanoclj_val_t*)sc->malloc(len * sizeof(nanoclj_val_t));
   if (!data) {
     sc->no_memory = 1;
     return &(sc->_sink);
@@ -1304,8 +1304,8 @@ static inline int hash_fn(const char *key, int table_size) {
  * speed to out-weigh the cost of making a new vector.
  */
 
-static inline void new_frame_in_env(nanoclj_t * sc, clj_value old_env) {
-  clj_value new_frame;
+static inline void new_frame_in_env(nanoclj_t * sc, nanoclj_val_t old_env) {
+  nanoclj_val_t new_frame;
 
   /* The interaction-environment has about 300 variables in it. */
   if (old_env.as_uint64 == sc->EMPTY.as_uint64) {
@@ -1319,10 +1319,10 @@ static inline void new_frame_in_env(nanoclj_t * sc, clj_value old_env) {
   sc->envir = mk_pointer(get_cell(sc, T_ENVIRONMENT, new_frame, old_env, mk_nil()));
 }
 
-static inline void new_slot_spec_in_env(nanoclj_t * sc, clj_value env,
-					clj_value variable, clj_value value) {
-  clj_value slot = cons(sc, variable, value);
-  clj_value x = car(env);
+static inline void new_slot_spec_in_env(nanoclj_t * sc, nanoclj_val_t env,
+					nanoclj_val_t variable, nanoclj_val_t value) {
+  nanoclj_val_t slot = cons(sc, variable, value);
+  nanoclj_val_t x = car(env);
   
   if (is_vector(x)) {
     struct cell * vec = decode_pointer(x);
@@ -1333,8 +1333,8 @@ static inline void new_slot_spec_in_env(nanoclj_t * sc, clj_value env,
   }
 }
 
-static inline clj_value find_slot_in_env(nanoclj_t * sc, clj_value env, clj_value hdl, bool all) {
-  clj_value x, y;
+static inline nanoclj_val_t find_slot_in_env(nanoclj_t * sc, nanoclj_val_t env, nanoclj_val_t hdl, bool all) {
+  nanoclj_val_t x, y;
 
   for (x = env; x.as_uint64 != sc->EMPTY.as_uint64; x = cdr(x)) {
     y = car(x);
@@ -1345,7 +1345,7 @@ static inline clj_value find_slot_in_env(nanoclj_t * sc, clj_value env, clj_valu
     }
 
     for (; y.as_uint64 != sc->EMPTY.as_uint64; y = cdr(y)) {
-      clj_value slot = caar(y);
+      nanoclj_val_t slot = caar(y);
       if (is_vector(slot)) {
 	struct cell * c = decode_pointer(slot);
 	bool found = false;
@@ -1377,18 +1377,18 @@ static inline clj_value find_slot_in_env(nanoclj_t * sc, clj_value env, clj_valu
 
 #else /* USE_ALIST_ENV */
 
-static inline void new_frame_in_env(nanoclj_t * sc, clj_value old_env) {
+static inline void new_frame_in_env(nanoclj_t * sc, nanoclj_val_t old_env) {
   sc->envir = mk_pointer(get_cell(sc, T_ENVIRONMENT, sc->EMPTY, old_env))
 }
 
-static inline void new_slot_spec_in_env(nanoclj_t * sc, clj_value env,
-					clj_value variable, clj_value value) {
+static inline void new_slot_spec_in_env(nanoclj_t * sc, nanoclj_val_t env,
+					nanoclj_val_t variable, nanoclj_val_t value) {
   car(env) = cons(sc, cons(sc, variable, value), car(env));
 }
 
-static inline clj_value find_slot_in_env(nanoclj_t * sc, clj_value env, clj_value hdl,
+static inline nanoclj_val_t find_slot_in_env(nanoclj_t * sc, nanoclj_val_t env, nanoclj_val_t hdl,
     int all) {
-  clj_value x, y;
+  nanoclj_val_t x, y;
   for (x = env; x.as_uint64 != sc->EMPTY.as_uint64; x = cdr(x)) {
     for (y = car(x); y.as_uint64 != sc->EMPTY.as_uint64; y = cdr(y)) {
       if (caar(y) == hdl) {
@@ -1410,15 +1410,15 @@ static inline clj_value find_slot_in_env(nanoclj_t * sc, clj_value env, clj_valu
 
 #endif /* USE_ALIST_ENV else */
 
-static inline void new_slot_in_env(nanoclj_t * sc, clj_value variable, clj_value value) {
+static inline void new_slot_in_env(nanoclj_t * sc, nanoclj_val_t variable, nanoclj_val_t value) {
   new_slot_spec_in_env(sc, sc->envir, variable, value);
 }
 
-static inline void set_slot_in_env(clj_value slot, clj_value value) {
+static inline void set_slot_in_env(nanoclj_val_t slot, nanoclj_val_t value) {
   cdr(slot) = value;
 }
 
-static inline clj_value slot_value_in_env(clj_value slot) {
+static inline nanoclj_val_t slot_value_in_env(nanoclj_val_t slot) {
   return cdr(slot);
 }
 
@@ -1479,8 +1479,8 @@ static inline bool is_empty(nanoclj_t * sc, struct cell * coll) {
 static inline struct cell * rest(nanoclj_t * sc, struct cell * coll) {
   int typ = _type(coll);
   if (typ == T_DELAY) {
-    clj_value code = cons(sc, sc->DEREF, cons(sc, mk_pointer(coll), sc->EMPTY));
-    clj_value r = nanoclj_eval(sc, code);
+    nanoclj_val_t code = cons(sc, sc->DEREF, cons(sc, mk_pointer(coll), sc->EMPTY));
+    nanoclj_val_t r = nanoclj_eval(sc, code);
     if (is_primitive(r)) {
       return &(sc->_EMPTY);
     } else {
@@ -1550,23 +1550,23 @@ static inline struct cell * rest(nanoclj_t * sc, struct cell * coll) {
   return &(sc->_EMPTY);
 }
 
-static inline clj_value first(nanoclj_t * sc, struct cell * coll) {
+static inline nanoclj_val_t first(nanoclj_t * sc, struct cell * coll) {
   if (coll == NULL || coll == &(sc->_EMPTY)) {
     return mk_nil();
   }
 
   if (_type(coll) == T_DELAY) {
 #if 0
-    clj_value code = cons(sc, sc->DEREF, cons(sc, mk_pointer(coll), sc->EMPTY));
-    clj_value r = nanoclj_eval(sc, code);
+    nanoclj_val_t code = cons(sc, sc->DEREF, cons(sc, mk_pointer(coll), sc->EMPTY));
+    nanoclj_val_t r = nanoclj_eval(sc, code);
 #else
-    clj_value x = find_slot_in_env(sc, sc->envir, sc->DEREF, 1);
-    clj_value r;
+    nanoclj_val_t x = find_slot_in_env(sc, sc->envir, sc->DEREF, 1);
+    nanoclj_val_t r;
     if (x.as_uint64 != sc->EMPTY.as_uint64) {
       x = slot_value_in_env(x);
 
-      clj_value tmp_args = sc->args;
-      clj_value tmp_code = sc->code;
+      nanoclj_val_t tmp_args = sc->args;
+      nanoclj_val_t tmp_code = sc->code;
 
       r = nanoclj_call(sc, x, cons(sc, mk_pointer(coll), sc->EMPTY));
 
@@ -1663,7 +1663,7 @@ static inline clj_value first(nanoclj_t * sc, struct cell * coll) {
   return sc->EMPTY;
 }
 
-static inline int compare(clj_value a, clj_value b) {
+static inline int compare(nanoclj_val_t a, nanoclj_val_t b) {
   if (a.as_uint64 == b.as_uint64) {
     return 0;
   }
@@ -1760,14 +1760,14 @@ static inline int compare(clj_value a, clj_value b) {
 }
 
 static inline int _compare(const void * a, const void * b) {
-  return compare(*(const clj_value*)a, *(const clj_value*)b);
+  return compare(*(const nanoclj_val_t*)a, *(const nanoclj_val_t*)b);
 }
 
 static inline void sort_vector_in_place(struct cell * vec) {
-  qsort(_data_unchecked(vec), _size_unchecked(vec), sizeof(clj_value), _compare);
+  qsort(_data_unchecked(vec), _size_unchecked(vec), sizeof(nanoclj_val_t), _compare);
 }
 
-static inline bool equals(nanoclj_t * sc, clj_value a0, clj_value b0) {
+static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
   if (a0.as_uint64 == b0.as_uint64) {
     return true;
   } else if (is_primitive(a0) && is_primitive(b0)) {
@@ -1826,7 +1826,7 @@ static inline bool equals(nanoclj_t * sc, clj_value a0, clj_value b0) {
   return false;
 }
 
-static int hasheq(clj_value v) { 
+static int hasheq(nanoclj_val_t v) { 
   switch (prim_type(v)) {
   case T_BOOLEAN:
   case T_CHARACTER:
@@ -1887,7 +1887,7 @@ static int hasheq(clj_value v) {
     case T_PAIR:{
       uint32_t hash = 31 + hasheq(_car(c));
       size_t n = 1;
-      for ( clj_value x = _cdr(c) ; is_pair(x); x = cdr(x), n++) {
+      for ( nanoclj_val_t x = _cdr(c) ; is_pair(x); x = cdr(x), n++) {
 	hash = 31 * hash + (uint32_t)hasheq(car(x));
       }
       return murmur3_hash_coll(hash, n);
@@ -1904,7 +1904,7 @@ static inline void ok_to_freely_gc(nanoclj_t * sc) {
 
 
 #if defined TSGRIND
-static void check_cell_alloced(clj_value p, int expect_alloced) {
+static void check_cell_alloced(nanoclj_val_t p, int expect_alloced) {
   /* Can't use putstr(sc,str) because callers have no access to
      sc.  */
   if (typeflag(p) & !expect_alloced) {
@@ -1915,7 +1915,7 @@ static void check_cell_alloced(clj_value p, int expect_alloced) {
   }
 
 }
-static void check_range_alloced(clj_value p, int n, int expect_alloced) {
+static void check_range_alloced(nanoclj_val_t p, int n, int expect_alloced) {
   int i;
   for (i = 0; i < n; i++) {
     (void) check_cell_alloced(p + i, expect_alloced);
@@ -1932,17 +1932,17 @@ static inline struct cell * oblist_initial_value(nanoclj_t * sc) {
   return vec;
 }
 
-static inline void oblist_add_item(nanoclj_t * sc, const char * name, clj_value v) {
+static inline void oblist_add_item(nanoclj_t * sc, const char * name, nanoclj_val_t v) {
   int location = hash_fn(name, _size_unchecked(sc->oblist));
   set_vector_elem(sc->oblist, location, cons(sc, v, vector_elem(sc->oblist, location)));
 }
 
 /* returns the new symbol */
-static inline clj_value oblist_add_symbol_by_name(nanoclj_t * sc, const char *name) {
+static inline nanoclj_val_t oblist_add_symbol_by_name(nanoclj_t * sc, const char *name) {
   /* This is leaked intentionally for now */
   char * str = (char*)sc->malloc(strlen(name) + 1);
   memcpy(str, name, strlen(name) + 1);
-  clj_value x = mk_symbol(sc, str, 0);
+  nanoclj_val_t x = mk_symbol(sc, str, 0);
 
   oblist_add_item(sc, name, x);
   
@@ -1950,22 +1950,22 @@ static inline clj_value oblist_add_symbol_by_name(nanoclj_t * sc, const char *na
 }
 
 /* returns the new keyword */
-static inline clj_value oblist_add_keyword_by_name(nanoclj_t * sc, const char *name) {
+static inline nanoclj_val_t oblist_add_keyword_by_name(nanoclj_t * sc, const char *name) {
   /* This is leaked intentionally for now */
   char * str = (char*)malloc(strlen(name) + 1);
   memcpy(str, name, strlen(name) + 1);
-  clj_value x = mk_keyword(str);  
+  nanoclj_val_t x = mk_keyword(str);  
   
   oblist_add_item(sc, name, x);
 
   return x;
 }
 
-static inline clj_value oblist_find_symbol_by_name(nanoclj_t * sc, const char *name) {
+static inline nanoclj_val_t oblist_find_symbol_by_name(nanoclj_t * sc, const char *name) {
   int location = hash_fn(name, _size_unchecked(sc->oblist));
-  clj_value x = vector_elem(sc->oblist, location);
+  nanoclj_val_t x = vector_elem(sc->oblist, location);
   for (; x.as_uint64 != sc->EMPTY.as_uint64; x = cdr(x)) {
-    clj_value y = car(x);
+    nanoclj_val_t y = car(x);
     if (is_symbol(y)) {
       const char * s = symname(y);
       if (str_eq(name, s)) {
@@ -1976,11 +1976,11 @@ static inline clj_value oblist_find_symbol_by_name(nanoclj_t * sc, const char *n
   return sc->EMPTY;
 }
 
-static inline clj_value oblist_find_keyword_by_name(nanoclj_t * sc, const char *name) {
+static inline nanoclj_val_t oblist_find_keyword_by_name(nanoclj_t * sc, const char *name) {
   int location = hash_fn(name, _size_unchecked(sc->oblist));
-  clj_value x = vector_elem(sc->oblist, location);
+  nanoclj_val_t x = vector_elem(sc->oblist, location);
   for (; x.as_uint64 != sc->EMPTY.as_uint64; x = cdr(x)) {
-    clj_value y = car(x);
+    nanoclj_val_t y = car(x);
     if (is_keyword(y)) {
       const char * s = keywordname(y);
       if (str_eq(name, s)) {
@@ -2007,7 +2007,7 @@ static inline int utf8_get_codepoint_pos(const char * s, int ci) {
   return (int)(p - s);
 }
 
-static inline clj_value mk_vector(nanoclj_t * sc, size_t len) {
+static inline nanoclj_val_t mk_vector(nanoclj_t * sc, size_t len) {
   return mk_pointer(get_vector_object(sc, T_VECTOR, len));
 }
 
@@ -2021,7 +2021,7 @@ static inline struct cell * resize_vector(nanoclj_t * sc, struct cell * vec, int
   return new_vec;
 }	
 
-static inline clj_value mk_sorted_set(nanoclj_t * sc, int len) {
+static inline nanoclj_val_t mk_sorted_set(nanoclj_t * sc, int len) {
   return mk_pointer(get_vector_object(sc, T_SORTED_SET, len));
 }
 
@@ -2057,7 +2057,7 @@ static inline struct cell * mk_seq_2(nanoclj_t * sc, struct cell * coll) {
   return &(sc->_EMPTY);
 }
 
-static inline bool get_elem(nanoclj_t * sc, struct cell * coll, clj_value key, clj_value * result) {
+static inline bool get_elem(nanoclj_t * sc, struct cell * coll, nanoclj_val_t key, nanoclj_val_t * result) {
   switch (_type(coll)) {
   case T_VECTOR:
     if (is_number(key)) {
@@ -2089,7 +2089,7 @@ static inline bool get_elem(nanoclj_t * sc, struct cell * coll, clj_value key, c
   case T_ARRAYMAP:{
     size_t size = _size_unchecked(coll);
     for (int i = 0; i < size; i++) {
-      clj_value pair = vector_elem(coll, i);
+      nanoclj_val_t pair = vector_elem(coll, i);
       if (compare(key, car(pair)) == 0) {
 	if (result) *result = cdr(pair);
 	return true;
@@ -2101,7 +2101,7 @@ static inline bool get_elem(nanoclj_t * sc, struct cell * coll, clj_value key, c
   case T_SORTED_SET:{
     size_t size = _size_unchecked(coll);
     for (int i = 0; i < size; i++) {
-      clj_value value = vector_elem(coll, i);
+      nanoclj_val_t value = vector_elem(coll, i);
       if (compare(key, value) == 0) {
 	if (result) *result = value;
 	return true;
@@ -2114,9 +2114,9 @@ static inline bool get_elem(nanoclj_t * sc, struct cell * coll, clj_value key, c
 }
 
 /* get new keyword */
-static inline clj_value def_keyword(nanoclj_t * sc, const char *name) {
+static inline nanoclj_val_t def_keyword(nanoclj_t * sc, const char *name) {
   /* first check oblist */
-  clj_value x = oblist_find_keyword_by_name(sc, name);
+  nanoclj_val_t x = oblist_find_keyword_by_name(sc, name);
   if (x.as_uint64 != sc->EMPTY.as_uint64) {
     return x;
   } else {
@@ -2125,9 +2125,9 @@ static inline clj_value def_keyword(nanoclj_t * sc, const char *name) {
 }
 
 /* get new symbol */
-static inline clj_value def_symbol(nanoclj_t * sc, const char *name) {
+static inline nanoclj_val_t def_symbol(nanoclj_t * sc, const char *name) {
   /* first check oblist */
-  clj_value x = oblist_find_symbol_by_name(sc, name);
+  nanoclj_val_t x = oblist_find_symbol_by_name(sc, name);
   if (x.as_uint64 != sc->EMPTY.as_uint64) {
     return x;
   } else {
@@ -2136,23 +2136,23 @@ static inline clj_value def_symbol(nanoclj_t * sc, const char *name) {
 }
 
 /* get new symbol or keyword */
-static inline clj_value def_symbol_or_keyword(nanoclj_t * sc, const char *name) {
+static inline nanoclj_val_t def_symbol_or_keyword(nanoclj_t * sc, const char *name) {
   if (name[0] == ':') return def_keyword(sc, name + 1);
   else return def_symbol(sc, name);
 }
 
-static inline clj_value def_namespace_with_sym(nanoclj_t *sc, clj_value sym) {
-  clj_value ns = mk_pointer(get_cell(sc, T_ENVIRONMENT, sc->EMPTY, sc->root_env, mk_string(sc, symname(sym))));
-  nanoclj_define(sc, sc->global_env, sym, ns);
+static inline nanoclj_val_t def_namespace_with_sym(nanoclj_t *sc, nanoclj_val_t sym) {
+  nanoclj_val_t ns = mk_pointer(get_cell(sc, T_ENVIRONMENT, sc->EMPTY, sc->root_env, mk_string(sc, symname(sym))));
+  nanoclj_intern(sc, sc->global_env, sym, ns);
   return ns;
 }
 
-static inline clj_value def_namespace(nanoclj_t * sc, const char *name) {
+static inline nanoclj_val_t def_namespace(nanoclj_t * sc, const char *name) {
   return def_namespace_with_sym(sc, def_symbol(sc, name));
 }
 
-static inline clj_value gensym(nanoclj_t * sc, const char * prefix) {
-  clj_value x;
+static inline nanoclj_val_t gensym(nanoclj_t * sc, const char * prefix) {
+  nanoclj_val_t x;
   char name[256];
 
   for (; sc->gensym_cnt < LONG_MAX; sc->gensym_cnt++) {
@@ -2172,7 +2172,7 @@ static inline clj_value gensym(nanoclj_t * sc, const char * prefix) {
 }
 
 /* make symbol or number literal from string */
-static inline clj_value mk_primitive(nanoclj_t * sc, char *q) {
+static inline nanoclj_val_t mk_primitive(nanoclj_t * sc, char *q) {
   bool has_dec_point = false;
   bool has_fp_exp = false;
   char *div = 0;
@@ -2255,7 +2255,7 @@ static inline clj_value mk_primitive(nanoclj_t * sc, char *q) {
   return mk_integer(sc, atoll(q));
 }
 
-static inline clj_value mk_char_const(nanoclj_t * sc, char *name) {
+static inline nanoclj_val_t mk_char_const(nanoclj_t * sc, char *name) {
   if (*name == '\\') {   /* \w (character) */
     int c = 0;
     if (str_eq(name + 1, "space")) {
@@ -2290,7 +2290,7 @@ static inline clj_value mk_char_const(nanoclj_t * sc, char *name) {
   }
 }
 
-static inline clj_value mk_sharp_const(nanoclj_t * sc, char *name) {
+static inline nanoclj_val_t mk_sharp_const(nanoclj_t * sc, char *name) {
   if (str_eq(name, "Inf")) {
     return mk_real(INFINITY);
   } else if (str_eq(name, "-Inf")) {
@@ -2311,7 +2311,7 @@ static inline clj_value mk_sharp_const(nanoclj_t * sc, char *name) {
  *  sec. 2.3.5), the Schorr-Deutsch-Waite link-inversion algorithm,
  *  for marking.
  */
-static inline void mark(clj_value a) {
+static inline void mark(nanoclj_val_t a) {
   if (is_primitive(a)) {
     return;
   }
@@ -2319,7 +2319,7 @@ static inline void mark(clj_value a) {
   struct cell * t = NULL;
   struct cell * p = decode_pointer(a);
   struct cell * q;
-  clj_value q0;
+  nanoclj_val_t q0;
 
 E2:_setmark(p);
   switch (_type(p)) {
@@ -2338,7 +2338,7 @@ E2:_setmark(p);
     break;
   }
 
-  clj_value metadata = _metadata_unchecked(p);
+  nanoclj_val_t metadata = _metadata_unchecked(p);
   if (!is_nil(metadata)) {
     mark(metadata);
   }
@@ -2428,7 +2428,7 @@ static inline void finalize_cell(nanoclj_t * sc, struct cell * a) {
 }
 
 /* garbage collection. parameter a, b is marked. */
-static void gc(nanoclj_t * sc, clj_value a, clj_value b) {
+static void gc(nanoclj_t * sc, nanoclj_val_t a, nanoclj_val_t b) {
 #if GC_VERBOSE
   putstr(sc, "gc...", get_err_port(sc));
 #endif
@@ -2591,7 +2591,7 @@ static inline port *port_rep_from_filename(nanoclj_t * sc, const char *fn, int p
   return pt;
 }
 
-static inline clj_value port_from_filename(nanoclj_t * sc, const char *fn, int prop) {
+static inline nanoclj_val_t port_from_filename(nanoclj_t * sc, const char *fn, int prop) {
   port *pt = port_rep_from_filename(sc, fn, prop);
   if (!pt) {
     return mk_nil();
@@ -2615,7 +2615,7 @@ static inline port *port_rep_from_callback(nanoclj_t * sc,
   return pt;
 }
 
-static inline clj_value port_from_file(nanoclj_t * sc, FILE * f, int prop) {
+static inline nanoclj_val_t port_from_file(nanoclj_t * sc, FILE * f, int prop) {
   port *pt = port_rep_from_file(sc, f, prop);
   if (!pt) {
     return mk_nil();
@@ -2626,7 +2626,7 @@ static inline clj_value port_from_file(nanoclj_t * sc, FILE * f, int prop) {
   }
 }
 
-static inline clj_value port_from_callback(nanoclj_t * sc,
+static inline nanoclj_val_t port_from_callback(nanoclj_t * sc,
 					   void (*func) (const char *, size_t, void *),
 					   int prop) {
   port *pt = port_rep_from_callback(sc, func, prop);
@@ -2651,7 +2651,7 @@ static inline port *port_rep_from_string(nanoclj_t * sc, char *start,
   return pt;
 }
 
-static inline clj_value port_from_string(nanoclj_t * sc, char *start, char *past_the_end, int prop) {
+static inline nanoclj_val_t port_from_string(nanoclj_t * sc, char *start, char *past_the_end, int prop) {
   port *pt = port_rep_from_string(sc, start, past_the_end, prop);
   if (pt == 0) {
     return sc->EMPTY;
@@ -2686,7 +2686,7 @@ static inline port *port_rep_from_scratch(nanoclj_t * sc) {
   return pt;
 }
 
-static inline clj_value port_from_scratch(nanoclj_t * sc) {
+static inline nanoclj_val_t port_from_scratch(nanoclj_t * sc) {
   port *pt;
   pt = port_rep_from_scratch(sc);
   if (pt == 0) {
@@ -2713,7 +2713,7 @@ static inline int realloc_port_string(nanoclj_t * sc, port * p) {
   }
 }
 
-static inline const char * to_cstr(clj_value x) {
+static inline const char * to_cstr(nanoclj_val_t x) {
   switch (prim_type(x)) {
   case T_SYMBOL: return symname(x);
   case T_KEYWORD: return keywordname(x);
@@ -2768,7 +2768,7 @@ static inline void char_to_utf8(int c, char *p, int *plen) {
   if (plen) *plen = strlen(p);
 }
 
-static inline void putchars(nanoclj_t * sc, const char *s, size_t len, clj_value out) {
+static inline void putchars(nanoclj_t * sc, const char *s, size_t len, nanoclj_val_t out) {
   assert(s);
   assert(is_writer(dest_port));
 
@@ -2792,7 +2792,7 @@ static inline void putchars(nanoclj_t * sc, const char *s, size_t len, clj_value
   }
 }
 
-static inline void putstr(nanoclj_t * sc, const char *s, clj_value dest_port) {
+static inline void putstr(nanoclj_t * sc, const char *s, nanoclj_val_t dest_port) {
   putchars(sc, s, strlen(s), dest_port);
 }
 
@@ -2818,7 +2818,7 @@ static inline void putcharacter(nanoclj_t * sc, int c) {
   }
 }
 
-static inline void set_styles(nanoclj_t * sc, clj_value out, clj_value x) {
+static inline void set_styles(nanoclj_t * sc, nanoclj_val_t out, nanoclj_val_t x) {
 #ifndef WIN32
   if (!is_writer(out) || !is_cell(x)) {
     return;
@@ -2835,9 +2835,9 @@ static inline void set_styles(nanoclj_t * sc, clj_value out, clj_value x) {
 	struct cell * rgb = NULL;
 	
 	for (int i = 0, n = _size_unchecked(coll); i < n; i++) {
-	  clj_value y = vector_elem(coll, i);
-	  clj_value key = car(y);
-	  clj_value value = cdr(y);
+	  nanoclj_val_t y = vector_elem(coll, i);
+	  nanoclj_val_t key = car(y);
+	  nanoclj_val_t value = cdr(y);
 
 	  if (key.as_uint64 == sc->BOLD.as_uint64) {
 	    if (is_true(value)) {
@@ -2932,7 +2932,7 @@ static inline char *readstr_upto(nanoclj_t * sc, char *delim) {
 }
 
 /* read string expression "xxx...xxx" */
-static inline clj_value readstrexp(nanoclj_t * sc) {
+static inline nanoclj_val_t readstrexp(nanoclj_t * sc) {
   char *p = sc->strbuff;
   int c, len;
   int c1 = 0;
@@ -2943,7 +2943,7 @@ static inline clj_value readstrexp(nanoclj_t * sc) {
   for (;;) {
     c = inchar(sc, inport);
     if (c == EOF || !check_strbuff_size(sc, &p)) {
-      return (clj_value)kFALSE;
+      return (nanoclj_val_t)kFALSE;
     }
     switch (state) {
     case st_ok:
@@ -3016,7 +3016,7 @@ static inline clj_value readstrexp(nanoclj_t * sc) {
           state = st_ok;
         }
       } else {
-        return (clj_value)kFALSE;
+        return (nanoclj_val_t)kFALSE;
       }
       break;
     case st_oct1:
@@ -3027,7 +3027,7 @@ static inline clj_value readstrexp(nanoclj_t * sc) {
         state = st_ok;
       } else {
         if (state == st_oct2 && c1 >= 32)
-          return (clj_value)kFALSE;
+          return (nanoclj_val_t)kFALSE;
 
         c1 = (c1 << 3) + (c - '0');
 
@@ -3184,7 +3184,7 @@ static inline int token(nanoclj_t * sc, port * inport) {
 
 /* ========== Routines for Printing ========== */
 
-static inline void printslashstring(nanoclj_t * sc, const char *p, int len, clj_value out) {
+static inline void printslashstring(nanoclj_t * sc, const char *p, int len, nanoclj_val_t out) {
   assert(is_writer(out));
   
   int c, d;
@@ -3228,7 +3228,7 @@ static inline void printslashstring(nanoclj_t * sc, const char *p, int len, clj_
 }
 
 /* Uses internal buffer unless string pointer is already available */
-static inline void print_primitive(nanoclj_t * sc, clj_value l, int print_flag, clj_value out) {
+static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_flag, nanoclj_val_t out) {
   const char *p = 0;
   int plen = -1;
   
@@ -3356,7 +3356,7 @@ static inline size_t seq_length(nanoclj_t * sc, struct cell * a) {
   case T_LIST:
     while ( 1 ) {
       if (a == &(sc->_EMPTY)) return i;
-      clj_value b = _cdr(a);
+      nanoclj_val_t b = _cdr(a);
       if (!is_cell(b)) return i;
       a = decode_pointer(b);
       i++;
@@ -3370,17 +3370,17 @@ static inline struct cell * mk_arraymap(nanoclj_t * sc, size_t len) {
   return get_vector_object(sc, T_ARRAYMAP, len);
 }
 
-static inline clj_value mk_mapentry(nanoclj_t * sc, clj_value key, clj_value val) {
+static inline nanoclj_val_t mk_mapentry(nanoclj_t * sc, nanoclj_val_t key, nanoclj_val_t val) {
   return mk_pointer(get_cell(sc, T_MAPENTRY, key, val, mk_nil()));
 }
 
-static inline clj_value mk_collection(nanoclj_t * sc, int type, clj_value args) {
+static inline nanoclj_val_t mk_collection(nanoclj_t * sc, int type, nanoclj_val_t args) {
   int i;
   int len = seq_length(sc, decode_pointer(args));
   if (len < 0) {
     return sc->EMPTY;
   }
-  clj_value x;
+  nanoclj_val_t x;
   struct cell * coll;
   switch (type) {
   case T_VECTOR:
@@ -3415,7 +3415,7 @@ static inline clj_value mk_collection(nanoclj_t * sc, int type, clj_value args) 
   return mk_pointer(coll);
 }
 
-static inline clj_value mk_format_va(nanoclj_t * sc, const char *fmt, ...) {
+static inline nanoclj_val_t mk_format_va(nanoclj_t * sc, const char *fmt, ...) {
   va_list ap;
 
   /* Determine required size */
@@ -3438,7 +3438,7 @@ static inline clj_value mk_format_va(nanoclj_t * sc, const char *fmt, ...) {
   n = vsnprintf(p, size, fmt, ap);
   va_end(ap);
   
-  clj_value r = sc->EMPTY;
+  nanoclj_val_t r = sc->EMPTY;
   if (n >= 0) {
     r = mk_counted_string(sc, p, n);
   }
@@ -3446,7 +3446,7 @@ static inline clj_value mk_format_va(nanoclj_t * sc, const char *fmt, ...) {
   return r;
 }
 
-static inline clj_value mk_format(nanoclj_t * sc, const char * fmt, clj_value args) {
+static inline nanoclj_val_t mk_format(nanoclj_t * sc, const char * fmt, nanoclj_val_t args) {
   int n_args = 0;
   long long arg0l = 0, arg1l = 0;
   double arg0d = 0.0, arg1d = 0.0;
@@ -3454,7 +3454,7 @@ static inline clj_value mk_format(nanoclj_t * sc, const char * fmt, clj_value ar
   int plan = 0, m = 1;
   
   for ( ; args.as_uint64 != sc->EMPTY.as_uint64; args = cdr(args), n_args++, m *= 4) {
-    clj_value arg = car(args);
+    nanoclj_val_t arg = car(args);
     long long l;
     double d;
     const char * s;
@@ -3540,13 +3540,13 @@ static inline clj_value mk_format(nanoclj_t * sc, const char * fmt, clj_value ar
 /* ========== Routines for Evaluation Cycle ========== */
 
 /* make closure. c is code. e is environment */
-static inline clj_value mk_closure(nanoclj_t * sc, clj_value c, clj_value e) {
+static inline nanoclj_val_t mk_closure(nanoclj_t * sc, nanoclj_val_t c, nanoclj_val_t e) {
   return mk_pointer(get_cell(sc, T_CLOSURE, c, e, mk_nil()));
 }
 
 /* reverse list --- in-place */
-static inline clj_value reverse_in_place(nanoclj_t * sc, clj_value term, clj_value list) {
-  clj_value p = list, result = term, q;
+static inline nanoclj_val_t reverse_in_place(nanoclj_t * sc, nanoclj_val_t term, nanoclj_val_t list) {
+  nanoclj_val_t p = list, result = term, q;
 
   while (p.as_uint64 != sc->EMPTY.as_uint64) {
     q = cdr(p);
@@ -3559,8 +3559,8 @@ static inline clj_value reverse_in_place(nanoclj_t * sc, clj_value term, clj_val
 
 /* ========== Evaluation Cycle ========== */
 
-static clj_value get_err_port(nanoclj_t * sc) {
-  clj_value x = find_slot_in_env(sc, sc->envir, sc->ERR, 1);
+static nanoclj_val_t get_err_port(nanoclj_t * sc) {
+  nanoclj_val_t x = find_slot_in_env(sc, sc->envir, sc->ERR, 1);
   if (x.as_uint64 != sc->EMPTY.as_uint64) {
     x = slot_value_in_env(x);
     if (is_writer(x)) {
@@ -3570,8 +3570,8 @@ static clj_value get_err_port(nanoclj_t * sc) {
   return mk_nil();
 }
 
-static clj_value get_out_port(nanoclj_t * sc) {
-  clj_value x = find_slot_in_env(sc, sc->envir, sc->OUT, 1);
+static nanoclj_val_t get_out_port(nanoclj_t * sc) {
+  nanoclj_val_t x = find_slot_in_env(sc, sc->envir, sc->OUT, 1);
   if (x.as_uint64 != sc->EMPTY.as_uint64) {
     x = slot_value_in_env(x);
     if (is_writer(x)) {
@@ -3581,8 +3581,8 @@ static clj_value get_out_port(nanoclj_t * sc) {
   return mk_nil();
 }
 
-static clj_value get_in_port(nanoclj_t * sc) {
-  clj_value x = find_slot_in_env(sc, sc->envir, sc->IN, 1);
+static nanoclj_val_t get_in_port(nanoclj_t * sc) {
+  nanoclj_val_t x = find_slot_in_env(sc, sc->envir, sc->IN, 1);
   if (x.as_uint64 != sc->EMPTY.as_uint64) {
     x = slot_value_in_env(x);
     if (is_reader(x)) {
@@ -3593,11 +3593,11 @@ static clj_value get_in_port(nanoclj_t * sc) {
   return mk_nil();
 }
 
-static inline clj_value _Error_1(nanoclj_t * sc, const char *s, int a) {
+static inline nanoclj_val_t _Error_1(nanoclj_t * sc, const char *s, int a) {
   const char *str = s;
 #if USE_ERROR_HOOK
-  clj_value x;
-  clj_value hdl = sc->ERROR_HOOK;
+  nanoclj_val_t x;
+  nanoclj_val_t hdl = sc->ERROR_HOOK;
 #endif
 
 #if SHOW_ERROR_LINE
@@ -3627,13 +3627,13 @@ static inline clj_value _Error_1(nanoclj_t * sc, const char *s, int a) {
     sc->code = cons(sc, mk_string(sc, str), sc->EMPTY);
     sc->code = cons(sc, slot_value_in_env(x), sc->code);
     sc->op = (int) OP_EVAL;
-    return (clj_value)kTRUE;
+    return (nanoclj_val_t)kTRUE;
   }
 #endif
 
   sc->args = cons(sc, mk_string(sc, str), sc->EMPTY);
   sc->op = (int) OP_ERR0;
-  return (clj_value)kTRUE;
+  return (nanoclj_val_t)kTRUE;
 }
 
 #define Error_1(sc,s, a) return _Error_1(sc,s,a)
@@ -3644,23 +3644,23 @@ static inline clj_value _Error_1(nanoclj_t * sc, const char *s, int a) {
 #define  END  } while (0)
 #define s_goto(sc,a) BEGIN                                  \
     sc->op = (int)(a);                                      \
-    return (clj_value)kTRUE; END
+    return (nanoclj_val_t)kTRUE; END
 
 #define s_return(sc,a) return _s_return(sc,a)
 
 /* this structure holds all the interpreter's registers */
 struct dump_stack_frame {
   enum nanoclj_opcodes op;
-  clj_value args;
-  clj_value envir;
-  clj_value code;
+  nanoclj_val_t args;
+  nanoclj_val_t envir;
+  nanoclj_val_t code;
 #ifdef USE_RECUR_REGISTER
-  clj_value recur;
+  nanoclj_val_t recur;
 #endif
 };
 
-static inline void s_save(nanoclj_t * sc, enum nanoclj_opcodes op, clj_value args,
-			  clj_value code) {
+static inline void s_save(nanoclj_t * sc, enum nanoclj_opcodes op, nanoclj_val_t args,
+			  nanoclj_val_t code) {
   int nframes = decode_integer(sc->dump);
   struct dump_stack_frame *next_frame;
   
@@ -3684,7 +3684,7 @@ static inline void s_save(nanoclj_t * sc, enum nanoclj_opcodes op, clj_value arg
   sc->dump = mk_int(nframes + 1);
 }
 
-static inline clj_value _s_return(nanoclj_t * sc, clj_value a) { 
+static inline nanoclj_val_t _s_return(nanoclj_t * sc, nanoclj_val_t a) { 
   int nframes = decode_integer(sc->dump);
 
   sc->value = (a);
@@ -3702,10 +3702,10 @@ static inline clj_value _s_return(nanoclj_t * sc, clj_value a) {
 #endif
 
   sc->dump = mk_int(nframes);
-  return (clj_value)kTRUE;
+  return (nanoclj_val_t)kTRUE;
 }
 
-static inline void s_set_return_envir(nanoclj_t * sc, clj_value env) {
+static inline void s_set_return_envir(nanoclj_t * sc, nanoclj_val_t env) {
   int nframes = decode_integer(sc->dump);
   if (nframes >= 1) {
     struct dump_stack_frame * frame = (struct dump_stack_frame *) sc->dump_base + nframes - 1;
@@ -3741,9 +3741,9 @@ static inline void dump_stack_mark(nanoclj_t * sc) {
   }
 }
 
-#define s_retbool(tf)    s_return(sc, (tf) ? (clj_value)kTRUE : (clj_value)kFALSE)
+#define s_retbool(tf)    s_return(sc, (tf) ? (nanoclj_val_t)kTRUE : (nanoclj_val_t)kFALSE)
 
-static inline bool is_list(clj_value a) {
+static inline bool is_list(nanoclj_val_t a) {
   return is_cell(a) && _type(decode_pointer(a)) == T_LIST;
 }
 
@@ -3758,7 +3758,7 @@ static inline bool destructure(nanoclj_t * sc, struct cell * binding, struct cel
   }
 
   for (size_t i = 0; i < n; i++, y = rest(sc, y)) {
-    clj_value e = vector_elem(binding, i);
+    nanoclj_val_t e = vector_elem(binding, i);
     if (e.as_uint64 == sc->AMP.as_uint64) {
       if (++i < n) {
 	e = vector_elem(binding, i);
@@ -3779,7 +3779,7 @@ static inline bool destructure(nanoclj_t * sc, struct cell * binding, struct cel
       } else if (is_primitive(e)) {
 	new_slot_in_env(sc, e, first(sc, y));
       } else {
-	clj_value y2 = first(sc, y);
+	nanoclj_val_t y2 = first(sc, y);
 	if (!is_cell(y2)) {
 	  return false;
 	} else {
@@ -3799,22 +3799,22 @@ static inline bool destructure(nanoclj_t * sc, struct cell * binding, struct cel
   return true;
 }
 
-static inline clj_value construct_by_type(nanoclj_t * sc, int type_id, clj_value args) {
-  clj_value x, y;
+static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoclj_val_t args) {
+  nanoclj_val_t x, y;
   
   switch (type_id) {
   case T_NIL:
     return sc->EMPTY;
     
   case T_BOOLEAN:;
-    return is_true(car(args)) ? (clj_value)kTRUE : (clj_value)kFALSE;
+    return is_true(car(args)) ? (nanoclj_val_t)kTRUE : (nanoclj_val_t)kFALSE;
 
   case T_STRING:
     return mk_string(sc, to_cstr(car(args)));
 
   case T_CHAR_ARRAY:{
     strview_t sv = to_strview(car(args));
-    clj_value a = mk_counted_string(sc, sv.ptr, sv.size);
+    nanoclj_val_t a = mk_counted_string(sc, sv.ptr, sv.size);
     typeflag(a) = T_CHAR_ARRAY | T_GC_ATOM | (typeflag(a) & T_SMALL);
     return a;
   }
@@ -3852,8 +3852,8 @@ static inline clj_value construct_by_type(nanoclj_t * sc, int type_id, clj_value
     return mk_type(to_int(car(args)));
   
   case T_ENVIRONMENT:{
-    clj_value parent = sc->EMPTY;
-    clj_value name = sc->EMPTY;
+    nanoclj_val_t parent = sc->EMPTY;
+    nanoclj_val_t name = sc->EMPTY;
     if (args.as_uint64 != sc->EMPTY.as_uint64) {
       parent = car(args);
       if (cdr(args).as_uint64 != sc->EMPTY.as_uint64) {
@@ -3866,7 +3866,7 @@ static inline clj_value construct_by_type(nanoclj_t * sc, int type_id, clj_value
   }
   case T_PAIR:
   case T_LIST:{
-    clj_value x = cadr(args);
+    nanoclj_val_t x = cadr(args);
     if (is_cell(x)) {
       struct cell * coll = decode_pointer(x);
       cdr(args) = mk_pointer(mk_seq_2(sc, coll));
@@ -3974,7 +3974,7 @@ static inline bool unpack_args_2(nanoclj_t * sc) {
   if (sc->args.as_uint64 != sc->EMPTY.as_uint64) {
     struct cell * c = decode_pointer(sc->args);
     sc->arg0 = _car(c);
-    clj_value r = _cdr(c);
+    nanoclj_val_t r = _cdr(c);
     if (r.as_uint64 != sc->EMPTY.as_uint64) {
       c = decode_pointer(r);
       sc->arg1 = _car(c);
@@ -3990,7 +3990,7 @@ static inline bool unpack_args_2_plus(nanoclj_t * sc) {
   if (sc->args.as_uint64 != sc->EMPTY.as_uint64) {
     struct cell * c = decode_pointer(sc->args);
     sc->arg0 = _car(c);
-    clj_value r = _cdr(c);
+    nanoclj_val_t r = _cdr(c);
     if (r.as_uint64 != sc->EMPTY.as_uint64) {
       c = decode_pointer(r);
       sc->arg1 = _car(c);
@@ -4002,7 +4002,7 @@ static inline bool unpack_args_2_plus(nanoclj_t * sc) {
   return false;
 }
 
-static inline int get_literal_fn_arity(nanoclj_t * sc, clj_value body, bool * has_rest) {
+static inline int get_literal_fn_arity(nanoclj_t * sc, nanoclj_val_t body, bool * has_rest) {
   if (is_pair(body)) {
     int n1 = get_literal_fn_arity(sc, car(body), has_rest);
     int n2 = get_literal_fn_arity(sc, cdr(body), has_rest);
@@ -4021,10 +4021,10 @@ static inline int get_literal_fn_arity(nanoclj_t * sc, clj_value body, bool * ha
   }
 }
 
-static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
-  clj_value x, y, ns, meta;
+static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
+  nanoclj_val_t x, y, ns, meta;
   int syn;
-  clj_value params0;
+  nanoclj_val_t params0;
   struct cell * params;
 
   if (sc->nesting != 0) {
@@ -4071,7 +4071,7 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     /* Set up another iteration of REPL */
     sc->nesting = 0;
     sc->save_inport = get_in_port(sc);
-    nanoclj_define(sc, sc->root_env, sc->IN, sc->loadport);
+    nanoclj_intern(sc, sc->root_env, sc->IN, sc->loadport);
       
     s_save(sc, OP_T0LVL, sc->EMPTY, sc->EMPTY);
     s_save(sc, OP_T1LVL, sc->EMPTY, sc->EMPTY);
@@ -4081,7 +4081,7 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 
   case OP_T1LVL:               /* top level */
     sc->code = sc->value;
-    nanoclj_define(sc, sc->root_env, sc->IN, sc->save_inport);
+    nanoclj_intern(sc, sc->root_env, sc->IN, sc->save_inport);
     s_goto(sc, OP_EVAL);
 
   case OP_READ:                /* read */
@@ -4241,7 +4241,7 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       }
 
     case T_KEYWORD:{
-      clj_value coll = car(sc->args), elem;
+      nanoclj_val_t coll = car(sc->args), elem;
       if (is_cell(coll) && get_elem(sc, decode_pointer(coll), sc->code, &elem)) {
 	s_return(sc, elem);
       } else if (cdr(sc->args).as_uint64 != sc->EMPTY.as_uint64) {
@@ -4275,7 +4275,7 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       case T_ENVIRONMENT:{
 	fprintf(stderr, "trying to change env\n");
 	sc->global_env = sc->code;
-	s_return(sc, (clj_value)kTRUE);
+	s_return(sc, (nanoclj_val_t)kTRUE);
       }
       case T_VECTOR:
       case T_ARRAYMAP:
@@ -4283,7 +4283,7 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	if (sc->args.as_uint64 == sc->EMPTY.as_uint64) {
 	  Error_0(sc, "Error - Invalid arity");
 	}
-	clj_value elem;
+	nanoclj_val_t elem;
 	if (get_elem(sc, decode_pointer(sc->code), car(sc->args), &elem)) {
 	  s_return(sc, elem);
 	} else if (cdr(sc->args).as_uint64 != sc->EMPTY.as_uint64) {
@@ -4326,7 +4326,7 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	  size_t needed_args = seq_length(sc, yy);
 	  bool found_match = false;
 	  for ( ; x.as_uint64 != sc->EMPTY.as_uint64; x = cdr(x)) {
-	    clj_value vec = caar(x);
+	    nanoclj_val_t vec = caar(x);
 
 	    if (destructure(sc, decode_pointer(vec), yy, needed_args)) {
 	      found_match = true;
@@ -4384,7 +4384,7 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     /* If the hook is defined, apply it to sc->code, otherwise
        set sc->value fall thru */
     {
-      clj_value f = find_slot_in_env(sc, sc->envir, sc->COMPILE_HOOK, 1);
+      nanoclj_val_t f = find_slot_in_env(sc, sc->envir, sc->COMPILE_HOOK, 1);
       if (f.as_uint64 == sc->EMPTY.as_uint64) {
         sc->value = sc->code;
         /* Fallthru */
@@ -4406,7 +4406,7 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       has_name = true;
     }
     
-    clj_value name;
+    nanoclj_val_t name;
     if (has_name) {
       name = car(x);
       x = cdr(x);
@@ -4445,7 +4445,7 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 
     /* If symbol does not exist or new value is given */
     if (y.as_uint64 == sc->EMPTY.as_uint64 || sc->arg_rest.as_uint64 != sc->EMPTY.as_uint64) {
-      clj_value new_value = sc->arg_rest.as_uint64 != sc->EMPTY.as_uint64 ? car(sc->arg_rest) : sc->EMPTY;
+      nanoclj_val_t new_value = sc->arg_rest.as_uint64 != sc->EMPTY.as_uint64 ? car(sc->arg_rest) : sc->EMPTY;
       if (y.as_uint64 != sc->EMPTY.as_uint64) {
 	set_slot_in_env(y, new_value);
       } else {
@@ -4553,11 +4553,11 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     if (_type(input_vec) != T_VECTOR) {
       Error_0(sc, "Syntax error");
     }
-    clj_value body = cdr(sc->code);
+    nanoclj_val_t body = cdr(sc->code);
 
     size_t n = _size_unchecked(input_vec) / 2;
 
-    clj_value values = sc->EMPTY;
+    nanoclj_val_t values = sc->EMPTY;
     struct cell * args = get_vector_object(sc, T_VECTOR, n);
 
     for (int i = (int)n - 1; i >= 0; i--) {
@@ -4697,7 +4697,7 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 
   case OP_AND0:                /* and */
     if (sc->code.as_uint64 == sc->EMPTY.as_uint64) {
-      s_return(sc, (clj_value)kTRUE);
+      s_return(sc, (nanoclj_val_t)kTRUE);
     }
     s_save(sc, OP_AND1, sc->EMPTY, cdr(sc->code));
     sc->code = car(sc->code);
@@ -4716,7 +4716,7 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 
   case OP_OR0:                 /* or */
     if (sc->code.as_uint64 == sc->EMPTY.as_uint64) {
-      s_return(sc, (clj_value)kFALSE);
+      s_return(sc, (nanoclj_val_t)kFALSE);
     }
     s_save(sc, OP_OR1, sc->EMPTY, cdr(sc->code));
     sc->code = car(sc->code);
@@ -5142,9 +5142,9 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       Error_0(sc, "Error - Invalid arity");
     }
 
-    clj_value coll = sc->arg0;
-    clj_value arg = sc->arg1;
-    clj_value elem;
+    nanoclj_val_t coll = sc->arg0;
+    nanoclj_val_t arg = sc->arg1;
+    nanoclj_val_t elem;
 
     if (is_cell(coll) && get_elem(sc, decode_pointer(coll), arg, &elem)) {
       s_return(sc, elem);
@@ -5162,9 +5162,9 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     }
     
     if (is_cell(sc->arg0) && get_elem(sc, decode_pointer(sc->arg0), sc->arg1, NULL)) {
-      s_return(sc, (clj_value)kTRUE);
+      s_return(sc, (nanoclj_val_t)kTRUE);
     } else {
-      s_return(sc, (clj_value)kFALSE);
+      s_return(sc, (nanoclj_val_t)kFALSE);
     }
     
   case OP_CONJ:             /* conj- */
@@ -5186,7 +5186,7 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       /* If MapEntry is added to vector, it is an index value pair */
       if (type(y) == T_MAPENTRY) {
 	long long index = to_long(car(y));
-	clj_value value = cdr(y);
+	nanoclj_val_t value = cdr(y);
 	if (index < 0 || index >= vector_len) {
 	  Error_0(sc, "Error - Index out of bounds");     
 	} else {
@@ -5209,7 +5209,7 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       
     case T_ARRAYMAP:{
       struct cell * vec = decode_pointer(x);
-      clj_value key = car(y);
+      nanoclj_val_t key = car(y);
       size_t vector_len = _size_unchecked(vec);
       for (size_t i = 0; i < vector_len; i++) {
 	if (car(vector_elem(vec, i)).as_uint64 == key.as_uint64) {
@@ -5373,9 +5373,9 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 
   case OP_FLUSH:
     {
-      clj_value p0 = find_slot_in_env(sc, sc->envir, sc->OUT, 1);
+      nanoclj_val_t p0 = find_slot_in_env(sc, sc->envir, sc->OUT, 1);
       if (p0.as_uint64 != sc->EMPTY.as_uint64) {
-	clj_value p = slot_value_in_env(p0);
+	nanoclj_val_t p = slot_value_in_env(p0);
 	if (p.as_uint64 != sc->EMPTY.as_uint64) {
 	  port * pt = port_unchecked(p);
 	  if (pt->kind & port_file) {
@@ -5411,7 +5411,7 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     set_basic_style(stderr, 1);
     set_basic_style(stderr, 31);
     {
-      clj_value err = get_err_port(sc);
+      nanoclj_val_t err = get_err_port(sc);
       assert(is_writer(err));
       strview_t sv = to_strview(car(sc->args));
       putchars(sc, sv.ptr, sv.size, err);
@@ -5577,9 +5577,9 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	
       case TOK_TAG:{
 	const char * tag = readstr_upto(sc, DELIMITERS);
-	clj_value f = find_slot_in_env(sc, sc->envir, sc->TAG_HOOK, 1);
+	nanoclj_val_t f = find_slot_in_env(sc, sc->envir, sc->TAG_HOOK, 1);
 	if (f.as_uint64 != sc->EMPTY.as_uint64) {
-	  clj_value hook = slot_value_in_env(f);
+	  nanoclj_val_t hook = slot_value_in_env(f);
 	  if (!is_nil(hook)) {
 	    sc->code = cons(sc, hook, cons(sc, mk_string(sc, tag), sc->EMPTY));
 	    s_goto(sc, OP_EVAL);
@@ -5810,7 +5810,7 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       set_vector_elem(vec, i, first(sc, seq));
     }
     sort_vector_in_place(vec);
-    clj_value r = sc->EMPTY;
+    nanoclj_val_t r = sc->EMPTY;
     for (int i = (int)l - 1; i >= 0; i--) {
       r = cons(sc, vector_elem(vec, i), r);
     }
@@ -5821,8 +5821,8 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     if (!unpack_args_2(sc)) {
       Error_0(sc, "Error - Invalid arity");
     }
-    clj_value input = sc->arg0;
-    clj_value options = sc->arg1;
+    nanoclj_val_t input = sc->arg0;
+    nanoclj_val_t options = sc->arg1;
     utf8proc_uint8_t * dest = NULL;
     utf8proc_ssize_t s = utf8proc_map((const unsigned char *)strvalue(input),
 				      (utf8proc_ssize_t)strlength(input),
@@ -5830,7 +5830,7 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 				      (utf8proc_option_t)to_long(options)
 				      );
     if (s >= 0) {
-      clj_value r = mk_counted_string(sc, (char *)dest, s);
+      nanoclj_val_t r = mk_counted_string(sc, (char *)dest, s);
       free(dest);
       s_return(sc, r);
     } else {
@@ -5854,7 +5854,7 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     }
     x = sc->arg0;
     y = find_slot_in_env(sc, sc->envir, x, 1);
-    clj_value ns;
+    nanoclj_val_t ns;
     if (y.as_uint64 != sc->EMPTY.as_uint64) {
       ns = slot_value_in_env(y);
     } else {
@@ -5877,10 +5877,10 @@ static inline clj_value opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     sprintf(sc->strbuff, "%d: illegal operator", sc->op);
     Error_0(sc, sc->strbuff);
   }
-  return (clj_value)kTRUE;                 /* NOTREACHED */
+  return (nanoclj_val_t)kTRUE;                 /* NOTREACHED */
 }
  
-static inline const char *procname(clj_value x) {
+static inline const char *procname(nanoclj_val_t x) {
   int n = procnum_unchecked(x);
   const char *name = dispatch_table[n].name;
   if (name == 0) {
@@ -5908,27 +5908,27 @@ static void Eval_Cycle(nanoclj_t * sc, enum nanoclj_opcodes op) {
 /* ========== Initialization of internal keywords ========== */
 
 static inline void assign_syntax(nanoclj_t * sc, const char *name, unsigned int syntax) {
-  clj_value x = mk_symbol(sc, name, syntax);
+  nanoclj_val_t x = mk_symbol(sc, name, syntax);
   oblist_add_item(sc, name, x);
 }
 
 static inline void assign_proc(nanoclj_t * sc, enum nanoclj_opcodes op, const char *name) {
-  clj_value x = def_symbol(sc, name);
-  clj_value y = mk_proc(op);
+  nanoclj_val_t x = def_symbol(sc, name);
+  nanoclj_val_t y = mk_proc(op);
   new_slot_in_env(sc, x, y);
 }
 
 
 /* initialization of nanoclj_t */
 #if USE_INTERFACE
-static const char * checked_strvalue(clj_value p) {
+static const char * checked_strvalue(nanoclj_val_t p) {
   if (type(p) == T_STRING) {
     return strvalue(p);
   } else {
     return "";
   }
 }
-static clj_value checked_car(clj_value p) {
+static nanoclj_val_t checked_car(nanoclj_val_t p) {
   switch (type(p)) {
   case T_NIL:
   case T_PAIR:
@@ -5938,7 +5938,7 @@ static clj_value checked_car(clj_value p) {
     return mk_nil();
   }
 }
-static clj_value checked_cdr(clj_value p) {
+static nanoclj_val_t checked_cdr(nanoclj_val_t p) {
   switch (type(p)) {
   case T_NIL:
   case T_PAIR:
@@ -5948,24 +5948,24 @@ static clj_value checked_cdr(clj_value p) {
     return mk_nil();
   }
 }
-static void fill_vector_checked(clj_value vec, clj_value elem) {
+static void fill_vector_checked(nanoclj_val_t vec, nanoclj_val_t elem) {
   if (is_vector(vec)) {
     fill_vector(decode_pointer(vec), elem);
   }
 }
-static clj_value vector_elem_checked(clj_value vec, size_t ielem) {
+static nanoclj_val_t vector_elem_checked(nanoclj_val_t vec, size_t ielem) {
   if (is_vector(vec)) {
     return vector_elem(decode_pointer(vec), ielem);
   } else {
     return mk_nil();
   }
 }
-static void set_vector_elem_checked(clj_value vec, size_t ielem, clj_value newel) {
+static void set_vector_elem_checked(nanoclj_val_t vec, size_t ielem, nanoclj_val_t newel) {
   if (is_vector(vec)) {
     set_vector_elem(decode_pointer(vec), ielem, newel);
   }
 }
-static clj_value first_checked(nanoclj_t * sc, clj_value coll) {
+static nanoclj_val_t first_checked(nanoclj_t * sc, nanoclj_val_t coll) {
   if (is_cell(coll)) {
     return first(sc, decode_pointer(coll));
   } else {
@@ -5973,14 +5973,14 @@ static clj_value first_checked(nanoclj_t * sc, clj_value coll) {
   }
 }
 
-static bool is_empty_checked(nanoclj_t * sc, clj_value coll) {
+static bool is_empty_checked(nanoclj_t * sc, nanoclj_val_t coll) {
   if (is_cell(coll)) {
     return is_empty(sc, decode_pointer(coll));
   } else {
     return false;
   }
 }
-static clj_value rest_checked(nanoclj_t * sc, clj_value coll) {
+static nanoclj_val_t rest_checked(nanoclj_t * sc, nanoclj_val_t coll) {
   if (is_cell(coll)) {
     return mk_pointer(rest(sc, decode_pointer(coll)));
   } else {
@@ -5988,7 +5988,7 @@ static clj_value rest_checked(nanoclj_t * sc, clj_value coll) {
   }
 }
 
-static size_t size_checked(nanoclj_t * sc, clj_value coll) {
+static size_t size_checked(nanoclj_t * sc, nanoclj_val_t coll) {
   if (is_cell(coll)) {
     return seq_length(sc, decode_pointer(coll));
   } else {
@@ -5997,7 +5997,7 @@ static size_t size_checked(nanoclj_t * sc, clj_value coll) {
 }
    
 static struct nanoclj_interface vtbl = {
-  nanoclj_define,
+  nanoclj_intern,
   cons,
   mk_integer,
   mk_real,
@@ -6161,7 +6161,7 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc,
     }
   }
 
-  /* initialization of global clj_values to special symbols */
+  /* initialization of global nanoclj_val_ts to special symbols */
   sc->LAMBDA = def_symbol(sc, "fn");
   sc->DO = def_symbol(sc, "do");
   sc->ARG1 = def_symbol(sc, "%1");
@@ -6198,8 +6198,8 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc,
   sc->REGEX = def_symbol(sc, "regex");
   sc->EMPTYSTR = mk_string(sc, "");  
 
-  nanoclj_define(sc, sc->global_env, def_symbol(sc, "root"), sc->root_env);
-  nanoclj_define(sc, sc->global_env, def_symbol(sc, "nil"), mk_nil());
+  nanoclj_intern(sc, sc->global_env, def_symbol(sc, "root"), sc->root_env);
+  nanoclj_intern(sc, sc->global_env, def_symbol(sc, "nil"), mk_nil());
 
   register_functions(sc);
 
@@ -6209,49 +6209,49 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc,
 }
 
 void nanoclj_set_input_port_file(nanoclj_t * sc, FILE * fin) {
-  clj_value inport = port_from_file(sc, fin, port_input);
-  nanoclj_define(sc, sc->global_env, sc->IN, inport);
+  nanoclj_val_t inport = port_from_file(sc, fin, port_input);
+  nanoclj_intern(sc, sc->global_env, sc->IN, inport);
 }
 
 void nanoclj_set_input_port_string(nanoclj_t * sc, char *start, char *past_the_end) {
-  clj_value inport = port_from_string(sc, start, past_the_end, port_input);
-  nanoclj_define(sc, sc->global_env, sc->IN, inport);
+  nanoclj_val_t inport = port_from_string(sc, start, past_the_end, port_input);
+  nanoclj_intern(sc, sc->global_env, sc->IN, inport);
 }
 
 void nanoclj_set_output_port_file(nanoclj_t * sc, FILE * fout) {
-  clj_value p = port_from_file(sc, fout, port_output);
-  nanoclj_define(sc, sc->root_env, sc->OUT, p);
+  nanoclj_val_t p = port_from_file(sc, fout, port_output);
+  nanoclj_intern(sc, sc->root_env, sc->OUT, p);
 }
 
 void nanoclj_set_output_port_callback(nanoclj_t * sc,
 				     void (*func) (const char *, size_t, void *)
 				     ) {
-  clj_value p = port_from_callback(sc, func, port_output);
-  nanoclj_define(sc, sc->root_env, sc->OUT, p);
+  nanoclj_val_t p = port_from_callback(sc, func, port_output);
+  nanoclj_intern(sc, sc->root_env, sc->OUT, p);
 }
 
 void nanoclj_set_error_port_callback(nanoclj_t * sc,
 				    void (*func) (const char *, size_t, void *)
 				    ) {
-  clj_value p = port_from_callback(sc, func, port_output);
-  nanoclj_define(sc, sc->global_env, sc->ERR, p);
+  nanoclj_val_t p = port_from_callback(sc, func, port_output);
+  nanoclj_intern(sc, sc->global_env, sc->ERR, p);
 }
 
 void nanoclj_set_error_port_file(nanoclj_t * sc, FILE * fout) {
-  clj_value p = port_from_file(sc, fout, port_output);
-  nanoclj_define(sc, sc->global_env, sc->ERR, p);
+  nanoclj_val_t p = port_from_file(sc, fout, port_output);
+  nanoclj_intern(sc, sc->global_env, sc->ERR, p);
 }
 
 void nanoclj_set_output_port_string(nanoclj_t * sc, char *start, char *past_the_end) {
-  clj_value p = port_from_string(sc, start, past_the_end, port_output);
-  nanoclj_define(sc, sc->root_env, sc->OUT, p);
+  nanoclj_val_t p = port_from_string(sc, start, past_the_end, port_output);
+  nanoclj_intern(sc, sc->root_env, sc->OUT, p);
 }
 
 void nanoclj_set_external_data(nanoclj_t * sc, void *p) {
   sc->ext_data = p;
 }
 
-void nanoclj_set_object_invoke_callback(nanoclj_t * sc, clj_value (*func) (nanoclj_t *, void *, clj_value)) {
+void nanoclj_set_object_invoke_callback(nanoclj_t * sc, nanoclj_val_t (*func) (nanoclj_t *, void *, nanoclj_val_t)) {
   sc->object_invoke_callback = func;
 }
 
@@ -6307,7 +6307,7 @@ void nanoclj_load_file(nanoclj_t * sc, FILE * fin) {
 
 void nanoclj_load_named_file(nanoclj_t * sc, FILE * fin, const char *filename) {
   if (fin == NULL) {
-    fprintf(stderr, "File clj_value can not be NULL when loading a file\n");
+    fprintf(stderr, "File nanoclj_val_t can not be NULL when loading a file\n");
     return;
   }
   dump_stack_reset(sc);
@@ -6336,7 +6336,7 @@ void nanoclj_load_named_file(nanoclj_t * sc, FILE * fin, const char *filename) {
   }
 }
 
-clj_value nanoclj_eval_string(nanoclj_t * sc, const char *cmd) {
+nanoclj_val_t nanoclj_eval_string(nanoclj_t * sc, const char *cmd) {
   dump_stack_reset(sc);
 
   sc->envir = sc->global_env;
@@ -6380,8 +6380,8 @@ void nanoclj_load_string(nanoclj_t * sc, const char *cmd) {
   }
 }
 
-void nanoclj_define(nanoclj_t * sc, clj_value envir, clj_value symbol, clj_value value) {
-  clj_value x = find_slot_in_env(sc, envir, symbol, 0);
+void nanoclj_intern(nanoclj_t * sc, nanoclj_val_t envir, nanoclj_val_t symbol, nanoclj_val_t value) {
+  nanoclj_val_t x = find_slot_in_env(sc, envir, symbol, 0);
   if (x.as_uint64 != sc->EMPTY.as_uint64) {
     set_slot_in_env(x, value);
   } else {
@@ -6390,7 +6390,7 @@ void nanoclj_define(nanoclj_t * sc, clj_value envir, clj_value symbol, clj_value
 }
 
 static inline void save_from_C_call(nanoclj_t * sc) {
-  clj_value saved_data = cons(sc,
+  nanoclj_val_t saved_data = cons(sc,
 			      car(sc->sink),
 			      cons(sc,
 				   sc->envir,
@@ -6411,7 +6411,7 @@ static inline void restore_from_C_call(nanoclj_t * sc) {
 }
 
 /* "func" and "args" are assumed to be already eval'ed. */
-clj_value nanoclj_call(nanoclj_t * sc, clj_value func, clj_value args) {
+nanoclj_val_t nanoclj_call(nanoclj_t * sc, nanoclj_val_t func, nanoclj_val_t args) {
   fprintf(stderr, "dump = %d\n", decode_integer(sc->dump));
 
   save_from_C_call(sc);
@@ -6429,7 +6429,7 @@ clj_value nanoclj_call(nanoclj_t * sc, clj_value func, clj_value args) {
 
 #if !NANOCLJ_STANDALONE
 void nanoclj_register_foreign_func(nanoclj_t * sc, nanoclj_registerable * sr) {
-  nanoclj_define(sc,
+  nanoclj_intern(sc,
       sc->global_env, def_symbol(sc, sr->name), mk_foreign_func(sc, sr->f));
 }
 
@@ -6441,13 +6441,13 @@ void nanoclj_register_foreign_func_list(nanoclj_t * sc,
   }
 }
 
-clj_value nanoclj_apply0(nanoclj_t * sc, const char *procname) {
+nanoclj_val_t nanoclj_apply0(nanoclj_t * sc, const char *procname) {
   return nanoclj_eval(sc, cons(sc, def_symbol(sc, procname), sc->EMPTY));
 }
 
 #endif
 
-clj_value nanoclj_eval(nanoclj_t * sc, clj_value obj) {
+nanoclj_val_t nanoclj_eval(nanoclj_t * sc, nanoclj_val_t obj) {
   save_from_C_call(sc);
 
   sc->args = sc->EMPTY;
@@ -6492,16 +6492,16 @@ int main(int argc, const char **argv) {
   nanoclj_set_output_port_file(&sc, stdout);
   nanoclj_set_error_port_file(&sc, stderr);
 #if USE_DL
-  nanoclj_define(&sc, sc.global_env, def_symbol(&sc, "load-extension"),
+  nanoclj_intern(&sc, sc.global_env, def_symbol(&sc, "load-extension"),
 		mk_foreign_func(&sc, scm_load_ext));
 #endif
 
-  clj_value args = sc.EMPTY;
+  nanoclj_val_t args = sc.EMPTY;
   for (int i = argc - 1; i >= 2; i--) {
-    clj_value value = mk_string(&sc, argv[i]);
+    nanoclj_val_t value = mk_string(&sc, argv[i]);
     args = cons(&sc, value, args);
   }
-  nanoclj_define(&sc, sc.global_env, def_symbol(&sc, "*command-line-args*"), args);
+  nanoclj_intern(&sc, sc.global_env, def_symbol(&sc, "*command-line-args*"), args);
   
   FILE * fh = open_file(InitFile);
   nanoclj_load_named_file(&sc, fh, InitFile);
@@ -6521,8 +6521,8 @@ int main(int argc, const char **argv) {
     fclose(fh);
 
     /* Call -main if it exists */
-    clj_value main = def_symbol(&sc, "-main");
-    clj_value x = find_slot_in_env(&sc, sc.envir, main, 1);
+    nanoclj_val_t main = def_symbol(&sc, "-main");
+    nanoclj_val_t x = find_slot_in_env(&sc, sc.envir, main, 1);
     if (x.as_uint64 != sc.EMPTY.as_uint64) {
       x = slot_value_in_env(x);
       x = nanoclj_call(&sc, x, sc.EMPTY);

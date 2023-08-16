@@ -7,8 +7,8 @@
 
 #include "nanoclj_priv.h"
 
-NANOCLJ_EXPORT pointer scm_load_ext(nanoclj * sc, pointer arglist);
+NANOCLJ_EXPORT nanoclj_val_t scm_load_ext(nanoclj * sc, nanoclj_val_t arglist);
 
-void scm_unload_ext(NANOCLJ_EXPORT pointer ptr);
+void scm_unload_ext(NANOCLJ_EXPORT nanoclj_val_t ptr);
 
 #endif

@@ -78,7 +78,7 @@ extern "C" {
 /* cell structure */
   struct cell {
     unsigned short _flag;
-    clj_value _metadata;
+    nanoclj_val_t _metadata;
     union {
       struct {
         char *_svalue;
@@ -90,7 +90,7 @@ extern "C" {
       } _small_string;
       struct {
 	size_t _size;
-	clj_value * _data;
+	nanoclj_val_t * _data;
       } _collection;
       long long _lvalue;
       port *_port;
@@ -106,8 +106,8 @@ extern "C" {
 	void * _ptr;
       } _fo;
       struct {
-        clj_value _car;
-        clj_value _cdr;
+        nanoclj_val_t _car;
+        nanoclj_val_t _cdr;
       } _cons;
       struct {
 	struct cell * _origin;
@@ -126,76 +126,76 @@ extern "C" {
     int tracing;
 
     char **alloc_seg;
-    clj_value *cell_seg;
+    nanoclj_val_t *cell_seg;
     int last_cell_seg;
 
 /* We use 5 registers. */
-    clj_value args;               /* register for arguments of function */
-    clj_value envir;              /* stack register for current environment */
-    clj_value code;               /* register for current code */
-    clj_value dump;               /* stack register for next evaluation */
+    nanoclj_val_t args;               /* register for arguments of function */
+    nanoclj_val_t envir;              /* stack register for current environment */
+    nanoclj_val_t code;               /* register for current code */
+    nanoclj_val_t dump;               /* stack register for next evaluation */
 #ifdef USE_RECUR_REGISTER    
-    clj_value recur;		  /* recursion point */
+    nanoclj_val_t recur;		  /* recursion point */
 #endif
 
 /* Temporary registers for argument unpacking */
-    clj_value arg0;
-    clj_value arg1;
-    clj_value arg2;
-    clj_value arg_rest;
+    nanoclj_val_t arg0;
+    nanoclj_val_t arg1;
+    nanoclj_val_t arg2;
+    nanoclj_val_t arg_rest;
     
     struct cell _sink;
-    clj_value sink;               /* when mem. alloc. fails */
+    nanoclj_val_t sink;               /* when mem. alloc. fails */
     struct cell _EMPTY;
-    clj_value EMPTY;              /* special cell representing empty list */
+    nanoclj_val_t EMPTY;              /* special cell representing empty list */
     struct cell * oblist;         /* pointer to symbol table */
-    clj_value global_env;         /* pointer to global environment */
-    clj_value target_env;
-    clj_value root_env;		/* pointer to the initial root env */
-    clj_value c_nest;             /* stack for nested calls from C */
+    nanoclj_val_t global_env;         /* pointer to global environment */
+    nanoclj_val_t target_env;
+    nanoclj_val_t root_env;		/* pointer to the initial root env */
+    nanoclj_val_t c_nest;             /* stack for nested calls from C */
 
 /* global pointers to special symbols */
-    clj_value LAMBDA;             /* pointer to syntax lambda */
-    clj_value DO;                 /* pointer to syntax do */
-    clj_value QUOTE;              /* pointer to syntax quote */
-    clj_value ARG1;		  /* first arg in literal functions */
-    clj_value ARG2;		  /* second arg in literal functions */
-    clj_value ARG3;		  /* third arg in literal functions */
-    clj_value ARG_REST;	  	  /* rest args in literal functions */
+    nanoclj_val_t LAMBDA;             /* pointer to syntax lambda */
+    nanoclj_val_t DO;                 /* pointer to syntax do */
+    nanoclj_val_t QUOTE;              /* pointer to syntax quote */
+    nanoclj_val_t ARG1;		  /* first arg in literal functions */
+    nanoclj_val_t ARG2;		  /* second arg in literal functions */
+    nanoclj_val_t ARG3;		  /* third arg in literal functions */
+    nanoclj_val_t ARG_REST;	  	  /* rest args in literal functions */
     
-    clj_value DEREF;		  /* pointer to symbol deref */
-    clj_value VAR;		  /* pointer to symbol var */
-    clj_value QQUOTE;             /* pointer to symbol quasiquote */
-    clj_value UNQUOTE;            /* pointer to symbol unquote */
-    clj_value UNQUOTESP;          /* pointer to symbol unquote-splicing */
-    clj_value SLASH_HOOK;         /* *slash-hook* */
-    clj_value ERROR_HOOK;         /* *error-hook* */
-    clj_value TAG_HOOK;           /* *default-data-reader-fn* */
-    clj_value COMPILE_HOOK;       /* *compile-hook* */
-    clj_value IN;		  /* *in* */
-    clj_value OUT;		  /* *out* */
-    clj_value ERR;		  /* *err* */
-    clj_value NS;		  /* *ns* */
-    clj_value RECUR;		  /* recur */
-    clj_value AMP;		  /* & */
-    clj_value UNDERSCORE;         /* _ */
-    clj_value DOC;		  /* :doc */
+    nanoclj_val_t DEREF;		  /* pointer to symbol deref */
+    nanoclj_val_t VAR;		  /* pointer to symbol var */
+    nanoclj_val_t QQUOTE;             /* pointer to symbol quasiquote */
+    nanoclj_val_t UNQUOTE;            /* pointer to symbol unquote */
+    nanoclj_val_t UNQUOTESP;          /* pointer to symbol unquote-splicing */
+    nanoclj_val_t SLASH_HOOK;         /* *slash-hook* */
+    nanoclj_val_t ERROR_HOOK;         /* *error-hook* */
+    nanoclj_val_t TAG_HOOK;           /* *default-data-reader-fn* */
+    nanoclj_val_t COMPILE_HOOK;       /* *compile-hook* */
+    nanoclj_val_t IN;		  /* *in* */
+    nanoclj_val_t OUT;		  /* *out* */
+    nanoclj_val_t ERR;		  /* *err* */
+    nanoclj_val_t NS;		  /* *ns* */
+    nanoclj_val_t RECUR;		  /* recur */
+    nanoclj_val_t AMP;		  /* & */
+    nanoclj_val_t UNDERSCORE;         /* _ */
+    nanoclj_val_t DOC;		  /* :doc */
     
-    clj_value ANSI;		  /* :ansi */
-    clj_value RGB;		  /* :rgb */
-    clj_value BOLD;		  /* :bold */
-    clj_value UNDERLINE;	  /* :underline */
+    nanoclj_val_t ANSI;		  /* :ansi */
+    nanoclj_val_t RGB;		  /* :rgb */
+    nanoclj_val_t BOLD;		  /* :bold */
+    nanoclj_val_t UNDERLINE;	  /* :underline */
 
-    clj_value SORTED_SET;	  /* sorted-set */
-    clj_value ARRAY_MAP;	  /* array-map */
-    clj_value REGEX;		  /* regex */
-    clj_value EMPTYSTR;		  /* "" */
+    nanoclj_val_t SORTED_SET;	  /* sorted-set */
+    nanoclj_val_t ARRAY_MAP;	  /* array-map */
+    nanoclj_val_t REGEX;		  /* regex */
+    nanoclj_val_t EMPTYSTR;		  /* "" */
     
     struct cell * free_cell;      /* pointer to top of free cells */
     long fcells;                  /* # of free cells */
     
-    clj_value save_inport;
-    clj_value loadport;
+    nanoclj_val_t save_inport;
+    nanoclj_val_t loadport;
 
     port load_stack[MAXFIL];    /* Stack of open files for port -1 (LOADing) */
     int nesting_stack[MAXFIL];
@@ -211,11 +211,11 @@ extern "C" {
     size_t errbuff_size;
 
     int tok;
-    clj_value value;
+    nanoclj_val_t value;
     int op;
 
     void *ext_data;             /* For the benefit of foreign functions */
-    clj_value (*object_invoke_callback) (nanoclj_t *, void *, clj_value);
+    nanoclj_val_t (*object_invoke_callback) (nanoclj_t *, void *, nanoclj_val_t);
 
     long gensym_cnt;
 
@@ -234,42 +234,42 @@ extern "C" {
   };
 
 #if 0
-  int is_string(clj_value p);
-  const char *string_value(clj_value p);
-  int is_number(clj_value p);
-  int64_t ivalue(clj_value p);
-  double rvalue(clj_value p);
-  int is_integer(clj_value p);
-  int is_real(clj_value p);
-  int is_character(clj_value p);
-  int is_vector(clj_value p);
-  int is_port(clj_value p);
-  int is_pair(clj_value p);
-  clj_value pair_car(clj_value p);
-  clj_value pair_cdr(clj_value p);
-  clj_value set_car(clj_value p, clj_value q);
-  clj_value set_cdr(clj_value p, clj_value q);
+  int is_string(nanoclj_val_t p);
+  const char *string_value(nanoclj_val_t p);
+  int is_number(nanoclj_val_t p);
+  int64_t ivalue(nanoclj_val_t p);
+  double rvalue(nanoclj_val_t p);
+  int is_integer(nanoclj_val_t p);
+  int is_real(nanoclj_val_t p);
+  int is_character(nanoclj_val_t p);
+  int is_vector(nanoclj_val_t p);
+  int is_port(nanoclj_val_t p);
+  int is_pair(nanoclj_val_t p);
+  nanoclj_val_t pair_car(nanoclj_val_t p);
+  nanoclj_val_t pair_cdr(nanoclj_val_t p);
+  nanoclj_val_t set_car(nanoclj_val_t p, nanoclj_val_t q);
+  nanoclj_val_t set_cdr(nanoclj_val_t p, nanoclj_val_t q);
 
-  int is_symbol(clj_value p);
-  const char *symname(clj_value p);
+  int is_symbol(nanoclj_val_t p);
+  const char *symname(nanoclj_val_t p);
 
-  int is_syntax(clj_value p);
+  int is_syntax(nanoclj_val_t p);
   
-  int is_proc(clj_value p);
-  int is_foreign(clj_value p);
-  const char *syntaxname(clj_value p);
-  int is_closure(clj_value p);
+  int is_proc(nanoclj_val_t p);
+  int is_foreign(nanoclj_val_t p);
+  const char *syntaxname(nanoclj_val_t p);
+  int is_closure(nanoclj_val_t p);
 #if 0
-  int is_macro(clj_value p);
+  int is_macro(nanoclj_val_t p);
 #endif
-  clj_value closure_code(clj_value p);
-  clj_value closure_env(clj_value p);
+  nanoclj_val_t closure_code(nanoclj_val_t p);
+  nanoclj_val_t closure_env(nanoclj_val_t p);
 
-  int is_delay(clj_value p);
-  int is_environment(clj_value p);
+  int is_delay(nanoclj_val_t p);
+  int is_environment(nanoclj_val_t p);
 #if 0
-  int is_immutable(clj_value p);
-  void setimmutable(clj_value p);
+  int is_immutable(nanoclj_val_t p);
+  void setimmutable(nanoclj_val_t p);
 #endif
 #endif
 

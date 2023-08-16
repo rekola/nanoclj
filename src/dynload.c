@@ -96,9 +96,9 @@ static void dl_detach(HMODULE mo) {
 
 static HMODULE dll_handle;
 
-clj_value scm_load_ext(nanoclj * sc, clj_value args) {
-  clj_value first_arg;
-  clj_value retval;
+nanoclj_val_t scm_load_ext(nanoclj * sc, nanoclj_val_t args) {
+  nanoclj_val_t first_arg;
+  nanoclj_val_t retval;
   char filename[MAXPATHLEN], init_fn[MAXPATHLEN + 6];
   char *name;
   void (*module_init) (nanoclj * sc);
@@ -126,7 +126,7 @@ clj_value scm_load_ext(nanoclj * sc, clj_value args) {
   return (retval);
 }
 
-void scm_unload_ext(clj_value ptr) {
+void scm_unload_ext(nanoclj_val_t ptr) {
   // todo: this is not supposed to work yet, but probably not greatly needed anyway
   dl_detach(dll_handle);
 }
