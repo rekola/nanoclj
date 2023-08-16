@@ -73,6 +73,8 @@ extern "C" {
     } rep;
   } port;
 
+  typedef struct nanoclj_canvas_t nanoclj_canvas_t;
+
 /* cell structure */
   struct cell {
     unsigned short _flag;
@@ -93,6 +95,7 @@ extern "C" {
       long long _lvalue;
       port *_port;
       nanoclj_image_t * _image;
+      nanoclj_canvas_t * _canvas;
       struct {
 	int _min_arity;
 	int _max_arity;

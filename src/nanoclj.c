@@ -155,7 +155,8 @@ enum nanoclj_types {
   T_OUTPUT_STREAM = 29,
   T_RATIO = 30,
   T_LIST = 31,
-  T_IMAGE = 32
+  T_IMAGE = 32,
+  T_CANVAS = 33
 };
 
 typedef struct strview_s {
@@ -305,6 +306,7 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define _data_unchecked(p)	  ((p)->_object._collection._data)
 #define _port_unchecked(p)	  ((p)->_object._port)
 #define _image_unchecked(p)	  ((p)->_object._image)
+#define _canvas_unchecked(p)	  ((p)->_object._canvas)
 #define _size_unchecked(p)	  ((p)->_object._collection._size)
 #define _metadata_unchecked(p)     ((p)->_metadata)
 #define _origin_unchecked(p)	  ((p)->_object._seq._origin)
@@ -342,6 +344,8 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define origin_unchecked(p)	  (decode_pointer(p)->_object._seq._origin)
 #define position_unchecked(p)	  (decode_pointer(p)->_object._seq._pos)
 #define port_unchecked(p)	  (decode_pointer(p)->_object._port)
+#define canvas_unchecked(p)	  (decode_pointer(p)->_object._canvas)
+
 #define char_unchecked(p)	  decode_integer(p)
 #define type_unchecked(p)	  decode_integer(p)
 #define bool_unchecked(p)	  decode_integer(p)
@@ -747,6 +751,7 @@ static inline const char * typename_from_id(int_fast16_t id) {
   case 30: return "clojure.lang.Ratio";
   case 31: return "clojure.lang.PersistentList";
   case 32: return "scheme.lang.Image";
+  case 33: return "scheme.lang.Canvas";
   }
   return "";
 }
@@ -2181,11 +2186,11 @@ static inline nanoclj_val_t mk_primitive(nanoclj_t * sc, char *q) {
   if (!isdigit(q[0]) && q[0] != '-' && (p = strchr(q, '/')) != 0 && p != q) {
     *p = 0;
     return cons(sc, sc->SLASH_HOOK,
-        cons(sc,
-            cons(sc,
-                sc->QUOTE,
-                cons(sc, mk_primitive(sc, p + 1), sc->EMPTY)),
-            cons(sc, def_symbol(sc, q), sc->EMPTY)));
+		cons(sc,
+		     cons(sc,
+			  sc->QUOTE,
+			  cons(sc, mk_primitive(sc, p + 1), sc->EMPTY)),
+		     cons(sc, def_symbol(sc, q), sc->EMPTY)));
   }
 
   p = q;
@@ -2397,6 +2402,8 @@ static inline void port_close(nanoclj_t * sc, port * pt) {
   pt->kind = port_free;
 }
 
+static void finalize_canvas(nanoclj_t * sc, nanoclj_canvas_t * canvas);
+
 static inline void finalize_cell(nanoclj_t * sc, struct cell * a) {
   switch (_type(a)) {
   case T_STRING:
@@ -2421,6 +2428,10 @@ static inline void finalize_cell(nanoclj_t * sc, struct cell * a) {
     nanoclj_image_t * image = _image_unchecked(a);
     sc->free(image->data);
     sc->free(image);
+  }
+  case T_CANVAS:{
+    nanoclj_canvas_t * canvas = _canvas_unchecked(a);
+    finalize_canvas(sc, _canvas_unchecked(a));
   }
     break;
   }
