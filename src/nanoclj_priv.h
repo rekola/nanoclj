@@ -185,8 +185,7 @@ extern "C" {
     
     nanoclj_val_t ANSI;		  /* :ansi */
     nanoclj_val_t RGB;		  /* :rgb */
-    nanoclj_val_t BOLD;		  /* :bold */
-    nanoclj_val_t UNDERLINE;	  /* :underline */
+    nanoclj_val_t WEIGHT;	  /* :weight */
 
     nanoclj_val_t SORTED_SET;	  /* sorted-set */
     nanoclj_val_t ARRAY_MAP;	  /* array-map */

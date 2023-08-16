@@ -2816,7 +2816,7 @@ static inline void set_styles(nanoclj_t * sc, nanoclj_val_t x) {
   port *pt = port_unchecked(get_out_port(sc));
   struct cell * coll = decode_pointer(x);
 
-  int ansi_color = 0;
+  int ansi_color = 0, weight = 0;
   struct cell * rgb = NULL;
 
   if (!is_empty(sc, coll) && _type(coll) == T_ARRAYMAP) {
@@ -2825,10 +2825,8 @@ static inline void set_styles(nanoclj_t * sc, nanoclj_val_t x) {
       nanoclj_val_t key = car(y);
       nanoclj_val_t value = cdr(y);
       
-      if (key.as_uint64 == sc->BOLD.as_uint64) {
-	/* TODO */
-      } else if (key.as_uint64 == sc->UNDERLINE.as_uint64) {
-	/* TODO */
+      if (key.as_uint64 == sc->WEIGHT.as_uint64) {
+	weight = to_int(value);
       } else if (key.as_uint64 == sc->ANSI.as_uint64) {
 	ansi_color = to_int(value);
       } else if (key.as_uint64 == sc->RGB.as_uint64) {
@@ -2843,6 +2841,13 @@ static inline void set_styles(nanoclj_t * sc, nanoclj_val_t x) {
   if (pt->kind & port_file) {
     FILE * fh = pt->rep.stdio.file;
     if (isatty(fileno(fh))) {
+      if (weight > 0) {
+	set_basic_style(fh, 1);
+      } else if (weight == 0) {
+	set_basic_style(fh, 22);
+      } else if (weight < 0) {
+	set_basic_style(fh, 2);	
+      }
       if (sc->truecolor_term && rgb) {
 	set_truecolor(fh,
 		      to_int(vector_elem(rgb, 0)),
@@ -2852,10 +2857,11 @@ static inline void set_styles(nanoclj_t * sc, nanoclj_val_t x) {
 	set_basic_style(fh, ansi_color);
       } else {
 	reset_color(fh);
-      }          
+      }
     }
   }
 #endif
+  
   if (pt->kind & port_callback) {
     if (rgb) {
       if (pt->rep.callback.color) {
@@ -6176,8 +6182,7 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc,
   
   sc->ANSI = def_keyword(sc, "ansi");
   sc->RGB = def_keyword(sc, "rgb");
-  sc->BOLD = def_keyword(sc, "bold");
-  sc->UNDERLINE = def_keyword(sc, "underline");
+  sc->WEIGHT = def_keyword(sc, "weight");
 
   sc->SORTED_SET = def_symbol(sc, "sorted-set");
   sc->ARRAY_MAP = def_symbol(sc, "array-map");
