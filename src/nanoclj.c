@@ -2815,25 +2815,27 @@ static inline size_t char_to_utf8(int c, char *p) {
 
 static inline void putchars(nanoclj_t * sc, const char *s, size_t len, nanoclj_val_t out) {
   assert(s);
-  assert(is_writer(dest_port));
 
-  if (!is_writer(out)) {
-    return;
-  }
-
-  port * pt = port_unchecked(out);
-  if (pt->kind & port_file) {
-    fwrite(s, 1, len, pt->rep.stdio.file);
-  } else if (pt->kind & port_callback) {
-    pt->rep.callback.text(s, len, sc->ext_data);
-  } else {
-    for (; len; len--) {
-      if (pt->rep.string.curr != pt->rep.string.past_the_end) {
-        *pt->rep.string.curr++ = *s++;
-      } else if (realloc_port_string(sc, pt)) {
-        *pt->rep.string.curr++ = *s++;
+  if (is_writer(out)) {
+    port * pt = port_unchecked(out);
+    if (pt->kind & port_file) {
+      fwrite(s, 1, len, pt->rep.stdio.file);
+    } else if (pt->kind & port_callback) {
+      pt->rep.callback.text(s, len, sc->ext_data);
+    } else {
+      for (; len; len--) {
+	if (pt->rep.string.curr != pt->rep.string.past_the_end) {
+	  *pt->rep.string.curr++ = *s++;
+	} else if (realloc_port_string(sc, pt)) {
+	  *pt->rep.string.curr++ = *s++;
+	}
       }
     }
+  } else if (is_canvas(out)) {
+#if HAS_CANVAS
+    void * canvas = canvas_unchecked(out);
+    canvas_show_text(canvas, s, len);
+#endif
   }
 }
 

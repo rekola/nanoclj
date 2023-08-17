@@ -1,5 +1,5 @@
-#ifndef _NANOCLJ_CAIRO_FUNCTIONS_H_
-#define _NANOCLJ_CAIRO_FUNCTIONS_H_
+#ifndef _NANOCLJ_CAIRO_H_
+#define _NANOCLJ_CAIRO_H_
 
 #include <cairo/cairo.h>
 
@@ -30,6 +30,8 @@ static inline nanoclj_val_t mk_canvas(nanoclj_t * sc, int width, int height) {
 static inline nanoclj_val_t canvas_create_image(nanoclj_t * sc, void * canvas) {
   cairo_t * cr = (cairo_t *)canvas;
   cairo_surface_t * surface = cairo_get_target(cr);
+
+  cairo_surface_flush(surface);
   
   unsigned char * data = cairo_image_surface_get_data(surface);
   int width = cairo_image_surface_get_width(surface);
@@ -58,8 +60,14 @@ static inline void canvas_fill(void * canvas) {
   cairo_fill((cairo_t *)canvas);
 }
 
-static inline void canvas_show_text(void * canvas, const char * text) {
-  cairo_show_text((cairo_t *)canvas, text);
+static inline void canvas_show_text(void * canvas, const char * text, size_t len) {
+  char * tmp = (char *)malloc(len + 1);
+  if (tmp) {
+    memcpy(tmp, text, len);
+    tmp[len] = 0;
+    cairo_show_text((cairo_t *)canvas, tmp);
+    free(tmp);
+  }
 }
 
 #endif
