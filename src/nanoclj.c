@@ -1668,6 +1668,30 @@ static inline nanoclj_val_t first(nanoclj_t * sc, struct cell * coll) {
   return sc->EMPTY;
 }
 
+static inline bool equiv(nanoclj_val_t a, nanoclj_val_t b) {
+  if (a.as_uint64 == kNaN || b.as_uint64 == kNaN) {
+    return false;
+  } else if (a.as_uint64 == b.as_uint64) {
+    return true;
+  }
+  int type_a = prim_type(a), type_b = prim_type(b);
+  if (type_a == T_REAL || type_b == T_REAL) {
+    return to_double(a) == to_double(b);
+  } else if (type_a != T_CELL && type_b != T_CELL) {
+    return false;
+  } else {
+    type_a = expand_type(a, type_a);
+    type_b = expand_type(b, type_b);
+    if (type_a == T_RATIO || type_b == T_RATIO) {
+      return to_double(a) == to_double(b);
+    } else if (type_a == T_LONG || type_b == T_LONG) {
+      return to_long(a) == to_long(b);
+    } else {
+      return false;
+    }
+  }
+}
+
 static inline int compare(nanoclj_val_t a, nanoclj_val_t b) {
   if (a.as_uint64 == b.as_uint64) {
     return 0;
@@ -2916,12 +2940,11 @@ static inline bool is_one_of(char *s, int c) {
 /* read characters up to delimiter, but cater to character constants */
 static inline char *readstr_upto(nanoclj_t * sc, char *delim) {
   char *p = sc->strbuff;
-  int c;
   port * inport = port_unchecked(get_in_port(sc));
   bool found_delim = false;
   
   while (1) {
-    c = inchar(sc, inport);
+    int c = inchar(sc, inport);
     if (c == EOF) break;
 
     if (check_strbuff_size(sc, &p)) {
@@ -5289,7 +5312,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     if (!unpack_args_2(sc)) {
       Error_0(sc, "Error - Invalid arity");
     }
-    s_retbool(compare(sc->arg0, sc->arg1) == 0);
+    s_retbool(equiv(sc->arg0, sc->arg1));
     
   case OP_LT:                  /* lt */
     if (!unpack_args_2(sc)) {
