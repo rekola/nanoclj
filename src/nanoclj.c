@@ -2402,7 +2402,7 @@ static inline void port_close(nanoclj_t * sc, port * pt) {
   pt->kind = port_free;
 }
 
-static void finalize_canvas(nanoclj_t * sc, nanoclj_canvas_t * canvas);
+static void finalize_canvas(nanoclj_t * sc, void * canvas);
 
 static inline void finalize_cell(nanoclj_t * sc, struct cell * a) {
   switch (_type(a)) {
@@ -2429,10 +2429,8 @@ static inline void finalize_cell(nanoclj_t * sc, struct cell * a) {
     sc->free(image->data);
     sc->free(image);
   }
-  case T_CANVAS:{
-    nanoclj_canvas_t * canvas = _canvas_unchecked(a);
+  case T_CANVAS:
     finalize_canvas(sc, _canvas_unchecked(a));
-  }
     break;
   }
 }
@@ -4022,21 +4020,27 @@ static inline bool unpack_args_2_plus(nanoclj_t * sc) {
   return false;
 }
 
-static inline int get_literal_fn_arity(nanoclj_t * sc, nanoclj_val_t body, bool * has_rest) {
+static inline int get_literal_fn_arity(nanoclj_t * sc, nanoclj_val_t body, bool * has_rest) {  
   if (is_pair(body)) {
+    bool has_rest2;
     int n1 = get_literal_fn_arity(sc, car(body), has_rest);
-    int n2 = get_literal_fn_arity(sc, cdr(body), has_rest);
+    int n2 = get_literal_fn_arity(sc, cdr(body), &has_rest2);
+    if (has_rest2) *has_rest = true;
     return n1 > n2 ? n1 : n2;
   } else if (body.as_uint64 == sc->ARG_REST.as_uint64) {
     *has_rest = true;
     return 0;
   } else if (body.as_uint64 == sc->ARG1.as_uint64) {
+    *has_rest = false;
     return 1;
   } else if (body.as_uint64 == sc->ARG2.as_uint64) {
+    *has_rest = false;
     return 2;
   } else if (body.as_uint64 == sc->ARG3.as_uint64) {
+    *has_rest = false;
     return 3;
   } else {
+    *has_rest = false;
     return 0;
   }
 }

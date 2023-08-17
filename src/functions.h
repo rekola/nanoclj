@@ -18,8 +18,7 @@
 
 #if !(NANOCLJ_HAS_CANVAS) 
 /* No canvas support */
-struct nanoclj_canvas_t { void * dummy; };
-static void finalize_canvas(nanoclj_t * sc, nanoclj_canvas_t * canvas) { }
+static void finalize_canvas(nanoclj_t * sc, void * canvas) { }
 static inline nanoclj_val_t mk_canvas(nanoclj_t * sc, int width, int height) { return mk_nil(); }
 #endif
 
