@@ -577,22 +577,18 @@ static inline int32_t to_int(nanoclj_val_t p) {
 static inline double to_double(nanoclj_val_t p) {
   switch (prim_type(p)) {
   case T_INTEGER:
-  case T_PROC:
-  case T_TYPE:
-  case T_CHARACTER:
     return (double)decode_integer(p);
   case T_REAL:
     return rvalue_unchecked(p);
   case T_CELL: {
     struct cell * c = decode_pointer(p);
-    if (_type(c) == T_LONG) {
-      return (double)lvalue_unchecked(p);
-    } else if (_type(c) == T_RATIO) {
-      return to_double(_car(c)) / to_double(_cdr(c));
+    switch (_type(c)) {
+    case T_LONG: (double)lvalue_unchecked(p);
+    case T_RATIO: to_double(_car(c)) / to_double(_cdr(c));
     }
   }
   }
-  return 0.0;
+  return NAN;
 }
 
 #if 0
@@ -1244,8 +1240,6 @@ static inline int inchar(nanoclj_t * sc, port * pt) {
 
 /* back character to input buffer */
 static inline void backchar(int c, port * pt) {
-  if (c == EOF)
-    return;
   pt->backchar = c;
 }
 
@@ -1433,7 +1427,6 @@ static inline bool is_empty(nanoclj_t * sc, struct cell * coll) {
   if (!coll) {
     return true;
   }
-  int c;
   switch (_type(coll)) {
   case T_NIL:
     return true;
@@ -1453,9 +1446,13 @@ static inline bool is_empty(nanoclj_t * sc, struct cell * coll) {
     return _size_unchecked(coll) == 0;
   case T_READER: {
     port * pt = _port_unchecked(coll);
-    c = inchar(sc, pt);
-    backchar(c, pt);
-    return c == EOF;
+    int c = inchar(sc, pt);
+    if (c == EOF) {
+      return true;
+    } else {
+      backchar(c, pt);
+      return false;
+    }
   }
   case T_SEQ:{
     struct cell * o = _origin_unchecked(coll);
@@ -1469,9 +1466,13 @@ static inline bool is_empty(nanoclj_t * sc, struct cell * coll) {
       return pos >= _strlength(o);
     case T_READER:{
       port * pt = _port_unchecked(o);
-      c = inchar(sc, pt);
-      backchar(c, pt);
-      return c == EOF;
+      int c = inchar(sc, pt);
+      if (c == EOF) {
+	return true;
+      } else {
+	backchar(c, pt);
+	return false;
+      }
     }
     }    
   }
@@ -2750,27 +2751,33 @@ static inline const char * to_cstr(nanoclj_val_t x) {
 }
 
 static inline size_t char_to_utf8(int c, char *p) {
-  unsigned char *s = (unsigned char *)p;
-  int bytes;
-  if (c < 0 || c > 0x10FFFF) {
-    fprintf(stderr, "char_to_utf8: bad char %d\n", c);
-    c = '?';
-  }
-  if (c < 0x80) {
-    *s++ = (unsigned char) c;
-    *s = 0;
-    return 1;
+  if (c == EOF) {
+    return 0;
   } else {
-    bytes = (c < 0x800) ? 2 : ((c < 0x10000) ? 3 : 4);
-    s[bytes] = 0;
-    s[0] = 0x80;
-    while (--bytes) {
-      s[0] |= (0x80 >> bytes);
-      s[bytes] = (unsigned char) (0x80 | (c & 0x3F));
-      c >>= 6;
+    if (c < 0 || c > 0x10FFFF) {
+      fprintf(stderr, "char_to_utf8: bad char %d\n", c);
+      c = '?';
     }
-    s[0] |= (unsigned char) c;
-    return strlen(p);
+
+    unsigned char *s = (unsigned char *)p;
+ 
+    if (c < 0x80) {
+      *s++ = (unsigned char) c;
+      *s = 0;
+      return 1;
+    } else {
+      int bytes = (c < 0x800) ? 2 : ((c < 0x10000) ? 3 : 4);
+      int len = bytes;
+      s[bytes] = 0;
+      s[0] = 0x80;
+      while (--bytes) {
+	s[0] |= (0x80 >> bytes);
+	s[bytes] = (unsigned char) (0x80 | (c & 0x3F));
+	c >>= 6;
+      }
+      s[0] |= (unsigned char) c;
+      return len;
+    }
   }
 }
 
@@ -2803,9 +2810,11 @@ static inline void putstr(nanoclj_t * sc, const char *s, nanoclj_val_t dest_port
 }
 
 static inline void putcharacter(nanoclj_t * sc, int c, nanoclj_val_t out) {
-  port *pt = port_unchecked(out);
-  size_t len = char_to_utf8(c, sc->strbuff);
-  putchars(sc, sc->strbuff, len, out);
+  if (c != EOF) {
+    port *pt = port_unchecked(out);  
+    size_t len = char_to_utf8(c, sc->strbuff);
+    putchars(sc, sc->strbuff, len, out);
+  }
 }
 
 static inline void set_styles(nanoclj_t * sc, nanoclj_val_t x) {
@@ -2895,13 +2904,13 @@ static inline int check_strbuff_size(nanoclj_t * sc, char **p) {
 }
 
 /* check c is in chars */
-static inline int is_one_of(char *s, int c) {
+static inline bool is_one_of(char *s, int c) {
   if (c == EOF)
-    return 1;
+    return true;
   while (*s)
     if (*s++ == c)
-      return (1);
-  return (0);
+      return true;
+  return false;
 }
 
 /* read characters up to delimiter, but cater to character constants */
@@ -2909,26 +2918,25 @@ static inline char *readstr_upto(nanoclj_t * sc, char *delim) {
   char *p = sc->strbuff;
   int c;
   port * inport = port_unchecked(get_in_port(sc));
-
+  bool found_delim = false;
+  
   while (1) {
     c = inchar(sc, inport);
-#if 0
-    if (c == EOF) {
-      fprintf(stderr, "readstr_upto: EOF\n");
-      break;
-    }
-#endif
+    if (c == EOF) break;
+
     if (check_strbuff_size(sc, &p)) {
       p += char_to_utf8(c, p);
     }
     if (is_one_of(delim, c)) {
+      found_delim = true;
       break;
     }
   }
 
+  /* Check if the delimiter was escaped */
   if (p == sc->strbuff + 2 && p[-2] == '\\') {
     *p = 0;
-  } else {
+  } else if (found_delim) { /* Return the delimiter */
     backchar(p[-1], inport);
     *--p = '\0';
   }
@@ -3078,7 +3086,7 @@ static inline int skipspace(nanoclj_t * sc) {
 static inline int token(nanoclj_t * sc, port * inport) {
   int c = skipspace(sc);
   if (c == EOF) {
-    return (TOK_EOF);
+    return TOK_EOF;
   }  
   switch (c = inchar(sc, inport)) {
   case EOF:
@@ -3096,6 +3104,7 @@ static inline int token(nanoclj_t * sc, port * inport) {
     if (is_one_of(" \n\t", c)) {
       return (TOK_DOT);
     } else {
+      /* FIXME: cannot backchar two values */
       backchar(c, inport);
       backchar('.', inport);
       return TOK_PRIMITIVE;
@@ -3607,7 +3616,6 @@ static nanoclj_val_t get_in_port(nanoclj_t * sc) {
       return x;
     }
   }
-  fprintf(stderr, "no inport\n");
   return mk_nil();
 }
 
@@ -4116,7 +4124,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       struct port * pt = port_unchecked(x);
       sc->tok = token(sc, pt);
       if (sc->tok == TOK_EOF) {
-	s_return(sc, mk_character(EOF));
+	s_return(sc, mk_nil());
       }
       s_goto(sc, OP_RDSEXPR);
     }
@@ -5628,12 +5636,14 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       } else if (sc->tok == TOK_RPAREN) {
 	port * inport = port_unchecked(get_in_port(sc));
 	int c = inchar(sc, inport);
-	if (c != '\n')
+	if (c != '\n') {
+	  if (c == EOF) fprintf(stderr, "backchar with eof\n");
 	  backchar(c, inport);
+	} else if (sc->load_stack[sc->file_i].kind & port_file) {
 #if SHOW_ERROR_LINE
-	else if (sc->load_stack[sc->file_i].kind & port_file)
 	  sc->load_stack[sc->file_i].rep.stdio.curr_line++;
 #endif
+	}
 	sc->nesting_stack[sc->file_i]--;
 	s_return(sc, reverse_in_place(sc, sc->EMPTY, sc->args));
       } else if (sc->tok == TOK_DOT) {
@@ -5660,12 +5670,13 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       } else if (sc->tok == TOK_RSQUARE) {
 	port * inport = port_unchecked(get_in_port(sc));
 	int c = inchar(sc, inport);
-	if (c != '\n')
+	if (c != '\n') {
 	  backchar(c, inport);
+	} else if (sc->load_stack[sc->file_i].kind & port_file) {
 #if SHOW_ERROR_LINE
-	else if (sc->load_stack[sc->file_i].kind & port_file)
 	  sc->load_stack[sc->file_i].rep.stdio.curr_line++;
 #endif
+	}
 	sc->nesting_stack[sc->file_i]--;
 	s_return(sc, reverse_in_place(sc, sc->EMPTY, sc->args));
       } else {
@@ -5687,12 +5698,13 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       } else if (sc->tok == TOK_RCURLY) {
 	port * inport = port_unchecked(get_in_port(sc));
 	int c = inchar(sc, inport);
-	if (c != '\n')
+	if (c != '\n') {
 	  backchar(c, inport);
+	} else if (sc->load_stack[sc->file_i].kind & port_file) {
 #if SHOW_ERROR_LINE
-	else if (sc->load_stack[sc->file_i].kind & port_file)
 	  sc->load_stack[sc->file_i].rep.stdio.curr_line++;
 #endif
+	}
 	sc->nesting_stack[sc->file_i]--;
 	s_return(sc, reverse_in_place(sc, sc->EMPTY, sc->args));
       } else {
@@ -6357,7 +6369,7 @@ nanoclj_val_t nanoclj_eval_string(nanoclj_t * sc, const char *cmd) {
   sc->args = mk_integer(sc, sc->file_i);
   
   Eval_Cycle(sc, OP_T0LVL);
-  fprintf(stderr, "eval sycle ret\n");
+  fprintf(stderr, "eval cycle ret\n");
   typeflag(sc->loadport) = T_GC_ATOM;
   if (sc->retcode == 0) {
     sc->retcode = sc->nesting != 0;
