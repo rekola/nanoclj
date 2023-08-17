@@ -1039,7 +1039,9 @@ static inline long long normalize(long long num, long long den, long long * outp
   assert(den != 0);
   if (den == 0) {
     *output_den = 0;
-    return 1;
+    if (num > 0) return 1;
+    else if (num < 0) return -1;
+    else return 0;
   } else if (num == 0) {
     *output_den = 1;
     return 0;
