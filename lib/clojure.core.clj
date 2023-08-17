@@ -283,16 +283,20 @@
 
 ; Printing and Reading
 
-(defn slurp [fn] (apply str (clojure.lang.io/reader fn)))
-(defn spit [f content] (let [prev-outport *out*
-                             w (clojure.lang.io/writer f)
-                             ]
-                         (set! *out* w)
-                         (print content)
-                         (close w)
-                         (set! *out* prev-outport)
-                         nil))
+(defn slurp
+  "Reads a file"
+  [fn] (apply* str (clojure.lang.io/reader fn)))
 
+(defn spit
+  "Writes content to a file"
+  [f content] (let [prev-out *out*
+                    w (clojure.lang.io/writer f)
+                    ]
+                (set! *out* w)
+                (print (str content))
+                (close w)
+                (set! *out* prev-out)
+                nil))
 
 (def printf (fn [& args] (print- (apply format args))))
 
@@ -303,13 +307,13 @@
 (def *print-length* nil)
 
 (def styles- {
-              :scalar { :ansi 92 :rgb [ 127 158 127 ] }
-              :boolean { :ansi 95 :rgb [ 220 140 195 ] }
-              :nil { :ansi 95 :rgb [ 220 140 195 ] }
-              :char { :ansi 91 :rgb [ 204 147 147 ] }
-              :string { :ansi 91 :rgb [ 204 147 147 ] }
-              :symbol { :weight 0 :ansi 93 :rgb [ 240 223 175 ] }
-              :keyword { :weight 1 :ansi 93 :rgb [ 240 223 175 ] }
+              :scalar [ 0.5 0.62 0.5 ]
+              :boolean [ 0.86 0.55 0.76 ]
+              :nil [ 0.86 0.55 0.76 ]
+              :char [ 0.8 0.58 0.58 ]
+              :string [ 0.8 0.58 0.58 ]
+              :symbol [ 0.94 0.87 0.69 ]
+              :keyword [ 0.94 0.87 0.69 ]
               })
 
 (defn pr
@@ -358,32 +362,32 @@
                                                   (pr (first x))
                                                   (run! (fn [x] (print \space) (pr x)) (rest x))
                                                   (print \))))
-                         (ratio? x) (do (color (styles- :scalar))
+                         (ratio? x) (do (set-color (styles- :scalar))
                                         (pr- (numerator x))
                                         (print \/)
                                         (pr- (denominator x))
-                                        (color))
-                         (nil? x) (do (color (styles- :nil))
+                                        (set-color))
+                         (nil? x) (do (set-color (styles- :nil))
                                       (pr- x)
-                                      (color))
-                         (boolean? x) (do (color (styles- :boolean))
+                                      (set-color))
+                         (boolean? x) (do (set-color (styles- :boolean))
                                           (pr- x)
-                                          (color))
-                         (char? x) (do (color (styles- :char))
+                                          (set-color))
+                         (char? x) (do (set-color (styles- :char))
                                        (pr- x)
-                                       (color))
-                         (number? x) (do (color (styles- :scalar))
+                                       (set-color))
+                         (number? x) (do (set-color (styles- :scalar))
                                          (pr- x)
-                                         (color))
-                         (string? x) (do (color (styles- :string))
+                                         (set-color))
+                         (string? x) (do (set-color (styles- :string))
                                          (pr- x)
-                                         (color))
-                         (keyword? x) (do (color (styles- :keyword))
+                                         (set-color))
+                         (keyword? x) (do (set-color (styles- :keyword))
                                           (pr- x)
-                                          (color))
-                         (symbol? x) (do (color (styles- :symbol))
+                                          (set-color))
+                         (symbol? x) (do (set-color (styles- :symbol))
                                          (pr- x)
-                                         (color))
+                                         (set-color))
                          :else (pr- x))
                    ) more))
 
@@ -393,20 +397,28 @@
 (def *print-hook* prn)
 
 (def-macro (with-out-str body)
-   `(let [ prev-outport *out*
-           new-outport (clojure.lang.io/writer)
-         ] (set! *out* new-outport)
+   `(let [ prev-out *out*
+           w (clojure.lang.io/writer)
+         ] (set! *out* w)
 	   ,body
-           (set! *out* prev-outport)
-           (java.lang.String new-outport)))
+           (set! *out* prev-out)
+           (java.lang.String w)))
+
+(def-macro (with-canvas width height body)
+  `(let ((prev-out *out*)
+         (c (canvas width height)))
+     (set! *out* c)
+     ,body
+     (set! *out* prev-out)
+     c))
 
 (def-macro (with-in-str s body)
-  `(let ((prev-inport *in*)
-         (new-inport (clojure.lang.io/reader (char-array ,s)))
+  `(let ((prev-in *in*)
+         (rdr (clojure.lang.io/reader (char-array ,s)))
          )
-     (set! *in* new-inport)
+     (set! *in* rdr)
      (let ((r ,body))
-       (set! *in* prev-inport)
+       (set! *in* prev-in)
        r
        )))
 
@@ -540,24 +552,26 @@
 ; Plotting
 
 (defn plot
-  "Plots a series"
+  "Plots a series. Matlab style."
   ([x y] (let [width 500
                height 250
+               v-margin 5
+               content-height (- height v-margin v-margin)
                min-x (apply min x)
                min-y (apply min y)
                range-x (- (apply max x) min-x)
                range-y (- (apply max y) min-y)
-               cnv (Canvas/create width height)
                fit-x (fn [x] (* (/ (- x min-y) range-x) width))
-               fit-y (fn [y] (* (/ (- y min-y) range-y) height))
-               draw (fn [cnv x y] (if (or (empty? x) (empty? y))
-                                       nil
-                                       (do
-                                         (Canvas/line-to cnv (fit-x (first x)) (fit-y (first y)))
-                                         (recur cnv (rest x) (rest y)))))
+               fit-y (fn [y] (+ (* (/ (- y min-y) range-y) content-height) v-margin))
+               draw (fn [x y] (if (or (empty? x) (empty? y))
+                                nil
+                                (do
+                                  (line-to (fit-x (first x)) (fit-y (first y)))
+                                  (recur (rest x) (rest y)))))
                ]
-           (Canvas/move-to cnv (fit-x (first x)) (fit-y (first y)))
-           (draw cnv (rest x) (rest y))
-           (Canvas/stroke cnv)
-           (Canvas/create-image cnv)
-           )))
+           (with-canvas width height
+             (do
+               (move-to (fit-x (first x)) (fit-y (first y)))
+               (draw (rest x) (rest y))
+               (stroke)
+               )))))

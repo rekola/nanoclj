@@ -33,7 +33,7 @@ namespace nanoclj {
     virtual void print_error(std::string_view s) { }
     virtual void print_image(nanoclj_image_t * image) { }
 
-    virtual void set_color(int r, int g, int b) { }
+    virtual void set_color(double r, double g, double b) { }
     virtual void reset_color() { }
 
     void flush() {

@@ -81,7 +81,7 @@ extern "C" {
   NANOCLJ_EXPORT void nanoclj_set_output_port_file(nanoclj_t * sc, FILE * fin);
   NANOCLJ_EXPORT void nanoclj_set_output_port_callback(nanoclj_t * sc,
 						       void (*text) (const char*, size_t, void*),
-						       void (*color) (int, int, int, void*),
+						       void (*color) (double, double, double, void*),
 						       void (*reset_color) (void*),
 						       void (*image) (nanoclj_image_t*, void*));
   NANOCLJ_EXPORT void nanoclj_set_error_port_callback(nanoclj_t * sc, void (*text) (const char *, size_t, void *));

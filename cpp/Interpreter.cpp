@@ -11,7 +11,7 @@ static void out_print_callback(const char * s, size_t len, void * data) {
   }
 }
 
-static void out_color_callback(int r, int g, int b, void * data) {
+static void out_color_callback(double r, double g, double b, void * data) {
   if (data) {
     auto interpreter = reinterpret_cast<Interpreter *>(data);
     interpreter->flush();

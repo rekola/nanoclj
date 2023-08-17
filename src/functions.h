@@ -12,14 +12,6 @@
 #ifdef WIN32
 #include <direct.h>
 #define getcwd _getcwd
-#else
-#include "cairo_functions.h"
-#endif
-
-#if !(NANOCLJ_HAS_CANVAS) 
-/* No canvas support */
-static void finalize_canvas(nanoclj_t * sc, void * canvas) { }
-static inline nanoclj_val_t mk_canvas(nanoclj_t * sc, int width, int height) { return mk_nil(); }
 #endif
 
 #define STB_IMAGE_STATIC
@@ -575,7 +567,6 @@ static inline void register_functions(nanoclj_t * sc) {
   nanoclj_val_t clojure_java_browse = def_namespace(sc, "clojure.java.browse");
   nanoclj_val_t clojure_java_shell = def_namespace(sc, "clojure.java.shell");
   nanoclj_val_t Image = def_namespace(sc, "Image");
-  nanoclj_val_t Canvas = def_namespace(sc, "Canvas");
   
   nanoclj_intern(sc, Thread, def_symbol(sc, "sleep"), mk_foreign_func_with_arity(sc, Thread_sleep, 1, 1));
   
@@ -615,14 +606,6 @@ static inline void register_functions(nanoclj_t * sc) {
 
   nanoclj_intern(sc, Image, def_symbol(sc, "load"), mk_foreign_func_with_arity(sc, Image_load, 1, 1));
   nanoclj_intern(sc, Image, def_symbol(sc, "resize"), mk_foreign_func_with_arity(sc, Image_resize, 3, 3));
-
-#ifdef NANOCLJ_HAS_CANVAS
-  nanoclj_intern(sc, Canvas, def_symbol(sc, "create"), mk_foreign_func_with_arity(sc, Canvas_create, 2, 2));
-  nanoclj_intern(sc, Canvas, def_symbol(sc, "move-to"), mk_foreign_func_with_arity(sc, Canvas_move_to, 3, 3));
-  nanoclj_intern(sc, Canvas, def_symbol(sc, "line-to"), mk_foreign_func_with_arity(sc, Canvas_line_to, 3, 3));    
-  nanoclj_intern(sc, Canvas, def_symbol(sc, "stroke"), mk_foreign_func_with_arity(sc, Canvas_stroke, 1, 1));
-  nanoclj_intern(sc, Canvas, def_symbol(sc, "create-image"), mk_foreign_func_with_arity(sc, Canvas_create_image, 1, 1));
-#endif
   
 #if NANOCLJ_USE_LINENOISE
   nanoclj_val_t linenoise = def_namespace(sc, "linenoise");

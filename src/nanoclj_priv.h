@@ -66,7 +66,7 @@ extern "C" {
       } string;
       struct {
 	void (*text) (const char *, size_t, void*);
-	void (*color) (int r, int g, int b, void*);
+	void (*color) (double r, double g, double b, void*);
 	void (*reset_color) (void*);
 	void (*image) (nanoclj_image_t*, void*);
       } callback;
@@ -180,10 +180,6 @@ extern "C" {
     nanoclj_val_t UNDERSCORE;         /* _ */
     nanoclj_val_t DOC;		  /* :doc */
     
-    nanoclj_val_t ANSI;		  /* :ansi */
-    nanoclj_val_t RGB;		  /* :rgb */
-    nanoclj_val_t WEIGHT;	  /* :weight */
-
     nanoclj_val_t SORTED_SET;	  /* sorted-set */
     nanoclj_val_t ARRAY_MAP;	  /* array-map */
     nanoclj_val_t REGEX;		  /* regex */
