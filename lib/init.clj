@@ -144,3 +144,4 @@
 (load "Integer.clj")
 (load "Long.clj")
 (load "sparkline.clj")
+(load "Plot.clj")

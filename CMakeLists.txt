@@ -30,7 +30,12 @@ find_library(UTF8PROC_LIBRARY utf8proc)
 if(UTF8PROC_LIBRARY)
   target_link_libraries(nanoclj utf8proc)
 endif()
-  
+
+find_library(CAIRO_LIBRARY cairo)
+if(CAIRO_LIBRARY)
+  target_link_libraries(nanoclj cairo)
+endif()
+
 configure_file(lib/init.clj init.clj @ONLY)
 configure_file(lib/bootstrap.clj bootstrap.clj @ONLY)
 configure_file(lib/clojure.core.clj clojure.core.clj @ONLY)
@@ -40,3 +45,4 @@ configure_file(lib/clojure.string.clj clojure.string.clj @ONLY)
 configure_file(lib/Integer.clj Integer.clj @ONLY)
 configure_file(lib/Long.clj Long.clj @ONLY)
 configure_file(lib/sparkline.clj sparkline.clj @ONLY)
+configure_file(lib/Plot.clj Plot.clj @ONLY)
