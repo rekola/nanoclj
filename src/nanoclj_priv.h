@@ -53,7 +53,6 @@ extern "C" {
     union {
       struct {
         FILE *file;
-        int closeit;
 #if SHOW_ERROR_LINE
         int curr_line;
         char *filename;
@@ -73,6 +72,13 @@ extern "C" {
     } rep;
   } port;
 
+  typedef struct nanoclj_vector_store_t {
+    nanoclj_val_t * data;
+    size_t size;
+    size_t reserved;
+    size_t refcnt;
+  } nanoclj_vector_store_t;
+  
 /* cell structure */
   struct cell {
     unsigned short _flag;
@@ -88,7 +94,7 @@ extern "C" {
       } _small_string;
       struct {
 	size_t _size;
-	nanoclj_val_t * _data;
+	nanoclj_vector_store_t * _store;
       } _collection;
       long long _lvalue;
       port *_port;
