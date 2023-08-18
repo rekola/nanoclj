@@ -53,10 +53,6 @@ extern "C" {
 #define USE_INTERFACE 1
 #endif
 
-#ifndef SHOW_ERROR_LINE         /* Show error line in file */
-#define SHOW_ERROR_LINE 1
-#endif
-
   typedef struct nanoclj_s nanoclj_t;
   typedef union {
     uint64_t as_uint64;
@@ -88,7 +84,7 @@ extern "C" {
   void nanoclj_set_output_port_string(nanoclj_t * sc, char *start, char *past_the_end);
   NANOCLJ_EXPORT void nanoclj_load_file(nanoclj_t * sc, FILE * fin);
   NANOCLJ_EXPORT void nanoclj_load_named_file(nanoclj_t * sc, FILE * fin, const char *filename);
-  NANOCLJ_EXPORT nanoclj_val_t nanoclj_eval_string(nanoclj_t * sc, const char *cmd);
+  NANOCLJ_EXPORT nanoclj_val_t nanoclj_eval_string(nanoclj_t * sc, const char *cmd, size_t len);
   NANOCLJ_EXPORT void nanoclj_load_string(nanoclj_t * sc, const char *cmd);
   NANOCLJ_EXPORT nanoclj_val_t nanoclj_apply0(nanoclj_t * sc, const char *procname);
   NANOCLJ_EXPORT nanoclj_val_t nanoclj_call(nanoclj_t * sc, nanoclj_val_t func, nanoclj_val_t args);
@@ -168,8 +164,7 @@ extern "C" {
     bool (*is_promise) (nanoclj_val_t p);
     bool (*is_environment) (nanoclj_val_t p);
     void (*load_file) (nanoclj_t * sc, FILE * fin);
-    void (*load_string) (nanoclj_t * sc, const char *input);
-    nanoclj_val_t (*eval_string) (nanoclj_t * sc, const char *input);
+    nanoclj_val_t (*eval_string) (nanoclj_t * sc, const char *input, size_t len);
     nanoclj_val_t (*def_symbol) (nanoclj_t * sc, const char *name);
   };
 #endif

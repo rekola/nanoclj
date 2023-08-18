@@ -47,21 +47,23 @@ extern "C" {
     port_binary = 128
   };
 
-  typedef struct port {
+  typedef struct nanoclj_string_t {
+    char *start;
+    char *past_the_end;
+  } nanoclj_string_t;
+
+  typedef struct nanoclj_port_t {
     unsigned char kind;
     int backchar;
     union {
       struct {
         FILE *file;
-#if SHOW_ERROR_LINE
         int curr_line;
         char *filename;
-#endif
       } stdio;
       struct {
-        char *start;
-        char *past_the_end;
-        char *curr;
+	char *curr;
+	nanoclj_string_t data;
       } string;
       struct {
 	void (*text) (const char *, size_t, void*);
@@ -70,7 +72,7 @@ extern "C" {
 	void (*image) (nanoclj_image_t*, void*);
       } callback;
     } rep;
-  } port;
+  } nanoclj_port_t;
 
   typedef struct nanoclj_vector_store_t {
     nanoclj_val_t * data;
@@ -97,22 +99,19 @@ extern "C" {
 	nanoclj_vector_store_t * _store;
       } _collection;
       long long _lvalue;
-      port *_port;
+      nanoclj_port_t * _port;
       nanoclj_image_t * _image;
       void * _canvas;
       struct {
-	int _min_arity;
-	int _max_arity;
+	int _min_arity, _max_arity;
 	foreign_func _ptr;
       } _ff;
       struct {
-	int _min_arity;
-	int _max_arity;
+	int _min_arity, _max_arity;
 	void * _ptr;
       } _fo;
       struct {
-        nanoclj_val_t _car;
-        nanoclj_val_t _cdr;
+        nanoclj_val_t _car, _cdr;
       } _cons;
       struct {
 	struct cell * _origin;
@@ -197,7 +196,7 @@ extern "C" {
     nanoclj_val_t save_inport;
     nanoclj_val_t loadport;
 
-    port load_stack[MAXFIL];    /* Stack of open files for port -1 (LOADing) */
+    nanoclj_port_t load_stack[MAXFIL];    /* Stack of open files for port -1 (LOADing) */
     int nesting_stack[MAXFIL];
     int file_i;
     int nesting;

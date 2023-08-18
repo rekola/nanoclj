@@ -441,7 +441,8 @@ static const char * completion_symbols[MAX_COMPLETION_SYMBOLS];
  
 static inline void completion(const char *input, linenoiseCompletions *lc) {
   if (!num_completion_symbols) {
-    nanoclj_val_t sym = nanoclj_eval_string(linenoise_sc, "(ns-interns *ns*)");
+    const char * expr = "(ns-interns *ns*)";
+    nanoclj_val_t sym = nanoclj_eval_string(linenoise_sc, expr, strlen(expr));
     for ( ; sym.as_uint64 != linenoise_sc->EMPTY.as_uint64 && num_completion_symbols < MAX_COMPLETION_SYMBOLS; sym = cdr(sym)) {
       nanoclj_val_t v = car(sym);
       if (is_symbol(v)) {

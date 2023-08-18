@@ -65,8 +65,9 @@ Interpreter::Interpreter() {
       nanoclj_load_named_file(sc, fin, "init.clj");
       fclose(fin);
     }
-    
-    auto sym = nanoclj_eval_string(sc, "(ns-interns *ns*)");
+
+    std::string expr = "(ns-interns *ns*)";
+    auto sym = nanoclj_eval_string(sc, expr.c_str(), expr.size());
     for ( ; sym.as_uint64 != sc->EMPTY.as_uint64; sym = sc->vptr->pair_cdr(sym)) {
       auto v = sc->vptr->pair_car(sym);
       if (sc->vptr->is_symbol(v)) {
@@ -85,13 +86,13 @@ Interpreter::~Interpreter() {
 
 Value *
 Interpreter::eval(const std::string & expression) {
-  nanoclj_eval_string(sc_, expression.c_str());
+  nanoclj_eval_string(sc_, expression.c_str(), expression.size());
   return nullptr;
 }
 
 void
 Interpreter::eval_print(const std::string & expression) {
-  nanoclj_val_t v = nanoclj_eval_string(sc_, expression.c_str());
+  nanoclj_val_t v = nanoclj_eval_string(sc_, expression.c_str(), expression.size());
   nanoclj_val_t q = sc_->vptr->cons(sc_, sc_->QUOTE, sc_->vptr->cons(sc_, v, sc_->EMPTY));
   nanoclj_val_t c =
     sc_->vptr->cons(sc_,
