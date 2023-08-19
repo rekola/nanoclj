@@ -7,13 +7,20 @@
 
 static inline const char * utf8_next(const char * p) {
   if (*p == 0) return 0;
-  unsigned char *s = (unsigned char*) p;
+  const unsigned char *s = (const unsigned char*) p;
   if (IS_ASCII(*s)) return p + 1;
   return p + ((*s < 0xE0) ? 2 : ((*s < 0xF0) ? 3 : 4));
 }
 
+static inline const char * utf8_prev(const char * p) {
+  const unsigned char *s = (const unsigned char*) p;
+  s--;
+  while ( (*s & 0xC0) == 0x80 ) s--;
+  return (const char *)s;
+}
+
 static inline int_fast32_t utf8_decode(const char *p) {
-  unsigned char *s = (unsigned char*) p;
+  const unsigned char *s = (const unsigned char*) p;
   if (IS_ASCII(*s)) {
     return *s;
   }
@@ -33,12 +40,24 @@ static inline int utf8_num_codepoints(const char *s) {
   return count;
 }
 
-static inline int utf8_get_codepoint_pos(const char * s, int ci) {
-  const char * p = s;
+static inline int utf8_get_codepoint_pos(const char * p, int ci) {
   for (; *p && ci > 0; ci--) {
     p = utf8_next(p);
   }
   return (int)(p - s);
+}
+
+int mk_wcwidth(wchar_t ucs);
+
+static inline int utf8_num_cells(const char *p, size_t len) {
+  const char * end = p + len;
+  int nc = 0;
+  while (p < end) {
+    int c = utf8_decode(p);
+    p = utf8_next(p);
+    nc += mk_wcwidth(c);
+  }
+  return nc;
 }
 
 #endif
