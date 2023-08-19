@@ -12,6 +12,7 @@
 #ifdef WIN32
 #include <direct.h>
 #define getcwd _getcwd
+#define environ _environ
 #endif
 
 #define STB_IMAGE_STATIC
@@ -528,7 +529,9 @@ static inline void free_hints(void * ptr) {
 static inline nanoclj_val_t linenoise_readline(nanoclj_t * sc, nanoclj_val_t args) {
   if (!linenoise_sc) {
     linenoise_sc = sc;
-  
+
+    linenoiseSetupSigWinchHandler();
+    linenoiseSetMultiLine(1);
     linenoiseSetCompletionCallback(completion);
     linenoiseSetHintsCallback(hints);
     linenoiseSetFreeHintsCallback(free_hints);

@@ -115,12 +115,15 @@
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
+#include <signal.h>
 #include "linenoise.h"
 
 #define LINENOISE_DEFAULT_HISTORY_MAX_LEN 100
 #define LINENOISE_MAX_LINE 4096
-static char *unsupported_term[] = {"dumb","cons25","emacs",NULL};
+static char *unsupported_term[] = {"dumb", "cons25", "emacs", NULL};
 static linenoiseCompletionCallback *completionCallback = NULL;
+static linenoiseHighlightCallback *highlightCallback = NULL;
+static linenoiseHighlightCancelCallback *highlightCancelCallback = NULL;
 static linenoiseHintsCallback *hintsCallback = NULL;
 static linenoiseFreeHintsCallback *freeHintsCallback = NULL;
 static char *linenoiseNoTTY(void);
@@ -475,6 +478,16 @@ void linenoiseAddCompletion(linenoiseCompletions *lc, const char *str) {
     lc->cvec[lc->len++] = copy;
 }
 
+/* Register a callback function to be called for brace highlighting. */
+void linenoiseSetHighlightCallback(linenoiseHighlightCallback *fn) {
+    highlightCallback = fn;
+}
+
+/* Register a callback function to be called for canceling brace highlighting actions. */
+void linenoiseSetHighlightCancelCallback(linenoiseHighlightCancelCallback *fn) {
+    highlightCancelCallback = fn;
+}
+
 /* =========================== Line editing ================================= */
 
 /* We define a very simple "append buffer" structure, that is an heap
@@ -744,6 +757,10 @@ int linenoiseEditInsert(struct linenoiseState *l, char c) {
             l->buf[l->len] = '\0';
             refreshLine(l);
         }
+
+	if (highlightCallback != NULL) {
+	  highlightCallback(l->buf, l->pos-1);
+        }
     }
     return 0;
 }
@@ -936,6 +953,10 @@ char *linenoiseEditFeed(struct linenoiseState *l) {
     nread = read(l->ifd,&c,1);
     if (nread <= 0) return NULL;
 
+    if (highlightCancelCallback != NULL) {
+      highlightCancelCallback();
+    }
+ 
     /* Only autocomplete when the callback is set. It returns < 0 when
      * there was an error reading from fd. Otherwise it will return the
      * character that should be handled next. */
@@ -1345,4 +1366,18 @@ int linenoiseHistoryLoad(const char *filename) {
     }
     fclose(fp);
     return 0;
+}
+
+void sigwinchHandler( int sig_number ) {
+#if 0
+    if (activeState) {
+        activeState->cols = getColumns(activeState->ifd, activeState->ofd);
+    }
+#endif
+}
+
+void linenoiseSetupSigWinchHandler() {
+#if 0
+    signal(SIGWINCH, sigwinchHandler);
+#endif
 }

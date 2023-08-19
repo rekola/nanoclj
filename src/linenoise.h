@@ -43,6 +43,8 @@
 extern "C" {
 #endif
 
+void linenoiseSetupSigWinchHandler();
+  
 #include <stddef.h> /* For size_t. */
 
 extern char *linenoiseEditMore;
@@ -93,6 +95,12 @@ void linenoiseSetHintsCallback(linenoiseHintsCallback *);
 void linenoiseSetFreeHintsCallback(linenoiseFreeHintsCallback *);
 void linenoiseAddCompletion(linenoiseCompletions *, const char *);
 
+/* Brace Highlight API. */
+typedef void(linenoiseHighlightCallback)(const char *, int pos);
+void linenoiseSetHighlightCallback(linenoiseHighlightCallback *);
+typedef void(linenoiseHighlightCancelCallback)();
+void linenoiseSetHighlightCancelCallback(linenoiseHighlightCancelCallback *);
+  
 /* History API. */
 int linenoiseHistoryAdd(const char *line);
 int linenoiseHistorySetMaxLen(int len);
