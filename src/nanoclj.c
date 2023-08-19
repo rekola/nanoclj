@@ -39,6 +39,7 @@
 #include "murmur3.h"
 #include "legal.h"
 #include "term.h"
+#include "nanoclj_utf8.h"
 
 #define kNIL		  UINT64_C(18444492273895866368)
 #define kTRUE		  UINT64_C(9221683186994511873)
@@ -711,8 +712,6 @@ static inline bool is_true(nanoclj_val_t p) {
 #define cadddr(p)        car(cdr(cdr(cdr(p))))
 #define cddddr(p)        cdr(cdr(cdr(cdr(p))))
 
-#define IS_ASCII(C) (((C) & ~0x7F) == 0)
-
 static void gc(nanoclj_t * sc, nanoclj_val_t a, nanoclj_val_t b);
 static void putstr(nanoclj_t * sc, const char *s, nanoclj_val_t port);
 static void dump_stack_mark(nanoclj_t *);
@@ -769,26 +768,6 @@ static inline int_fast16_t syntaxnum(nanoclj_val_t p) {
     return s->syntax;
   }
   return 0;
-}
-
-static inline const char * utf8_next(const char * p) {
-  if (*p == 0) return 0;
-  unsigned char *s = (unsigned char*) p;
-  if (IS_ASCII(*s)) return p + 1;
-  return p + ((*s < 0xE0) ? 2 : ((*s < 0xF0) ? 3 : 4));
-}
-
-static inline int_fast32_t utf8_decode(const char *p) {
-  unsigned char *s = (unsigned char*) p;
-  if (IS_ASCII(*s)) {
-    return *s;
-  }
-  int_fast32_t bytes = (*s < 0xE0) ? 2 : ((*s < 0xF0) ? 3 : 4);
-  int_fast32_t c = *s & ((0x100 >> bytes) - 1);
-  while (--bytes) {
-    c = (c << 6) | (*(++s) & 0x3F);
-  }
-  return c;
 }
 
 /* allocate new cell segment */
@@ -2053,22 +2032,6 @@ static inline nanoclj_val_t oblist_find_keyword_by_name(nanoclj_t * sc, const ch
     }
   }
   return sc->EMPTY;
-}
-
-static inline int utf8_num_codepoints(const char *s) {
-  int count = 0;
-  while (*s) {
-    count += (*s++ & 0xC0) != 0x80;
-  }
-  return count;
-}
-
-static inline int utf8_get_codepoint_pos(const char * s, int ci) {
-  const char * p = s;
-  for (; *p && ci > 0; ci--) {
-    p = utf8_next(p);
-  }
-  return (int)(p - s);
 }
 
 static inline nanoclj_val_t mk_vector(nanoclj_t * sc, size_t len) {
