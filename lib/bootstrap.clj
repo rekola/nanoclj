@@ -311,13 +311,13 @@
   "Returns the maximum of the arguments"
   ([x] x)
   ([x y] (if (gt x y) x y))
-  ([x y & more] (reduce (fn [x y] (if (gt x y) x y)) (if (gt x y) x y) more)))
+  ([& args] (reduce #( if (gt %1 %2) %1 %2) args)))
 
 (defn min
   "Returns the minimum of the arguments"
   ([x] x)
-  ([x y] (if (lt x y) x y)) 
-  ([x y & more] (reduce (fn [x y] (if (lt x y) x y)) (if (lt x y) x y) more)))
+  ([x y] (if (lt x y) x y))
+  ([& args] (reduce #( if (lt %1 %2) %1 %2) args)))
 
 (defn +
   "Returns the sum of the arguments"
