@@ -10,7 +10,7 @@
                min-y (apply min y)
                range-x (- (apply max x) min-x)
                range-y (- (apply max y) min-y)
-               fit-x (fn [x] (* (/ (- x min-y) range-x) width))
+               fit-x (fn [x] (* (/ (- x min-x) range-x) width))
                fit-y (fn [y] (+ (* (/ (- y min-y) range-y) content-height) v-margin))
                draw (fn [x y] (if (or (empty? x) (empty? y))
                                 nil
