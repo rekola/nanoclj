@@ -10,12 +10,18 @@
 #define _NANOCLJ_SOURCE
 #include "nanoclj_priv.h"
 
-#ifndef WIN32
+#ifdef _WIN32
+
+#if defined(_MSC_VER) && _MSC_VER < 1900
+#define snprintf _snprintf  // Microsoft headers use underscores in some names
+#endif
+
+#else /* _WIN32 */
+
 #include <unistd.h>
-#endif
-#ifdef WIN32
-#define snprintf _snprintf
-#endif
+
+#endif /* _WIN32 */
+
 #if USE_DL
 #include "dynload.h"
 #endif
@@ -23,10 +29,11 @@
 #include <math.h>
 #include <limits.h>
 #include <ctype.h>
-#include <time.h>
 #include <stdarg.h>
-#include <utf8proc.h>
 #include <assert.h>
+
+#include <utf8proc.h>
+#include <sixel/sixel.h>
 
 #include "clock.h"
 #include "murmur3.h"
@@ -1294,7 +1301,9 @@ static inline struct cell * get_vector_object(nanoclj_t * sc, int_fast16_t t, na
 
 /* =================== Canvas ====================== */
 
-#ifndef WIN32
+#ifdef WIN32
+#include "nanoclj_gdi.h"
+#else
 #include "nanoclj_cairo.h"
 #endif
 
@@ -2867,24 +2876,20 @@ static inline void putcharacter(nanoclj_t * sc, int c, nanoclj_val_t out) {
 }
 
 static inline void set_color(nanoclj_t * sc, struct cell * vec, nanoclj_val_t out) {
+  if (is_canvas(out)) {
 #if NANOCLJ_HAS_CANVAS
-  if (is_canvas(out) && vec) {
     canvas_set_color(canvas_unchecked(out),
 		     to_double(vector_elem(vec, 0)),
 		     to_double(vector_elem(vec, 1)),
 		     to_double(vector_elem(vec, 2)));
-  }
 #endif
-  
-  if (is_writer(out)) {
+  } else if (is_writer(out)) {
     nanoclj_port_t * pt = port_unchecked(out);
-#ifndef WIN32    
     if (pt->kind & port_file) {
+#ifndef WIN32    
       FILE * fh = pt->rep.stdio.file;
       if (isatty(fileno(fh))) {
-	if (!vec) {
-	  reset_color(fh);
-	} else if (sc->truecolor_term) {
+	if (sc->truecolor_term) {
 	  set_truecolor(fh,
 			to_double(vector_elem(vec, 0)),
 			to_double(vector_elem(vec, 1)),
@@ -2893,17 +2898,14 @@ static inline void set_color(nanoclj_t * sc, struct cell * vec, nanoclj_val_t ou
 	  /* set_basic_style(fh, ansi_color); */
 	}
       }
-    }
 #endif
-    if (pt->kind & port_callback) {
-      if (vec && pt->rep.callback.color) {
+    } else if (pt->kind & port_callback) {
+      if (pt->rep.callback.color) {
 	pt->rep.callback.color(to_double(vector_elem(vec, 0)),
 			       to_double(vector_elem(vec, 1)),
 			       to_double(vector_elem(vec, 2)),
 			       sc->ext_data
 			       );
-      } else if (!vec && pt->rep.callback.reset_color) {
-	pt->rep.callback.reset_color(sc->ext_data);
       }
     }
   }
@@ -3259,6 +3261,11 @@ static inline void print_slashstring(nanoclj_t * sc, const char *p, int len, nan
   putcharacter(sc, '"', out);
 }
 
+static int sixel_write(char *data, int size, void *priv)
+{
+  return fwrite(data, 1, size, (FILE *)priv);
+}
+
 static inline void print_image(nanoclj_t * sc, nanoclj_image_t * img, nanoclj_val_t out) {
   assert(is_writer(out));
   if (!is_writer(out)) {
@@ -3270,9 +3277,30 @@ static inline void print_image(nanoclj_t * sc, nanoclj_image_t * img, nanoclj_va
   if ((pt->kind & port_callback) && pt->rep.callback.image) {
     pt->rep.callback.image(img, sc->ext_data);
   } else {
+#if 1
+    int width = img->width, height = img->height;
+    unsigned char * tmp = malloc(3 * width * height);
+    for (unsigned int i = 0; i < width * height; i++) {
+      tmp[3 * i + 0] = img->data[4 * i + 0];
+      tmp[3 * i + 1] = img->data[4 * i + 1];
+      tmp[3 * i + 2] = img->data[4 * i + 2];
+    }
+    sixel_dither_t * dither = sixel_dither_get(SIXEL_BUILTIN_G8);
+    sixel_output_t * output = NULL;
+    sixel_output_new(&output, sixel_write, stdout, NULL);
+    
+    /* convert pixels into sixel format and write it to output context */
+    sixel_encode(tmp,
+		 img->width,
+		 img->height,
+		 8,
+		 dither,
+		 output);
+#else
     char * p = sc->strbuff;
     snprintf(sc->strbuff, sc->strbuff_size, "#object[%s %p %d %d %d]", typename_from_id(T_IMAGE), (void *)img, img->width, img->height, img->channels);
     putstr(sc, p, out);
+#endif
   }
 }
 
@@ -5446,63 +5474,6 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     }
     print_primitive(sc, sc->arg0, op == OP_PR, get_out_port(sc));
     s_return(sc, mk_nil());
-
-  case OP_SET_COLOR:
-    x = car(sc->args);
-    if (is_vector(x)) {
-      set_color(sc, decode_pointer(x), get_out_port(sc));
-    } else {
-      set_color(sc, NULL, get_out_port(sc));
-    }
-    s_return(sc, mk_nil());
-
-  case OP_MOVETO:
-    if (!unpack_args_2(sc)) {
-      Error_0(sc, "Error - Invalid arity");
-    }
-#if NANOCLJ_HAS_CANVAS
-    x = get_out_port(sc);
-    if (is_canvas(x)) {
-      canvas_move_to(canvas_unchecked(x), to_double(sc->arg0), to_double(sc->arg1));
-    }
-#endif
-    s_return(sc, mk_nil());
-    
-  case OP_LINETO:
-    if (!unpack_args_2(sc)) {
-      Error_0(sc, "Error - Invalid arity");
-    }
-#if NANOCLJ_HAS_CANVAS
-    x = get_out_port(sc);
-    if (is_canvas(x)) {
-      canvas_line_to(canvas_unchecked(x), to_double(sc->arg0), to_double(sc->arg1));
-    }
-#endif
-    s_return(sc, mk_nil());
-
-  case OP_STROKE:
-    if (!unpack_args_0(sc)) {
-      Error_0(sc, "Error - Invalid arity");
-    }
-#if NANOCLJ_HAS_CANVAS
-    x = get_out_port(sc);
-    if (is_canvas(x)) {
-      canvas_stroke(canvas_unchecked(x));
-    }
-#endif
-    s_return(sc, mk_nil());
-
-  case OP_FILL:
-    if (!unpack_args_0(sc)) {
-      Error_0(sc, "Error - Invalid arity");
-    }
-#if NANOCLJ_HAS_CANVAS
-    x = get_out_port(sc);
-    if (is_canvas(x)) {
-      canvas_stroke(canvas_unchecked(x));
-    }
-#endif
-    s_return(sc, mk_nil());
   
   case OP_FORMAT:{
     if (!unpack_args_1_plus(sc)) {
@@ -5710,8 +5681,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       } else if (sc->tok == TOK_RPAREN) {
 	nanoclj_port_t * inport = port_unchecked(get_in_port(sc));
 	int c = inchar(sc, inport);
-	if (c != '\n') {
-	  if (c == EOF) fprintf(stderr, "backchar with eof\n");
+	if (c != '\n' && c != EOF) {
 	  backchar(c, inport);
 	} else if (sc->load_stack[sc->file_i].kind & port_file) {
 	  sc->load_stack[sc->file_i].rep.stdio.curr_line++;
@@ -5962,6 +5932,108 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     x = sc->arg0;
     /* TODO: construct a regex */
     s_return(sc, x);
+
+  case OP_SET_COLOR:
+    if (!unpack_args_1(sc)) {
+      Error_0(sc, "Error - Invalid arity");
+    }
+    x = car(sc->args);
+    if (is_vector(x)) {
+      set_color(sc, decode_pointer(x), get_out_port(sc));
+    }
+    s_return(sc, mk_nil());
+
+  case OP_MOVETO:
+    if (!unpack_args_2(sc)) {
+      Error_0(sc, "Error - Invalid arity");
+    }
+#if NANOCLJ_HAS_CANVAS
+    x = get_out_port(sc);
+    if (is_canvas(x)) {
+      canvas_move_to(canvas_unchecked(x), to_double(sc->arg0), to_double(sc->arg1));
+    }
+#endif
+    s_return(sc, mk_nil());
+    
+  case OP_LINETO:
+    if (!unpack_args_2(sc)) {
+      Error_0(sc, "Error - Invalid arity");
+    }
+#if NANOCLJ_HAS_CANVAS
+    x = get_out_port(sc);
+    if (is_canvas(x)) {
+      canvas_line_to(canvas_unchecked(x), to_double(sc->arg0), to_double(sc->arg1));
+    }
+#endif
+    s_return(sc, mk_nil());
+
+  case OP_CLOSE_PATH:
+    if (!unpack_args_0(sc)) {
+      Error_0(sc, "Error - Invalid arity");
+    }
+#if NANOCLJ_HAS_CANVAS
+    x = get_out_port(sc);
+    if (is_canvas(x)) {
+      canvas_close_path(canvas_unchecked(x));
+    }
+#endif
+    s_return(sc, mk_nil());
+
+  case OP_STROKE:
+    if (!unpack_args_0(sc)) {
+      Error_0(sc, "Error - Invalid arity");
+    }
+#if NANOCLJ_HAS_CANVAS
+    x = get_out_port(sc);
+    if (is_canvas(x)) {
+      canvas_stroke(canvas_unchecked(x));
+    }
+#endif
+    s_return(sc, mk_nil());
+
+  case OP_FILL:
+    if (!unpack_args_0(sc)) {
+      Error_0(sc, "Error - Invalid arity");
+    }
+#if NANOCLJ_HAS_CANVAS
+    x = get_out_port(sc);
+    if (is_canvas(x)) {
+      canvas_stroke(canvas_unchecked(x));
+    }
+#endif
+    s_return(sc, mk_nil());
+    
+  case OP_SAVE:
+    if (!unpack_args_0(sc)) {
+      Error_0(sc, "Error - Invalid arity");
+    }
+#if NANOCLJ_HAS_CANVAS
+    x = get_out_port(sc);
+    if (is_canvas(x)) {
+      canvas_save(canvas_unchecked(x));
+    }
+#endif
+    s_return(sc, mk_nil());
+
+  case OP_RESTORE:
+    if (!unpack_args_0(sc)) {
+      Error_0(sc, "Error - Invalid arity");
+    }
+    x = get_out_port(sc);
+    if (is_canvas(x)) {
+#if NANOCLJ_HAS_CANVAS
+      canvas_restore(canvas_unchecked(x));
+#endif
+    } else if (is_writer(x)) {
+      nanoclj_port_t * pt = port_unchecked(x); 
+      if (pt->kind & port_file) {
+	FILE * fh = pt->rep.stdio.file;
+	reset_color(fh);
+      } else if (pt->rep.callback.reset_color) {
+	pt->rep.callback.reset_color(sc->ext_data);
+      }
+    }
+    s_return(sc, mk_nil());
 
   default:
     sprintf(sc->strbuff, "%d: illegal operator", sc->op);

@@ -52,12 +52,24 @@ static inline void canvas_line_to(void * canvas, double x, double y) {
   cairo_line_to((cairo_t *)canvas, x, y);
 }
 
+static inline void canvas_close_path(void * canvas) {
+  cairo_close_path((cairo_t *)canvas);
+}
+
 static inline void canvas_stroke(void * canvas) {
   cairo_stroke((cairo_t *)canvas);
 }
 
 static inline void canvas_fill(void * canvas) {
   cairo_fill((cairo_t *)canvas);
+}
+
+static inline void canvas_save(void * canvas) {
+  cairo_save((cairo_t *)canvas);
+}
+
+static inline void canvas_restore(void * canvas) {
+  cairo_restore((cairo_t *)canvas);
 }
 
 static inline void canvas_show_text(void * canvas, const char * text, size_t len) {
