@@ -139,6 +139,8 @@ static int history_max_len = LINENOISE_DEFAULT_HISTORY_MAX_LEN;
 static int history_len = 0;
 static char **history = NULL;
 
+static struct linenoiseState *activeState;
+
 enum KEY_ACTION{
 	KEY_NULL = 0,	    /* NULL */
 	CTRL_A = 1,         /* Ctrl+a */
@@ -918,6 +920,10 @@ int linenoiseEditStart(struct linenoiseState *l, int stdin_fd, int stdout_fd, ch
     linenoiseHistoryAdd("");
 
     if (write(l->ofd,prompt,l->plen) == -1) return -1;
+
+    // Set things up so we can handle async prints coming in
+    activeState = l;
+
     return 0;
 }
 
@@ -951,7 +957,9 @@ char *linenoiseEditFeed(struct linenoiseState *l) {
     char seq[3];
 
     nread = read(l->ifd,&c,1);
-    if (nread <= 0) return NULL;
+    if (nread <= 0) {
+      return NULL;
+    }
 
     if (highlightCancelCallback != NULL) {
       highlightCancelCallback();
@@ -963,7 +971,9 @@ char *linenoiseEditFeed(struct linenoiseState *l) {
     if ((l->in_completion || c == 9) && completionCallback != NULL) {
         c = completeLine(l,c);
         /* Return on errors */
-        if (c < 0) return NULL;
+        if (c < 0) {
+	  return NULL;
+	}
         /* Read next character when 0 */
         if (c == 0) return linenoiseEditMore;
     }
@@ -1077,7 +1087,9 @@ char *linenoiseEditFeed(struct linenoiseState *l) {
         }
         break;
     default:
-        if (linenoiseEditInsert(l,c)) return NULL;
+        if (linenoiseEditInsert(l,c)) {
+	    return NULL;
+	}
         break;
     case CTRL_U: /* Ctrl+u, delete the whole line. */
         l->buf[0] = '\0';
@@ -1111,6 +1123,8 @@ char *linenoiseEditFeed(struct linenoiseState *l) {
  * returns something different than NULL. At this point the user input
  * is in the buffer, and we can restore the terminal in normal mode. */
 void linenoiseEditStop(struct linenoiseState *l) {
+    activeState = NULL;
+
     if (!isatty(l->ifd)) return;
     disableRawMode(l->ifd);
     printf("\n");
@@ -1197,6 +1211,17 @@ static char *linenoiseNoTTY(void) {
         } else {
             line[len] = c;
             len++;
+        }
+    }
+}
+
+void linenoisePrintNow(const char *text) {
+
+    if (strcmp(text, "\n") != 0) {
+        fprintf(stdout, "\r\x1b[0K%s\n", text);
+
+        if (activeState) {
+            refreshLine(activeState);
         }
     }
 }
@@ -1369,15 +1394,11 @@ int linenoiseHistoryLoad(const char *filename) {
 }
 
 void sigwinchHandler( int sig_number ) {
-#if 0
     if (activeState) {
         activeState->cols = getColumns(activeState->ifd, activeState->ofd);
     }
-#endif
 }
 
 void linenoiseSetupSigWinchHandler() {
-#if 0
     signal(SIGWINCH, sigwinchHandler);
-#endif
 }
