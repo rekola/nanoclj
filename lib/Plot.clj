@@ -1,4 +1,8 @@
-(def Plot (package
+(defn linspace
+  "Creates an evenly spaced vector from a to b with n points"
+  ([a b] (linspace a b 100))
+  ([a b n] (let [dx (float (/ (- b a) (- n 1)))]
+            (vec (range a (+ b dx) dx)))))
 
 (defn plot
   "Plots a series. Matlab style."
@@ -24,5 +28,3 @@
                (draw (rest x) (rest y))
                (stroke)
                )))))
-
-))
