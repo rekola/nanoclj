@@ -2663,7 +2663,7 @@ static inline nanoclj_val_t port_from_file(nanoclj_t * sc, FILE * f, int prop) {
 static inline nanoclj_val_t port_from_callback(nanoclj_t * sc,
 					       void (*text) (const char *, size_t, void *),
 					       void (*color) (double, double, double, void *),
-					       void (*reset_color) (void *),
+					       void (*restore) (void *),
 					       void (*image) (nanoclj_image_t*, void*),
 					       int prop) {
   nanoclj_port_t *pt = (nanoclj_port_t *)sc->malloc(sizeof *pt);
@@ -2674,7 +2674,7 @@ static inline nanoclj_val_t port_from_callback(nanoclj_t * sc,
   pt->backchar = -1;
   pt->rep.callback.text = text;
   pt->rep.callback.color = color;
-  pt->rep.callback.reset_color = reset_color;
+  pt->rep.callback.restore = restore;
   pt->rep.callback.image = image;
 
   return mk_writer(sc, pt);
@@ -5992,8 +5992,8 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       if (pt->kind & port_file) {
 	FILE * fh = pt->rep.stdio.file;
 	reset_color(fh);
-      } else if (pt->rep.callback.reset_color) {
-	pt->rep.callback.reset_color(sc->ext_data);
+      } else if (pt->rep.callback.restore) {
+	pt->rep.callback.restore(sc->ext_data);
       }
     }
     s_return(sc, mk_nil());
@@ -6346,10 +6346,10 @@ void nanoclj_set_output_port_file(nanoclj_t * sc, FILE * fout) {
 void nanoclj_set_output_port_callback(nanoclj_t * sc,
 				      void (*text) (const char *, size_t, void *),
 				      void (*color) (double, double, double, void *),
-				      void (*reset_color) (void *),
+				      void (*restore) (void *),
 				      void (*image) (nanoclj_image_t *, void *)
 				      ) {
-  nanoclj_val_t p = port_from_callback(sc, text, color, reset_color, image, port_output);
+  nanoclj_val_t p = port_from_callback(sc, text, color, restore, image, port_output);
   nanoclj_intern(sc, sc->root_env, sc->OUT, p);
 }
 

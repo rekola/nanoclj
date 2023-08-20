@@ -34,7 +34,7 @@ namespace nanoclj {
     virtual void print_image(nanoclj_image_t * image) { }
 
     virtual void set_color(double r, double g, double b) { }
-    virtual void reset_color() { }
+    virtual void restore() { }
 
     void flush() {
       print(out_buffer);

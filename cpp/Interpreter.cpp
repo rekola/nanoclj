@@ -19,11 +19,11 @@ static void out_color_callback(double r, double g, double b, void * data) {
   }
 }
 
-static void out_reset_color_callback(void * data) {
+static void out_restore_callback(void * data) {
   if (data) {
     auto interpreter = reinterpret_cast<Interpreter *>(data);
     interpreter->flush();
-    interpreter->reset_color();
+    interpreter->restore();
   }  
 }
 
@@ -54,7 +54,7 @@ Interpreter::Interpreter() {
     sc_ = sc;
 
     nanoclj_set_input_port_file(sc, stdin);
-    nanoclj_set_output_port_callback(sc, &out_print_callback, &out_color_callback, &out_reset_color_callback, &out_image_callback);
+    nanoclj_set_output_port_callback(sc, &out_print_callback, &out_color_callback, &out_restore_callback, &out_image_callback);
     nanoclj_set_error_port_callback(sc, &error_callback);
     nanoclj_set_external_data(sc, this);
     nanoclj_set_object_invoke_callback(sc, &object_invoke_callback);

@@ -68,7 +68,7 @@ extern "C" {
       struct {
 	void (*text) (const char *, size_t, void*);
 	void (*color) (double r, double g, double b, void*);
-	void (*reset_color) (void*);
+	void (*restore) (void*);
 	void (*image) (nanoclj_image_t*, void*);
       } callback;
     } rep;
