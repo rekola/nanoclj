@@ -117,6 +117,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include "linenoise.h"
+#include "nanoclj_utf8.h"
 
 #define LINENOISE_DEFAULT_HISTORY_MAX_LEN 100
 #define LINENOISE_MAX_LINE 4096
@@ -593,7 +594,14 @@ static void refreshSingleLine(struct linenoiseState *l, int flags) {
 
     if (flags & REFRESH_WRITE) {
         /* Move cursor to original position. */
-        snprintf(seq,sizeof(seq),"\r\x1b[%dC", (int)(pos+plen));
+        int actual_pos;
+        if (l->utf8) {
+	    actual_pos = utf8_num_cells(l->prompt, strlen(l->prompt));
+	    actual_pos += utf8_num_cells(buf, pos < len ? pos : len);
+	} else {
+	    actual_pos = (int)(pos+plen);
+	}
+        snprintf(seq,sizeof(seq),"\r\x1b[%dC", actual_pos);
         abAppend(&ab,seq,strlen(seq));
     }
 
@@ -686,7 +694,14 @@ static void refreshMultiLine(struct linenoiseState *l, int flags) {
         }
 
         /* Set column. */
-        col = (plen+(int)l->pos) % (int)l->cols;
+	if (l->utf8) {
+	    col = utf8_num_cells(l->prompt, strlen(l->prompt));
+	    col += utf8_num_cells(l->buf, l->pos < l->len ? l->pos : l->len);
+	} else {
+	    col = plen+(int)l->pos;
+	}
+	col %= (int)l->cols;
+	
         lndebug("set col %d", 1+col);
         if (col)
             snprintf(seq,64,"\r\x1b[%dC", col);
@@ -770,7 +785,14 @@ int linenoiseEditInsert(struct linenoiseState *l, char c) {
 /* Move cursor on the left. */
 void linenoiseEditMoveLeft(struct linenoiseState *l) {
     if (l->pos > 0) {
-        l->pos--;
+        int step;
+        if (l->utf8) {
+	    const char * current = l->buf + l->pos;
+	    step = (int)(current - utf8_prev(current));
+	} else {
+	    step = 1;
+	}
+        l->pos-=step;
         refreshLine(l);
     }
 }
@@ -778,7 +800,36 @@ void linenoiseEditMoveLeft(struct linenoiseState *l) {
 /* Move cursor on the right. */
 void linenoiseEditMoveRight(struct linenoiseState *l) {
     if (l->pos != l->len) {
-        l->pos++;
+        int step;
+        if (l->utf8) {
+	    const char * current = l->buf + l->pos;	
+	    step = (int)(utf8_next(current) - current);
+	} else {
+	    step = 1;
+	}
+        l->pos+=step;
+        refreshLine(l);
+    }
+}
+
+/* Move cursor left to the beginning of the word. */
+void linenoiseEditMoveWordLeft(struct linenoiseState *l) {
+    if (l->pos > 0) {
+	while (l->pos > 0 && l->buf[l->pos-1] == ' ')
+	    l->pos--;
+	while (l->pos > 0 && l->buf[l->pos-1] != ' ')
+            l->pos--;
+	refreshLine(l);
+    }
+}
+
+/* Move cursor right to the end of the word. */
+void linenoiseEditMoveWordRight(struct linenoiseState *l) {
+    if (l->pos < l->len) {
+	while (l->pos < l->len && l->buf[l->pos] == ' ')
+	    l->pos++;
+	while (l->pos < l->len && l->buf[l->pos] != ' ')
+            l->pos++;
         refreshLine(l);
     }
 }
@@ -829,8 +880,16 @@ void linenoiseEditHistoryNext(struct linenoiseState *l, int dir) {
  * position. Basically this is what happens with the "Delete" keyboard key. */
 void linenoiseEditDelete(struct linenoiseState *l) {
     if (l->len > 0 && l->pos < l->len) {
-        memmove(l->buf+l->pos,l->buf+l->pos+1,l->len-l->pos-1);
-        l->len--;
+        int removed_bytes;
+        if (l->utf8) {
+	    const char * current = l->buf + l->pos;
+	    const char * next = utf8_next(current);
+	    removed_bytes = (int)(next - current);
+	} else {
+	    removed_bytes = 1;
+	}
+        memmove(l->buf+l->pos,l->buf+l->pos+removed_bytes,l->len-l->pos-removed_bytes);
+        l->len-=removed_bytes;
         l->buf[l->len] = '\0';
         refreshLine(l);
     }
@@ -839,9 +898,17 @@ void linenoiseEditDelete(struct linenoiseState *l) {
 /* Backspace implementation. */
 void linenoiseEditBackspace(struct linenoiseState *l) {
     if (l->pos > 0 && l->len > 0) {
-        memmove(l->buf+l->pos-1,l->buf+l->pos,l->len-l->pos);
-        l->pos--;
-        l->len--;
+        int removed_bytes;
+	if (l->utf8) {
+	    const char * current = l->buf + l->pos;
+	    const char * prev = utf8_prev(current);
+	    removed_bytes = (int)(current - prev);
+	} else {
+	    removed_bytes = 1;
+	}
+        memmove(l->buf+l->pos-removed_bytes,l->buf+l->pos,l->len-l->pos);
+        l->pos-=removed_bytes;
+        l->len-=removed_bytes;
         l->buf[l->len] = '\0';
         refreshLine(l);
     }
@@ -902,7 +969,8 @@ int linenoiseEditStart(struct linenoiseState *l, int stdin_fd, int stdout_fd, ch
     l->cols = getColumns(stdin_fd, stdout_fd);
     l->oldrows = 0;
     l->history_index = 0;
-
+    l->utf8 = 1;
+    
     /* Buffer starts empty. */
     l->buf[0] = '\0';
     l->buflen--; /* Make sure there is always space for the nulterm */
@@ -954,7 +1022,7 @@ char *linenoiseEditFeed(struct linenoiseState *l) {
 
     char c;
     int nread;
-    char seq[3];
+    char seq[5];
 
     nread = read(l->ifd,&c,1);
     if (nread <= 0) {
@@ -1049,7 +1117,15 @@ char *linenoiseEditFeed(struct linenoiseState *l) {
                         linenoiseEditDelete(l);
                         break;
                     }
-                }
+                } else if (seq[1] == '1' && seq[2] == ';') {
+		    /* Read two more bytes */
+		    if (read(l->ifd,seq+3,2) == -1) break;
+		    if (seq[3] == '5' && seq[4] == 'D') {
+		        linenoiseEditMoveWordLeft(l);
+		    } else if (seq[3] == '5' && seq[4] == 'C') {
+		        linenoiseEditMoveWordRight(l);		        
+		    }
+		}
             } else {
                 switch(seq[1]) {
                 case 'A': /* Up */
