@@ -41,10 +41,11 @@ static inline int utf8_num_codepoints(const char *s) {
 }
 
 static inline int utf8_get_codepoint_pos(const char * p, int ci) {
-  for (; *p && ci > 0; ci--) {
+  int i = 0;
+  for (; *p && ci > 0; ci--, i++) {
     p = utf8_next(p);
   }
-  return (int)(p - s);
+  return i;
 }
 
 int mk_wcwidth(wchar_t ucs);
