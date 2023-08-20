@@ -2,17 +2,42 @@
 
 ## A Tiny Clojure Interpreter
 
-- This is small `Clojure` language implementation written in `C` language.
-- Based on TinyScheme R7, which is based on TinyScheme, which is based on MiniScheme
-- It does not attempt to be a real Clojure but a real Lisp with Clojure syntax. I.e. lists are actual Lisp lists built from cons cells
-- Not yet complete nor fast
-- Somewhat similar to Janet, but has Unicode out of the box. Similar to Planck but doesn't use Javascript or ClojureScript.
+This is small Clojure language implementation written in C language.
+It is based on TinyScheme R7, which is based on TinyScheme,
+which is based on MiniScheme. nanoclj does not attempt to be a real
+Clojure but a real Lisp with Clojure syntax. I.e. lists are actual
+Lisp lists built from cons cells. It is not yet complete nor fast. It
+is somewhat similar to Janet, but has Unicode out of the box. Similar
+to Planck but doesn't use Javascript or ClojureScript.
 
 ## Possible applications
 
 - as a tiny engine for running plugins and other extensions in your `C/C++` program (suppose you want to change some part of logic of your program without recompiling it every time).
 - as a sandbox to learn the language (as it supports most common features except those which will make implementation not "nano")
 - as utility script-running tool, even to create `CGI-scripts` for web-server
+
+## 2D Graphics
+
+Since Clojure has no standard way for 2D drawing, a new system has
+been created for nanoclj. The principle of minimality suggests that
+there should only be a single way to output text, which means that
+println must work with canvas. Therefore, an active canvas is bound to
+`*out*` and it's the target of all canvas operations. For normal `*out*`
+the canvas commands are ignored (apart from color and restore), but
+one could imagine that they could be used to draw vector graphics on a
+Tektronix terminal, or move-to could set the cursor position in a text
+mode program. The canvas interface has been modeled after Cairo.
+
+In GUI program the resulting canvas can be displayed in a REPL using
+the GUI callbacks for output Writer. In terminal program sixels are
+used to print the results of a function call when the function returns
+a canvas or image. The terminal must, of course, has to support sixel
+graphics and sixel support must be enabled. The following terminals
+have been tested:
+
+- Black Box: everything works, but on HiDPI system the images are scaled
+- xterm: doesn't support true color
+- mlterm: true color and sixels work, but the output flickers when updated
 
 ## Differences to Clojure:
 
@@ -21,17 +46,17 @@
 - By default 32 bit integers are used, since 64 bit integers don't fit in the NaN boxing.
 - (cons 1 2) is allowed
 - List length has complexity of O(n)
-- Macros use Scheme syntax
+- Vectors support O(1) append, but update is O(n)
+- Macros and namespace definitions use TinyScheme syntax
 - Tail call optimization
 - sort is not stable and cannot throw on type mismatch
-- Namespace definition uses TinyScheme syntax
 - License is BSD 2-Clause License instead of EPL
 - No type inheritance
 - No 32 bit floating point numbers or small integers
 - (identical 'a 'a) ; => true
-- All primitives are, in effect, interned (e.g. doubles and 32 bit integers)
+- Primitives such as doubles and 32 bit integers are passed by value, and are in effect, interned
 - Strings are not interned (identical? "abc" "abc") ;=> false
-- Ratios use smallest possible integer type for numerator and denominator
+- Ratios use smallest suitable integer type for numerator and denominator
 - No chunked lazy sequences
 
 ## Differences to (Tiny)Scheme:
@@ -53,7 +78,14 @@
 ## Types
 
 - Types are first class values and can be invoked to construct new values
-- Type names try to imitate Java and Clojure types where possible (type \a) ;=> java.lang.Character
+- Type names try to imitate Java and Clojure types when possible (type \a) ;=> java.lang.Character
+
+## Dependencies
+
+- linenoise (included)
+- cairo
+- libsixel
+- utf8proc
 
 ## Missing functionality
 
@@ -69,6 +101,7 @@
 - Namespace qualifiers for keywords
 - Numeric literals other than decimal (e.g. 0xff, 2r0, 3N, 0.1M, 01)
 - Persistent data structures
+- Transient data structures
 - BigInts and BigDecimals
 - Unchecked operations
 - Autopromoting operations
@@ -76,7 +109,7 @@
 - Multithreading and transactions
 - Threading macros (->, -->, some-> and some->>)
 - Classes (class, class?, cast)
-- *print-length*, *print-level*
+- `*print-length*`, `*print-level*`
 - Missing core functions and macros
   - doseq, for, dotimes
   - line-seq
@@ -87,7 +120,7 @@
   - keep
   - mapv, filterv
   - sorted-set-by, sorted-map, hash-set
-  - *clojure-version*
+  - `*clojure-version*`
   - update, update-in, merge, get-in, disj
   - name
   - lazy-cat, realized?
@@ -116,6 +149,7 @@
   - if-not
   - if-let
   - realized?
+  - defn-
 - clojure.string
   - upper-case
   - clojure.string/capitalize
@@ -123,8 +157,3 @@
   - clojure.string/replace
   - trim, trimr, trim-newline
 - ...and lots more...
-
-## Dependencies
-
-- linenoise (included)
-- utf8proc
