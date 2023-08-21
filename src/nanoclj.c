@@ -2337,14 +2337,14 @@ static inline nanoclj_val_t mk_char_const(nanoclj_t * sc, char *name) {
       }   
     } else if (name[2] == 0) {
       c = name[1];
-    } else if (utf8_num_codepoints(name + 1) == 1) {
+    } else if (*(utf8_next(name + 1)) == 0) {
       c = utf8_decode(name + 1);
     } else {
       return sc->EMPTY;
     }
     return mk_character(c);
   } else {
-    return (sc->EMPTY);
+    return sc->EMPTY;
   }
 }
 
@@ -2358,7 +2358,7 @@ static inline nanoclj_val_t mk_sharp_const(nanoclj_t * sc, char *name) {
   } else if (str_eq(name, "Eof")) {
     return mk_character(EOF);
   } else {
-    return (sc->EMPTY);
+    return sc->EMPTY;
   }
 }
 
@@ -3194,7 +3194,7 @@ static inline void print_slashstring(nanoclj_t * sc, const char *p, int len, nan
     c = utf8_decode(p);
     p = utf8_next(p);
     
-    if (c == '"' || c < ' ' || c == '\\') {
+    if (c == '"' || c < ' ' || c == '\\' || (c >= 0x7f && c <= 0xa0)) {
       putcharacter(sc, '\\', out);
       switch (c) {
       case '"':
