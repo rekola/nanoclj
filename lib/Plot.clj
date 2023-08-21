@@ -22,9 +22,9 @@
                                   (line-to (fit-x (first x)) (fit-y (first y)))
                                   (recur (rest x) (rest y)))))
                ]
-           (with-canvas width height
-             (do
-               (move-to (fit-x (first x)) (fit-y (first y)))
-               (draw (rest x) (rest y))
-               (stroke)
-               )))))
+           (image (with-canvas width height
+                    (do
+                      (move-to (fit-x (first x)) (fit-y (first y)))
+                      (draw (rest x) (rest y))
+                      (stroke)
+               ))))))
