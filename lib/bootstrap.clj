@@ -64,6 +64,7 @@
 (def scheme.lang.CharArray (scheme.lang.Type 27))
 (def java.io.InputStream (scheme.lang.Type 28))
 (def java.io.OutputStream (scheme.lang.Type 29))
+(def scheme.lang.Image (scheme.lang.Type 32))
 (def scheme.lang.Canvas (scheme.lang.Type 33))
 
 (def symbol clojure.lang.Symbol)
@@ -74,6 +75,7 @@
 (def char-array scheme.lang.CharArray)
 (def map-entry clojure.lang.MapEntry)
 (def canvas scheme.lang.Canvas)
+(def image scheme.lang.Image)
 
 (def nil?
   "Returns true if the argument is nil"
