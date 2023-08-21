@@ -304,6 +304,12 @@
 (defn print [& more] (run! print- more))
 (defn println [& more] (apply print more) (newline))
 
+(defn warn [& more] (let [prev-out *out*]                          
+                      (set! *out* *err*)
+	              (apply println more)
+                      (set! *out* prev-out)
+                      nil))
+
 (def *print-length* nil)
 
 (def styles- {
@@ -412,14 +418,6 @@
            (set! *out* prev-out)
            (java.lang.String w)))
 
-(def-macro (with-canvas width height body)
-  `(let ((prev-out *out*)
-         (c (canvas width height)))
-     (set! *out* c)
-     ,body
-     (set! *out* prev-out)
-     c))
-
 (def-macro (with-in-str s body)
   `(let ((prev-in *in*)
          (rdr (clojure.lang.io/reader (char-array ,s)))
@@ -429,6 +427,14 @@
        (set! *in* prev-in)
        r
        )))
+
+(def-macro (with-canvas width height body)
+  `(let ((prev-out *out*)
+         (c (canvas width height)))
+     (set! *out* c)
+     ,body
+     (set! *out* prev-out)
+     c))
 
 (defn pr-str [& xs] (with-out-str (apply pr xs)))
 (defn prn-str [& xs] (with-out-str (apply prn xs)))
