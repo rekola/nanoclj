@@ -555,7 +555,7 @@ void refreshShowHints(struct abuf *ab, struct linenoiseState *l, int plen) {
  * prompt, just write it, or both. */
 static void refreshSingleLine(struct linenoiseState *l, int flags) {
     char seq[64];
-    size_t plen = strlen(l->prompt);
+    size_t plen = l->plen;
     int fd = l->ofd;
     char *buf = l->buf;
     size_t len = l->len;
@@ -618,7 +618,7 @@ static void refreshSingleLine(struct linenoiseState *l, int flags) {
  * prompt, just write it, or both. */
 static void refreshMultiLine(struct linenoiseState *l, int flags) {
     char seq[64];
-    int plen = strlen(l->prompt);
+    int plen = l->plen;
     int rows = (plen+l->len+l->cols-1)/l->cols; /* rows used by current buf. */
     int rpos = (plen+l->oldpos+l->cols)/l->cols; /* cursor relative row. */
     int rpos2; /* rpos after refresh. */
@@ -657,7 +657,7 @@ static void refreshMultiLine(struct linenoiseState *l, int flags) {
 
     if (flags & REFRESH_WRITE) {
         /* Write the prompt and the current buffer content */
-        abAppend(&ab,l->prompt,strlen(l->prompt));
+        abAppend(&ab,l->prompt,l->plen);
         if (maskmode == 1) {
             unsigned int i;
             for (i = 0; i < l->len; i++) abAppend(&ab,"*",1);
@@ -695,7 +695,7 @@ static void refreshMultiLine(struct linenoiseState *l, int flags) {
 
         /* Set column. */
 	if (l->utf8) {
-	    col = utf8_num_cells(l->prompt, strlen(l->prompt));
+	    col = utf8_num_cells(l->prompt, l->plen);
 	    col += utf8_num_cells(l->buf, l->pos < l->len ? l->pos : l->len);
 	} else {
 	    col = plen+(int)l->pos;
@@ -954,7 +954,7 @@ void linenoiseEditDeletePrevWord(struct linenoiseState *l) {
  * fails. If stdin_fd or stdout_fd are set to -1, the default is to use
  * STDIN_FILENO and STDOUT_FILENO.
  */
-int linenoiseEditStart(struct linenoiseState *l, int stdin_fd, int stdout_fd, char *buf, size_t buflen, const char *prompt) {
+int linenoiseEditStart(struct linenoiseState *l, int stdin_fd, int stdout_fd, char *buf, size_t buflen, const char *prompt, size_t prompt_size) {
     /* Populate the linenoise state that we pass to functions implementing
      * specific editing functionalities. */
     l->in_completion = 0;
@@ -963,7 +963,7 @@ int linenoiseEditStart(struct linenoiseState *l, int stdin_fd, int stdout_fd, ch
     l->buf = buf;
     l->buflen = buflen;
     l->prompt = prompt;
-    l->plen = strlen(prompt);
+    l->plen = prompt_size;
     l->oldpos = l->pos = 0;
     l->len = 0;
     l->cols = getColumns(stdin_fd, stdout_fd);
@@ -1210,7 +1210,7 @@ void linenoiseEditStop(struct linenoiseState *l) {
  * In many applications that are not event-drivern, we can just call
  * the blocking linenoise API, wait for the user to complete the editing
  * and return the buffer. */
-static char *linenoiseBlockingEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, const char *prompt)
+static char *linenoiseBlockingEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, const char *prompt, size_t prompt_size)
 {
     struct linenoiseState l;
 
@@ -1220,7 +1220,7 @@ static char *linenoiseBlockingEdit(int stdin_fd, int stdout_fd, char *buf, size_
         return NULL;
     }
 
-    linenoiseEditStart(&l,stdin_fd,stdout_fd,buf,buflen,prompt);
+    linenoiseEditStart(&l,stdin_fd,stdout_fd,buf,buflen,prompt,prompt_size);
     char *res;
     while((res = linenoiseEditFeed(&l)) == linenoiseEditMore);
     linenoiseEditStop(&l);
@@ -1307,7 +1307,7 @@ void linenoisePrintNow(const char *text) {
  * for a blacklist of stupid terminals, and later either calls the line
  * editing function or uses dummy fgets() so that you will be able to type
  * something even in the most desperate of the conditions. */
-char *linenoise(const char *prompt) {
+char *linenoise(const char *prompt, size_t prompt_size) {
     char buf[LINENOISE_MAX_LINE];
 
     if (!isatty(STDIN_FILENO)) {
@@ -1317,7 +1317,7 @@ char *linenoise(const char *prompt) {
     } else if (isUnsupportedTerm()) {
         size_t len;
 
-        printf("%s",prompt);
+        fwrite(prompt, prompt_size, 1, stdout);
         fflush(stdout);
         if (fgets(buf,LINENOISE_MAX_LINE,stdin) == NULL) return NULL;
         len = strlen(buf);
@@ -1327,7 +1327,7 @@ char *linenoise(const char *prompt) {
         }
         return strdup(buf);
     } else {
-        char *retval = linenoiseBlockingEdit(STDIN_FILENO,STDOUT_FILENO,buf,LINENOISE_MAX_LINE,prompt);
+        char *retval = linenoiseBlockingEdit(STDIN_FILENO,STDOUT_FILENO,buf,LINENOISE_MAX_LINE,prompt,prompt_size);
         return retval;
     }
 }
