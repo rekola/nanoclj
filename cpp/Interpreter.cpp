@@ -58,12 +58,17 @@ Interpreter::Interpreter() {
     nanoclj_set_error_port_callback(sc, &error_callback);
     nanoclj_set_external_data(sc, this);
     nanoclj_set_object_invoke_callback(sc, &object_invoke_callback);
-    
-    chdir("assets/nanoclj");
-    auto fin = fopen("init.clj", "rt");
-    if (fin) {
-      nanoclj_load_named_file(sc, fin, "init.clj");
-      fclose(fin);
+
+    char buf[1024];
+    const char * path = getcwd(buf, 1024);
+    if (path) {
+      chdir("assets/nanoclj");
+      auto fin = fopen("init.clj", "rt");
+      if (fin) {
+	nanoclj_load_named_file(sc, fin, "init.clj");
+	fclose(fin);
+      }
+      chdir(path);
     }
 
     std::string expr = "(ns-interns *ns*)";
