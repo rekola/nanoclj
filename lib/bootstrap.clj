@@ -113,13 +113,29 @@
                       java.lang.Integer java.lang.Long java.lang.Double
                       clojure.lang.BigInt clojure.lang.Ratio)))
 
-(def string? (fn [x] (instance? java.lang.String x)))
-(def symbol? (fn [x] (instance? clojure.lang.Symbol x)))
-(def char? (fn [x] (instance? java.lang.Character x)))
+(def string?
+  "Returns true if argument is a string"
+  (fn [x] (instance? java.lang.String x)))
+
+(def symbol?
+  "Returns true if argument is a symbol"
+  (fn [x] (instance? clojure.lang.Symbol x)))
+
+(def char?
+  "Returns true if argument is a character"
+  (fn [x] (instance? java.lang.Character x)))
 
 (def procedure?
   "Returns true if the argument is a function"
   (fn [x] (is-any-of? (type x) scheme.lang.Procedure scheme.lang.Closure scheme.lang.ForeignFunction)))
+
+(def sorted?
+  "Returns true if coll is a sorted collection"
+  (fn [x] (instance? clojure.lang.PersistentTreeSet x)))
+
+(def ifn?
+  "Returns true if coll is invokeable"
+  (fn [x] (is-any-of? (type x) scheme.lang.Procedure scheme.lang.Closure scheme.lang.ForeignFunction clojure.lang.PersistentVector scheme.lang.Macro clojure.lang.Delay scheme.lang.Type clojure.lang.Keyword clojure.lang.PersistentArrayMap clojure.lang.PersistentTreeSet scheme.lang.ForeignObject)))
 
 (def defined? (fn [sym] (boolean (resolve sym))))
                         
