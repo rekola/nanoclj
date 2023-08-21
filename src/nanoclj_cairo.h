@@ -23,6 +23,8 @@ static inline nanoclj_val_t mk_canvas(nanoclj_t * sc, int width, int height) {
   cairo_rectangle(cr, 0, 0, width, height);
   cairo_fill(cr);
   cairo_set_source_rgba(cr, 1, 0, 0, 1);
+
+  cairo_set_font_size(cr, 20);
   
   return mk_pointer(x);  
 }
