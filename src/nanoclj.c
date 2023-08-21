@@ -3279,32 +3279,31 @@ static inline void print_image(nanoclj_t * sc, nanoclj_image_t * img, nanoclj_va
 static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_flag, nanoclj_val_t out) {
   const char *p = 0;
   int plen = -1;
-  
-  if (is_nil(l)) {
-    p = "nil";
-  } else if (l.as_uint64 == sc->EMPTY.as_uint64) {
-    p = "()";
-  } else if (is_boolean(l)) {
+
+  switch (prim_type(l)) {
+  case T_BOOLEAN:
     p = bool_unchecked(l) == 0 ? "false" : "true";
-  } else if (prim_type(l) == T_INTEGER) {
+    break;
+  case T_INTEGER:
     p = sc->strbuff;
     sprintf(sc->strbuff, "%d", (int)decode_integer(l));
-  } else if (is_real(l)) {
-    p = sc->strbuff;
-    double r = rvalue_unchecked(l);
-    if (isnan(r)) {
-      strcpy(sc->strbuff, "##NaN");
-    } else if (isinf(r)) {
-      strcpy(sc->strbuff, r > 0 ? "##Inf" : "##-Inf");
+    break;
+  case T_REAL:
+    if (isnan(l.as_double)) {
+      p = "##NaN";
+    } else if (isinf(l.as_double)) {
+      p = l.as_double > 0 ? "##Inf" : "##-Inf";
     } else {
+      p = sc->strbuff;
       sprintf(sc->strbuff, "%.15g", rvalue_unchecked(l));	
     }
-  } else if (is_character(l)) {
-    int c = char_unchecked(l);
-    p = sc->strbuff;
+    break;
+  case T_CHARACTER:    
     if (!print_flag) {
-      plen = char_to_utf8(c, sc->strbuff);
+      p = sc->strbuff;
+      plen = char_to_utf8(char_unchecked(l), sc->strbuff);
     } else {
+      int c = char_unchecked(l);
       switch (c) {
       case -1:
 	p = "##Eof";
@@ -3328,7 +3327,8 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
 	p = "\\backspace";
 	break;
       default:
-	if (c < 32 || (c >= 0x7f && c <= 0xa0)) {
+	p = sc->strbuff;
+      	if (c < 32 || (c >= 0x7f && c <= 0xa0)) {
           sprintf(sc->strbuff, "\\u%04x", c);
         } else {
 	  sc->strbuff[0] = '\\';
@@ -3337,37 +3337,53 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
         break;
       }
     }
-  } else if (is_symbol(l)) {
+    break;
+  case T_SYMBOL:
     p = symname(l);
-  } else if (is_keyword(l)) {
+    break;
+  case T_KEYWORD:
     p = sc->strbuff;
     snprintf(sc->strbuff, sc->strbuff_size, ":%s", keywordname(l));
-  } else if (is_type(l)) {
+    break;
+  case T_TYPE:
     p = typename_from_id(type_unchecked(l));
-  } else if (is_writer(l) && (port_unchecked(l)->kind & port_string)) {
-    nanoclj_port_t * pt = port_unchecked(l);
-    p = pt->rep.string.data.start;
-    plen = pt->rep.string.curr - pt->rep.string.data.start;
-  } else if (is_cell(l)) {
+    break;
+  case T_CELL:{
     struct cell * c = decode_pointer(l);
-    switch (_type(c)) {
-    case T_LONG:
-      p = sc->strbuff;
-      sprintf(sc->strbuff, "%lld", _lvalue_unchecked(c));
-      break;
-    case T_STRING:
-      if (!print_flag) {
-	p = mutable_strvalue(c);
-	plen = _strlength(c);
+    if (c == NULL) {
+      p = "nil";    
+    } else {
+      switch (_type(c)) {
+      case T_NIL:
+	p = "()";
 	break;
-      } else {
-	print_slashstring(sc, strvalue(l), strlength(l), out);
+      case T_LONG:
+	p = sc->strbuff;
+	sprintf(sc->strbuff, "%lld", _lvalue_unchecked(c));
+	break;
+      case T_STRING:
+	if (!print_flag) {
+	  p = mutable_strvalue(c);
+	  plen = _strlength(c);
+	  break;
+	} else {
+	  print_slashstring(sc, strvalue(l), strlength(l), out);
+	  return;
+	}
+      case T_WRITER:
+	if (_port_unchecked(c)->kind & port_string) {
+	  nanoclj_port_t * pt = port_unchecked(l);
+	  p = pt->rep.string.data.start;
+	  plen = pt->rep.string.curr - pt->rep.string.data.start;
+	} 
+	break;
+      case T_IMAGE:
+	print_image(sc, _image_unchecked(c), out);
 	return;
       }
-    case T_IMAGE:
-      print_image(sc, _image_unchecked(c), out);
-      return;
     }
+  }
+    break;
   }
 
   if (!p) {
@@ -3378,7 +3394,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
   if (plen < 0) {
     plen = strlen(p);
   }
-
+  
   putchars(sc, p, plen, out);
 }
 
