@@ -124,6 +124,7 @@ extern "C" {
 /* arrays for segments */
     func_alloc malloc;
     func_dealloc free;
+    func_realloc realloc;
 
 /* return code */
     int retcode;

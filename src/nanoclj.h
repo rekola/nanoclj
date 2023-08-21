@@ -66,11 +66,12 @@ extern "C" {
 
   typedef void *(*func_alloc) (size_t);
   typedef void (*func_dealloc) (void *);
+  typedef void *(*func_realloc) (void *, size_t);
   
   NANOCLJ_EXPORT nanoclj_t *nanoclj_init_new(void);
-  NANOCLJ_EXPORT nanoclj_t *nanoclj_init_new_custom_alloc(func_alloc malloc, func_dealloc free);
+  NANOCLJ_EXPORT nanoclj_t *nanoclj_init_new_custom_alloc(func_alloc malloc, func_dealloc free, func_realloc realloc);
   NANOCLJ_EXPORT int nanoclj_init(nanoclj_t * sc);
-  NANOCLJ_EXPORT int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc, func_dealloc);
+  NANOCLJ_EXPORT int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc, func_dealloc, func_realloc);
   NANOCLJ_EXPORT void nanoclj_deinit(nanoclj_t * sc);
   void nanoclj_set_input_port_file(nanoclj_t * sc, FILE * fin);
   void nanoclj_set_input_port_string(nanoclj_t * sc, char *start, char *past_the_end);

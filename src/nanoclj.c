@@ -1016,7 +1016,7 @@ static inline nanoclj_val_t mk_image(nanoclj_t * sc, int32_t width, int32_t heig
   image->height = height;
   image->channels = channels;
   
-  memcpy(image->data, data, size);
+  if (data) memcpy(image->data, data, size);
   
   return mk_pointer(x);
 }
@@ -3055,7 +3055,7 @@ static inline nanoclj_val_t readstrexp(nanoclj_t * sc) {
   }
 }
 
-/* skip white characters */
+/* skip white space characters, returns the first non-whitespace character */
 static inline int skipspace(nanoclj_t * sc) {
   int c = 0, curr_line = 0;
   nanoclj_port_t * inport = port_unchecked(get_in_port(sc));
@@ -3072,21 +3072,13 @@ static inline int skipspace(nanoclj_t * sc) {
     sc->load_stack[sc->file_i].rep.stdio.curr_line += curr_line;
   }
 
-  if (c != EOF) {
-    backchar(c, inport);
-    return 1;
-  } else {
-    return EOF;
-  }
+  return c;
 }
 
 /* get token */
 static inline int token(nanoclj_t * sc, nanoclj_port_t * inport) {
-  int c = skipspace(sc);
-  if (c == EOF) {
-    return TOK_EOF;
-  }  
-  switch (c = inchar(sc, inport)) {
+  int c;
+  switch (c = skipspace(sc)) {
   case EOF:
     return (TOK_EOF);
   case '(':
@@ -3235,8 +3227,7 @@ static inline void print_slashstring(nanoclj_t * sc, const char *p, int len, nan
   putcharacter(sc, '"', out);
 }
 
-static int sixel_write(char *data, int size, void *priv)
-{
+static int sixel_write(char *data, int size, void *priv) {
   return fwrite(data, 1, size, (FILE *)priv);
 }
 
@@ -3270,6 +3261,7 @@ static inline void print_image(nanoclj_t * sc, nanoclj_image_t * img, nanoclj_va
 		   8,
 		   dither,
 		   output);
+      sc->free(tmp);
       return;
     }
 
@@ -3706,9 +3698,7 @@ static inline void s_save(nanoclj_t * sc, enum nanoclj_opcodes op, nanoclj_val_t
   if (nframes >= sc->dump_size) {
     sc->dump_size *= 2;
     fprintf(stderr, "reallocing stack (%d)\n", sc->dump_size);
-    /* alas there is no sc->realloc */
-    sc->dump_base = realloc(sc->dump_base,
-        sizeof(struct dump_stack_frame) * sc->dump_size);
+    sc->dump_base = sc->realloc(sc->dump_base, sizeof(struct dump_stack_frame) * sc->dump_size);
   }
   next_frame = (struct dump_stack_frame *) sc->dump_base + nframes;
   next_frame->op = op;
@@ -6216,9 +6206,9 @@ nanoclj_t *nanoclj_init_new() {
   }
 }
 
-nanoclj_t *nanoclj_init_new_custom_alloc(func_alloc malloc, func_dealloc free) {
+nanoclj_t *nanoclj_init_new_custom_alloc(func_alloc malloc, func_dealloc free, func_realloc realloc) {
   nanoclj_t *sc = (nanoclj_t *) malloc(sizeof(nanoclj_t));
-  if (!nanoclj_init_custom_alloc(sc, malloc, free)) {
+  if (!nanoclj_init_custom_alloc(sc, malloc, free, realloc)) {
     free(sc);
     return 0;
   } else {
@@ -6228,14 +6218,12 @@ nanoclj_t *nanoclj_init_new_custom_alloc(func_alloc malloc, func_dealloc free) {
 
 
 int nanoclj_init(nanoclj_t * sc) {
-  return nanoclj_init_custom_alloc(sc, malloc, free);
+  return nanoclj_init_custom_alloc(sc, malloc, free, realloc);
 }
 
 #include "functions.h"
  
-int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc,
-    func_dealloc free) {
-  
+int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc free, func_realloc realloc) {  
   int i, n = sizeof(dispatch_table) / sizeof(dispatch_table[0]);
 
 #if USE_INTERFACE
@@ -6244,6 +6232,7 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc,
   sc->gensym_cnt = 0;
   sc->malloc = malloc;
   sc->free = free;
+  sc->realloc = realloc;
   sc->last_cell_seg = -1;
   sc->sink = mk_pointer(&sc->_sink);
   sc->EMPTY = mk_pointer(&sc->_EMPTY);
