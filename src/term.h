@@ -46,4 +46,12 @@ static inline bool has_truecolor() {
 #endif
 }
 
+static inline bool has_sixels() {
+#ifdef _WIN32
+  return false;
+#else
+  return true;
+#endif
+}
+
 #endif

@@ -162,7 +162,8 @@ enum nanoclj_types {
   T_RATIO = 30,
   T_LIST = 31,
   T_IMAGE = 32,
-  T_CANVAS = 33
+  T_CANVAS = 33,
+  T_EXCEPTION = 34
 };
 
 typedef struct strview_s {
@@ -406,6 +407,11 @@ static inline bool is_canvas(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
   struct cell * c = decode_pointer(p);
   return _type(c) == T_CANVAS;  
+}
+static inline bool is_exception(nanoclj_val_t p) {
+  if (!is_cell(p)) return false;
+  struct cell * c = decode_pointer(p);
+  return _type(c) == T_EXCEPTION;
 }
 
 static inline bool is_coll_type(int_fast16_t type_id) {
@@ -1165,6 +1171,11 @@ static inline nanoclj_val_t mk_string(nanoclj_t * sc, const char *str) {
   } else {
     return mk_nil();
   }
+}
+
+static inline nanoclj_val_t mk_exception(nanoclj_t * sc, const char * text) {
+  struct cell * x = get_cell(sc, T_EXCEPTION, mk_string(sc, text), sc->EMPTY, mk_nil());
+  return mk_pointer(x);
 }
 
 static inline struct cell * mk_seq(nanoclj_t * sc, struct cell * origin, size_t position) {
@@ -3240,30 +3251,31 @@ static inline void print_image(nanoclj_t * sc, nanoclj_image_t * img, nanoclj_va
   if ((pt->kind & port_callback) && pt->rep.callback.image) {
     pt->rep.callback.image(img, sc->ext_data);
   } else {
-#if 1
-    int width = img->width, height = img->height;
-    unsigned char * tmp = malloc(3 * width * height);
-    for (unsigned int i = 0; i < width * height; i++) {
-      tmp[3 * i + 0] = img->data[4 * i + 0];
-      tmp[3 * i + 1] = img->data[4 * i + 1];
-      tmp[3 * i + 2] = img->data[4 * i + 2];
+    if (sc->sixel_term) {
+      int width = img->width, height = img->height;
+      unsigned char * tmp = malloc(3 * width * height);
+      for (unsigned int i = 0; i < width * height; i++) {
+	tmp[3 * i + 0] = img->data[4 * i + 0];
+	tmp[3 * i + 1] = img->data[4 * i + 1];
+	tmp[3 * i + 2] = img->data[4 * i + 2];
+      }
+      sixel_dither_t * dither = sixel_dither_get(SIXEL_BUILTIN_G8);
+      sixel_output_t * output = NULL;
+      sixel_output_new(&output, sixel_write, stdout, NULL);
+      
+      /* convert pixels into sixel format and write it to output context */
+      sixel_encode(tmp,
+		   img->width,
+		   img->height,
+		   8,
+		   dither,
+		   output);
+      return;
     }
-    sixel_dither_t * dither = sixel_dither_get(SIXEL_BUILTIN_G8);
-    sixel_output_t * output = NULL;
-    sixel_output_new(&output, sixel_write, stdout, NULL);
-    
-    /* convert pixels into sixel format and write it to output context */
-    sixel_encode(tmp,
-		 img->width,
-		 img->height,
-		 8,
-		 dither,
-		 output);
-#else
+
     char * p = sc->strbuff;
     snprintf(sc->strbuff, sc->strbuff_size, "#object[%s %p %d %d %d]", typename_from_id(T_IMAGE), (void *)img, img->width, img->height, img->channels);
     putstr(sc, p, out);
-#endif
   }
 }
 
@@ -3359,13 +3371,6 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
     case T_IMAGE:
       print_image(sc, _image_unchecked(c), out);
       return;
-    case T_CANVAS:{
-#if NANOCLJ_HAS_CANVAS
-      nanoclj_val_t img = canvas_create_image(sc, _canvas_unchecked(c));
-      print_image(sc, image_unchecked(img), out);
-      return;
-#endif
-    }
     }
   }
 
@@ -3969,7 +3974,19 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
 #if NANOCLJ_HAS_CANVAS
     return mk_canvas(sc, to_int(car(args)), to_int(cadr(args)));
 #endif
-  } 
+
+  case T_IMAGE:
+    if (args.as_uint64 == sc->EMPTY.as_uint64) {
+      return mk_image(sc, 0, 0, 0, NULL);      
+    } else {
+      x = car(args);
+      if (is_canvas(x)) {
+#if NANOCLJ_HAS_CANVAS
+	return canvas_create_image(sc, canvas_unchecked(x));
+#endif
+      }
+    }
+  }
   
   return mk_nil();
 }
@@ -4313,7 +4330,11 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	  }
 	}
 	x = _ff_unchecked(code_cell)(sc, sc->args);
-	s_return(sc, x);
+	if (is_exception(x)) {
+	  Error_0(sc, to_cstr(car(x)));
+	} else {
+	  s_return(sc, x);
+	}
       }
       case T_FOREIGN_OBJECT:{
 	/* Keep nested calls from GC'ing the arglist */
@@ -6324,6 +6345,7 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc,
   register_functions(sc);
 
   sc->truecolor_term = has_truecolor();
+  sc->sixel_term = has_sixels();
   
   return !sc->no_memory;
 }
