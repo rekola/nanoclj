@@ -12,9 +12,9 @@ to Planck but doesn't use Javascript or ClojureScript.
 
 ## Possible applications
 
-- as a tiny engine for running plugins and other extensions in your `C/C++` program (suppose you want to change some part of logic of your program without recompiling it every time).
+- as a tiny engine for running plugins and other extensions in your C/C++ program (suppose you want to change some part of logic of your program without recompiling it every time).
 - as a sandbox to learn the language (as it supports most common features except those which will make implementation not "nano")
-- as utility script-running tool, even to create `CGI-scripts` for web-server
+- as utility script-running tool, even to create CGI-scripts for web-server
 
 ## 2D Graphics
 
@@ -38,6 +38,8 @@ have been tested:
 - Black Box: everything works, but on HiDPI system the images are scaled
 - xterm: doesn't support true color
 - mlterm: true color and sixels work, but the output flickers when updated
+
+![Plotting from nanoclj](https://user-images.githubusercontent.com/6755525/262003070-b5eac109-f1cc-4071-ad7b-a1e5d107a1d9.jpeg "Plotting from nanoclj")
 
 ## Differences to Clojure:
 
