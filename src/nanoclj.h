@@ -14,8 +14,12 @@ extern "C" {
 /*
  * Default values for #define'd symbols
  */
-#ifndef NANOCLOJURE_STANDALONE              /* If used as standalone interpreter */
-#define NANOCLOJURE_STANDALONE 0
+#ifndef NANOCLJ_STANDALONE              /* If used as standalone interpreter */
+#define NANOCLJ_STANDALONE 0
+#endif
+
+#ifndef NANOCLJ_SIXEL
+#define NANOCLJ_SIXEL NANOCLJ_STANDALONE
 #endif
 
 #ifndef _MSC_VER

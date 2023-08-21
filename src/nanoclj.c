@@ -3227,9 +3227,11 @@ static inline void print_slashstring(nanoclj_t * sc, const char *p, int len, nan
   putcharacter(sc, '"', out);
 }
 
+#if NANOCLJ_SIXEL
 static int sixel_write(char *data, int size, void *priv) {
   return fwrite(data, 1, size, (FILE *)priv);
 }
+#endif
 
 static inline void print_image(nanoclj_t * sc, nanoclj_image_t * img, nanoclj_val_t out) {
   assert(is_writer(out));
@@ -3243,6 +3245,7 @@ static inline void print_image(nanoclj_t * sc, nanoclj_image_t * img, nanoclj_va
     pt->rep.callback.image(img, sc->ext_data);
   } else {
     if (sc->sixel_term) {
+#if NANOCLJ_SIXEL
       int width = img->width, height = img->height;
       unsigned char * tmp = malloc(3 * width * height);
       for (unsigned int i = 0; i < width * height; i++) {
@@ -3263,6 +3266,7 @@ static inline void print_image(nanoclj_t * sc, nanoclj_image_t * img, nanoclj_va
 		   output);
       sc->free(tmp);
       return;
+#endif      
     }
 
     char * p = sc->strbuff;
@@ -6322,6 +6326,7 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc fr
   sc->AMP = def_symbol(sc, "&");
   sc->UNDERSCORE = def_symbol(sc, "_");
   sc->DOC = def_keyword(sc, "doc");
+  sc->WINDOW_SIZE = def_symbol(sc, "*window-size*");
   
   sc->SORTED_SET = def_symbol(sc, "sorted-set");
   sc->ARRAY_MAP = def_symbol(sc, "array-map");
@@ -6352,6 +6357,16 @@ void nanoclj_set_input_port_string(nanoclj_t * sc, char *start, char *past_the_e
 void nanoclj_set_output_port_file(nanoclj_t * sc, FILE * fout) {
   nanoclj_val_t p = port_from_file(sc, fout, port_output);
   nanoclj_intern(sc, sc->root_env, sc->OUT, p);
+
+  int width, height;
+  nanoclj_val_t size = mk_nil();
+  if (get_window_size(fout, &width, &height)) {
+    struct cell * vec = get_vector_object(sc, T_VECTOR, mk_vector_store(sc, 2));
+    set_vector_elem(vec, 0, mk_int(width));
+    set_vector_elem(vec, 1, mk_int(height));
+    size = mk_pointer(vec);
+  }
+  nanoclj_intern(sc, sc->global_env, sc->WINDOW_SIZE, size);
 }
 
 void nanoclj_set_output_port_callback(nanoclj_t * sc,
@@ -6362,6 +6377,13 @@ void nanoclj_set_output_port_callback(nanoclj_t * sc,
 				      ) {
   nanoclj_val_t p = port_from_callback(sc, text, color, restore, image, port_output);
   nanoclj_intern(sc, sc->root_env, sc->OUT, p);
+  nanoclj_intern(sc, sc->global_env, sc->WINDOW_SIZE, mk_nil());
+}
+
+void nanoclj_set_output_port_string(nanoclj_t * sc, char *start, char *past_the_end) {
+  nanoclj_val_t p = port_from_string(sc, start, past_the_end, port_output);
+  nanoclj_intern(sc, sc->root_env, sc->OUT, p);
+  nanoclj_intern(sc, sc->global_env, sc->WINDOW_SIZE, mk_nil());
 }
 
 void nanoclj_set_error_port_callback(nanoclj_t * sc, void (*text) (const char *, size_t, void *)) {
@@ -6372,11 +6394,6 @@ void nanoclj_set_error_port_callback(nanoclj_t * sc, void (*text) (const char *,
 void nanoclj_set_error_port_file(nanoclj_t * sc, FILE * fout) {
   nanoclj_val_t p = port_from_file(sc, fout, port_output);
   nanoclj_intern(sc, sc->global_env, sc->ERR, p);
-}
-
-void nanoclj_set_output_port_string(nanoclj_t * sc, char *start, char *past_the_end) {
-  nanoclj_val_t p = port_from_string(sc, start, past_the_end, port_output);
-  nanoclj_intern(sc, sc->root_env, sc->OUT, p);
 }
 
 void nanoclj_set_external_data(nanoclj_t * sc, void *p) {

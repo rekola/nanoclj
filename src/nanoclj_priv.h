@@ -181,6 +181,8 @@ extern "C" {
     nanoclj_val_t OUT;		  /* *out* */
     nanoclj_val_t ERR;		  /* *err* */
     nanoclj_val_t NS;		  /* *ns* */
+    nanoclj_val_t WINDOW_SIZE;    /* *window-size* */
+    
     nanoclj_val_t RECUR;		  /* recur */
     nanoclj_val_t AMP;		  /* & */
     nanoclj_val_t UNDERSCORE;         /* _ */

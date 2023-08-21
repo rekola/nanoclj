@@ -1,6 +1,10 @@
 #ifndef _NANOCLJ_TERM_H_
 #define _NANOCLJ_TERM_H_
 
+#include <termios.h>
+#include <unistd.h>
+#include <sys/ioctl.h>
+
 #ifdef _WIN32
 #include <conio.h>
 #include <windows.h>
@@ -35,6 +39,19 @@ static inline void set_truecolor(FILE * fh, double r, double g, double b) {
 	    clamp((int)(g * 255), 0, 255),
 	    clamp((int)(b * 255), 0, 255));
   }
+}
+
+static inline bool get_window_size(FILE * fh, int * width, int * height) {
+  if (isatty(fileno(fh))) {
+    struct winsize ws;
+    
+    if (ioctl(1, TIOCGWINSZ, &ws) != -1) {
+      *width = ws.ws_xpixel;
+      *height = ws.ws_ypixel;
+      return true;
+    }
+  }
+  return false;
 }
 
 static inline bool has_truecolor() {
