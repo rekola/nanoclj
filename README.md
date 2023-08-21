@@ -35,11 +35,15 @@ a canvas or image. The terminal must, of course, has to support sixel
 graphics and sixel support must be enabled. The following terminals
 have been tested:
 
-- Black Box: everything works, but on HiDPI system the images are scaled
-- xterm: doesn't support true color
-- mlterm: true color and sixels work, but the output flickers when updated
+| Terminal | Status |
+| - | - |
+| Black Box | Everything works, but on HiDPI system the images are upscaled, and the terminal and the flatpak system use too much CPU time when idling. |
+| xterm | Sixels work, but doesn't support true color. |
+| mlterm | True color and sixels work, but the output flickers when updated. |
+| GNOME Terminal | True color works, but sixel support is not enabled. |
 
 ![Plotting from nanoclj](https://user-images.githubusercontent.com/6755525/262003070-b5eac109-f1cc-4071-ad7b-a1e5d107a1d9.jpeg "Plotting from nanoclj")
+*The plot function returns an image which can then be saved with Image/save or modified using other functions in the Image namespace.*
 
 ## Differences to Clojure:
 
