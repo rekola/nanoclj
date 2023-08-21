@@ -441,7 +441,7 @@ static inline nanoclj_val_t Image_resize(nanoclj_t * sc, nanoclj_val_t args) {
 static inline nanoclj_val_t Image_transpose(nanoclj_t * sc, nanoclj_val_t args) {
   nanoclj_val_t image00 = car(args);
   if (!is_image(image00)) {
-    return mk_exception("Not an Image");
+    return mk_exception(sc, "Not an Image");
   }
   struct cell * image0 = decode_pointer(image00);
   nanoclj_image_t * image = _image_unchecked(image0);
@@ -460,7 +460,7 @@ static inline nanoclj_val_t Image_transpose(nanoclj_t * sc, nanoclj_val_t args) 
     }
   } else {
     sc->free(tmp);
-    return mk_exception("Unsupported number of channels");
+    return mk_exception(sc, "Unsupported number of channels");
   }
   
   nanoclj_val_t new_image = mk_image(sc, h, w, channels, tmp);
@@ -511,6 +511,158 @@ static inline nanoclj_val_t Image_save(nanoclj_t * sc, nanoclj_val_t args) {
   return (nanoclj_val_t)kTRUE;
 }
 
+static inline int * mk_kernel(nanoclj_t * sc, float radius, int * size) {
+  int r = (int)ceil(radius);
+
+  if (r <= 0) {
+    *size = 0;
+    return NULL;
+  }    
+  
+  int rows = 2 * r + 1;
+  float sigma = radius / 3;
+  float sigma22 = 2.0f * sigma * sigma;
+  float sigmaPi2 = 2.0f * (float)M_PI * sigma;
+  float sqrtSigmaPi2 = sqrt(sigmaPi2);
+
+  int * kernel = (int*)sc->malloc(rows * sizeof(int));
+
+  int row = -r;
+  float first_value = exp(-row*row/sigma22) / sqrtSigmaPi2;
+  int i = 0;
+  kernel[i++] = 1;
+
+  for ( ; i < rows; row++) {
+    kernel[i++] = (int)(exp(-row * row / sigma22) / sqrtSigmaPi2 / first_value);
+  }
+  *size = rows;
+  return kernel;
+}
+
+nanoclj_val_t Image_gaussian_blur(nanoclj_t * sc, nanoclj_val_t args) {
+  nanoclj_val_t image00 = car(args), h_radius = cadr(args), v_radius = caddr(args);
+  if (!is_image(image00)) {
+    return mk_exception(sc, "Not an Image");
+  }
+  if (!is_number(h_radius)) {
+    return mk_exception(sc, "Not a number");
+  }
+  if (!is_nil(v_radius) && v_radius.as_uint64 != sc->EMPTY.as_uint64 && !is_number(v_radius)) {
+    return mk_exception(sc, "Not a number or nil");
+  }
+
+  struct cell * image0 = decode_pointer(image00);
+  nanoclj_image_t * image = _image_unchecked(image0);
+  int w = image->width, h = image->height, channels = image->channels;
+  
+  int hsize, vsize;
+  int * hkernel = mk_kernel(sc, to_double(h_radius), &hsize);
+
+  int htotal = 0, vtotal = 0;
+  for (int i = 0; i < hsize; i++) htotal += hkernel[i];
+
+  int * vkernel;
+  if (v_radius.as_uint64 == sc->EMPTY.as_uint64 || is_nil(v_radius)) {
+    vsize = hsize;
+    vkernel = hkernel;
+    vtotal = htotal;
+  } else {
+    vkernel = mk_kernel(sc, to_double(v_radius), &vsize);
+    for (int i = 0; i < vsize; i++) vtotal += vkernel[i];    
+  }
+  
+  unsigned char * output_data = (unsigned char *)malloc(w * h * channels);
+  unsigned char * tmp = (unsigned char *)malloc(w * h * channels);
+
+  if (channels == 4) {
+    if (hsize) {
+      memset(tmp, 0, w * h * channels);
+      for (int row = 0; row < h; row++) {
+        for (int col = 0; col < w; col++) {
+          int c0 = 0, c1 = 0, c2 = 0, c3 = 0;
+          for (int i = 0; i < hsize; i++) {
+	    const unsigned char * ptr = image->data + (row * w + clamp(col + i - vsize / 2, 0, w - 1)) * 4;
+            c0 += *ptr++ * hkernel[i];
+            c1 += *ptr++ * hkernel[i];
+            c2 += *ptr++ * hkernel[i];
+            c3 += *ptr++ * hkernel[i];
+          }
+	  unsigned char * ptr = tmp + (row * w + col) * 4;
+          *ptr++ = (unsigned char)(c0 / htotal);
+          *ptr++ = (unsigned char)(c1 / htotal);
+          *ptr++ = (unsigned char)(c2 / htotal);
+          *ptr++ = (unsigned char)(c3 / htotal);
+        }
+      }
+    } else {
+      memcpy(tmp, image->data, w * h * 4);
+    }
+    if (vsize) {      
+      memset(output_data, 0, w * h * channels);
+      for (int col = 0; col < w; col++) {
+        for (int row = 0; row < h; row++) {
+          int c0 = 0, c1 = 0, c2 = 0, c3 = 0;
+          for (int i = 0; i < vsize; i++) {
+            const unsigned char * ptr = tmp + (clamp(row + i - vsize / 2, 0, h - 1) * w + col) * 4;
+            c0 += *ptr++ * vkernel[i];
+            c1 += *ptr++ * vkernel[i];
+            c2 += *ptr++ * vkernel[i];
+            c3 += *ptr++ * vkernel[i];
+          }
+	  unsigned char * ptr = output_data + (row * w + col) * 4;
+          *ptr++ = (unsigned char)(c0 / vtotal);
+          *ptr++ = (unsigned char)(c1 / vtotal);
+          *ptr++ = (unsigned char)(c2 / vtotal);
+          *ptr++ = (unsigned char)(c3 / vtotal);
+        }
+      }
+    } else {
+      memcpy(output_data, tmp, w * h * 4);
+    }
+  } else if (channels == 1) {
+    if (hsize) {
+      memset(tmp, 0, w * h * channels);
+      for (int row = 0; row < h; row++) {
+        for (int col = 0; col < w; col++) {
+          int c0 = 0;
+          for (int i = 0; i < hsize; i++) {
+            const unsigned char * ptr = image->data + (row * w + clamp(col + i - vsize / 2, 0, w - 1));
+            c0 += *ptr * hkernel[i];
+          }
+          unsigned char * ptr = tmp + row * w + col;
+          *ptr = (unsigned char)(c0 / htotal);
+        }
+      }
+    } else {
+      memcpy(tmp, image->data, w * h);
+    }
+    if (vsize) {
+      memset(output_data, 0, w * h * channels);
+      for (int col = 0; col < w; col++) {
+        for (int row = 0; row < h; row++) {
+          int c0 = 0;
+          for (int i = 0; i < vsize; i++) {
+            const unsigned char * ptr = tmp + (clamp(row + i - vsize / 2, 0, h - 1) * w + col);
+            c0 += *ptr * vkernel[i];
+          }
+          unsigned char * ptr = output_data + row * w + col;
+          *ptr = (unsigned char)(c0 / vtotal);
+        }
+      }
+    } else {
+      memcpy(output_data, tmp, w * h);
+    }
+  }
+
+  if (vkernel != hkernel) sc->free(vkernel);
+  sc->free(hkernel);
+  
+  sc->free(tmp);
+  nanoclj_val_t r = mk_image(sc, w, h, channels, output_data);
+  sc->free(output_data);
+  return r;
+}
+
 #if NANOCLJ_USE_LINENOISE
 #define MAX_COMPLETION_SYMBOLS 65535
 
@@ -519,39 +671,52 @@ static int num_completion_symbols = 0;
 static const char * completion_symbols[MAX_COMPLETION_SYMBOLS];
  
 static inline void completion(const char *input, linenoiseCompletions *lc) {
-  if (!num_completion_symbols) {
-    const char * expr = "(ns-interns *ns*)";
-    nanoclj_val_t sym = nanoclj_eval_string(linenoise_sc, expr, strlen(expr));
-    for ( ; sym.as_uint64 != linenoise_sc->EMPTY.as_uint64 && num_completion_symbols < MAX_COMPLETION_SYMBOLS; sym = cdr(sym)) {
-      nanoclj_val_t v = car(sym);
-      if (is_symbol(v)) {
-	completion_symbols[num_completion_symbols++] = symname(v);
-      } else if (is_mapentry(v)) {
-	completion_symbols[num_completion_symbols++] = symname(car(v));
-      }
+  int i, n = strlen(input);
+  bool is_in_string = false;
+  for (i = 0; i < n; i++) {
+    if (input[i] == '"') {
+      is_in_string = !is_in_string;
+    } else if (input[i] == '\\' && i + 1 < n && input[i + 1] == '"') {
+      i++;
     }
   }
-
-  int i, n = strlen(input);
-  for (i = n; i > 0 && !(isspace(input[i - 1]) ||
-			 input[i - 1] == '(' ||
-			 input[i - 1] == '[' ||
-			 input[i - 1] == '{'); i--) { }
-  char buffer[1024];
-  int prefix_len = 0;
-  if (i > 0) {
-    prefix_len = i;
-    strncpy(buffer, input, i);
-    buffer[prefix_len] = 0;
-    input += i;
-    n -= i;
-  }
-  for (i = 0; i < num_completion_symbols; i++) {
-    const char * s = completion_symbols[i];
-    if (strncmp(input, s, n) == 0) {
-      strncpy(buffer + prefix_len, s, 1024 - prefix_len);
-      buffer[1023] = 0;
-      linenoiseAddCompletion(lc, buffer);
+  
+  if (is_in_string) {
+    // TODO: auto-complete urls and paths
+  } else {
+    if (!num_completion_symbols) {
+      const char * expr = "(ns-interns *ns*)";
+      nanoclj_val_t sym = nanoclj_eval_string(linenoise_sc, expr, strlen(expr));
+      for ( ; sym.as_uint64 != linenoise_sc->EMPTY.as_uint64 && num_completion_symbols < MAX_COMPLETION_SYMBOLS; sym = cdr(sym)) {
+	nanoclj_val_t v = car(sym);
+	if (is_symbol(v)) {
+	  completion_symbols[num_completion_symbols++] = symname(v);
+	} else if (is_mapentry(v)) {
+	  completion_symbols[num_completion_symbols++] = symname(car(v));
+	}
+      }
+    }
+    
+    for (i = n; i > 0 && !(isspace(input[i - 1]) ||
+			   input[i - 1] == '(' ||
+			   input[i - 1] == '[' ||
+			   input[i - 1] == '{'); i--) { }
+    char buffer[1024];
+    int prefix_len = 0;
+    if (i > 0) {
+      prefix_len = i;
+      strncpy(buffer, input, i);
+      buffer[prefix_len] = 0;
+      input += i;
+      n -= i;
+    }
+    for (i = 0; i < num_completion_symbols; i++) {
+      const char * s = completion_symbols[i];
+      if (strncmp(input, s, n) == 0) {
+	strncpy(buffer + prefix_len, s, 1024 - prefix_len);
+	buffer[1023] = 0;
+	linenoiseAddCompletion(lc, buffer);
+      }
     }
   }
 }
@@ -616,7 +781,8 @@ static inline nanoclj_val_t linenoise_readline(nanoclj_t * sc, nanoclj_val_t arg
     linenoiseHistorySetMaxLen(10000);
     linenoiseHistoryLoad(".nanoclj_history");
   }
-  char * line = linenoise(to_cstr(car(args)));
+  strview_t prompt = to_strview(car(args));
+  char * line = linenoise(prompt.ptr, prompt.size);
   if (line == NULL) return mk_nil();
   
   linenoiseHistoryAdd(line);
@@ -690,7 +856,8 @@ static inline void register_functions(nanoclj_t * sc) {
   nanoclj_intern(sc, Image, def_symbol(sc, "resize"), mk_foreign_func_with_arity(sc, Image_resize, 3, 3));
   nanoclj_intern(sc, Image, def_symbol(sc, "transpose"), mk_foreign_func_with_arity(sc, Image_transpose, 1, 1));
   nanoclj_intern(sc, Image, def_symbol(sc, "save"), mk_foreign_func_with_arity(sc, Image_save, 2, 2));
-		 
+  nanoclj_intern(sc, Image, def_symbol(sc, "gaussian-blur"), mk_foreign_func_with_arity(sc, Image_gaussian_blur, 2, 2));
+  
 #if NANOCLJ_USE_LINENOISE
   nanoclj_val_t linenoise = def_namespace(sc, "linenoise");
   nanoclj_intern(sc, linenoise, def_symbol(sc, "read-line"), mk_foreign_func_with_arity(sc, linenoise_readline, 1, 1));
