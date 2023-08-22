@@ -180,16 +180,20 @@ static nanoclj_val_t System_getProperty(nanoclj_t * sc, nanoclj_val_t args) {
 }
 
 static inline nanoclj_val_t System_glob(nanoclj_t * sc, nanoclj_val_t args) {
-  const char * pattern = to_cstr(car(args));
+  const_strview_t sv = to_const_strview(car(args));
+  char * tmp = (char *)sc->malloc(sv.size + 1);
+  memcpy(tmp, sv.ptr, sv.size);
+  tmp[sv.size] = 0;
 
   glob_t gstruct;
-  int r = glob(pattern, GLOB_ERR, NULL, &gstruct);
+  int r = glob(tmp, GLOB_ERR, NULL, &gstruct);
   nanoclj_val_t x = sc->EMPTY;
   if (r == 0) {
     for (char ** found = gstruct.gl_pathv; *found; found++) {
       x = cons(sc, mk_string(sc, *found), x);
     }
   }
+  sc->free(tmp);
   globfree(&gstruct);
   
   if (r != 0 && r != GLOB_NOMATCH) {
@@ -385,9 +389,14 @@ static inline nanoclj_val_t shell_sh(nanoclj_t * sc, nanoclj_val_t args0) {
       n--;
       char ** output_args = (char **)sc->malloc(n * sizeof(char*));
       for (size_t i = 0; i < n; i++, args = rest(sc, args)) {
-	output_args[i] = to_cstr(first(sc, args));
+	strview_t sv = to_strview(first(sc, args));
+	char * tmp = (char *)sc->malloc(sv.size + 1);
+	memcpy(tmp, sv.ptr, sv.size);
+	tmp[sv.size] = 0;
+	output_args[i] = sv.ptr;
       }
       execvp(cmd, output_args);
+      /* TODO: free memory if execvp fails */
       exit(1);
     } else {
       return r < 0 ? (nanoclj_val_t)kFALSE : (nanoclj_val_t)kTRUE;
@@ -455,7 +464,7 @@ static inline nanoclj_val_t Image_transpose(nanoclj_t * sc, nanoclj_val_t args) 
 	tmp[4 * (x * h + y) + 0] = image->data[4 * (y * w + x) + 0];
 	tmp[4 * (x * h + y) + 1] = image->data[4 * (y * w + x) + 1];
 	tmp[4 * (x * h + y) + 2] = image->data[4 * (y * w + x) + 2];     
-	tmp[4 * (x * h + y) + 2] = image->data[4 * (y * w + x) + 3];     
+	tmp[4 * (x * h + y) + 3] = image->data[4 * (y * w + x) + 3];     
       }
     }
   } else {
@@ -571,8 +580,8 @@ nanoclj_val_t Image_gaussian_blur(nanoclj_t * sc, nanoclj_val_t args) {
     for (int i = 0; i < vsize; i++) vtotal += vkernel[i];    
   }
   
-  unsigned char * output_data = (unsigned char *)malloc(w * h * channels);
-  unsigned char * tmp = (unsigned char *)malloc(w * h * channels);
+  unsigned char * output_data = (unsigned char *)sc->malloc(w * h * channels);
+  unsigned char * tmp = (unsigned char *)sc->malloc(w * h * channels);
 
   if (channels == 4) {
     if (hsize) {
