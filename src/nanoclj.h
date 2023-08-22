@@ -117,16 +117,16 @@ extern "C" {
 #if USE_INTERFACE
   struct nanoclj_interface {
     void (*nanoclj_intern) (nanoclj_t * sc, nanoclj_val_t ns, nanoclj_val_t symbol, nanoclj_val_t value);
-    nanoclj_val_t(*cons) (nanoclj_t * sc, nanoclj_val_t a, nanoclj_val_t b);
-    nanoclj_val_t(*mk_integer) (nanoclj_t * sc, long long num);
-    nanoclj_val_t(*mk_real) (double num);
-    nanoclj_val_t(*mk_symbol) (nanoclj_t * sc, const char *name);
-    nanoclj_val_t(*mk_string) (nanoclj_t * sc, const char *str);
-    nanoclj_val_t(*mk_counted_string) (nanoclj_t * sc, const char *str, size_t len);
-    nanoclj_val_t(*mk_character) (int c);
-    nanoclj_val_t(*mk_vector) (nanoclj_t * sc, size_t len);
-    nanoclj_val_t(*mk_foreign_func) (nanoclj_t * sc, foreign_func f);
-    nanoclj_val_t(*mk_boolean) (bool b);
+    nanoclj_val_t (*cons) (nanoclj_t * sc, nanoclj_val_t a, nanoclj_val_t b);
+    nanoclj_val_t (*mk_integer) (nanoclj_t * sc, long long num);
+    nanoclj_val_t (*mk_real) (double num);
+    nanoclj_val_t (*mk_symbol) (nanoclj_t * sc, const char *name);
+    nanoclj_val_t (*mk_string) (nanoclj_t * sc, const char *str);
+    nanoclj_val_t (*mk_counted_string) (nanoclj_t * sc, const char *str, size_t len);
+    nanoclj_val_t (*mk_character) (int c);
+    nanoclj_val_t (*mk_vector) (nanoclj_t * sc, size_t len);
+    nanoclj_val_t (*mk_foreign_func) (nanoclj_t * sc, foreign_func f);
+    nanoclj_val_t (*mk_boolean) (bool b);
     
     bool (*is_string) (nanoclj_val_t p);
     const char *(*string_value) (nanoclj_val_t p);
@@ -141,8 +141,8 @@ extern "C" {
     bool (*is_vector) (nanoclj_val_t p);
     size_t (*size) (nanoclj_t * sc, nanoclj_val_t vec);
     void (*fill_vector) (nanoclj_val_t vec, nanoclj_val_t elem);
-    nanoclj_val_t(*vector_elem) (nanoclj_val_t vec, size_t ielem);
-    void(*set_vector_elem) (nanoclj_val_t vec, size_t ielem, nanoclj_val_t newel);
+    nanoclj_val_t (*vector_elem) (nanoclj_val_t vec, size_t ielem);
+    void (*set_vector_elem) (nanoclj_val_t vec, size_t ielem, nanoclj_val_t newel);
     bool (*is_reader) (nanoclj_val_t p);
     bool (*is_writer) (nanoclj_val_t p);
     
