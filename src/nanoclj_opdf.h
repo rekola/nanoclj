@@ -110,11 +110,15 @@ _OP_DEF("re-pattern", 1, 1, OP_RE_PATTERN)
 
 /* Canvas ops */
 _OP_DEF("set-color", 1, 1, OP_SET_COLOR)
+_OP_DEF("set-font-size", 1, 1, OP_SET_FONT_SIZE)
+_OP_DEF("set-line-width", 1, 1, OP_SET_LINE_WIDTH)
 _OP_DEF("move-to", 2, 2, OP_MOVETO)
 _OP_DEF("line-to", 2, 2, OP_LINETO)
+_OP_DEF("arc", 5, 5, OP_ARC)
 _OP_DEF("close-path", 0, 0, OP_CLOSE_PATH)
 _OP_DEF("stroke", 0, 0, OP_STROKE)
 _OP_DEF("fill", 0, 0, OP_FILL)
+_OP_DEF("get-text-extents", 0, 0, OP_GET_TEXT_EXTENTS)
 _OP_DEF("save", 0, 0, OP_SAVE)
 _OP_DEF("restore", 0, 0, OP_RESTORE)
 

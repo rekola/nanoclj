@@ -40,12 +40,24 @@ static inline void canvas_set_color(void * canvas, double r0, double g0, double 
   SetDCPenColor(hdc, RGB(r, g, b));
 }
 
+static inline void canvas_set_font_size(void * canvas, double size) {
+
+}
+
+static inline void canvas_set_line_width(void * canvas, double w) {
+
+}
+
 static inline void canvas_move_to(void * canvas, double x, double y) {
   MoveToEx((HDC)canvas, (int)x, (int)y, NULL);  
 }
 
 static inline void canvas_line_to(void * canvas, double x, double y) {
   LineTo((HDC)canvas, (int)x, (int)y);  
+}
+
+static inline void canvas_arc(void * canvas, double xc, double yc, double radius, double angle1, double angle2) {
+
 }
 
 static inline void canvas_stroke(void * canvas) {
@@ -79,6 +91,10 @@ static inline void canvas_show_text(void * canvas, const char * text, size_t len
 	   [in]      UINT    format
 	   );
 #endif
+}
+
+static inline void canvas_get_text_extents(void * canvas, const_strview_t text, double * width, double * height) {
+  *width = *height = 0;  
 }
 
 #endif

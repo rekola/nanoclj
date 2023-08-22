@@ -171,6 +171,11 @@ typedef struct strview_s {
   size_t size;
 } strview_t;
 
+typedef struct const_strview_s {
+  const char * ptr;
+  size_t size;
+} const_strview_t;
+
 struct symbol {
   int_fast16_t syntax;
   const char * name;
@@ -502,6 +507,11 @@ static inline strview_t to_strview(nanoclj_val_t v) {
   }
 
   return (strview_t){ "", 0 };
+}
+
+static inline const_strview_t to_const_strview(nanoclj_val_t v) {
+  strview_t sv = to_strview(v);
+  return (const_strview_t){ sv.ptr, sv.size };
 }
 
 static inline char *mutable_strvalue(struct cell * s) {
@@ -884,6 +894,10 @@ static inline struct cell * get_cell(nanoclj_t * sc, int flags, nanoclj_val_t a,
   _car(cell) = a;
   _cdr(cell) = b;
   _metadata_unchecked(cell) = meta;
+
+#if 1
+  retain(sc, mk_pointer(cell), sc->EMPTY);
+#endif
   
   return cell;
 }
@@ -1236,6 +1250,7 @@ static inline int inchar(nanoclj_t * sc, nanoclj_port_t * pt) {
   } else {
     c = utf8_inchar(pt);
   }
+  
   if (c == EOF) {
     /* Instead, set port_saw_EOF */
     pt->kind |= port_saw_EOF;
@@ -2051,6 +2066,13 @@ static inline nanoclj_val_t mk_vector(nanoclj_t * sc, size_t len) {
   return mk_pointer(get_vector_object(sc, T_VECTOR, s));
 }
 
+static inline nanoclj_val_t mk_vector_2d(nanoclj_t * sc, double a, double b) {
+  struct cell * vec = get_vector_object(sc, T_VECTOR, mk_vector_store(sc, 2));
+  set_vector_elem(vec, 0, mk_real(a));
+  set_vector_elem(vec, 1, mk_real(b));
+  return mk_pointer(vec);
+}
+
 /* Copies a vector so that the copy can be mutated */
 static inline struct cell * copy_vector(nanoclj_t * sc, struct cell * vec) {
   size_t len = _size_unchecked(vec);
@@ -2833,7 +2855,7 @@ static inline void putchars(nanoclj_t * sc, const char *s, size_t len, nanoclj_v
   } else if (is_canvas(out)) {
 #if NANOCLJ_HAS_CANVAS
     void * canvas = canvas_unchecked(out);
-    canvas_show_text(canvas, s, len);
+    canvas_show_text(canvas, (const_strview_t){ s, len });
 #endif
   }
 }
@@ -2923,7 +2945,7 @@ static inline char *readstr_upto(nanoclj_t * sc, char *delim) {
   while (1) {
     int c = inchar(sc, inport);
     if (c == EOF) break;
-
+    
     if (check_strbuff_size(sc, &p)) {
       p += char_to_utf8(c, p);
     }
@@ -3253,7 +3275,10 @@ static inline void print_image(nanoclj_t * sc, nanoclj_image_t * img, nanoclj_va
 	tmp[3 * i + 1] = img->data[4 * i + 1];
 	tmp[3 * i + 2] = img->data[4 * i + 2];
       }
-      sixel_dither_t * dither = sixel_dither_get(SIXEL_BUILTIN_G8);
+      sixel_dither_t * dither;
+      sixel_dither_new(&dither, -1, NULL);
+      sixel_dither_initialize(dither, tmp, width, height, SIXEL_PIXELFORMAT_RGB888, SIXEL_LARGE_NORM, SIXEL_REP_CENTER_BOX, SIXEL_QUALITY_HIGHCOLOR);
+
       sixel_output_t * output = NULL;
       sixel_output_new(&output, sixel_write, stdout, NULL);
       
@@ -3265,6 +3290,8 @@ static inline void print_image(nanoclj_t * sc, nanoclj_image_t * img, nanoclj_va
 		   dither,
 		   output);
       sc->free(tmp);
+      sixel_output_destroy(output);
+      sixel_dither_destroy(dither);
       return;
 #endif      
     }
@@ -4023,8 +4050,8 @@ static inline bool unpack_args_1(nanoclj_t * sc) {
   if (sc->args.as_uint64 != sc->EMPTY.as_uint64) {
     struct cell * c = decode_pointer(sc->args);
     sc->arg0 = _car(c);
-    sc->arg1 = sc->arg_rest = mk_nil();
-    return true;
+    nanoclj_val_t r = _cdr(c);
+    return r.as_uint64 == sc->EMPTY.as_uint64;      
   }
   return false;
 }
@@ -4048,9 +4075,38 @@ static inline bool unpack_args_2(nanoclj_t * sc) {
     if (r.as_uint64 != sc->EMPTY.as_uint64) {
       c = decode_pointer(r);
       sc->arg1 = _car(c);
-      sc->arg_rest = mk_nil();
-      
-      return true;
+      nanoclj_val_t r = _cdr(c);
+      return r.as_uint64 == sc->EMPTY.as_uint64;      
+    }
+  }
+  return false;
+}
+
+static inline bool unpack_args_5(nanoclj_t * sc) {
+  if (sc->args.as_uint64 != sc->EMPTY.as_uint64) {
+    struct cell * c = decode_pointer(sc->args);
+    sc->arg0 = _car(c);
+    nanoclj_val_t r = _cdr(c);
+    if (r.as_uint64 != sc->EMPTY.as_uint64) {
+      c = decode_pointer(r);
+      sc->arg1 = _car(c);
+      r = _cdr(c);
+      if (r.as_uint64 != sc->EMPTY.as_uint64) {
+	c = decode_pointer(r);
+	sc->arg2 = _car(c);
+	r = _cdr(c);
+	if (r.as_uint64 != sc->EMPTY.as_uint64) {
+	  c = decode_pointer(r);
+	  sc->arg3 = _car(c);
+	  r = _cdr(c);
+	  if (r.as_uint64 != sc->EMPTY.as_uint64) {
+	    c = decode_pointer(r);
+	    sc->arg4 = _car(c);
+	    r = _cdr(c);
+	    return r.as_uint64 == sc->EMPTY.as_uint64;
+	  }
+	}
+      }
     }
   }
   return false;
@@ -4065,7 +4121,6 @@ static inline bool unpack_args_2_plus(nanoclj_t * sc) {
       c = decode_pointer(r);
       sc->arg1 = _car(c);
       sc->arg_rest = _cdr(c);
-      
       return true;
     }
   }
@@ -5937,6 +5992,30 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     }
     s_return(sc, mk_nil());
 
+  case OP_SET_FONT_SIZE:
+    if (!unpack_args_1(sc)) {
+      Error_0(sc, "Error - Invalid arity");
+    }
+#if NANOCLJ_HAS_CANVAS
+    x = get_out_port(sc);
+    if (is_canvas(x)) {
+      canvas_set_font_size(canvas_unchecked(x), to_double(sc->arg0));
+    }
+#endif
+    s_return(sc, mk_nil());
+    
+  case OP_SET_LINE_WIDTH:
+    if (!unpack_args_1(sc)) {
+      Error_0(sc, "Error - Invalid arity");
+    }
+#if NANOCLJ_HAS_CANVAS
+    x = get_out_port(sc);
+    if (is_canvas(x)) {
+      canvas_set_line_width(canvas_unchecked(x), to_double(sc->arg0));
+    }
+#endif
+    s_return(sc, mk_nil());
+
   case OP_MOVETO:
     if (!unpack_args_2(sc)) {
       Error_0(sc, "Error - Invalid arity");
@@ -5957,6 +6036,19 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     x = get_out_port(sc);
     if (is_canvas(x)) {
       canvas_line_to(canvas_unchecked(x), to_double(sc->arg0), to_double(sc->arg1));
+    }
+#endif
+    s_return(sc, mk_nil());
+
+  case OP_ARC:
+    if (!unpack_args_5(sc)) {
+      Error_0(sc, "Error - Invalid arity");
+    }
+#if NANOCLJ_HAS_CANVAS
+    x = get_out_port(sc);
+    if (is_canvas(x)) {
+      canvas_arc(canvas_unchecked(x), to_double(sc->arg0), to_double(sc->arg1),
+		 to_double(sc->arg2), to_double(sc->arg3), to_double(sc->arg4));
     }
 #endif
     s_return(sc, mk_nil());
@@ -5996,6 +6088,19 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     }
 #endif
     s_return(sc, mk_nil());
+
+  case OP_GET_TEXT_EXTENTS:
+    if (!unpack_args_1(sc)) {
+      Error_0(sc, "Error - Invalid arity");
+    }
+#if NANOCLJ_HAS_CANVAS
+    x = get_out_port(sc);
+    if (is_canvas(x)) {
+      double width, height;
+      canvas_get_text_extents(canvas_unchecked(x), to_const_strview(sc->arg0), &width, &height);
+      s_return(sc, mk_vector_2d(sc, width, height));
+    }
+#endif
     
   case OP_SAVE:
     if (!unpack_args_0(sc)) {
@@ -6356,6 +6461,7 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc fr
 
   sc->truecolor_term = has_truecolor();
   sc->sixel_term = has_sixels();
+  sc->dpi_scale_factor = 2.0;
   
   return !sc->no_memory;
 }
@@ -6377,10 +6483,7 @@ void nanoclj_set_output_port_file(nanoclj_t * sc, FILE * fout) {
   int width, height;
   nanoclj_val_t size = mk_nil();
   if (get_window_size(fout, &width, &height)) {
-    struct cell * vec = get_vector_object(sc, T_VECTOR, mk_vector_store(sc, 2));
-    set_vector_elem(vec, 0, mk_int(width));
-    set_vector_elem(vec, 1, mk_int(height));
-    size = mk_pointer(vec);
+    size = mk_vector_2d(sc, width, height);
   }
   nanoclj_intern(sc, sc->global_env, sc->WINDOW_SIZE, size);
 }

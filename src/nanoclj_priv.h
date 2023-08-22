@@ -147,6 +147,8 @@ extern "C" {
     nanoclj_val_t arg0;
     nanoclj_val_t arg1;
     nanoclj_val_t arg2;
+    nanoclj_val_t arg3;
+    nanoclj_val_t arg4;
     nanoclj_val_t arg_rest;
     
     struct cell _sink;
@@ -227,6 +229,7 @@ extern "C" {
 
     bool sixel_term;
     bool truecolor_term;
+    double dpi_scale_factor;
   };
 
 /* operator code */
