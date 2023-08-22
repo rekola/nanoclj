@@ -216,7 +216,10 @@
 
 (def map
   "Returns a lazy sequence with each element mapped using f"
-  (fn [f coll] (if (empty? coll) '() (cons (f (first coll)) (lazy-seq (map f (rest coll)))))))
+  (fn
+    ([f coll] (if (empty? coll) '() (cons (f (first coll)) (lazy-seq (map f (rest coll))))))
+    ([f c1 c2] (if (or (empty? c1) (empty? c2)) '() (cons (f (first c1) (first c2)) (lazy-seq (map f (rest c1) (rest c2))))))))
+  
 
 (def repeatedly (fn ([f]   (cons (f) (lazy-seq (repeatedly f))))
                     ([n f] (if (<= n 0) '() (cons (f) (lazy-seq (repeatedly (dec n) f)))))))
@@ -479,6 +482,12 @@
                                :else false))
 
 ; Collections
+
+(defn partition
+  "Partitions the collection into n sized blocks"
+  [n coll] (if (empty? coll)
+             '()
+             (cons (take n coll) (lazy-seq (partition n (drop n coll))))))
 
 (defn split-at
   "Splits coll into two parts at index n and returns the parts in a vector"
