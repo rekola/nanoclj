@@ -8,7 +8,7 @@ endif()
 add_definitions(-DNANOCLJ_STANDALONE -DNANOCLJ_USE_LINENOISE)
 
 # The math optimizations are not necessary, but they do not cause harm. Since NaNs are needed -ffast-math or -ffinite-math-only cannot be used.
-add_compile_options(-std=gnu99 -Wall -O3 -march=native -funsafe-math-optimizations -fno-math-errno -fno-rounding-math -fno-signaling-nans -fcx-limited-range -ffp-contract=fast -Wno-unused-value -Wno-unused-variable -Wno-unused-function)
+add_compile_options(-std=gnu99 -Wall -O3 -march=native -funsafe-math-optimizations -fno-math-errno -fno-rounding-math -fno-signaling-nans -fcx-limited-range -ffp-contract=fast -Wno-unused-value -Wno-unused-variable -Wno-unused-function -Werror=implicit-function-declaration)
 
 if(DEFINED ENV{WARN_ERROR_BUILD})
     add_compile_options(-Werror)
@@ -17,6 +17,7 @@ endif()
 set(SOURCE_FILES
     src/nanoclj.c
     src/linenoise.c
+    src/wcwidth.c
     )
 
 add_executable(nanoclj ${SOURCE_FILES})
@@ -34,6 +35,11 @@ endif()
 find_library(CAIRO_LIBRARY cairo)
 if(CAIRO_LIBRARY)
   target_link_libraries(nanoclj cairo)
+endif()
+
+find_library(SIXEL_LIBRARY sixel)
+if(SIXEL_LIBRARY)
+  target_link_libraries(nanoclj sixel)
 endif()
 
 configure_file(lib/init.clj init.clj @ONLY)
