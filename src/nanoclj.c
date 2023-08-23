@@ -1317,8 +1317,6 @@ static inline struct cell * get_vector_object(nanoclj_t * sc, int_fast16_t t, na
 
 /* ========== Environment implementation  ========== */
 
-#if !defined(USE_ALIST_ENV) || !defined(USE_OBJECT_LIST)
-
 static inline int hash_fn(const char *key, int table_size) {
   unsigned int hashed = 0;
   const char *c;
@@ -1331,9 +1329,6 @@ static inline int hash_fn(const char *key, int table_size) {
   }
   return hashed % table_size;
 }
-#endif
-
-#ifndef USE_ALIST_ENV
 
 /*
  * In this implementation, each frame of the environment may be
@@ -1413,41 +1408,6 @@ static inline nanoclj_val_t find_slot_in_env(nanoclj_t * sc, nanoclj_val_t env, 
   }
   return sc->EMPTY;
 }
-
-#else /* USE_ALIST_ENV */
-
-static inline void new_frame_in_env(nanoclj_t * sc, nanoclj_val_t old_env) {
-  sc->envir = mk_pointer(get_cell(sc, T_ENVIRONMENT, sc->EMPTY, old_env))
-}
-
-static inline void new_slot_spec_in_env(nanoclj_t * sc, nanoclj_val_t env,
-					nanoclj_val_t variable, nanoclj_val_t value) {
-  car(env) = cons(sc, cons(sc, variable, value), car(env));
-}
-
-static inline nanoclj_val_t find_slot_in_env(nanoclj_t * sc, nanoclj_val_t env, nanoclj_val_t hdl,
-    int all) {
-  nanoclj_val_t x, y;
-  for (x = env; x.as_uint64 != sc->EMPTY.as_uint64; x = cdr(x)) {
-    for (y = car(x); y.as_uint64 != sc->EMPTY.as_uint64; y = cdr(y)) {
-      if (caar(y) == hdl) {
-        break;
-      }
-    }
-    if (y.as_uint64 != sc->EMPTY.as_uint64) {
-      break;
-    }
-    if (!all) {
-      return sc->EMPTY;
-    }
-  }
-  if (x.as_uint64 != sc->EMPTY.as_uint64) {
-    return car(y);
-  }
-  return sc->EMPTY;
-}
-
-#endif /* USE_ALIST_ENV else */
 
 static inline void new_slot_in_env(nanoclj_t * sc, nanoclj_val_t variable, nanoclj_val_t value) {
   new_slot_spec_in_env(sc, sc->envir, variable, value);
