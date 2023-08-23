@@ -54,7 +54,7 @@ have been tested:
 - List length has complexity of O(n)
 - Vectors support O(1) append, but update is O(n)
 - Macros and namespace definitions use TinyScheme syntax
-- Tail call optimization
+- Tail-call optimization
 - sort is not stable and cannot throw on type mismatch
 - License is BSD 2-Clause License instead of EPL
 - No type inheritance
@@ -89,6 +89,7 @@ have been tested:
 ## Dependencies
 
 - linenoise (included)
+- stb_image, stb_image_resize, stb_image_write (included)
 - cairo
 - libsixel
 - utf8proc
@@ -99,7 +100,7 @@ have been tested:
 - Transducers
 - Exception handling
 - Regular expressions
-- Vars, Refs, Agents and Atoms
+- Refs, Agents and Atoms
 - Queues
 - Arrays
 - Tagged Literals (e.g. #uuid and #inst)
@@ -147,7 +148,6 @@ have been tested:
   - flatten
   - zipmap
   - memoize
-  - partition
   - group-by
   - condp
   - doto
@@ -156,10 +156,12 @@ have been tested:
   - if-let
   - realized?
   - defn-
+  - reduced, reduced?  
 - clojure.string
   - upper-case
   - clojure.string/capitalize
   - clojure.string/split
   - clojure.string/replace
   - trim, trimr, trim-newline
+- clojure.set
 - ...and lots more...
