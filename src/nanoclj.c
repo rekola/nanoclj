@@ -742,39 +742,39 @@ static inline const char* get_version() {
 
 static inline const char * typename_from_id(int_fast16_t id) {
   switch (id) {
-  case 0: return "scheme.lang.EmptyList";
+  case 0: return "nanoclj.core.EmptyList";
   case 1: return "java.lang.Boolean";
   case 2: return "java.lang.String";
   case 3: return "java.lang.Integer";
   case 4: return "java.lang.Long";
   case 5: return "java.lang.Double";
   case 6: return "clojure.lang.Symbol";
-  case 7: return "scheme.lang.Procedure";
+  case 7: return "nanoclj.core.Procedure";
   case 8: return "clojure.lang.Cons";
-  case 9: return "scheme.lang.Closure";
-  case 11: return "scheme.lang.ForeignFunction";
+  case 9: return "nanoclj.core.Closure";
+  case 11: return "nanoclj.core.ForeignFunction";
   case 12: return "java.lang.Character";
   case 13: return "java.io.Reader";
   case 14: return "java.io.Writer";
   case 15: return "clojure.lang.PersistentVector";
-  case 16: return "scheme.lang.Macro";
+  case 16: return "nanoclj.core.Macro";
   case 17: return "clojure.lang.Delay";
   case 18: return "clojure.lang.Namespace"; /* Environment */
-  case 19: return "scheme.lang.Type";
+  case 19: return "nanoclj.core.Type";
   case 20: return "clojure.lang.Keyword";
   case 21: return "clojure.lang.MapEntry";
   case 22: return "clojure.lang.PersistentArrayMap";
-  case 23: return "scheme.lang.Seq";
+  case 23: return "nanoclj.core.Seq";
   case 24: return "clojure.lang.PersistentTreeSet";
-  case 25: return "scheme.lang.ForeignObject";
+  case 25: return "nanoclj.core.ForeignObject";
   case 26: return "clojure.lang.BigInt";
-  case 27: return "scheme.lang.CharArray";
+  case 27: return "nanoclj.core.CharArray";
   case 28: return "java.io.InputStream";
   case 29: return "java.io.OutputStream";
   case 30: return "clojure.lang.Ratio";
   case 31: return "clojure.lang.PersistentList";
-  case 32: return "scheme.lang.Image";
-  case 33: return "scheme.lang.Canvas";
+  case 32: return "nanoclj.core.Image";
+  case 33: return "nanoclj.core.Canvas";
   case 34: return "java.lang.Exception";
   case 35: return "clojure.lang.Var";
   }

@@ -3,7 +3,7 @@
 (defn vector? [x] (instance? clojure.lang.PersistentVector x))
 (defn keyword? [x] (instance? clojure.lang.Keyword x))
 (defn delay? [x] (instance? clojure.lang.Delay x))
-(defn seq? [x] (is-any-of? (type x) scheme.lang.Seq clojure.lang.PersistentList))
+(defn seq? [x] (is-any-of? (type x) nanoclj.core.Seq clojure.lang.PersistentList))
 (defn map-entry? [x] (instance? clojure.lang.MapEntry x))
 (defn set? [x] (instance? clojure.lang.PersistentTreeSet x))
 (defn map? [x] (instance? clojure.lang.PersistentArrayMap x))
@@ -12,7 +12,7 @@
                             clojure.lang.PersistentArrayMap
                             clojure.lang.PersistentVector
                             clojure.lang.PersistentList
-                            scheme.lang.Seq
+                            nanoclj.core.Seq
                             clojure.lang.Cons
                             ))
 (defn associative? [coll] (is-any-of? (type x)

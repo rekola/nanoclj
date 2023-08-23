@@ -58,24 +58,24 @@
 (initialize-type- (type (divide 1 2)) "Constructs a ratio")
 ; (initialize-type- (type (first {1 1})))
 
-(def clojure.lang.Cons (scheme.lang.Type 8))
-(def clojure.lang.BigInt (scheme.lang.Type 26))
-(def clojure.lang.MapEntry (scheme.lang.Type 21))
-(def scheme.lang.CharArray (scheme.lang.Type 27))
-(def java.io.InputStream (scheme.lang.Type 28))
-(def java.io.OutputStream (scheme.lang.Type 29))
-(def scheme.lang.Image (scheme.lang.Type 32))
-(def scheme.lang.Canvas (scheme.lang.Type 33))
+(def clojure.lang.Cons (nanoclj.core.Type 8))
+(def clojure.lang.BigInt (nanoclj.core.Type 26))
+(def clojure.lang.MapEntry (nanoclj.core.Type 21))
+(def nanoclj.core.CharArray (nanoclj.core.Type 27))
+(def java.io.InputStream (nanoclj.core.Type 28))
+(def java.io.OutputStream (nanoclj.core.Type 29))
+(def nanoclj.core.Image (nanoclj.core.Type 32))
+(def nanoclj.core.Canvas (nanoclj.core.Type 33))
 
 (def symbol clojure.lang.Symbol)
 (def vector clojure.lang.PersistentVector)
 (def cons clojure.lang.Cons)
-(def seq scheme.lang.Seq)
+(def seq nanoclj.core.Seq)
 (def boolean java.lang.Boolean)
-(def char-array scheme.lang.CharArray)
+(def char-array nanoclj.core.CharArray)
 (def map-entry clojure.lang.MapEntry)
-(def canvas scheme.lang.Canvas)
-(def image scheme.lang.Image)
+(def canvas nanoclj.core.Canvas)
+(def image nanoclj.core.Image)
 
 (def nil?
   "Returns true if the argument is nil"
@@ -131,7 +131,7 @@
 
 (def procedure?
   "Returns true if the argument is a function"
-  (fn [x] (is-any-of? (type x) scheme.lang.Procedure scheme.lang.Closure scheme.lang.ForeignFunction)))
+  (fn [x] (is-any-of? (type x) nanoclj.core.Procedure nanoclj.core.Closure nanoclj.core.ForeignFunction)))
 
 (def sorted?
   "Returns true if coll is a sorted collection"
@@ -139,7 +139,7 @@
 
 (def ifn?
   "Returns true if coll is invokeable"
-  (fn [x] (is-any-of? (type x) scheme.lang.Procedure scheme.lang.Closure scheme.lang.ForeignFunction clojure.lang.PersistentVector scheme.lang.Macro clojure.lang.Delay scheme.lang.Type clojure.lang.Keyword clojure.lang.PersistentArrayMap clojure.lang.PersistentTreeSet scheme.lang.ForeignObject)))
+  (fn [x] (is-any-of? (type x) nanoclj.core.Procedure nanoclj.core.Closure nanoclj.core.ForeignFunction clojure.lang.PersistentVector nanoclj.core.Macro clojure.lang.Delay nanoclj.core.Type clojure.lang.Keyword clojure.lang.PersistentArrayMap clojure.lang.PersistentTreeSet nanoclj.core.ForeignObject)))
 
 (def defined? (fn [sym] (boolean (resolve sym))))
                         
@@ -235,7 +235,7 @@
 
 (def macro?
   "Returns true if the argument is a macro"
-  (fn [x] (instance? scheme.lang.Macro x)))
+  (fn [x] (instance? nanoclj.core.Macro x)))
 
 ; DEFINE-MACRO Contributed by Andy Gaynor
 (macro (def-macro dform)
@@ -492,4 +492,4 @@
 
 (defn closure?
   "Returns true if argument is a closure. Note, a macro object is also a closure."
-  [x] (or (instance? scheme.lang.Closure x) (instance? scheme.lang.Macro x)))
+  [x] (or (instance? nanoclj.core.Closure x) (instance? nanoclj.core.Macro x)))
