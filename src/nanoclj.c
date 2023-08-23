@@ -6442,7 +6442,7 @@ static inline void update_window_size(nanoclj_t * sc, nanoclj_val_t out) {
       FILE * fh = pt->rep.stdio.file;
       
       int width, height;
-      if (get_window_size(fh, &width, &height)) {
+      if (get_window_size(stdin, fh, &width, &height)) {
 	size = mk_vector_2d(sc, width, height);
       }
     }
