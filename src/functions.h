@@ -778,6 +778,12 @@ static inline void free_hints(void * ptr) {
   linenoise_sc->free(ptr);
 }
 
+static inline void mouse_motion(int x, int y) {
+  double f = linenoise_sc->dpi_scale_factor;
+  nanoclj_val_t p = mk_vector_2d(linenoise_sc, x / f, y / f);
+  nanoclj_intern(linenoise_sc, linenoise_sc->global_env, linenoise_sc->MOUSE_POS, p);
+}
+
 static inline nanoclj_val_t linenoise_readline(nanoclj_t * sc, nanoclj_val_t args) {
   if (!linenoise_sc) {
     linenoise_sc = sc;
@@ -786,6 +792,7 @@ static inline nanoclj_val_t linenoise_readline(nanoclj_t * sc, nanoclj_val_t arg
     linenoiseSetCompletionCallback(completion);
     linenoiseSetHintsCallback(hints);
     linenoiseSetFreeHintsCallback(free_hints);
+    linenoiseSetMouseMotionCallback(mouse_motion);
     linenoiseHistorySetMaxLen(10000);
     linenoiseHistoryLoad(".nanoclj_history");
   }

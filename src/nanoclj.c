@@ -2512,6 +2512,10 @@ static void gc(nanoclj_t * sc, nanoclj_val_t a, nanoclj_val_t b) {
   mark(sc->EMPTYSTR);
 
 #if 0
+  mark(sc->active_element);
+#endif
+  
+#if 0
   fprintf(stderr, "marking sink %p\n", (void *)sc->sink);
 #endif
   
@@ -3373,12 +3377,42 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
       case T_IMAGE:
 	print_image(sc, _image_unchecked(c), out);
 	return;
+      case T_CANVAS:{
+#if NANOCLJ_HAS_CANVAS
+	nanoclj_val_t image = canvas_create_image(sc, canvas_unchecked(l));
+
+	if (is_writer(out)) {
+	  nanoclj_port_t * pt = _port_unchecked(decode_pointer(out)); 
+	  if (pt->kind & port_file) {
+	    FILE * fh = pt->rep.stdio.file;
+	    if (l.as_uint64 == sc->active_element.as_uint64 && 0) {
+	  
+	    } else {
+	      int x, y;
+	      if (fh == stdout) {
+		sc->active_element = l;
+		if (0 && get_cursor_position(stdin, fh, &x, &y)) {
+		  sc->active_element_x = x;
+		  sc->active_element_y = y;
+		}
+	      } else {
+		sc->active_element = mk_nil();
+	      }
+	    }
+	    	
+	  }
+	}
+	
+	print_image(sc, image_unchecked(image), out);
+	return;
+      }
+#endif
       }
     }
   }
     break;
   }
-
+  
   if (!p) {
     p = sc->strbuff;
     snprintf(sc->strbuff, sc->strbuff_size, "#object[%s]", typename_from_id(type(l)));
@@ -6341,6 +6375,9 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc fr
   sc->save_inport = sc->EMPTY;
   sc->loadport = sc->EMPTY;
   sc->nesting = 0;
+
+  sc->active_element = mk_nil();
+  sc->active_element_x = sc->active_element_y = 0;
   
   if (alloc_cellseg(sc, FIRST_CELLSEGS) != FIRST_CELLSEGS) {
     sc->no_memory = 1;
@@ -6416,6 +6453,7 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc fr
   sc->UNDERSCORE = def_symbol(sc, "_");
   sc->DOC = def_keyword(sc, "doc");
   sc->WINDOW_SIZE = def_symbol(sc, "*window-size*");
+  sc->MOUSE_POS = def_symbol(sc, "*mouse-pos*");
   
   sc->SORTED_SET = def_symbol(sc, "sorted-set");
   sc->ARRAY_MAP = def_symbol(sc, "array-map");
@@ -6424,6 +6462,7 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc fr
 
   nanoclj_intern(sc, sc->global_env, def_symbol(sc, "root"), sc->root_env);
   nanoclj_intern(sc, sc->global_env, def_symbol(sc, "nil"), mk_nil());
+  nanoclj_intern(sc, sc->global_env, sc->MOUSE_POS, mk_nil());
 
   register_functions(sc);
 
@@ -6742,7 +6781,7 @@ int main(int argc, const char **argv) {
   fclose(fh);
 
   signal(SIGWINCH, sigwinchHandler);
-
+  
   if (argc >= 2) {
     fh = open_file(argv[1]);
     nanoclj_load_named_file(&sc, fh, argv[1]);

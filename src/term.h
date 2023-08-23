@@ -41,20 +41,24 @@ static inline void set_truecolor(FILE * fh, double r, double g, double b) {
   }
 }
 
-static inline bool set_raw_mode(int fd) {
-  struct termios raw;
-  tcgetattr(fd, &raw);
+static inline struct termios set_raw_mode(int fd) {
+  struct termios orig_term;
+  tcgetattr(fd, &orig_term);
 
+  struct termios raw = orig_term;
+  
   raw.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
   raw.c_oflag &= ~(OPOST);
-  raw.c_cflag |= (CS8);
+  raw.c_cflag |= CS8;
   raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
-  raw.c_cc[VMIN] = 1; raw.c_cc[VTIME] = 0;
+  raw.c_cc[VMIN] = 1;
+  raw.c_cc[VTIME] = 0;
   
-  return tcsetattr(fd,TCSAFLUSH,&raw) >= 0;
+  return orig_term;
 }
 
 static inline bool get_window_size(FILE * in, FILE * out, int * width, int * height) {
+  bool r = false;
   if (isatty(fileno(out))) {
     struct winsize ws;
     
@@ -66,12 +70,7 @@ static inline bool get_window_size(FILE * in, FILE * out, int * width, int * hei
       char buf[32];
       unsigned int i = 0;
 
-      struct termios orig_term;
-      tcgetattr(fileno(in), &orig_term);
-
-      if (!set_raw_mode(fileno(in))) {
-	return false;
-      }
+      struct termios orig_term = set_raw_mode(fileno(in));
       
       if (write(fileno(out), "\033[14t", 5) != 5) {
 	return false;
@@ -89,17 +88,44 @@ static inline bool get_window_size(FILE * in, FILE * out, int * width, int * hei
       }
       buf[i] = '\0';
 
-      bool r = false;
       if (buf[0] == 27 && buf[1] == '[' && buf[2] == '4' && buf[3] == ';' &&
 	  sscanf(buf + 4, "%d;%dt", height, width) == 2) {
 	r = true;
       }
 
       tcsetattr(STDIN_FILENO, TCSADRAIN, &orig_term);
-      return r;
     }
   }
-  return false;
+  return r;
+}
+	   
+static bool get_cursor_position(FILE * in, FILE * out, int * x, int * y) {
+  if (isatty(fileno(in)) && isatty(fileno(out))) {
+    struct termios orig_term = set_raw_mode(fileno(in));
+    
+    if (write(fileno(out), "\x1b[6n", 4) != 4) {
+      return false;
+    }
+    
+    char buf[32];
+    unsigned int i = 0;
+    while (i < sizeof(buf)-1) {
+      if (read(fileno(in), buf+i, 1) != 1) break;
+      if (buf[i] == 'R') break;
+      i++;
+    }
+    buf[i] = 0;
+    
+    bool r = false;
+    if (buf[0] == 0x27 && buf[1] == '[' && sscanf(buf+2, "%d;%d", y, x) == 2) {
+      r = true;
+    }
+    
+    tcsetattr(STDIN_FILENO, TCSADRAIN, &orig_term);
+    return r;
+  } else {
+    return false;
+  }
 }
 
 static inline bool has_truecolor() {

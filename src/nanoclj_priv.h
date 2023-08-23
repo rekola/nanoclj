@@ -184,6 +184,7 @@ extern "C" {
     nanoclj_val_t ERR;		  /* *err* */
     nanoclj_val_t NS;		  /* *ns* */
     nanoclj_val_t WINDOW_SIZE;    /* *window-size* */
+    nanoclj_val_t MOUSE_POS;      /* *mouse-pos* */
     
     nanoclj_val_t RECUR;		  /* recur */
     nanoclj_val_t AMP;		  /* & */
@@ -230,6 +231,10 @@ extern "C" {
     bool sixel_term;
     bool truecolor_term;
     double dpi_scale_factor;
+
+    /* Dynamic printing */
+    nanoclj_val_t active_element;
+    int active_element_x, active_element_y;
   };
 
 /* operator code */
