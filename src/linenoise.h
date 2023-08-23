@@ -97,6 +97,10 @@ void linenoiseSetHintsCallback(linenoiseHintsCallback *);
 void linenoiseSetFreeHintsCallback(linenoiseFreeHintsCallback *);
 void linenoiseAddCompletion(linenoiseCompletions *, const char *);
 
+/* Mouse API. */
+typedef void(linenoiseMouseMotionCallback)(int, int);
+void linenoiseSetMouseMotionCallback(linenoiseMouseMotionCallback *);
+
 /* Brace Highlight API. */
 typedef void(linenoiseHighlightCallback)(const char *, int pos);
 void linenoiseSetHighlightCallback(linenoiseHighlightCallback *);

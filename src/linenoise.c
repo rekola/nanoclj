@@ -123,6 +123,7 @@
 #define LINENOISE_MAX_LINE 4096
 static char *unsupported_term[] = {"dumb", "cons25", "emacs", NULL};
 static linenoiseCompletionCallback *completionCallback = NULL;
+static linenoiseMouseMotionCallback *mouseMotionCallback = NULL;
 static linenoiseHighlightCallback *highlightCallback = NULL;
 static linenoiseHighlightCancelCallback *highlightCancelCallback = NULL;
 static linenoiseHintsCallback *hintsCallback = NULL;
@@ -479,6 +480,10 @@ void linenoiseAddCompletion(linenoiseCompletions *lc, const char *str) {
     }
     lc->cvec = cvec;
     lc->cvec[lc->len++] = copy;
+}
+
+void linenoiseSetMouseMotionCallback(linenoiseMouseMotionCallback *fn) {
+    mouseMotionCallback = fn;
 }
 
 /* Register a callback function to be called for brace highlighting. */
@@ -983,6 +988,11 @@ int linenoiseEditStart(struct linenoiseState *l, int stdin_fd, int stdout_fd, ch
     /* Enter raw mode. */
     if (enableRawMode(l->ifd) == -1) return -1;
 
+    if (mouseMotionCallback) {
+      /* Enable mouse. */
+      if (write(l->ofd, "\033[?1003;1016h", 13) == -1) return -1;
+    }
+
     /* The latest history entry is always our current buffer, that
      * initially is just an empty string. */
     linenoiseHistoryAdd("");
@@ -1022,7 +1032,8 @@ char *linenoiseEditFeed(struct linenoiseState *l) {
 
     char c;
     int nread;
-    char seq[5];
+    char seq[32];
+    int mouse_x, mouse_y;
 
     nread = read(l->ifd,&c,1);
     if (nread <= 0) {
@@ -1126,6 +1137,17 @@ char *linenoiseEditFeed(struct linenoiseState *l) {
 		        linenoiseEditMoveWordRight(l);		        
 		    }
 		}
+	    } else if (seq[1] == '<') {
+	      //^[[<35;172;316M
+	      int i = 2;
+	      while (i < sizeof(seq)-1) {
+		if (read(l->ifd,seq+i,1) != 1) break;
+		if (seq[i] == 'M') break;
+		i++;
+	      }
+	      if (mouseMotionCallback && sscanf(seq+5,"%d;%d;",&mouse_x,&mouse_y) == 2) {
+		mouseMotionCallback(mouse_x, mouse_y);
+	      }
             } else {
                 switch(seq[1]) {
                 case 'A': /* Up */
