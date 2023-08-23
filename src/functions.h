@@ -61,7 +61,7 @@ static nanoclj_val_t System_gc(nanoclj_t * sc, nanoclj_val_t args) {
 }
 
 static nanoclj_val_t System_getenv(nanoclj_t * sc, nanoclj_val_t args) {
-  if (args.as_uint64 != sc->EMPTY.as_uint64) {
+  if (args.as_long != sc->EMPTY.as_long) {
     const char * v = getenv(strvalue(car(args)));
     return v ? mk_string(sc, v) : mk_nil();
   } else {
@@ -128,7 +128,7 @@ static nanoclj_val_t System_getProperty(nanoclj_t * sc, nanoclj_val_t args) {
 #endif
 
   nanoclj_val_t r;
-  if (args.as_uint64 == sc->EMPTY.as_uint64) {
+  if (args.as_long == sc->EMPTY.as_long) {
     nanoclj_val_t l = sc->EMPTY;
     l = cons(sc, mk_string(sc, user_name), l);
     l = cons(sc, mk_string(sc, "user.name"), l);
@@ -238,7 +238,7 @@ static nanoclj_val_t Math_acos(nanoclj_t * sc, nanoclj_val_t args) {
 }
 
 static nanoclj_val_t Math_atan(nanoclj_t * sc, nanoclj_val_t args) {
-  if (cdr(args).as_uint64 != sc->EMPTY.as_uint64) {
+  if (cdr(args).as_long != sc->EMPTY.as_long) {
     nanoclj_val_t x = car(sc->args);
     nanoclj_val_t y = cadr(sc->args);
     return mk_real(atan2(to_double(x), to_double(y)));
@@ -556,7 +556,7 @@ nanoclj_val_t Image_gaussian_blur(nanoclj_t * sc, nanoclj_val_t args) {
   if (!is_number(h_radius)) {
     return mk_exception(sc, "Not a number");
   }
-  if (!is_nil(v_radius) && v_radius.as_uint64 != sc->EMPTY.as_uint64 && !is_number(v_radius)) {
+  if (!is_nil(v_radius) && v_radius.as_long != sc->EMPTY.as_long && !is_number(v_radius)) {
     return mk_exception(sc, "Not a number or nil");
   }
 
@@ -571,7 +571,7 @@ nanoclj_val_t Image_gaussian_blur(nanoclj_t * sc, nanoclj_val_t args) {
   for (int i = 0; i < hsize; i++) htotal += hkernel[i];
 
   int * vkernel;
-  if (v_radius.as_uint64 == sc->EMPTY.as_uint64 || is_nil(v_radius)) {
+  if (v_radius.as_long == sc->EMPTY.as_long || is_nil(v_radius)) {
     vsize = hsize;
     vkernel = hkernel;
     vtotal = htotal;
@@ -696,7 +696,7 @@ static inline void completion(const char *input, linenoiseCompletions *lc) {
     if (!num_completion_symbols) {
       const char * expr = "(ns-interns *ns*)";
       nanoclj_val_t sym = nanoclj_eval_string(linenoise_sc, expr, strlen(expr));
-      for ( ; sym.as_uint64 != linenoise_sc->EMPTY.as_uint64 && num_completion_symbols < MAX_COMPLETION_SYMBOLS; sym = cdr(sym)) {
+      for ( ; sym.as_long != linenoise_sc->EMPTY.as_long && num_completion_symbols < MAX_COMPLETION_SYMBOLS; sym = cdr(sym)) {
 	nanoclj_val_t v = car(sym);
 	if (is_symbol(v)) {
 	  completion_symbols[num_completion_symbols++] = symname(v);

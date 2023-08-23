@@ -59,7 +59,7 @@ extern "C" {
 
   typedef struct nanoclj_s nanoclj_t;
   typedef union {
-    uint64_t as_uint64;
+    uint64_t as_long;
     double as_double;
   } nanoclj_val_t;
 
