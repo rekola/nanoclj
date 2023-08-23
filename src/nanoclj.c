@@ -3975,7 +3975,7 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
 
   case T_CANVAS:
 #if NANOCLJ_HAS_CANVAS
-    return mk_canvas(sc, to_int(car(args)), to_int(cadr(args)));
+    return mk_canvas(sc, to_int(car(args)) * sc->dpi_scale_factor, to_int(cadr(args)) * sc->dpi_scale_factor);
 #endif
 
   case T_IMAGE:
@@ -5966,7 +5966,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 #if NANOCLJ_HAS_CANVAS
     x = get_out_port(sc);
     if (is_canvas(x)) {
-      canvas_set_font_size(canvas_unchecked(x), to_double(sc->arg0));
+      canvas_set_font_size(canvas_unchecked(x), to_double(sc->arg0) * sc->dpi_scale_factor);
     }
 #endif
     s_return(sc, mk_nil());
@@ -5978,6 +5978,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 #if NANOCLJ_HAS_CANVAS
     x = get_out_port(sc);
     if (is_canvas(x)) {
+      /* Do not scale line width whit DPI scale factor */
       canvas_set_line_width(canvas_unchecked(x), to_double(sc->arg0));
     }
 #endif
@@ -5990,7 +5991,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 #if NANOCLJ_HAS_CANVAS
     x = get_out_port(sc);
     if (is_canvas(x)) {
-      canvas_move_to(canvas_unchecked(x), to_double(sc->arg0), to_double(sc->arg1));
+      canvas_move_to(canvas_unchecked(x), to_double(sc->arg0) * sc->dpi_scale_factor, to_double(sc->arg1) * sc->dpi_scale_factor);
     }
 #endif
     s_return(sc, mk_nil());
@@ -6002,7 +6003,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 #if NANOCLJ_HAS_CANVAS
     x = get_out_port(sc);
     if (is_canvas(x)) {
-      canvas_line_to(canvas_unchecked(x), to_double(sc->arg0), to_double(sc->arg1));
+      canvas_line_to(canvas_unchecked(x), to_double(sc->arg0) * sc->dpi_scale_factor, to_double(sc->arg1) * sc->dpi_scale_factor);
     }
 #endif
     s_return(sc, mk_nil());
@@ -6014,8 +6015,8 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 #if NANOCLJ_HAS_CANVAS
     x = get_out_port(sc);
     if (is_canvas(x)) {
-      canvas_arc(canvas_unchecked(x), to_double(sc->arg0), to_double(sc->arg1),
-		 to_double(sc->arg2), to_double(sc->arg3), to_double(sc->arg4));
+      canvas_arc(canvas_unchecked(x), to_double(sc->arg0) * sc->dpi_scale_factor, to_double(sc->arg1) * sc->dpi_scale_factor,
+		 to_double(sc->arg2) * sc->dpi_scale_factor, to_double(sc->arg3), to_double(sc->arg4));
     }
 #endif
     s_return(sc, mk_nil());
@@ -6065,7 +6066,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     if (is_canvas(x)) {
       double width, height;
       canvas_get_text_extents(canvas_unchecked(x), to_const_strview(sc->arg0), &width, &height);
-      s_return(sc, mk_vector_2d(sc, width, height));
+      s_return(sc, mk_vector_2d(sc, width / sc->dpi_scale_factor, height / sc->dpi_scale_factor));
     }
 #endif
     
@@ -6443,7 +6444,7 @@ static inline void update_window_size(nanoclj_t * sc, nanoclj_val_t out) {
       
       int width, height;
       if (get_window_size(stdin, fh, &width, &height)) {
-	size = mk_vector_2d(sc, width, height);
+	size = mk_vector_2d(sc, width / sc->dpi_scale_factor, height / sc->dpi_scale_factor);
       }
     }
   }

@@ -34,11 +34,11 @@
          range-y (- max-y min-y)
          fit-x (fn [x] (+ (* (/ (- x min-x) range-x) content-width) margin-left))
          fit-y (fn [y] (+ (* (/ (- max-y y) range-y) content-height) margin-top))
-         x-tick-step 0.2
-         y-tick-step 0.2
-         draw-x-ticks (fn [x] (if (< x max-x)
+         x-tick-step 0.25
+         y-tick-step 0.25
+         draw-x-ticks (fn [x] (if (<= x max-x)
                                 (let [fx (fit-x x)
-                                      label (format "%.1f" x)
+                                      label (format "%.2f" x)
                                       e (get-text-extents label)]
                                   (move-to fx margin-top)
                                   (line-to fx (+ margin-top 6))
@@ -50,9 +50,9 @@
                                   (print label)
                                   (recur (+ x x-tick-step)))
                                 nil))
-         draw-y-ticks (fn [y] (if (< y max-y)
+         draw-y-ticks (fn [y] (if (<= y max-y)
                                 (let [fy (fit-y y)
-                                      label (format "%.1f" y)
+                                      label (format "%.2f" y)
                                       e (get-text-extents label)]
                                   (move-to margin-left fy)
                                   (line-to (+ margin-left 6) fy)
@@ -72,7 +72,7 @@
          ]
      (image (with-canvas width height
               (do
-                (set-font-size 20)
+                (set-font-size 10)
                 (set-color box-color)
                 (set-line-width 1)
                                         ; Draw box
