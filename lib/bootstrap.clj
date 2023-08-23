@@ -121,6 +121,10 @@
   "Returns true if argument is a symbol"
   (fn [x] (instance? clojure.lang.Symbol x)))
 
+(def var?
+  "Returns true if argument is a var"
+  (fn [x] (instance? clolojure.lang.Var x)))
+
 (def char?
   "Returns true if argument is a character"
   (fn [x] (instance? java.lang.Character x)))
