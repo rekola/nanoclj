@@ -42,8 +42,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-void linenoiseSetupSigWinchHandler();
   
 #include <stddef.h> /* For size_t. */
 
@@ -75,6 +73,9 @@ typedef struct linenoiseCompletions {
   size_t len;
   char **cvec;
 } linenoiseCompletions;
+
+void linenoiseSetupSigWinchHandler();
+void linenoiseRefreshSize();
 
 /* Non blocking API. */
 int linenoiseEditStart(struct linenoiseState *l, int stdin_fd, int stdout_fd, char *buf, size_t buflen, const char *prompt, size_t prompt_size);

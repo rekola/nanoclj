@@ -1469,10 +1469,14 @@ int linenoiseHistoryLoad(const char *filename) {
     return 0;
 }
 
-void sigwinchHandler( int sig_number ) {
+void linenoiseRefreshSize() {
     if (activeState) {
         activeState->cols = getColumns(activeState->ifd, activeState->ofd);
     }
+}
+
+static void sigwinchHandler( int sig_number ) {
+    linenoiseRefreshSize();
 }
 
 void linenoiseSetupSigWinchHandler() {
