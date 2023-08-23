@@ -31,6 +31,7 @@
 #include <ctype.h>
 #include <stdarg.h>
 #include <assert.h>
+#include <signal.h>
 
 #include <utf8proc.h>
 #include <sixel/sixel.h>
@@ -163,7 +164,8 @@ enum nanoclj_types {
   T_LIST = 31,
   T_IMAGE = 32,
   T_CANVAS = 33,
-  T_EXCEPTION = 34
+  T_EXCEPTION = 34,
+  T_VAR = 35
 };
 
 typedef struct strview_s {
@@ -732,7 +734,6 @@ static void gc(nanoclj_t * sc, nanoclj_val_t a, nanoclj_val_t b);
 static void putstr(nanoclj_t * sc, const char *s, nanoclj_val_t port);
 static void dump_stack_mark(nanoclj_t *);
 static nanoclj_val_t get_err_port(nanoclj_t * sc);
-static nanoclj_val_t get_out_port(nanoclj_t * sc);
 static nanoclj_val_t get_in_port(nanoclj_t * sc);
 
 static inline const char* get_version() {
@@ -774,6 +775,8 @@ static inline const char * typename_from_id(int_fast16_t id) {
   case 31: return "clojure.lang.PersistentList";
   case 32: return "scheme.lang.Image";
   case 33: return "scheme.lang.Canvas";
+  case 34: return "java.lang.Exception";
+  case 35: return "clojure.lang.Var";
   }
   return "";
 }
@@ -1357,7 +1360,7 @@ static inline void new_frame_in_env(nanoclj_t * sc, nanoclj_val_t old_env) {
 
 static inline void new_slot_spec_in_env(nanoclj_t * sc, nanoclj_val_t env,
 					nanoclj_val_t variable, nanoclj_val_t value) {
-  nanoclj_val_t slot = cons(sc, variable, value);
+  nanoclj_val_t slot = mk_pointer(get_cell(sc, T_VAR, variable, value, mk_nil()));
   nanoclj_val_t x = car(env);
   
   if (is_vector(x)) {
@@ -1537,6 +1540,7 @@ static inline struct cell * rest(nanoclj_t * sc, struct cell * coll) {
     break;    
   case T_PAIR:
   case T_LIST:
+  case T_VAR:
     return decode_pointer(_cdr(coll));
   case T_VECTOR:
   case T_ARRAYMAP:
@@ -1639,6 +1643,7 @@ static inline nanoclj_val_t first(nanoclj_t * sc, struct cell * coll) {
   case T_RATIO:
   case T_PAIR:
   case T_LIST:
+  case T_VAR:
     return _car(coll);
   case T_VECTOR:
   case T_ARRAYMAP:
@@ -3206,12 +3211,13 @@ static inline int token(nanoclj_t * sc, nanoclj_port_t * inport) {
 
 /* ========== Routines for Printing ========== */
 
-static inline void print_slashstring(nanoclj_t * sc, const char *p, int len, nanoclj_val_t out) {
+static inline void print_slashstring(nanoclj_t * sc, const_strview_t sv, nanoclj_val_t out) {
   assert(is_writer(out));
-  
+
+  const char * p = sv.ptr;
   int c, d;
   putcharacter(sc, '"', out);
-  const char * end = p + len;
+  const char * end = p + sv.size;
   while (p < end) {
     c = utf8_decode(p);
     p = utf8_next(p);
@@ -3394,7 +3400,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
 	  plen = _strlength(c);
 	  break;
 	} else {
-	  print_slashstring(sc, strvalue(l), strlength(l), out);
+	  print_slashstring(sc, to_const_strview(l), out);
 	  return;
 	}
       case T_WRITER:
@@ -4566,8 +4572,8 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   case OP_QUOTE:               /* quote */
     s_return(sc, car(sc->code));
 
-  case OP_VAR:                 /* var (Not implemented) */
-    s_return(sc, car(sc->code));
+  case OP_VAR:                 /* var */
+    s_return(sc, find_slot_in_env(sc, sc->envir, car(sc->code), 1));
 
   case OP_INTERN:
     if (!unpack_args_2_plus(sc)) {
@@ -5636,7 +5642,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	s_goto(sc, OP_RDSEXPR);
 	
       case TOK_VAR:
-	s_save(sc, OP_RDDEREF, sc->EMPTY, sc->EMPTY);
+	s_save(sc, OP_RDVAR, sc->EMPTY, sc->EMPTY);
 	sc->tok = token(sc, inport);
 	s_goto(sc, OP_RDSEXPR);      
 	
@@ -5822,7 +5828,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 
   case OP_RDVAR:
     s_return(sc, cons(sc, sc->VAR, cons(sc, sc->value, sc->EMPTY)));
-
+    
   case OP_RDQQUOTE:
     s_return(sc, cons(sc, sc->QQUOTE, cons(sc, sc->value, sc->EMPTY)));
     
@@ -5933,8 +5939,9 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     nanoclj_val_t input = sc->arg0;
     nanoclj_val_t options = sc->arg1;
     utf8proc_uint8_t * dest = NULL;
-    utf8proc_ssize_t s = utf8proc_map((const unsigned char *)strvalue(input),
-				      (utf8proc_ssize_t)strlength(input),
+    const_strview_t sv = to_const_strview(input);
+    utf8proc_ssize_t s = utf8proc_map((const unsigned char *)sv.ptr,
+				      (utf8proc_ssize_t)sv.size,
 				      &dest,
 				      (utf8proc_option_t)to_long(options)
 				      );
@@ -6466,6 +6473,24 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc fr
   return !sc->no_memory;
 }
 
+static inline void update_window_size(nanoclj_t * sc, nanoclj_val_t out) {
+  nanoclj_val_t size = mk_nil();
+  
+  if (is_writer(out)) {
+    nanoclj_port_t * pt = port_unchecked(out);
+    if (pt->kind & port_file) {
+      FILE * fh = pt->rep.stdio.file;
+      
+      int width, height;
+      if (get_window_size(fh, &width, &height)) {
+	size = mk_vector_2d(sc, width, height);
+      }
+    }
+  }
+  
+  nanoclj_intern(sc, sc->global_env, sc->WINDOW_SIZE, size);
+} 
+
 void nanoclj_set_input_port_file(nanoclj_t * sc, FILE * fin) {
   nanoclj_val_t inport = port_from_file(sc, fin, port_input);
   nanoclj_intern(sc, sc->global_env, sc->IN, inport);
@@ -6480,12 +6505,7 @@ void nanoclj_set_output_port_file(nanoclj_t * sc, FILE * fout) {
   nanoclj_val_t p = port_from_file(sc, fout, port_output);
   nanoclj_intern(sc, sc->root_env, sc->OUT, p);
 
-  int width, height;
-  nanoclj_val_t size = mk_nil();
-  if (get_window_size(fout, &width, &height)) {
-    size = mk_vector_2d(sc, width, height);
-  }
-  nanoclj_intern(sc, sc->global_env, sc->WINDOW_SIZE, size);
+  update_window_size(sc, p);
 }
 
 void nanoclj_set_output_port_callback(nanoclj_t * sc,
@@ -6701,10 +6721,20 @@ nanoclj_val_t nanoclj_eval(nanoclj_t * sc, nanoclj_val_t obj) {
 #if NANOCLJ_STANDALONE
 
 static inline FILE *open_file(const char *fname) {
-    if (str_eq(fname, "-") || str_eq(fname, "--")) {
-        return stdin;
-    }
-    return fopen(fname, "r");
+  if (str_eq(fname, "-") || str_eq(fname, "--")) {
+    return stdin;
+  }
+  return fopen(fname, "r");
+}
+
+static nanoclj_t * interactive_sc = NULL;
+static void sigwinchHandler( int sig_number ) {
+#if NANOCLJ_USE_LINENOISE
+  linenoiseRefreshSize();
+#endif
+  if (interactive_sc) {
+    update_window_size(interactive_sc, get_out_port(interactive_sc));
+  }
 }
 
 int main(int argc, const char **argv) {
@@ -6725,6 +6755,8 @@ int main(int argc, const char **argv) {
     fprintf(stderr, "Could not initialize!\n");
     return 2;
   }
+  interactive_sc = &sc;
+  
   nanoclj_set_input_port_file(&sc, stdin);
   nanoclj_set_output_port_file(&sc, stdout);
   nanoclj_set_error_port_file(&sc, stderr);
@@ -6747,6 +6779,8 @@ int main(int argc, const char **argv) {
     exit(1);
   }
   fclose(fh);
+
+  signal(SIGWINCH, sigwinchHandler);
 
   if (argc >= 2) {
     fh = open_file(argv[1]);
