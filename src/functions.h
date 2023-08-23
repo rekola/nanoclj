@@ -782,7 +782,6 @@ static inline nanoclj_val_t linenoise_readline(nanoclj_t * sc, nanoclj_val_t arg
   if (!linenoise_sc) {
     linenoise_sc = sc;
 
-    linenoiseSetupSigWinchHandler();
     linenoiseSetMultiLine(0);
     linenoiseSetCompletionCallback(completion);
     linenoiseSetHintsCallback(hints);
