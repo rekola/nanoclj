@@ -158,9 +158,9 @@ static nanoclj_val_t System_getProperty(nanoclj_t * sc, nanoclj_val_t args) {
     l = cons(sc, mk_string(sc, "os.arch"), l);
     l = cons(sc, mk_string(sc, term), l);
     l = cons(sc, mk_string(sc, "term"), l);
-    l = cons(sc, mk_real(sc->dpi_scale_factor), l);
+    l = cons(sc, mk_real(sc->content_scale_factor), l);
     l = cons(sc, mk_string(sc, "content.scale.factor"), l);
-    r = mk_collection(sc, T_ARRAYMAP, l);    
+    r = mk_collection(sc, T_ARRAYMAP, decode_pointer(l));
   } else {
     const char * pname = strvalue(car(args));
     if (strcmp(pname, "os.name") == 0) {
@@ -184,7 +184,7 @@ static nanoclj_val_t System_getProperty(nanoclj_t * sc, nanoclj_val_t args) {
     } else if (strcmp(pname, "term") == 0) {
       r = mk_string(sc, term);
     } else if (strcmp(pname, "content.scale.factor") == 0) {
-      r = mk_real(sc->dpi_scale_factor);
+      r = mk_real(sc->content_scale_factor);
     } else {
       r = mk_nil();
     }
@@ -821,7 +821,7 @@ static inline void free_hints(void * ptr) {
 }
 
 static inline void on_mouse_motion(int x, int y) {
-  double f = linenoise_sc->dpi_scale_factor;
+  double f = linenoise_sc->content_scale_factor;
   nanoclj_val_t p = mk_vector_2d(linenoise_sc, x / f, y / f);
   nanoclj_intern(linenoise_sc, linenoise_sc->global_env, linenoise_sc->MOUSE_POS, p);
 }
