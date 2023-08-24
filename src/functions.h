@@ -877,6 +877,7 @@ static inline void register_functions(nanoclj_t * sc) {
   nanoclj_intern(sc, Image, def_symbol(sc, "resize"), mk_foreign_func_with_arity(sc, Image_resize, 3, 3));
   nanoclj_intern(sc, Image, def_symbol(sc, "transpose"), mk_foreign_func_with_arity(sc, Image_transpose, 1, 1));
   nanoclj_intern(sc, Image, def_symbol(sc, "save"), mk_foreign_func_with_arity(sc, Image_save, 2, 2));
+  nanoclj_intern(sc, Image, def_symbol(sc, "blur"), mk_foreign_func_with_arity(sc, Image_gaussian_blur, 2, 2));
   nanoclj_intern(sc, Image, def_symbol(sc, "gaussian-blur"), mk_foreign_func_with_arity(sc, Image_gaussian_blur, 2, 2));
   
 #if NANOCLJ_USE_LINENOISE
