@@ -124,6 +124,7 @@
 static char *unsupported_term[] = {"dumb", "cons25", "emacs", NULL};
 static linenoiseCompletionCallback *completionCallback = NULL;
 static linenoiseMouseMotionCallback *mouseMotionCallback = NULL;
+static linenoiseWindowSizeCallback *windowSizeCallback = NULL;
 static linenoiseHighlightCallback *highlightCallback = NULL;
 static linenoiseHighlightCancelCallback *highlightCancelCallback = NULL;
 static linenoiseHintsCallback *hintsCallback = NULL;
@@ -484,6 +485,10 @@ void linenoiseAddCompletion(linenoiseCompletions *lc, const char *str) {
 
 void linenoiseSetMouseMotionCallback(linenoiseMouseMotionCallback *fn) {
     mouseMotionCallback = fn;
+}
+
+void linenoiseSetWindowSizeCallback(linenoiseWindowSizeCallback *fn) {
+    windowSizeCallback = fn;
 }
 
 /* Register a callback function to be called for brace highlighting. */
@@ -1491,14 +1496,13 @@ int linenoiseHistoryLoad(const char *filename) {
     return 0;
 }
 
-void linenoiseRefreshSize() {
+static void sigwinchHandler( int sig_number ) {
     if (activeState) {
         activeState->cols = getColumns(activeState->ifd, activeState->ofd);
     }
-}
-
-static void sigwinchHandler( int sig_number ) {
-    linenoiseRefreshSize();
+    if (windowSizeCallback) {
+        windowSizeCallback();
+    }
 }
 
 void linenoiseSetupSigWinchHandler() {

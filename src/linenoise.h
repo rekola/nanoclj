@@ -101,6 +101,10 @@ void linenoiseAddCompletion(linenoiseCompletions *, const char *);
 typedef void(linenoiseMouseMotionCallback)(int, int);
 void linenoiseSetMouseMotionCallback(linenoiseMouseMotionCallback *);
 
+/* Window Size */
+typedef void(linenoiseWindowSizeCallback)(void);
+void linenoiseSetWindowSizeCallback(linenoiseWindowSizeCallback *);
+
 /* Brace Highlight API. */
 typedef void(linenoiseHighlightCallback)(const char *, int pos);
 void linenoiseSetHighlightCallback(linenoiseHighlightCallback *);
