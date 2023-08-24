@@ -20,10 +20,10 @@
          height (int (/ width 3))
          box-color [ 0.0 0.0 0.0 ]
          plots (map #( conj (vec %1) %2 ) (partition 2 args) plot-colors-)
-         margin-top 25
-         margin-bottom 50
-         margin-left 100
-         margin-right 25
+         margin-top 15
+         margin-bottom 25
+         margin-left 50
+         margin-right 15
          content-width (- width margin-left margin-right)
          content-height (- height margin-top margin-bottom)
          min-x (apply min (map #( apply min (first %1) ) plots))
@@ -70,30 +70,30 @@
                             (line-to (fit-x (first x)) (fit-y (first y)))
                             (recur (rest x) (rest y)))))
          ]
-     (image (with-canvas width height
-              (do
-                (set-font-size 10)
-                (set-color box-color)
-                (set-line-width 1)
+     (with-canvas width height
+       (do
+         (set-font-size 10)
+         (set-color box-color)
+         (set-line-width 1)
                                         ; Draw box
-                (move-to margin-left margin-top)
-                (line-to (- width margin-right) margin-top)
-                (line-to (- width margin-right) (- height margin-bottom))
-                (line-to margin-left (- height margin-bottom))
-                (close-path)
-                (stroke)
+         (move-to margin-left margin-top)
+         (line-to (- width margin-right) margin-top)
+         (line-to (- width margin-right) (- height margin-bottom))
+         (line-to margin-left (- height margin-bottom))
+         (close-path)
+         (stroke)
                                         ; Draw ticks
-                (draw-x-ticks (* (int (/ min-x x-tick-step)) x-tick-step))
-                (draw-y-ticks (* (int (/ min-y y-tick-step)) y-tick-step))
+         (draw-x-ticks (* (int (/ min-x x-tick-step)) x-tick-step))
+         (draw-y-ticks (* (int (/ min-y y-tick-step)) y-tick-step))
                                         ; Draw the plots
-                (set-line-width 3)
-                (run! (fn [p]
-                        (let [x (p 0)
-                              y (p 1)
-                              color (p 2)
-                              ]
-                          (set-color color)
-                          (move-to (fit-x (first x)) (fit-y (first y)))
-                          (draw (rest x) (rest y))
-                          (stroke))) plots)
-                ))))))
+         (set-line-width 3)
+         (run! (fn [p]
+                 (let [x (p 0)
+                       y (p 1)
+                       color (p 2)
+                       ]
+                   (set-color color)
+                   (move-to (fit-x (first x)) (fit-y (first y)))
+                   (draw (rest x) (rest y))
+                   (stroke))) plots)
+         )))))
