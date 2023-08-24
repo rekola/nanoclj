@@ -313,10 +313,10 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define _clr_gc_atom(p)       _typeflag(p) &= CLR_GC_ATOM
 
 #define _store_unchecked(p)	  ((p)->_object._collection._store)
+#define _size_unchecked(p)	  ((p)->_object._collection._size)
 #define _port_unchecked(p)	  ((p)->_object._port)
 #define _image_unchecked(p)	  ((p)->_object._image)
 #define _canvas_unchecked(p)	  ((p)->_object._canvas)
-#define _size_unchecked(p)	  ((p)->_object._collection._size)
 #define _metadata_unchecked(p)     ((p)->_metadata)
 #define _origin_unchecked(p)	  ((p)->_object._seq._origin)
 #define _lvalue_unchecked(p)       ((p)->_object._lvalue)
@@ -326,11 +326,11 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define _min_arity_unchecked(p)	  ((p)->_object._ff._min_arity)
 #define _max_arity_unchecked(p)	  ((p)->_object._ff._max_arity)
 
-#define _strvalue_unchecked(p)      ((p)->_object._string._svalue)
-#define _strlength_unchecked(p)        ((p)->_object._string._length)
+#define _strvalue_unchecked(p)      ((p)->_object._string.data)
+#define _strlength_unchecked(p)        ((p)->_object._string.size)
 
-#define _smallstrvalue_unchecked(p)      (&((p)->_object._small_string._svalue[0]))
-#define _smallstrlength_unchecked(p)      ((p)->_object._small_string._length)
+#define _smallstrvalue_unchecked(p)      (&((p)->_object._small_string.data[0]))
+#define _smallstrlength_unchecked(p)      ((p)->_object._small_string.size)
 
 /* macros for cell operations */
 #define typeflag(p)      (_typeflag(decode_pointer(p)))
@@ -339,11 +339,11 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define car(p)           _car(decode_pointer(p))
 #define cdr(p)           _cdr(decode_pointer(p))
 
-#define strvalue_unchecked(p)      (decode_pointer(p)->_object._string._svalue)
-#define strlength_unchecked(p)        (decode_pointer(p)->_object._string._length)
+#define strvalue_unchecked(p)      (decode_pointer(p)->_object._string.data)
+#define strlength_unchecked(p)        (decode_pointer(p)->_object._string.size)
 
-#define smallstrvalue_unchecked(p)      (&(decode_pointer(p)->_object._small_string._svalue[0]))
-#define smallstrlength_unchecked(p)      (decode_pointer(p)->_object._small_string._length)
+#define smallstrvalue_unchecked(p)      (&(decode_pointer(p)->_object._small_string.data[0]))
+#define smallstrlength_unchecked(p)      (decode_pointer(p)->_object._small_string.size)
 
 #define lvalue_unchecked(p)       (decode_pointer(p)->_object._lvalue)
 #define rvalue_unchecked(p)       ((p).as_double)
@@ -783,8 +783,8 @@ static inline strview_t to_strview(nanoclj_val_t x) {
       nanoclj_port_t * pt = port_unchecked(x);
       if (pt->kind & port_string) {
 	return (strview_t){
-	  pt->rep.string.data.start,
-	  pt->rep.string.data.past_the_end - pt->rep.string.data.start
+	  pt->rep.string.data.data,
+	  pt->rep.string.data.size
 	};
       }
     }
@@ -793,8 +793,8 @@ static inline strview_t to_strview(nanoclj_val_t x) {
       nanoclj_port_t * pt = port_unchecked(x);
       if (pt->kind & port_string) {
 	return (strview_t){
-	  pt->rep.string.data.start,
-	  pt->rep.string.curr - pt->rep.string.data.start
+	  pt->rep.string.data.data,
+	  pt->rep.string.curr - pt->rep.string.data.data
 	};
       }
       break;
@@ -1233,7 +1233,7 @@ static inline int basic_inchar(nanoclj_port_t * pt) {
   if (pt->kind & port_file) {
     return fgetc(pt->rep.stdio.file);
   } else if (pt->kind & port_string) {
-    if (pt->rep.string.curr == pt->rep.string.data.past_the_end) {
+    if (pt->rep.string.curr == pt->rep.string.data.data + pt->rep.string.data.size) {
       return EOF;
     } else {
       return (unsigned char)(*pt->rep.string.curr++);
@@ -2476,7 +2476,7 @@ static inline void port_close(nanoclj_t * sc, nanoclj_port_t * pt) {
       fclose(fh);
     }
   } else if (pt->kind & port_string) {
-    sc->free(pt->rep.string.data.start);
+    sc->free(pt->rep.string.data.data);
   }
   pt->kind = port_free;
 }
@@ -2727,8 +2727,8 @@ static inline nanoclj_val_t port_from_string(nanoclj_t * sc, const char *str, si
   pt->kind = port_string | prop;
   pt->backchar = -1;
   pt->rep.string.curr = buffer;
-  pt->rep.string.data.start = buffer;
-  pt->rep.string.data.past_the_end = buffer + length;
+  pt->rep.string.data.data = buffer;
+  pt->rep.string.data.size = length;
 
   if (prop & port_input) {
     return mk_reader(sc, pt);
@@ -2749,28 +2749,24 @@ static inline nanoclj_val_t port_from_scratch(nanoclj_t * sc) {
     sc->free(pt);
     return mk_nil();
   }
-  memset(start, ' ', BLOCK_SIZE - 1);
-  start[BLOCK_SIZE - 1] = '\0';
   pt->kind = port_string | port_output;
   pt->backchar = -1;
   pt->rep.string.curr = start;
-  pt->rep.string.data.start = start;
-  pt->rep.string.data.past_the_end = start + BLOCK_SIZE - 1;
+  pt->rep.string.data.data = start;
+  pt->rep.string.data.size = BLOCK_SIZE;
 
   return mk_writer(sc, pt);
 }
 
 static inline int realloc_port_string(nanoclj_t * sc, nanoclj_port_t * p) {
-  char *start = p->rep.string.data.start;
-  size_t new_size = p->rep.string.data.past_the_end - start + 1 + BLOCK_SIZE;
+  char *start = p->rep.string.data.data;
+  size_t new_size = p->rep.string.data.size + BLOCK_SIZE;
   char *str = sc->malloc(new_size);
   if (str) {
-    memset(str, ' ', new_size - 1);
-    str[new_size - 1] = '\0';
-    strcpy(str, start);
+    memcpy(str, start, p->rep.string.data.size);
     p->rep.string.curr -= start - str;
-    p->rep.string.data.start = str;
-    p->rep.string.data.past_the_end = str + new_size - 1;
+    p->rep.string.data.data = str;
+    p->rep.string.data.size = new_size;
     sc->free(start);
     return 1;
   } else {
@@ -2820,7 +2816,7 @@ static inline void putchars(nanoclj_t * sc, const char *s, size_t len, nanoclj_v
       pt->rep.callback.text(s, len, sc->ext_data);
     } else {
       for (; len; len--) {
-	if (pt->rep.string.curr != pt->rep.string.data.past_the_end) {
+	if (pt->rep.string.curr != pt->rep.string.data.data + pt->rep.string.data.size) {
 	  *pt->rep.string.curr++ = *s++;
 	} else if (realloc_port_string(sc, pt)) {
 	  *pt->rep.string.curr++ = *s++;
@@ -2860,12 +2856,12 @@ static inline void set_color(nanoclj_t * sc, struct cell * vec, nanoclj_val_t ou
 #ifndef WIN32    
       FILE * fh = pt->rep.stdio.file;
       if (isatty(fileno(fh))) {
-	set_truecolor(fh,
-		      to_double(vector_elem(vec, 0)),
-		      to_double(vector_elem(vec, 1)),
-		      to_double(vector_elem(vec, 2)),
-		      sc->truecolor_term
-		      );
+	set_term_color(fh,
+		       to_double(vector_elem(vec, 0)),
+		       to_double(vector_elem(vec, 1)),
+		       to_double(vector_elem(vec, 2)),
+		       sc->term_colors
+		       );
       }
 #endif
     } else if (pt->kind & port_callback) {
@@ -3374,8 +3370,8 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
       case T_WRITER:
 	if (_port_unchecked(c)->kind & port_string) {
 	  nanoclj_port_t * pt = port_unchecked(l);
-	  p = pt->rep.string.data.start;
-	  plen = pt->rep.string.curr - pt->rep.string.data.start;
+	  p = pt->rep.string.data.data;
+	  plen = pt->rep.string.curr - pt->rep.string.data.data;
 	} 
 	break;
       case T_IMAGE:
@@ -4022,7 +4018,7 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
 
   case T_CANVAS:
 #if NANOCLJ_HAS_CANVAS
-    return mk_canvas(sc, to_int(car(args)) * sc->dpi_scale_factor, to_int(cadr(args)) * sc->dpi_scale_factor);
+    return mk_canvas(sc, to_int(car(args)) * sc->content_scale_factor, to_int(cadr(args)) * sc->content_scale_factor);
 #endif
 
   case T_IMAGE:
@@ -6014,7 +6010,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 #if NANOCLJ_HAS_CANVAS
     x = get_out_port(sc);
     if (is_canvas(x)) {
-      canvas_set_font_size(canvas_unchecked(x), to_double(sc->arg0) * sc->dpi_scale_factor);
+      canvas_set_font_size(canvas_unchecked(x), to_double(sc->arg0) * sc->content_scale_factor);
     }
 #endif
     s_return(sc, mk_nil());
@@ -6039,7 +6035,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 #if NANOCLJ_HAS_CANVAS
     x = get_out_port(sc);
     if (is_canvas(x)) {
-      canvas_move_to(canvas_unchecked(x), to_double(sc->arg0) * sc->dpi_scale_factor, to_double(sc->arg1) * sc->dpi_scale_factor);
+      canvas_move_to(canvas_unchecked(x), to_double(sc->arg0) * sc->content_scale_factor, to_double(sc->arg1) * sc->content_scale_factor);
     }
 #endif
     s_return(sc, mk_nil());
@@ -6051,7 +6047,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 #if NANOCLJ_HAS_CANVAS
     x = get_out_port(sc);
     if (is_canvas(x)) {
-      canvas_line_to(canvas_unchecked(x), to_double(sc->arg0) * sc->dpi_scale_factor, to_double(sc->arg1) * sc->dpi_scale_factor);
+      canvas_line_to(canvas_unchecked(x), to_double(sc->arg0) * sc->content_scale_factor, to_double(sc->arg1) * sc->content_scale_factor);
     }
 #endif
     s_return(sc, mk_nil());
@@ -6063,8 +6059,8 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 #if NANOCLJ_HAS_CANVAS
     x = get_out_port(sc);
     if (is_canvas(x)) {
-      canvas_arc(canvas_unchecked(x), to_double(sc->arg0) * sc->dpi_scale_factor, to_double(sc->arg1) * sc->dpi_scale_factor,
-		 to_double(sc->arg2) * sc->dpi_scale_factor, to_double(sc->arg3), to_double(sc->arg4));
+      canvas_arc(canvas_unchecked(x), to_double(sc->arg0) * sc->content_scale_factor, to_double(sc->arg1) * sc->content_scale_factor,
+		 to_double(sc->arg2) * sc->content_scale_factor, to_double(sc->arg3), to_double(sc->arg4));
     }
 #endif
     s_return(sc, mk_nil());
@@ -6114,7 +6110,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     if (is_canvas(x)) {
       double width, height;
       canvas_get_text_extents(canvas_unchecked(x), to_strview(sc->arg0), &width, &height);
-      s_return(sc, mk_vector_2d(sc, width / sc->dpi_scale_factor, height / sc->dpi_scale_factor));
+      s_return(sc, mk_vector_2d(sc, width / sc->content_scale_factor, height / sc->content_scale_factor));
     }
 #endif
     
@@ -6205,8 +6201,8 @@ static inline void update_window_info(nanoclj_t * sc, nanoclj_val_t out) {
       
       int cols, rows, width, height;
       if (get_window_size(stdin, fh, &cols, &rows, &width, &height)) {
-	sc->dpi_scale_factor = width / cols > 15 ? 2.0 : 1.0;
-	size = mk_vector_2d(sc, width / sc->dpi_scale_factor, height / sc->dpi_scale_factor);
+	sc->content_scale_factor = width / cols > 15 ? 2.0 : 1.0;
+	size = mk_vector_2d(sc, width / sc->content_scale_factor, height / sc->content_scale_factor);
       }
     }
   }
@@ -6497,9 +6493,10 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc fr
 
   register_functions(sc);
 
-  sc->truecolor_term = has_truecolor();
   sc->sixel_term = has_sixels();
-  sc->dpi_scale_factor = 1.0;
+  sc->content_scale_factor = 1.0;
+
+  sc->term_colors = get_term_colortype();
   
   return !sc->no_memory;
 }
@@ -6639,8 +6636,8 @@ nanoclj_val_t nanoclj_eval_string(nanoclj_t * sc, const char *cmd, size_t len) {
   sc->load_stack[0].kind = port_input | port_string;
   sc->load_stack[0].backchar = -1;
   sc->load_stack[0].rep.string.curr = buffer;
-  sc->load_stack[0].rep.string.data.start = buffer;
-  sc->load_stack[0].rep.string.data.past_the_end = buffer + len;
+  sc->load_stack[0].rep.string.data.data = buffer;
+  sc->load_stack[0].rep.string.data.size = len;
   sc->loadport = mk_reader(sc, sc->load_stack);
   sc->retcode = 0;
   sc->args = mk_integer(sc, sc->file_i);

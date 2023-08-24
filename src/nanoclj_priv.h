@@ -36,6 +36,8 @@
 extern "C" {
 #endif
 
+#include "nanoclj_types.h"
+
   enum nanoclj_port_kind {
     port_free = 0,
     port_file = 1,
@@ -47,10 +49,10 @@ extern "C" {
     port_binary = 128
   };
 
-  typedef struct nanoclj_string_t {
-    char *start;
-    char *past_the_end;
-  } nanoclj_string_t;
+  typedef struct nanoclj_string_store_t {
+    char *data;
+    size_t size;
+  } nanoclj_string_store_t;
 
   typedef struct nanoclj_port_t {
     unsigned char kind;
@@ -63,7 +65,7 @@ extern "C" {
       } stdio;
       struct {
 	char *curr;
-	nanoclj_string_t data;
+	nanoclj_string_store_t data;
       } string;
       struct {
 	void (*text) (const char *, size_t, void*);
@@ -87,12 +89,12 @@ extern "C" {
     nanoclj_val_t _metadata;
     union {
       struct {
-        char *_svalue;
-        int _length;
+        char * data;
+        size_t size;
       } _string;
       struct {
-	char _svalue[15];
-	char _length;
+	char data[15];
+	char size;
       } _small_string;
       struct {
 	size_t _size;
@@ -229,8 +231,8 @@ extern "C" {
     int dump_size;              /* number of frames allocated for dump stack */
 
     bool sixel_term;
-    bool truecolor_term;
-    double dpi_scale_factor;
+    nanoclj_colortype_t term_colors;
+    double content_scale_factor;
 
     /* Dynamic printing */
     nanoclj_val_t active_element;

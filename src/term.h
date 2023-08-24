@@ -18,6 +18,7 @@
 #include <string.h>
 
 #include "nanoclj_utils.h"
+#include "nanoclj_types.h"
 
 static inline void reset_color(FILE * fh) {
   if (isatty(fileno(fh))) {
@@ -31,15 +32,16 @@ static inline void set_basic_style(FILE * fh, int style) {
   }
 }
 
-static inline void set_truecolor(FILE * fh, double r0, double g0, double b0, bool has_rgb) {
+static inline void set_term_color(FILE * fh, double r0, double g0, double b0, nanoclj_colortype_t colors) {
   if (isatty(fileno(fh))) {
     int r = clamp((int)(r0 * 255), 0, 255);
     int g = clamp((int)(g0 * 255), 0, 255);
     int b = clamp((int)(b0 * 255), 0, 255);
-    
-    if (has_rgb) {
-      fprintf(fh, "\033[%d;2;%d;%d;%dm", 38, r, g, b);
-    } else {
+
+    switch (colors) {
+    case nanoclj_colortype_16:
+      break;
+    case nanoclj_colortype_256: {
       int color;
       if ((r / 10) == (g / 10) && (g / 10) == (b / 10)) {
 	r /= 10;
@@ -57,6 +59,11 @@ static inline void set_truecolor(FILE * fh, double r0, double g0, double b0, boo
 	color = 16 + r * 6 * 6 + g * 6 + b;
       }
       fprintf(fh, "\033[38:5:%dm", color);
+    }
+      break;
+    case nanoclj_colortype_true:
+      fprintf(fh, "\033[%d;2;%d;%d;%dm", 38, r, g, b);
+      break;
     }
   }
 }
@@ -157,12 +164,23 @@ static bool get_cursor_position(FILE * in, FILE * out, int * x, int * y) {
   }
 }
 
-static inline bool has_truecolor() {
+static inline nanoclj_colortype_t get_term_colortype() {
 #ifdef _WIN32
-  return false;
+  return nanoclj_colortype_16;
 #else
-  const char * ev = getenv("COLORTERM");
-  return ev && (strcmp(ev, "truecolor") == 0 || strcmp(ev, "24bit") == 0);
+  const char * colorterm = getenv("COLORTERM");
+  const char * mlterm = getenv("MLTERM");
+  if (mlterm ||
+      (colorterm && (strcmp(colorterm, "truecolor") == 0 || strcmp(colorterm, "24bit") == 0))) {
+    return nanoclj_colortype_true;
+  } else {
+    const char * term = getenv("TERM");
+    if (term && strcmp(term, "xterm-256color") == 0) {
+      return nanoclj_colortype_256;
+    } else {
+      return nanoclj_colortype_16;
+    }
+  }
 #endif
 }
 
