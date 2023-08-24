@@ -180,7 +180,7 @@ static nanoclj_val_t System_getProperty(nanoclj_t * sc, nanoclj_val_t args) {
 }
 
 static inline nanoclj_val_t System_glob(nanoclj_t * sc, nanoclj_val_t args) {
-  const_strview_t sv = to_const_strview(car(args));
+  strview_t sv = to_strview(car(args));
   char * tmp = (char *)sc->malloc(sv.size + 1);
   memcpy(tmp, sv.ptr, sv.size);
   tmp[sv.size] = 0;
@@ -357,14 +357,25 @@ static nanoclj_val_t numeric_tower_expt(nanoclj_t * sc, nanoclj_val_t args) {
   return mk_real(pow(to_double(x), to_double(y)));
 }
 
-static inline nanoclj_val_t browse_url(nanoclj_t * sc, nanoclj_val_t args) {
-  const char * url = to_cstr(car(args));
+static inline nanoclj_val_t browse_url(nanoclj_t * sc, nanoclj_val_t args) {  
 #ifdef WIN32
+  strview_t sv = to_strview(car(args));
+  char * url = (char *)sc->malloc(sv.size + 1);
+  memcpy(url, sv.ptr, sv.size);
+  url[sv.size] = 0;
+
   ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
+  
+  sc->free(url);
   return (nanoclj_val_t)kTRUE;
 #else
   pid_t r = fork();
   if (r == 0) {
+    strview_t sv = to_strview(car(args));
+    char * url = (char *)sc->malloc(sv.size + 1);
+    memcpy(url, sv.ptr, sv.size);
+    url[sv.size] = 0;
+
     const char * cmd = "xdg-open";
     execlp(cmd, cmd, url, NULL);
     exit(1);
@@ -384,7 +395,11 @@ static inline nanoclj_val_t shell_sh(nanoclj_t * sc, nanoclj_val_t args0) {
 #else
     pid_t r = fork();
     if (r == 0) {
-      const char * cmd = to_cstr(first(sc, args));
+      strview_t sv0 = to_strview(first(sc, args));
+      char * cmd = (char *)sc->malloc(sv0.size + 1);
+      memcpy(cmd, sv0.ptr, sv0.size);
+      cmd[sv0.size] = 0;
+
       args = rest(sc, args);
       n--;
       char ** output_args = (char **)sc->malloc(n * sizeof(char*));
@@ -393,10 +408,9 @@ static inline nanoclj_val_t shell_sh(nanoclj_t * sc, nanoclj_val_t args0) {
 	char * tmp = (char *)sc->malloc(sv.size + 1);
 	memcpy(tmp, sv.ptr, sv.size);
 	tmp[sv.size] = 0;
-	output_args[i] = sv.ptr;
+	output_args[i] = tmp;
       }
       execvp(cmd, output_args);
-      /* TODO: free memory if execvp fails */
       exit(1);
     } else {
       return r < 0 ? (nanoclj_val_t)kFALSE : (nanoclj_val_t)kTRUE;
@@ -408,10 +422,14 @@ static inline nanoclj_val_t shell_sh(nanoclj_t * sc, nanoclj_val_t args0) {
 }
 
 static inline nanoclj_val_t Image_load(nanoclj_t * sc, nanoclj_val_t args) {
-  const char * filename = to_cstr(car(args));
+  strview_t sv = to_strview(car(args));
+  char * filename = (char *)sc->malloc(sv.size + 1);
+  memcpy(filename, sv.ptr, sv.size);
+  filename[sv.size] = 0;
 	    
   int w, h, channels;
   unsigned char * data = stbi_load(filename, &w, &h, &channels, 0);
+  sc->free(filename);
   if (!data) {
     return mk_exception(sc, "Failed to load Image");
   }
@@ -489,12 +507,18 @@ static inline nanoclj_val_t Image_save(nanoclj_t * sc, nanoclj_val_t args) {
   }
   struct cell * image0 = decode_pointer(image00);
   nanoclj_image_t * image = _image_unchecked(image0);
-  const char * filename = to_cstr(filename0);
+
+  strview_t sv = to_strview(filename0);
+  char * filename = (char *)sc->malloc(sv.size + 1);
+  memcpy(filename, sv.ptr, sv.size);
+  filename[sv.size] = 0;
+
   int w = image->width, h = image->height, channels = image->channels;
   unsigned char * data = image->data;
   
   char * ext = strrchr(filename, '.');
   if (!ext) {
+    sc->free(filename);
     return mk_exception(sc, "Could not determine file format");
   } else {
     int success = 0;
@@ -511,6 +535,8 @@ static inline nanoclj_val_t Image_save(nanoclj_t * sc, nanoclj_val_t args) {
     } else {
       return mk_exception(sc, "Unsupported file format");
     }
+
+    sc->free(filename);
 
     if (!success) {
       return mk_exception(sc, "Error writing file");

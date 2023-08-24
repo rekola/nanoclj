@@ -80,7 +80,7 @@ static inline void canvas_restore(void * canvas) {
 
 }
 
-static inline void canvas_show_text(void * canvas, const char * text, size_t len) {
+static inline void canvas_show_text(void * canvas, strview_t text) {
   HDC hdc = (HDC)canvas;
 
 #if 0
@@ -93,7 +93,7 @@ static inline void canvas_show_text(void * canvas, const char * text, size_t len
 #endif
 }
 
-static inline void canvas_get_text_extents(void * canvas, const_strview_t text, double * width, double * height) {
+static inline void canvas_get_text_extents(void * canvas, strview_t text, double * width, double * height) {
   *width = *height = 0;  
 }
 

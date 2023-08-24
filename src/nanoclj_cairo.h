@@ -84,7 +84,7 @@ static inline void canvas_restore(void * canvas) {
   cairo_restore((cairo_t *)canvas);
 }
 
-static inline void canvas_show_text(void * canvas, const_strview_t text) {
+static inline void canvas_show_text(void * canvas, strview_t text) {
   char * tmp = (char *)malloc(text.size + 1);
   if (tmp) {
     memcpy(tmp, text.ptr, text.size);
@@ -94,7 +94,7 @@ static inline void canvas_show_text(void * canvas, const_strview_t text) {
   }
 }
 
-static inline void canvas_get_text_extents(void * canvas, const_strview_t text, double * width, double * height) {
+static inline void canvas_get_text_extents(void * canvas, strview_t text, double * width, double * height) {
   char * tmp = (char *)malloc(text.size + 1);
   if (tmp) {
     memcpy(tmp, text.ptr, text.size);
