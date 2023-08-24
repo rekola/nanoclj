@@ -2854,14 +2854,12 @@ static inline void set_color(nanoclj_t * sc, struct cell * vec, nanoclj_val_t ou
 #ifndef WIN32    
       FILE * fh = pt->rep.stdio.file;
       if (isatty(fileno(fh))) {
-	if (sc->truecolor_term) {
-	  set_truecolor(fh,
-			to_double(vector_elem(vec, 0)),
-			to_double(vector_elem(vec, 1)),
-			to_double(vector_elem(vec, 2)));
-	} else {
-	  /* set_basic_style(fh, ansi_color); */
-	}
+	set_truecolor(fh,
+		      to_double(vector_elem(vec, 0)),
+		      to_double(vector_elem(vec, 1)),
+		      to_double(vector_elem(vec, 2)),
+		      sc->truecolor_term
+		      );
       }
 #endif
     } else if (pt->kind & port_callback) {
@@ -6181,6 +6179,24 @@ static inline void assign_proc(nanoclj_t * sc, enum nanoclj_opcodes op, const ch
   new_slot_in_env(sc, x, y);
 }
 
+static inline void update_window_info(nanoclj_t * sc, nanoclj_val_t out) {
+  nanoclj_val_t size = mk_nil();
+  
+  if (is_writer(out)) {
+    nanoclj_port_t * pt = port_unchecked(out);
+    if (pt->kind & port_file) {
+      FILE * fh = pt->rep.stdio.file;
+      
+      int cols, rows, width, height;
+      if (get_window_size(stdin, fh, &cols, &rows, &width, &height)) {
+	sc->dpi_scale_factor = width / cols > 15 ? 2.0 : 1.0;
+	size = mk_vector_2d(sc, width / sc->dpi_scale_factor, height / sc->dpi_scale_factor);
+      }
+    }
+  }
+  
+  nanoclj_intern(sc, sc->global_env, sc->WINDOW_SIZE, size);
+} 
 
 /* initialization of nanoclj_t */
 #if USE_INTERFACE
@@ -6343,7 +6359,6 @@ nanoclj_t *nanoclj_init_new_custom_alloc(func_alloc malloc, func_dealloc free, f
   }
 }
 
-
 int nanoclj_init(nanoclj_t * sc) {
   return nanoclj_init_custom_alloc(sc, malloc, free, realloc);
 }
@@ -6468,28 +6483,10 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc fr
 
   sc->truecolor_term = has_truecolor();
   sc->sixel_term = has_sixels();
-  sc->dpi_scale_factor = 2.0;
+  sc->dpi_scale_factor = 1.0;
   
   return !sc->no_memory;
 }
-
-static inline void update_window_size(nanoclj_t * sc, nanoclj_val_t out) {
-  nanoclj_val_t size = mk_nil();
-  
-  if (is_writer(out)) {
-    nanoclj_port_t * pt = port_unchecked(out);
-    if (pt->kind & port_file) {
-      FILE * fh = pt->rep.stdio.file;
-      
-      int width, height;
-      if (get_window_size(stdin, fh, &width, &height)) {
-	size = mk_vector_2d(sc, width / sc->dpi_scale_factor, height / sc->dpi_scale_factor);
-      }
-    }
-  }
-  
-  nanoclj_intern(sc, sc->global_env, sc->WINDOW_SIZE, size);
-} 
 
 void nanoclj_set_input_port_file(nanoclj_t * sc, FILE * fin) {
   nanoclj_val_t inport = port_from_file(sc, fin, port_input);
@@ -6505,7 +6502,7 @@ void nanoclj_set_output_port_file(nanoclj_t * sc, FILE * fout) {
   nanoclj_val_t p = port_from_file(sc, fout, port_output);
   nanoclj_intern(sc, sc->root_env, sc->OUT, p);
 
-  update_window_size(sc, p);
+  update_window_info(sc, p);
 }
 
 void nanoclj_set_output_port_callback(nanoclj_t * sc,
@@ -6727,16 +6724,6 @@ static inline FILE *open_file(const char *fname) {
   return fopen(fname, "r");
 }
 
-static nanoclj_t * interactive_sc = NULL;
-static void sigwinchHandler( int sig_number ) {
-#if NANOCLJ_USE_LINENOISE
-  linenoiseRefreshSize();
-#endif
-  if (interactive_sc) {
-    update_window_size(interactive_sc, get_out_port(interactive_sc));
-  }
-}
-
 int main(int argc, const char **argv) {
   if (argc == 1) {
     printf("%s\n", get_version());
@@ -6755,7 +6742,6 @@ int main(int argc, const char **argv) {
     fprintf(stderr, "Could not initialize!\n");
     return 2;
   }
-  interactive_sc = &sc;
   
   nanoclj_set_input_port_file(&sc, stdin);
   nanoclj_set_output_port_file(&sc, stdout);
@@ -6779,8 +6765,6 @@ int main(int argc, const char **argv) {
     exit(1);
   }
   fclose(fh);
-
-  signal(SIGWINCH, sigwinchHandler);
   
   if (argc >= 2) {
     fh = open_file(argv[1]);
