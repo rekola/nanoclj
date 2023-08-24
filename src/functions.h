@@ -778,10 +778,14 @@ static inline void free_hints(void * ptr) {
   linenoise_sc->free(ptr);
 }
 
-static inline void mouse_motion(int x, int y) {
+static inline void on_mouse_motion(int x, int y) {
   double f = linenoise_sc->dpi_scale_factor;
   nanoclj_val_t p = mk_vector_2d(linenoise_sc, x / f, y / f);
   nanoclj_intern(linenoise_sc, linenoise_sc->global_env, linenoise_sc->MOUSE_POS, p);
+}
+
+static inline void on_window_size() {
+  update_window_info(linenoise_sc, get_out_port(linenoise_sc));
 }
 
 static inline nanoclj_val_t linenoise_readline(nanoclj_t * sc, nanoclj_val_t args) {
@@ -789,10 +793,12 @@ static inline nanoclj_val_t linenoise_readline(nanoclj_t * sc, nanoclj_val_t arg
     linenoise_sc = sc;
 
     linenoiseSetMultiLine(0);
+    linenoiseSetupSigWinchHandler();
     linenoiseSetCompletionCallback(completion);
     linenoiseSetHintsCallback(hints);
     linenoiseSetFreeHintsCallback(free_hints);
-    linenoiseSetMouseMotionCallback(mouse_motion);
+    linenoiseSetMouseMotionCallback(on_mouse_motion);
+    linenoiseSetWindowSizeCallback(on_window_size);
     linenoiseHistorySetMaxLen(10000);
     linenoiseHistoryLoad(".nanoclj_history");
   }
