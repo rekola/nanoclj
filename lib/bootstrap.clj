@@ -7,6 +7,7 @@
 (def force first)
 (def car first)
 (def cdr rest)
+(def var-get rest)
 
 (def cadr (fn [x] (car (cdr x))))
 (def caddr (fn [x] (car (cdr (cdr x)))))
