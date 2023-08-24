@@ -35,12 +35,13 @@ a canvas or image. The terminal must, of course, has to support sixel
 graphics and sixel support must be enabled. The following terminals
 have been tested:
 
-| Terminal | Status |
-| - | - |
-| Black Box | Everything works, but on HiDPI system the images are upscaled, and the terminal and the flatpak system use too much CPU time when idling. |
-| xterm | Sixels work, but doesn't support true color. |
-| mlterm | True color and sixels work, but the output flickers when updated. |
-| GNOME Terminal | True color works, but sixel support is not enabled. |
+| Terminal | Graphics | Mouse | Other |
+| - | - | - | - |
+| wezterm | OK | OK | Buggy |
+| mlterm | OK | | Output flickers when updated. |
+| xterm | Sixels work, but no True color | OK | |
+| Black Box | OK | ? | On HiDPI system the images are upscaled, and the terminal and the flatpak system use too much CPU time when idling. |
+| GNOME Terminal | True color works, but sixel support is not enabled. | | |
 
 ![Plotting from nanoclj](https://user-images.githubusercontent.com/6755525/262003070-b5eac109-f1cc-4071-ad7b-a1e5d107a1d9.jpeg "Plotting from nanoclj")
 *The plot function returns an image which can then be saved with Image/save or modified using other functions in the Image namespace.*
@@ -100,7 +101,7 @@ have been tested:
 - Transducers
 - Exception handling
 - Regular expressions
-- Refs, Agents and Atoms
+- Refs, Agents, Atoms, Validators
 - Queues
 - Arrays
 - Tagged Literals (e.g. #uuid and #inst)
@@ -131,12 +132,11 @@ have been tested:
   - update, update-in, merge, get-in, disj
   - name
   - lazy-cat, realized?
-  - mapcat
   - nthrest, nthnext, nfirst
   - parse-long, parse-double, parse-uuid
   - distinct?
   - not-every?, not-any?
-  - map-indexed
+  - map-indexed, mapcat
   - partition-by
   - remove
   - merge-with
@@ -144,7 +144,6 @@ have been tested:
   - cycle
   - rseq
   - find
-  - keys
   - flatten
   - zipmap
   - memoize
@@ -156,7 +155,9 @@ have been tested:
   - if-let
   - realized?
   - defn-
-  - reduced, reduced?  
+  - reduced, reduced?
+  - with-local-vars, var-set, find-var, declare
+  - binding, 
 - clojure.string
   - upper-case
   - clojure.string/capitalize
@@ -164,4 +165,5 @@ have been tested:
   - clojure.string/replace
   - trim, trimr, trim-newline
 - clojure.set
+- clojure.data.csv
 - ...and lots more...
