@@ -86,9 +86,17 @@ static nanoclj_val_t System_getenv(nanoclj_t * sc, nanoclj_val_t args) {
 }
 
 static nanoclj_val_t System_getProperty(nanoclj_t * sc, nanoclj_val_t args) {
+#ifdef _WIN32
+  const char * term = "Windows";
+#else
+  const char * term = getenv("TERM_PROGRAM");
+  if (!term && getenv("MLTERM")) term = "mlterm";
+  else if (!term && getenv("XTERM_VERSION")) term = "XTerm";
+#endif
+  
   const char *user_home = NULL, *user_name = NULL;
   const char *os_name = NULL, *os_version = NULL, *os_arch = NULL;
-
+  
 #ifndef _WIN32
   struct utsname buf;
   if (uname(&buf) == 0) {
@@ -148,7 +156,11 @@ static nanoclj_val_t System_getProperty(nanoclj_t * sc, nanoclj_val_t args) {
     l = cons(sc, mk_string(sc, "os.version"), l);
     l = cons(sc, mk_string(sc, os_arch), l);
     l = cons(sc, mk_string(sc, "os.arch"), l);
-    r = mk_collection(sc, T_ARRAYMAP, l);
+    l = cons(sc, mk_string(sc, term), l);
+    l = cons(sc, mk_string(sc, "term"), l);
+    l = cons(sc, mk_real(sc->dpi_scale_factor), l);
+    l = cons(sc, mk_string(sc, "content.scale.factor"), l);
+    r = mk_collection(sc, T_ARRAYMAP, l);    
   } else {
     const char * pname = strvalue(car(args));
     if (strcmp(pname, "os.name") == 0) {
@@ -169,6 +181,10 @@ static nanoclj_val_t System_getProperty(nanoclj_t * sc, nanoclj_val_t args) {
       r = mk_string(sc, file_separator);
     } else if (strcmp(pname, "line.separator") == 0) {
       r = mk_string(sc, line_separator);
+    } else if (strcmp(pname, "term") == 0) {
+      r = mk_string(sc, term);
+    } else if (strcmp(pname, "content.scale.factor") == 0) {
+      r = mk_real(sc->dpi_scale_factor);
     } else {
       r = mk_nil();
     }
