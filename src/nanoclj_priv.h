@@ -197,6 +197,7 @@ extern "C" {
     nanoclj_val_t ARRAY_MAP;	  /* array-map */
     nanoclj_val_t REGEX;		  /* regex */
     nanoclj_val_t EMPTYSTR;		  /* "" */
+    nanoclj_val_t EMPTYVEC;
     
     struct cell * free_cell;      /* pointer to top of free cells */
     long fcells;                  /* # of free cells */
@@ -241,7 +242,7 @@ extern "C" {
 
 /* operator code */
   enum nanoclj_opcodes {
-#define _OP_DEF(A,B,C,OP) OP,
+#define _OP_DEF(A,OP) OP,
 #include "nanoclj_opdf.h"
     OP_MAXDEFINED
   };
