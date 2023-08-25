@@ -156,6 +156,8 @@ static nanoclj_val_t System_getProperty(nanoclj_t * sc, nanoclj_val_t args) {
     l = cons(sc, mk_string(sc, "os.version"), l);
     l = cons(sc, mk_string(sc, os_arch), l);
     l = cons(sc, mk_string(sc, "os.arch"), l);
+    l = cons(sc, mk_nil(), l);
+    l = cons(sc, mk_string(sc, "java.class.path"), l);
     l = cons(sc, mk_string(sc, term), l);
     l = cons(sc, mk_string(sc, "term"), l);
     l = cons(sc, mk_real(sc->content_scale_factor), l);
@@ -181,6 +183,8 @@ static nanoclj_val_t System_getProperty(nanoclj_t * sc, nanoclj_val_t args) {
       r = mk_string(sc, file_separator);
     } else if (strcmp(pname, "line.separator") == 0) {
       r = mk_string(sc, line_separator);
+    } else if (strcmp(pname, "java.class.path") == 0) {
+      r = mk_nil();
     } else if (strcmp(pname, "term") == 0) {
       r = mk_string(sc, term);
     } else if (strcmp(pname, "content.scale.factor") == 0) {
