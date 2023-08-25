@@ -49,6 +49,25 @@ extern "C" {
     port_binary = 128
   };
 
+  /* operator code */
+  enum nanoclj_opcodes {
+#define _OP_DEF(A,OP) OP,
+#include "nanoclj_opdf.h"
+    OP_MAXDEFINED
+  };
+
+  /* this structure holds all the interpreter's registers */
+  typedef struct dump_stack_frame_t {
+    enum nanoclj_opcodes op;
+    nanoclj_val_t args;
+    nanoclj_val_t envir;
+    nanoclj_val_t code;
+    bool is_c_call_return;
+#ifdef USE_RECUR_REGISTER
+    nanoclj_val_t recur;
+#endif
+  } dump_stack_frame_t;
+
   typedef struct nanoclj_string_store_t {
     char *data;
     size_t size;
@@ -114,6 +133,7 @@ extern "C" {
       } _fo;
       struct {
         nanoclj_val_t car, cdr;
+	nanoclj_val_t watches;
       } _cons;
       struct {
 	struct cell * origin;
@@ -228,7 +248,7 @@ extern "C" {
     long gensym_cnt;
 
     struct nanoclj_interface *vptr;
-    void *dump_base;            /* pointer to base of allocated dump stack */
+    dump_stack_frame_t * dump_base;            /* pointer to base of allocated dump stack */
     int dump_size;              /* number of frames allocated for dump stack */
 
     bool sixel_term;
@@ -238,13 +258,6 @@ extern "C" {
     /* Dynamic printing */
     nanoclj_val_t active_element;
     int active_element_x, active_element_y;
-  };
-
-/* operator code */
-  enum nanoclj_opcodes {
-#define _OP_DEF(A,OP) OP,
-#include "nanoclj_opdf.h"
-    OP_MAXDEFINED
   };
 
 #if 0

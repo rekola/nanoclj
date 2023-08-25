@@ -113,7 +113,6 @@
 
 (defn rand-nth [coll] (nth coll (rand-int (count coll))))
 
-(defn second [coll] (first (next coll)))
 (defn third [coll] (first (next (next coll))))
 
 ; Lists

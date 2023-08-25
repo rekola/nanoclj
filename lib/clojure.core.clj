@@ -83,7 +83,7 @@
 
 (defn denominator
   "Returns the denominator of a Ratio"
-  [n] (if (ratio? n) (rest n) 1))
+  [n] (if (ratio? n) (second n) 1))
 
 (defn quot
   "Returns the quotinent of dividing a by b"
@@ -146,14 +146,7 @@
 
 (defn last
   "Returns the last element of sequence"
-  [s] (if (next s) (recur (next s)) (first s)))
-
-(defn last-2
-  "Returns the last element of sequence"
-  [[f & r]] (do
-              (println "f = " f ", r = " r)
-              (if r (recur r) f))
-  )
+  [[f & r]] (if r (recur r) f))
 
 (def butlast (fn [coll] (if (next coll)
                           (cons (first coll) (recur (next coll)))
@@ -227,7 +220,7 @@
 ; Maps & Sets
 
 (def key first)
-(def val rest)
+(def val second)
 
 (defn keys
   "Returns the values in the map" 
@@ -371,6 +364,11 @@
                                                   (pr (first x))
                                                   (run! (fn [x] (print \space) (pr x)) (rest x))
                                                   (print \))))
+                         (pair? x) (do (print "(")
+                                       (pr (first x))
+                                       (print " . ")
+                                       (pr (second x))
+                                       (print ")"))                         
                          (ratio? x) (do (save)
                                         (set-color (styles- :scalar))
                                         (pr- (numerator x))
@@ -405,6 +403,7 @@
                                          (set-color (styles- :symbol))
                                          (pr- x)
                                          (restore))
+                         (delay? x) (pr @x)
                          :else (pr- x))
                    ) more))
 
