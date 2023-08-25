@@ -2296,8 +2296,11 @@ static inline nanoclj_val_t gensym(nanoclj_t * sc, const char * prefix, size_t p
 static inline nanoclj_val_t mk_primitive(nanoclj_t * sc, char *q) {
   bool has_dec_point = false;
   bool has_fp_exp = false;
+  bool has_hex_prefix = false;
+  bool has_octal_prefix = false;
   char *div = 0;
   char *p;
+  int sign = 1;
 
   /* Parse namespace qualifier such as Math/sin */
   if (!isdigit(q[0]) && q[0] != '-' && (p = strchr(q, '/')) != 0 && p != q) {
@@ -2313,16 +2316,17 @@ static inline nanoclj_val_t mk_primitive(nanoclj_t * sc, char *q) {
   p = q;
   char c = *p++;
   if ((c == '+') || (c == '-')) {
+    if (c == '-') sign = -1;
     c = *p++;
     if (c == '.') {
-      has_dec_point = 1;
+      has_dec_point = true;
       c = *p++;
     }
     if (!isdigit(c)) {
       return def_symbol_or_keyword(sc, q);
     }
   } else if (c == '.') {
-    has_dec_point = 1;
+    has_dec_point = true;
     c = *p++;
     if (!isdigit(c)) {
       return def_symbol_or_keyword(sc, q);
@@ -2331,8 +2335,31 @@ static inline nanoclj_val_t mk_primitive(nanoclj_t * sc, char *q) {
     return def_symbol_or_keyword(sc, q);
   }
 
+  if (!has_dec_point && c == '0') {
+    if (*p == 'x') {
+      has_hex_prefix = true;
+      p++;
+      q = p;
+    } else if (isdigit(*p)) {
+      has_octal_prefix = true;
+      q = p;
+    }
+  }
+
   for (; (c = *p) != 0; ++p) {
-    if (!isdigit(c)) {
+    if (has_hex_prefix) {
+      if (isdigit(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+	continue;
+      } else {
+	return mk_nil();
+      }
+    } else if (has_octal_prefix) {
+      if (c >= '0' && c <= '7') {
+	continue;
+      } else {
+	return mk_nil();
+      }      
+    } else if (!isdigit(c)) {
       if (c == '.') {
         if (!has_dec_point) {
           has_dec_point = 1;
@@ -2369,7 +2396,13 @@ static inline nanoclj_val_t mk_primitive(nanoclj_t * sc, char *q) {
     } else {
       return mk_ratio_long(sc, num, den);
     }
-  } 
+  }
+  if (has_hex_prefix) {
+    return mk_integer(sc, sign * strtoll(q, (char **)NULL, 16));
+  }
+  if (has_octal_prefix) {
+    return mk_integer(sc, sign * strtoll(q, (char **)NULL, 8));
+  }
   if (has_dec_point) {
     return mk_real(atof(q));
   }
@@ -5724,7 +5757,12 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	sc->tok = token(sc, inport);
 	s_goto(sc, OP_RDSEXPR);
       case TOK_PRIMITIVE:
-	s_return(sc, mk_primitive(sc, readstr_upto(sc, DELIMITERS)));
+	x = mk_primitive(sc, readstr_upto(sc, DELIMITERS));
+	if (is_nil(x)) {
+	  Error_0(sc, "Invalid number format");
+	} else {
+	  s_return(sc, x);
+	}
       case TOK_DQUOTE:
 	x = readstrexp(sc);
 	if (is_false(x)) {

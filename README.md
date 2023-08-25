@@ -107,7 +107,7 @@ have been tested:
 - Tagged Literals (e.g. #uuid and #inst)
 - Reader Conditionals
 - Namespace qualifiers for keywords
-- Numeric literals other than decimal (e.g. 0xff, 2r0, 3N, 0.1M, 01)
+- Exotic numeric literals (e.g. 2r0, 3N, 0.1M)
 - Persistent data structures
 - Transient data structures
 - BigInts and BigDecimals
