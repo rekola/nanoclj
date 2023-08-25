@@ -2009,33 +2009,28 @@ static inline struct cell * oblist_initial_value(nanoclj_t * sc) {
   return vec;
 }
 
-static inline void oblist_add_item(nanoclj_t * sc, const char * name, nanoclj_val_t v) {
+static inline nanoclj_val_t oblist_add_item(nanoclj_t * sc, const char * name, nanoclj_val_t v) {
   int location = hash_fn(name, _size_unchecked(sc->oblist));
   set_vector_elem(sc->oblist, location, cons(sc, v, vector_elem(sc->oblist, location)));
+  return v;
 }
 
 /* returns the new symbol */
 static inline nanoclj_val_t oblist_add_symbol_by_name(nanoclj_t * sc, const char *name, size_t len) {
   /* This is leaked intentionally for now */
   char * str = (char*)sc->malloc(len + 1);
-  memcpy(str, name, len + 1);
-  nanoclj_val_t x = mk_symbol(sc, str, 0);
-
-  oblist_add_item(sc, name, x);
-  
-  return x;
+  memcpy(str, name, len);
+  str[len] = 0;
+  return oblist_add_item(sc, name, mk_symbol(sc, str, 0));
 }
 
 /* returns the new keyword */
 static inline nanoclj_val_t oblist_add_keyword_by_name(nanoclj_t * sc, const char *name, size_t len) {
   /* This is leaked intentionally for now */
   char * str = (char*)malloc(len + 1);
-  memcpy(str, name, len + 1);
-  nanoclj_val_t x = mk_keyword(str);  
-  
-  oblist_add_item(sc, name, x);
-
-  return x;
+  memcpy(str, name, len);
+  str[len] = 0;
+  return oblist_add_item(sc, name, mk_keyword(str));
 }
 
 static inline nanoclj_val_t oblist_find_symbol_by_name(nanoclj_t * sc, const char *name, size_t len) {
@@ -2276,12 +2271,12 @@ static inline nanoclj_val_t def_namespace(nanoclj_t * sc, const char *name) {
   return def_namespace_with_sym(sc, def_symbol(sc, name));
 }
 
-static inline nanoclj_val_t gensym(nanoclj_t * sc, const char * prefix) {
+static inline nanoclj_val_t gensym(nanoclj_t * sc, const char * prefix, size_t prefix_len) {
   nanoclj_val_t x;
   char name[256];
 
   for (; sc->gensym_cnt < LONG_MAX; sc->gensym_cnt++) {
-    snprintf(name, 256, "%s%ld", prefix, sc->gensym_cnt);
+    snprintf(name, 256, "%.*s%ld", (int)prefix_len, prefix, sc->gensym_cnt);
     size_t len = strlen(name);
     
     /* first check oblist */
@@ -2662,12 +2657,17 @@ static void gc(nanoclj_t * sc, nanoclj_val_t a, nanoclj_val_t b) {
 
 /* ========== Routines for Reading ========== */
 
-static inline int file_push(nanoclj_t * sc, const char *fname) {
+static inline int file_push(nanoclj_t * sc, strview_t sv) {
   if (sc->file_i == MAXFIL - 1) {
     return 0;
   }
+  char * fname = (char *)sc->malloc(sv.size + 1);
+  memcpy(fname, sv.ptr, sv.size);
+  fname[sv.size] = 0;
   
   FILE * fin = fopen(fname, "r");
+  sc->free(fname);
+  
   if (fin != 0) {
     sc->file_i++;
     sc->load_stack[sc->file_i].kind = port_file | port_input;
@@ -3634,7 +3634,7 @@ static inline nanoclj_val_t mk_format(nanoclj_t * sc, const char * fmt, struct c
       s = strvalue(arg);
       switch (n_args) {
       case 0: arg0s = s; break;
-      case 1: arg0s = s; break;
+      case 1: arg1s = s; break;
       }
       plan += 3 * m;
       break;
@@ -3642,7 +3642,7 @@ static inline nanoclj_val_t mk_format(nanoclj_t * sc, const char * fmt, struct c
       s = keywordname(arg);
       switch (n_args) {
       case 0: arg0s = s; break;
-      case 1: arg0s = s; break;
+      case 1: arg1s = s; break;
       }
       plan += 3 * m;
       break;
@@ -3650,7 +3650,7 @@ static inline nanoclj_val_t mk_format(nanoclj_t * sc, const char * fmt, struct c
       s = symname(arg);
       switch (n_args) {
       case 0: arg0s = s; break;
-      case 1: arg0s = s; break;
+      case 1: arg1s = s; break;
       }
       plan += 3 * m;
       break;
@@ -4233,13 +4233,15 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   case OP_LOAD:                /* load */
     if (!unpack_args_1(sc)) {
       Error_0(sc, "Error - Invalid arity");
-    }
-    if (!file_push(sc, strvalue(sc->arg0))) {
-      sprintf(sc->strbuff, "Error - unable to open %s", strvalue(sc->arg0));
-      Error_0(sc, sc->strbuff);
     } else {
-      sc->args = mk_integer(sc, sc->file_i);
-      s_goto(sc, OP_T0LVL);
+      strview_t sv = to_strview(sc->arg0);
+      if (!file_push(sc, sv)) {
+	sprintf(sc->strbuff, "Error - unable to open %.*s", (int)sv.size, sv.ptr);
+	Error_0(sc, sc->strbuff);
+      } else {
+	sc->args = mk_integer(sc, sc->file_i);
+	s_goto(sc, OP_T0LVL);
+      }
     }
 
   case OP_T0LVL:               /* top level */
@@ -4294,8 +4296,12 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     }
     
   case OP_GENSYM:
-    s_return(sc, gensym(sc, sc->args.as_long != sc->EMPTY.as_long ?
-			strvalue(car(sc->args)) : "G__"));
+    if (sc->args.as_long != sc->EMPTY.as_long) {
+      strview_t sv = to_strview(car(sc->args));
+      s_return(sc, gensym(sc, sv.ptr, sv.size));
+    } else {
+      s_return(sc, gensym(sc, "G__", 3));
+    }
     
   case OP_EVAL:                /* main part of evaluation */
 #if USE_TRACING
@@ -4342,14 +4348,6 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	  sc->code = _car(code_cell);
 	  s_goto(sc, OP_EVAL);
 	}
-
-#if 0
-      case T_DELAY:
-	fprintf(stderr, "evaling promise\n");
-	s_save(sc, OP_SAVE_FORCED, sc->EMPTY, sc->code);                            
-	sc->args = sc->EMPTY;                                  
-	s_goto(sc, OP_APPLY);
-#endif
 	
       case T_VECTOR:{
 	if (_size_unchecked(code_cell) > 0) {
@@ -6259,8 +6257,7 @@ static void Eval_Cycle(nanoclj_t * sc, enum nanoclj_opcodes op) {
 /* ========== Initialization of internal keywords ========== */
 
 static inline void assign_syntax(nanoclj_t * sc, const char *name, unsigned int syntax) {
-  nanoclj_val_t x = mk_symbol(sc, name, syntax);
-  oblist_add_item(sc, name, x);
+  oblist_add_item(sc, name, mk_symbol(sc, name, syntax));
 }
 
 static inline void assign_proc(nanoclj_t * sc, enum nanoclj_opcodes op, const char *name) {
@@ -6678,7 +6675,7 @@ void nanoclj_load_file(nanoclj_t * sc, FILE * fin) {
 
 void nanoclj_load_named_file(nanoclj_t * sc, FILE * fin, const char *filename) {
   if (fin == NULL) {
-    fprintf(stderr, "File nanoclj_val_t can not be NULL when loading a file\n");
+    fprintf(stderr, "File can not be NULL when loading a file\n");
     return;
   }
   dump_stack_reset(sc);
