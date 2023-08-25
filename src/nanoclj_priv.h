@@ -97,27 +97,27 @@ extern "C" {
 	char size;
       } _small_string;
       struct {
-	size_t _size;
-	nanoclj_vector_store_t * _store;
+	size_t offset, size;
+	nanoclj_vector_store_t * store;
       } _collection;
       long long _lvalue;
       nanoclj_port_t * _port;
       nanoclj_image_t * _image;
       void * _canvas;
       struct {
-	int _min_arity, _max_arity;
-	foreign_func _ptr;
+	int min_arity, max_arity;
+	foreign_func ptr;
       } _ff;
       struct {
-	int _min_arity, _max_arity;
-	void * _ptr;
+	int min_arity, max_arity;
+	void * ptr;
       } _fo;
       struct {
-        nanoclj_val_t _car, _cdr;
+        nanoclj_val_t car, cdr;
       } _cons;
       struct {
-	struct cell * _origin;
-	size_t _pos;
+	struct cell * origin;
+	size_t pos;
       } _seq;
     } _object;
   };

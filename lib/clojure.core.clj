@@ -471,8 +471,6 @@
 
 ; Vectors
 
-(def subvec (fn ([v start] (drop start v))
-     	        ([v start end] (take (- end start) (drop start v)))))
 (defn rseq [x] (reverse (seq x)))
 
 ; Logic
