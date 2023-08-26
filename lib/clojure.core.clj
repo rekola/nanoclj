@@ -406,13 +406,15 @@
                                          (restore))
                          (delay? x) (pr @x)
                          (image? x) (let [ws *window-size*
-                                          f *window-dip-factor*
-                                          w (x :dip-width)
-                                          h (x :dip-height)
-                                          s (/ (ws 0) w )
+                                          f *window-scale-factor*
+                                          w (x :width)
+                                          h (x :height)
+                                          ww (* (ws 0) f)
+                                          wh (* (ws 1) f)
+                                          s (/ ww w )
                                           ]
-                                      (if (> w (ws 0))
-                                        (pr- (Image/resize x (* f (ws 0)) (* f s h)))
+                                      (if (> w wh)
+                                        (pr- (Image/resize x ww (* s h)))
                                         (pr- x)
                                         ))
                          :else (pr- x))

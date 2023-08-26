@@ -18,7 +18,7 @@
   "Starts the REPL"
   [] (let [prompt "user> "
            line (linenoise/read-line prompt)]
-       (if line (let [r (eval (read-string line))]
+       (if line (let [r (try (eval (read-string line)))]
                   (prn r)
                   (when (defined? '*2) (def *3 *2))
                   (when (defined? '*1) (def *2 *1))

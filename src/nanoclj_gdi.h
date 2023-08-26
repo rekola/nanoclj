@@ -20,7 +20,7 @@ static inline nanoclj_val_t mk_canvas(nanoclj_t * sc, int width, int height) {
   HBITMAP bitmap = CreateBitmap(width, height, 3, 24, NULL);
   SelectObject(hdc, bitmap);
   
-  struct cell * x = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
+  nanoclj_cell_t * x = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
   _typeflag(x) = T_CANVAS | T_GC_ATOM;
   _canvas_unchecked(x) = (void*)hdc;
   _metadata_unchecked(x) = mk_nil();

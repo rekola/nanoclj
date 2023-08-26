@@ -69,7 +69,7 @@ static nanoclj_val_t System_getenv(nanoclj_t * sc, nanoclj_val_t args) {
     
     int l = 0;
     for ( ; environ[l]; l++) { }
-    struct cell * map = mk_arraymap(sc, l);
+    nanoclj_cell_t * map = mk_arraymap(sc, l);
     for (int i = 0; i < l; i++) {
       char * p = environ[i];
       int j = 0;
@@ -160,8 +160,6 @@ static nanoclj_val_t System_getProperty(nanoclj_t * sc, nanoclj_val_t args) {
     l = cons(sc, mk_string(sc, "java.class.path"), l);
     l = cons(sc, mk_string(sc, term), l);
     l = cons(sc, mk_string(sc, "term"), l);
-    l = cons(sc, mk_real(sc->content_scale_factor), l);
-    l = cons(sc, mk_string(sc, "content.scale.factor"), l);
     r = mk_collection(sc, T_ARRAYMAP, decode_pointer(l));
   } else {
     const char * pname = strvalue(car(args));
@@ -187,8 +185,6 @@ static nanoclj_val_t System_getProperty(nanoclj_t * sc, nanoclj_val_t args) {
       r = mk_nil();
     } else if (strcmp(pname, "term") == 0) {
       r = mk_string(sc, term);
-    } else if (strcmp(pname, "content.scale.factor") == 0) {
-      r = mk_real(sc->content_scale_factor);
     } else {
       r = mk_nil();
     }
@@ -406,7 +402,7 @@ static inline nanoclj_val_t browse_url(nanoclj_t * sc, nanoclj_val_t args) {
 }
 
 static inline nanoclj_val_t shell_sh(nanoclj_t * sc, nanoclj_val_t args0) {
-  struct cell * args = decode_pointer(args0);
+  nanoclj_cell_t * args = decode_pointer(args0);
   size_t n = seq_length(sc, args);
   if (n >= 1) {
 #ifdef WIN32
@@ -469,7 +465,7 @@ static inline nanoclj_val_t Image_resize(nanoclj_t * sc, nanoclj_val_t args) {
   }
   
   int target_width = to_int(target_width0), target_height = to_int(target_height0);  
-  struct cell * image0 = decode_pointer(image00);
+  nanoclj_cell_t * image0 = decode_pointer(image00);
   nanoclj_image_t * image = _image_unchecked(image0);
   
   size_t target_size = target_width * target_height * image->channels;
@@ -490,7 +486,7 @@ static inline nanoclj_val_t Image_transpose(nanoclj_t * sc, nanoclj_val_t args) 
   if (!is_image(image00)) {
     return mk_exception(sc, "Not an Image");
   }
-  struct cell * image0 = decode_pointer(image00);
+  nanoclj_cell_t * image0 = decode_pointer(image00);
   nanoclj_image_t * image = _image_unchecked(image0);
   int w = image->width, h = image->height, channels = image->channels;
   
@@ -525,7 +521,7 @@ static inline nanoclj_val_t Image_save(nanoclj_t * sc, nanoclj_val_t args) {
   if (!is_string(filename0)) {
     return mk_exception(sc, "Not a string");
   }
-  struct cell * image0 = decode_pointer(image00);
+  nanoclj_cell_t * image0 = decode_pointer(image00);
   nanoclj_image_t * image = _image_unchecked(image0);
 
   strview_t sv = to_strview(filename0);
@@ -606,7 +602,7 @@ nanoclj_val_t Image_gaussian_blur(nanoclj_t * sc, nanoclj_val_t args) {
     return mk_exception(sc, "Not a number or nil");
   }
 
-  struct cell * image0 = decode_pointer(image00);
+  nanoclj_cell_t * image0 = decode_pointer(image00);
   nanoclj_image_t * image = _image_unchecked(image0);
   int w = image->width, h = image->height, channels = image->channels;
   
@@ -825,7 +821,7 @@ static inline void free_hints(void * ptr) {
 }
 
 static inline void on_mouse_motion(int x, int y) {
-  double f = linenoise_sc->content_scale_factor;
+  double f = linenoise_sc->window_scale_factor;
   nanoclj_val_t p = mk_vector_2d(linenoise_sc, x / f, y / f);
   nanoclj_intern(linenoise_sc, linenoise_sc->global_env, linenoise_sc->MOUSE_POS, p);
 }

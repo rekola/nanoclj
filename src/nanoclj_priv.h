@@ -103,7 +103,7 @@ extern "C" {
   } nanoclj_vector_store_t;
   
 /* cell structure */
-  struct cell {
+  typedef struct nanoclj_cell_t {
     unsigned short _flag;
     nanoclj_val_t _metadata;
     union {
@@ -112,8 +112,8 @@ extern "C" {
         size_t size;
       } _string;
       struct {
-	char data[15];
-	char size;
+	char data[23];
+	uint8_t size;
       } _small_string;
       struct {
 	size_t offset, size;
@@ -136,11 +136,11 @@ extern "C" {
 	nanoclj_val_t watches;
       } _cons;
       struct {
-	struct cell * origin;
+	struct nanoclj_cell_t * origin;
 	size_t pos;
       } _seq;
     } _object;
-  };
+  } nanoclj_cell_t;
 
   struct nanoclj_s {
 /* arrays for segments */
@@ -173,11 +173,11 @@ extern "C" {
     nanoclj_val_t arg4;
     nanoclj_val_t arg_rest;
     
-    struct cell _sink;
+    nanoclj_cell_t _sink;
     nanoclj_val_t sink;               /* when mem. alloc. fails */
-    struct cell _EMPTY;
+    nanoclj_cell_t _EMPTY;
     nanoclj_val_t EMPTY;              /* special cell representing empty list */
-    struct cell * oblist;         /* pointer to symbol table */
+    nanoclj_cell_t * oblist;         /* pointer to symbol table */
     nanoclj_val_t global_env;         /* pointer to global environment */
     nanoclj_val_t target_env;
     nanoclj_val_t root_env;		/* pointer to the initial root env */
@@ -206,12 +206,15 @@ extern "C" {
     nanoclj_val_t ERR;		  /* *err* */
     nanoclj_val_t NS;		  /* *ns* */
     nanoclj_val_t WINDOW_SIZE;    /* *window-size* */
+    nanoclj_val_t WINDOW_SCALE_F;   /* *window-scale-factor* */
     nanoclj_val_t MOUSE_POS;      /* *mouse-pos* */
     
     nanoclj_val_t RECUR;		  /* recur */
     nanoclj_val_t AMP;		  /* & */
     nanoclj_val_t UNDERSCORE;         /* _ */
     nanoclj_val_t DOC;		  /* :doc */
+    nanoclj_val_t WIDTH;	  /* :width */
+    nanoclj_val_t HEIGHT;	  /* :height */
     
     nanoclj_val_t SORTED_SET;	  /* sorted-set */
     nanoclj_val_t ARRAY_MAP;	  /* array-map */
@@ -219,7 +222,7 @@ extern "C" {
     nanoclj_val_t EMPTYSTR;		  /* "" */
     nanoclj_val_t EMPTYVEC;
     
-    struct cell * free_cell;      /* pointer to top of free cells */
+    nanoclj_cell_t * free_cell;      /* pointer to top of free cells */
     long fcells;                  /* # of free cells */
     
     nanoclj_val_t save_inport;
@@ -245,7 +248,7 @@ extern "C" {
     void *ext_data;             /* For the benefit of foreign functions */
     nanoclj_val_t (*object_invoke_callback) (nanoclj_t *, void *, nanoclj_val_t);
 
-    long gensym_cnt;
+    size_t gensym_cnt;
 
     struct nanoclj_interface *vptr;
     dump_stack_frame_t * dump_base;            /* pointer to base of allocated dump stack */
@@ -253,8 +256,8 @@ extern "C" {
 
     bool sixel_term;
     nanoclj_colortype_t term_colors;
-    double content_scale_factor;
-
+    double window_scale_factor;
+    
     /* Dynamic printing */
     nanoclj_val_t active_element;
     int active_element_x, active_element_y;
