@@ -7,6 +7,7 @@
 (defn map-entry? [x] (instance? clojure.lang.MapEntry x))
 (defn set? [x] (instance? clojure.lang.PersistentTreeSet x))
 (defn map? [x] (instance? clojure.lang.PersistentArrayMap x))
+(defn image? [x] (instance? nanoclj.core.Image x))
 (defn coll? [x] (is-any-of? (type x)
                             clojure.lang.PersistentTreeSet
                             clojure.lang.PersistentArrayMap
@@ -404,6 +405,16 @@
                                          (pr- x)
                                          (restore))
                          (delay? x) (pr @x)
+                         (image? x) (let [ws *window-size*
+                                          f *window-dip-factor*
+                                          w (x :dip-width)
+                                          h (x :dip-height)
+                                          s (/ (ws 0) w )
+                                          ]
+                                      (if (> w (ws 0))
+                                        (pr- (Image/resize x (* f (ws 0)) (* f s h)))
+                                        (pr- x)
+                                        ))
                          :else (pr- x))
                    ) more))
 
