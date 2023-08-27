@@ -95,11 +95,7 @@
 
 (def is-any-of? (fn [x & args] (cond (empty? args) false
                                      (equals? x (first args)) true
-                                     :else (apply is-any-of? x (rest args)))))
-;; (def is-any-of? (fn [x & [f & r]] (cond
-;;                                    (equals? x f) true
-;;                                    (empty? r) false
-;;                                    :else (apply is-any-of? x r))))
+                                     :else (apply* is-any-of? (cons x (rest args))))))
 
 (def int?
   "Returns true if the argument is fixed-precision integer"

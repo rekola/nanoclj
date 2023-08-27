@@ -757,6 +757,7 @@ static inline const char * typename_from_id(int_fast16_t id) {
   case 32: return "nanoclj.core.Image";
   case 33: return "nanoclj.core.Canvas";
   case 34: return "clojure.lang.Var";
+  case 35: return "clojure.lang.Delay";
   }
   return "";
 }
@@ -1204,7 +1205,7 @@ static inline nanoclj_val_t mk_counted_string(nanoclj_t * sc, const char *str, s
   nanoclj_cell_t * x = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
   _metadata_unchecked(x) = mk_nil();
 
-  if (len <= 24) {
+  if (len <= 23) {
     _typeflag(x) = T_STRING | T_GC_ATOM | T_SMALL;
     if (str) {
       memcpy(_smallstrvalue_unchecked(x), str, len);
@@ -1352,7 +1353,7 @@ static inline nanoclj_cell_t * get_vector_object(nanoclj_t * sc, int_fast16_t t,
 
 /* Sequence handling */
 
-/* Returns nil or not-empty container */
+/* Returns nil or not-empty sequence */
 static inline nanoclj_cell_t * seq(nanoclj_t * sc, nanoclj_cell_t * coll) {
   if (!coll) {
     return NULL;
@@ -1382,7 +1383,6 @@ static inline nanoclj_cell_t * seq(nanoclj_t * sc, nanoclj_cell_t * coll) {
     } else {
       return mk_seq(sc, coll, 0);
     }
-    break;
   case T_VECTOR:
   case T_ARRAYMAP:
   case T_SORTED_SET:
@@ -1391,7 +1391,6 @@ static inline nanoclj_cell_t * seq(nanoclj_t * sc, nanoclj_cell_t * coll) {
     } else {
       return mk_seq(sc, coll, 0);
     }
-    break;
   case T_READER: {
     nanoclj_port_t * pt = _port_unchecked(coll);
     int c = inchar(sc, pt);
@@ -1401,9 +1400,8 @@ static inline nanoclj_cell_t * seq(nanoclj_t * sc, nanoclj_cell_t * coll) {
       backchar(c, pt);
       return mk_seq(sc, coll, 0);
     }
-    break;
   }
-  }
+  }  
   
   return coll;
 }
@@ -3514,19 +3512,37 @@ static inline size_t seq_length(nanoclj_t * sc, nanoclj_cell_t * a) {
   case T_NIL:
     return 0;
 
+  case T_LONG:
+    return 1;
+    
   case T_PAIR:
-    return 2;
+  case T_VAR:
+  case T_RATIO:
+    return 2;    
     
   case T_SEQ:
-  case T_LIST:
-  case T_LAZYSEQ:
-    for (a = seq(sc, a); a; a = next(sc, a), i++) { }
+    /* Seq is never empty */
+    for (; a; a = next(sc, a), i++) { }
     return i;
 
   case T_VECTOR:
     return _size_unchecked(a);
-  }
 
+  case T_LIST:
+    while ( 1 ) {
+      if (a == &(sc->_EMPTY)) return i;
+      nanoclj_val_t b = _cdr(a);
+      if (!is_cell(b)) return i;
+      a = decode_pointer(b);
+      i++;
+    }
+
+#if 0
+  default:
+    for (a = seq(sc, a); a; a = next(sc, a), i++) { }
+    return i;
+#endif
+  }
   return 1;
 }
 
@@ -3540,6 +3556,7 @@ static inline nanoclj_val_t mk_mapentry(nanoclj_t * sc, nanoclj_val_t key, nanoc
 
 static inline nanoclj_val_t mk_collection(nanoclj_t * sc, int type, nanoclj_cell_t * args) {
   size_t len = seq_length(sc, args);
+
   nanoclj_cell_t * coll;
   switch (type) {
   case T_VECTOR:
@@ -3561,7 +3578,7 @@ static inline nanoclj_val_t mk_collection(nanoclj_t * sc, int type, nanoclj_cell
   if (type == T_ARRAYMAP) {    
     for (size_t i = 0; i < len; args = rest(sc, args), i++) {
       nanoclj_val_t key = first(sc, args);
-      args = next(sc, args);
+      args = rest(sc, args);
       nanoclj_val_t val = first(sc, args);
       set_vector_elem(coll, i, mk_mapentry(sc, key, val));
     }
@@ -3626,7 +3643,7 @@ static inline nanoclj_val_t mk_format(nanoclj_t * sc, const char * fmt, nanoclj_
     case T_TYPE:
     case T_PROC:
     case T_BOOLEAN:
-      l = decode_integer(arg);
+      l = to_long(arg);
       switch (n_args) {
       case 0: arg0l = l; break;
       case 1: arg1l = l; break;
@@ -4026,7 +4043,10 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
     x = first(sc, args);
     y = second(sc, args);
     if (is_cell(y)) {
-      nanoclj_cell_t * tail = seq(sc, decode_pointer(y));
+      nanoclj_cell_t * tail = decode_pointer(y);
+      if (tail && _type(tail) != T_LAZYSEQ) {
+	tail = seq(sc, tail);
+      }
       return mk_pointer(get_cell(sc, T_LIST, x, tail ? mk_pointer(tail) : sc->EMPTY, mk_nil()));
     } else {
       return mk_pointer(get_cell(sc, T_PAIR, x, y, mk_nil()));
@@ -4052,6 +4072,11 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
   case T_LAZYSEQ:
     x = mk_closure(sc, cons(sc, sc->EMPTY, first(sc, args)), sc->envir);
     typeflag(x) = T_LAZYSEQ;
+    return x;
+
+  case T_DELAY:
+    x = mk_closure(sc, cons(sc, sc->EMPTY, first(sc, args)), sc->envir);
+    typeflag(x) = T_DELAY;
     return x;
 
   case T_READER:
@@ -4511,7 +4536,8 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       case T_CLOSURE:
       case T_MACRO:
       case T_LAZYSEQ:
-	/* Should not accept lazyseq */
+      case T_DELAY:
+	/* Should not accept lazyseq or delay */
 	/* make environment */
 	new_frame_in_env(sc, closure_env(code_cell));
 	x = closure_code(code_cell);
@@ -5557,21 +5583,26 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     s_retbool(sc->arg0.as_long == sc->arg1.as_long);
 
   case OP_DEREF:
-    sc->code = car(sc->args);
-    if (type(sc->code) == T_LAZYSEQ || type(sc->code) == T_DELAY) {
-      if (!_is_realized(decode_pointer(sc->code))) {
-	/* Should change type to closure here */
-	s_save(sc, OP_SAVE_FORCED, sc->EMPTY, sc->code);
-	sc->args = sc->EMPTY;
-	s_goto(sc, OP_APPLY);
-      } else if (type(sc->code) == T_LAZYSEQ && is_nil(car(sc->code)) && is_nil(cdr(sc->code))) {
-	s_return(sc, sc->EMPTY);
-      }
-    }
-    if (type(sc->code) == T_DELAY) {
-      s_return(sc, cdr(sc->code));
+    x = car(sc->args);
+    if (!is_cell(x)) {
+      return x;
     } else {
-      s_return(sc, sc->code);
+      sc->code = x;
+      if (type(x) == T_LAZYSEQ || type(x) == T_DELAY) {
+	if (!_is_realized(decode_pointer(x))) {
+	  /* Should change type to closure here */
+	  s_save(sc, OP_SAVE_FORCED, sc->EMPTY, sc->code);
+	  sc->args = sc->EMPTY;
+	  s_goto(sc, OP_APPLY);
+	} else if (type(x) == T_LAZYSEQ && is_nil(car(sc->code)) && is_nil(cdr(sc->code))) {
+	  s_return(sc, sc->EMPTY);
+	}
+      }
+      if (type(x) == T_DELAY) {
+	s_return(sc, cdr(sc->code));
+      } else {
+	s_return(sc, sc->code);
+      }
     }
 
   case OP_SAVE_FORCED:         /* Save forced value replacing delay */
