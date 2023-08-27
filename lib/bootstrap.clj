@@ -4,7 +4,7 @@
 (def true (equals? 1 1))
 (def false (equals? 1 2))
 
-(def force first)
+(def force deref)
 (def car first)
 (def cdr rest)
 (def var-get second)
