@@ -205,9 +205,9 @@
 (defn doall [seq] (if (empty? seq) '() (cons (first seq) (doall (rest seq)))))
 (defn dorun [seq] (if (empty? seq) nil (recur (rest seq))))
 
-(defn take [n coll] (if (or (<= n 0) (empty? coll)) '() (cons (first coll) (lazy-seq (take (dec n) (rest coll))))))
+(defn take [n coll] (if (or (le n 0) (empty? coll)) '() (cons (first coll) (lazy-seq (take (dec n) (rest coll))))))
 
-(defn drop [n coll] (if (zero? n) coll (recur (dec n) (rest coll))))
+(defn drop [n coll] (if (le n 0) coll (recur (dec n) (rest coll))))
 
 (def map
   "Returns a lazy sequence with each element mapped using f"
