@@ -158,15 +158,11 @@ extern "C" {
     bool (*is_keyword) (nanoclj_val_t p);
     const char *(*symname) (nanoclj_val_t p);
 
-#if 0
-    int (*is_syntax) (nanoclj_val_t p);
-#endif
     bool (*is_proc) (nanoclj_val_t p);
     bool (*is_foreign) (nanoclj_val_t p);
     bool (*is_closure) (nanoclj_val_t p);
     bool (*is_macro) (nanoclj_val_t p);
     bool (*is_mapentry) (nanoclj_val_t p);
-    bool (*is_promise) (nanoclj_val_t p);
     bool (*is_environment) (nanoclj_val_t p);
     void (*load_file) (nanoclj_t * sc, FILE * fin);
     nanoclj_val_t (*eval_string) (nanoclj_t * sc, const char *input, size_t len);

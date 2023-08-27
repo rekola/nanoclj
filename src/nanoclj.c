@@ -150,7 +150,7 @@ enum nanoclj_types {
   T_WRITER = 14,
   T_VECTOR = 15,
   T_MACRO = 16,
-  T_DELAY = 17,
+  T_LAZYSEQ = 17,
   T_ENVIRONMENT = 18,
   T_TYPE = 19,
   T_KEYWORD = 20,
@@ -184,6 +184,7 @@ struct symbol {
 #define ADJ		64
 #define TYPE_BITS	 6
 #define T_MASKTYPE      63      /* 0000000000111111 */
+#define T_REALIZED    2048	/* 0000100000000000 */
 #define T_REVERSE     4096      /* 0001000000000000 */
 #define T_SMALL       8192      /* 0010000000000000 */
 #define T_GC_ATOM    16384      /* 0100000000000000 */    /* only for gc */
@@ -302,13 +303,15 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define _cdr(p)		 ((p)->_object._cons.cdr)
 #define _watches_unchecked(p)	((p)->_object._cons.watches)
 
-#define _is_mark(p)       (_typeflag(p) & MARK)
-#define _setmark(p)       (_typeflag(p) |= MARK)
-#define _clrmark(p)       (_typeflag(p) &= UNMARK)
-#define _is_small(p)	 (_typeflag(p) & T_SMALL)
-#define _is_gc_atom(p)       (_typeflag(p) & T_GC_ATOM)
-#define _set_gc_atom(p)       _typeflag(p) |= T_GC_ATOM
-#define _clr_gc_atom(p)       _typeflag(p) &= CLR_GC_ATOM
+#define _is_realized(p)           (_typeflag(p) & T_REALIZED)
+#define _set_realized(p)          (_typeflag(p) |= T_REALIZED)
+#define _is_mark(p)               (_typeflag(p) & MARK)
+#define _setmark(p)               (_typeflag(p) |= MARK)
+#define _clrmark(p)               (_typeflag(p) &= UNMARK)
+#define _is_small(p)	          (_typeflag(p) & T_SMALL)
+#define _is_gc_atom(p)            (_typeflag(p) & T_GC_ATOM)
+#define _set_gc_atom(p)           (_typeflag(p) |= T_GC_ATOM)
+#define _clr_gc_atom(p)           (_typeflag(p) &= CLR_GC_ATOM)
 
 #define _offset_unchecked(p)	  ((p)->_object._collection.offset)
 #define _size_unchecked(p)	  ((p)->_object._collection.size)
@@ -662,11 +665,10 @@ static inline nanoclj_val_t closure_env(nanoclj_cell_t * p) {
   return _cdr(p);
 }
 
-/* To do: promise should be forced ONCE only */
-static inline bool is_delay(nanoclj_val_t p) {
+static inline bool is_lazyseq(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
   nanoclj_cell_t * c = decode_pointer(p);
-  return _type(c) == T_DELAY;
+  return _type(c) == T_LAZYSEQ;
 }
 
 static inline bool is_environment(nanoclj_val_t p) {
@@ -730,7 +732,7 @@ static inline const char * typename_from_id(int_fast16_t id) {
   case 14: return "java.io.Writer";
   case 15: return "clojure.lang.PersistentVector";
   case 16: return "nanoclj.core.Macro";
-  case 17: return "clojure.lang.Delay";
+  case 17: return "clojure.lang.LazySeq";
   case 18: return "clojure.lang.Namespace"; /* Environment */
   case 19: return "nanoclj.core.Type";
   case 20: return "clojure.lang.Keyword";
@@ -1347,6 +1349,13 @@ static inline bool is_empty(nanoclj_t * sc, nanoclj_cell_t * coll) {
   if (!coll) {
     return true;
   }
+
+  if (_type(coll) == T_LAZYSEQ) {
+    nanoclj_val_t code = cons(sc, sc->DEREF, cons(sc, mk_pointer(coll), sc->EMPTY));
+    nanoclj_val_t r = nanoclj_eval(sc, code);
+    coll = decode_pointer(r);
+  }
+
   switch (_type(coll)) {
   case T_NIL:
     return true;
@@ -1356,7 +1365,7 @@ static inline bool is_empty(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_ENVIRONMENT:
   case T_CLOSURE:
   case T_MACRO:
-  case T_DELAY:
+  case T_LAZYSEQ:
     return false; /* empty was tested already */
   case T_STRING:
   case T_CHAR_ARRAY:
@@ -1406,32 +1415,18 @@ static inline bool is_empty(nanoclj_t * sc, nanoclj_cell_t * coll) {
 static inline nanoclj_cell_t * rest(nanoclj_t * sc, nanoclj_cell_t * coll) {
   int typ = _type(coll);
 
-  if (typ == T_DELAY) {
+  if (typ == T_LAZYSEQ) {
     nanoclj_val_t code = cons(sc, sc->DEREF, cons(sc, mk_pointer(coll), sc->EMPTY));
     nanoclj_val_t r = nanoclj_eval(sc, code);
-    if (is_primitive(r)) {
-      return &(sc->_EMPTY);
-    } else {
-      coll = decode_pointer(r);
-      typ = _type(coll);
-    }
-  } else if (typ == T_LIST && type(_cdr(coll)) == T_DELAY) {
-    nanoclj_val_t code = cons(sc, sc->DEREF, cons(sc, _cdr(coll), sc->EMPTY));
-    nanoclj_val_t r = nanoclj_eval(sc, code);
-    if (is_primitive(r)) {
-      return &(sc->_EMPTY);
-    } else {
-      return decode_pointer(r);
-    }
+    coll = decode_pointer(r);
   }
-
+  
   switch (typ) {
   case T_NIL:
     break;    
-  case T_PAIR:
   case T_LIST:
-  case T_VAR:
-    return decode_pointer(_cdr(coll));
+  case T_LAZYSEQ:
+    return decode_pointer(_cdr(coll));    
   case T_VECTOR:
   case T_ARRAYMAP:
   case T_SORTED_SET:
@@ -1496,22 +1491,29 @@ static inline nanoclj_cell_t * rest(nanoclj_t * sc, nanoclj_cell_t * coll) {
   return &(sc->_EMPTY);
 }
 
+static inline nanoclj_cell_t * next(nanoclj_t * sc, nanoclj_cell_t * coll) {
+  nanoclj_cell_t * r = rest(sc, coll);
+  if (_type(r) == T_LAZYSEQ) {
+    nanoclj_val_t code = cons(sc, sc->DEREF, cons(sc, mk_pointer(r), sc->EMPTY));
+    r = decode_pointer(nanoclj_eval(sc, code));
+  }
+  if (r == &(sc->_EMPTY)) {
+    return 0;
+  }
+  return r;
+}
+
 static inline nanoclj_val_t first(nanoclj_t * sc, nanoclj_cell_t * coll) {
-  if (coll == NULL || coll == &(sc->_EMPTY)) {
+  if (coll == NULL) {
     return mk_nil();
   }
 
-  if (_type(coll) == T_DELAY) {
+  if (_type(coll) == T_LAZYSEQ) {
     nanoclj_val_t code = cons(sc, sc->DEREF, cons(sc, mk_pointer(coll), sc->EMPTY));
     nanoclj_val_t r = nanoclj_eval(sc, code);
-
-    if (is_primitive(r)) {
-      return r;
-    } else {
-      coll = decode_pointer(r);
-    }
+    coll = decode_pointer(r);
   }
-    
+  
   switch (_type(coll)) {
   case T_NIL:
     break;
@@ -1523,6 +1525,7 @@ static inline nanoclj_val_t first(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_PAIR:
   case T_LIST:
   case T_VAR:
+  case T_LAZYSEQ:
     return _car(coll);
   case T_VECTOR:
   case T_ARRAYMAP:
@@ -1818,7 +1821,7 @@ static inline int compare(nanoclj_val_t a, nanoclj_val_t b) {
       case T_LIST:
       case T_MAPENTRY:
       case T_CLOSURE:
-      case T_DELAY:
+      case T_LAZYSEQ:
       case T_MACRO:
       case T_ENVIRONMENT:{
 	int r = compare(_car(a2), _car(b2));
@@ -1890,7 +1893,7 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
       case T_LIST:
       case T_MAPENTRY:
       case T_CLOSURE:
-      case T_DELAY:
+      case T_LAZYSEQ:
       case T_MACRO:
       case T_ENVIRONMENT:
 	if (equals(sc, _car(a), _car(b))) {
@@ -2176,7 +2179,7 @@ static inline nanoclj_cell_t * mk_seq_2(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_NIL:
   case T_PAIR:
   case T_LIST:
-  case T_DELAY:
+  case T_LAZYSEQ:
   case T_SEQ:
     return coll;
   }
@@ -3952,7 +3955,7 @@ static inline bool destructure(nanoclj_t * sc, nanoclj_cell_t * binding, nanoclj
     return false;
   }
 
-  for (size_t i = 0; i < n; i++, y = rest(sc, y)) {
+  for (size_t i = 0; i < n; i++, y = next(sc, y)) {
     nanoclj_val_t e = vector_elem(binding, i);
     if (e.as_long == sc->AMP.as_long) {
       if (++i < n) {
@@ -3960,7 +3963,7 @@ static inline bool destructure(nanoclj_t * sc, nanoclj_cell_t * binding, nanoclj
 	if (is_primitive(e)) {
 	  new_slot_in_env(sc, vector_elem(binding, i), mk_pointer(y != &sc->_EMPTY ? y : NULL));
 	} else {
-	  nanoclj_cell_t * y2 = rest(sc, y);
+	  nanoclj_cell_t * y2 = next(sc, y);
 	  if (!destructure(sc, decode_pointer(e), y2, seq_length(sc, y2), false)) {
 	    return false;
 	  }
@@ -4095,9 +4098,9 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
     }
     return mk_nil();
 
-  case T_DELAY:
+  case T_LAZYSEQ:
     x = mk_closure(sc, cons(sc, sc->EMPTY, first(sc, args)), sc->envir);
-    typeflag(x) = T_DELAY;
+    typeflag(x) = T_LAZYSEQ;
     return x;
 
   case T_READER:
@@ -4556,8 +4559,8 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       }
       case T_CLOSURE:
       case T_MACRO:
-      case T_DELAY:
-	/* Should not accept promise */
+      case T_LAZYSEQ:
+	/* Should not accept lazyseq */
 	/* make environment */
 	new_frame_in_env(sc, closure_env(code_cell));
 	x = closure_code(code_cell);
@@ -4953,7 +4956,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     
   case OP_LAZYSEQ:               /* lazy-seq */
     x = mk_closure(sc, cons(sc, sc->EMPTY, sc->code), sc->envir);
-    typeflag(x) = T_DELAY;
+    typeflag(x) = T_LAZYSEQ;
     s_return(sc, x);    
 
   case OP_AND0:                /* and */
@@ -5383,13 +5386,10 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       if (x2 && (_type(x2) == T_MAPENTRY || _type(x2) == T_RATIO || _type(x2) == T_PAIR || _type(x2) == T_VAR)) {
 	/* Handle degenerate lists */
 	s_return(sc, _cdr(x2));
+      } else if (op == OP_NEXT) {
+	s_return(sc, mk_pointer(next(sc, x2)));
       } else {
-	x2 = rest(sc, x2);
-	if (op == OP_NEXT && x2 == &(sc->_EMPTY)) {
-	  s_return(sc, mk_nil());
-	} else {
-	  s_return(sc, mk_pointer(x2));
-	}
+	s_return(sc, mk_pointer(rest(sc, x2)));
       }
     }
 
@@ -5607,14 +5607,17 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 
   case OP_DEREF:
     sc->code = car(sc->args);
-    if (is_delay(sc->code)) {
-      /* Should change type to closure here */
-      s_save(sc, OP_SAVE_FORCED, sc->EMPTY, sc->code);
-      sc->args = sc->EMPTY;
-      s_goto(sc, OP_APPLY);
-    } else {
-      s_return(sc, sc->code);
+    if (is_lazyseq(sc->code)) {
+      if (!_is_realized(decode_pointer(sc->code))) {
+	/* Should change type to closure here */
+	s_save(sc, OP_SAVE_FORCED, sc->EMPTY, sc->code);
+	sc->args = sc->EMPTY;
+	s_goto(sc, OP_APPLY);
+      } else if (is_nil(car(sc->code)) && is_nil(cdr(sc->code))) {
+	s_return(sc, sc->EMPTY);
+      }
     }
+    s_return(sc, sc->code);
 
   case OP_SAVE_FORCED:         /* Save forced value replacing delay */
     if (!is_cell(sc->code)) {
@@ -5623,7 +5626,13 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     if (!is_cell(sc->value)) {
       fprintf(stderr, "invalid value\n");
     }
-    memcpy(decode_pointer(sc->code), decode_pointer(sc->value), sizeof(nanoclj_cell_t));
+    _set_realized(decode_pointer(sc->code));
+    if (sc->value.as_long == sc->EMPTY.as_long) {
+      car(sc->code) = cdr(sc->code) = mk_nil();
+    } else {
+      car(sc->code) = car(sc->value);
+      cdr(sc->code) = cdr(sc->value);
+    }
     s_return(sc, sc->value);
 
   case OP_FLUSH:
@@ -6134,6 +6143,18 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       }      
     }
     break;
+
+  case OP_REALIZEDP:
+    if (!unpack_args_1(sc)) {
+      Error_0(sc, "Error - Invalid arity");
+    }
+    if (is_cell(sc->arg0)) {
+      nanoclj_cell_t * c = decode_pointer(sc->arg0);
+      if (_type(c) == T_LAZYSEQ) {
+	s_retbool(_is_realized(c));
+      }
+    }
+    s_retbool(true);
     
   case OP_SET_COLOR:
     if (!unpack_args_1(sc)) {
@@ -6472,20 +6493,11 @@ static struct nanoclj_interface vtbl = {
   is_keyword,
   symname,
 
-#if 0
-  is_syntax,
-#endif
   is_proc,
   is_foreign_function,
   is_closure,
   is_macro,
-  is_mapentry,
-#if 0
-  closure_code,
-  closure_env,
-#endif
-  
-  is_delay,
+  is_mapentry,  
   is_environment,
   
   nanoclj_load_file,

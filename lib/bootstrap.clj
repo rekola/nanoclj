@@ -51,7 +51,7 @@
 (initialize-type- (type type) "Constructs a procedure")
 (initialize-type- (type *ns*) "Constructs a namespace")
 (initialize-type- (type []) "Constructs a vector")
-(initialize-type- (type (lazy-seq '())) "Constructs a delay")
+(initialize-type- (type (lazy-seq '())) "Constructs a lazy-seq")
 (initialize-type- (type {}) "Constructs an array-map")
 (initialize-type- (type #{}) "Constructs a sorted-set")
 (initialize-type- (type (rest [ 1 2 ])) "Constructs a sequence")
@@ -140,7 +140,7 @@
 
 (def ifn?
   "Returns true if coll is invokeable"
-  (fn [x] (is-any-of? (type x) nanoclj.core.Procedure nanoclj.core.Closure nanoclj.core.ForeignFunction clojure.lang.PersistentVector nanoclj.core.Macro clojure.lang.Delay nanoclj.core.Type clojure.lang.Keyword clojure.lang.PersistentArrayMap clojure.lang.PersistentTreeSet nanoclj.core.ForeignObject)))
+  (fn [x] (is-any-of? (type x) nanoclj.core.Procedure nanoclj.core.Closure nanoclj.core.ForeignFunction clojure.lang.PersistentVector nanoclj.core.Macro clojure.lang.LazySeq nanoclj.core.Type clojure.lang.Keyword clojure.lang.PersistentArrayMap clojure.lang.PersistentTreeSet nanoclj.core.ForeignObject)))
 
 (def defined? (fn [sym] (boolean (resolve sym))))
                         
@@ -494,3 +494,9 @@
 (defn closure?
   "Returns true if argument is a closure. Note, a macro object is also a closure."
   [x] (or (instance? nanoclj.core.Closure x) (instance? nanoclj.core.Macro x)))
+
+(macro (unless form)
+     `(if (not ,(cadr form)) (do ,@(cddr form))))
+
+(macro (when form)
+       `(if ,(cadr form) (do ,@(cddr form))))

@@ -3,14 +3,6 @@
 (load "bootstrap.clj")
 (load "clojure.core.clj")
 
-(macro (unless form)
-     `(if (not ,(cadr form)) (do ,@(cddr form))))
-
-(macro (when form)
-       `(if ,(cadr form) (do ,@(cddr form))))
-
-(macro (delay form) `(clojure.lang.Delay ',(cdr form)))
-
 ;;;;; I/O
 
 (defn call-with-input-file [s p]
