@@ -96,4 +96,15 @@
                    (move-to (fit-x (first x)) (fit-y (first y)))
                    (draw (rest x) (rest y))
                    (stroke))) plots)
+
+         (add-watch (var *window-size*) 0
+                    (fn [key ref old-ws ws]
+                      (println "window-size: " (ws 0) " " (ws 1))
+                      ))
+         
+         (add-watch (var *mouse-pos*) 0
+                    (fn [key ref old-pos pos]
+                      nil
+                      ))
+
          )))))
