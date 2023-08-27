@@ -49,7 +49,7 @@ have been tested:
 ## Differences to Clojure:
 
 - Characters are 32 bit and strings and char arrays are UTF-8 (length is O(n))
-- Strings are compared by their UTF-8 representation
+- Strings are compared and sorted by the sequences of their UTF-32 codepoints.
 - By default 32 bit integers are used, since 64 bit integers don't fit in the NaN boxing.
 - (cons 1 2) is allowed
 - List length has complexity of O(n)
