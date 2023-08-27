@@ -67,6 +67,7 @@
 (def java.io.OutputStream (nanoclj.core.Type 29))
 (def nanoclj.core.Image (nanoclj.core.Type 32))
 (def nanoclj.core.Canvas (nanoclj.core.Type 33))
+(def clojure.lang.Delay (nanoclj.core.Type 35))
 
 (def symbol clojure.lang.Symbol)
 (def vector clojure.lang.PersistentVector)
