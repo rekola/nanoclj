@@ -167,7 +167,8 @@ enum nanoclj_types {
   T_LIST = 31,
   T_IMAGE = 32,
   T_CANVAS = 33,
-  T_VAR = 34
+  T_VAR = 34,
+  T_DELAY = 35
 };
 
 typedef struct strview_s {
@@ -669,6 +670,12 @@ static inline bool is_lazyseq(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
   nanoclj_cell_t * c = decode_pointer(p);
   return _type(c) == T_LAZYSEQ;
+}
+
+static inline bool is_delay(nanoclj_val_t p) {
+  if (!is_cell(p)) return false;
+  nanoclj_cell_t * c = decode_pointer(p);
+  return _type(c) == T_DELAY;
 }
 
 static inline bool is_environment(nanoclj_val_t p) {
@@ -1491,7 +1498,7 @@ static inline nanoclj_cell_t * next(nanoclj_t * sc, nanoclj_cell_t * coll) {
     r = decode_pointer(nanoclj_eval(sc, code));
   }
   if (r == &(sc->_EMPTY)) {
-    return 0;
+    return NULL;
   }
   return r;
 }
@@ -5551,33 +5558,39 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 
   case OP_DEREF:
     sc->code = car(sc->args);
-    if (is_lazyseq(sc->code)) {
+    if (type(sc->code) == T_LAZYSEQ || type(sc->code) == T_DELAY) {
       if (!_is_realized(decode_pointer(sc->code))) {
 	/* Should change type to closure here */
 	s_save(sc, OP_SAVE_FORCED, sc->EMPTY, sc->code);
 	sc->args = sc->EMPTY;
 	s_goto(sc, OP_APPLY);
-      } else if (is_nil(car(sc->code)) && is_nil(cdr(sc->code))) {
+      } else if (type(sc->code) == T_LAZYSEQ && is_nil(car(sc->code)) && is_nil(cdr(sc->code))) {
 	s_return(sc, sc->EMPTY);
       }
     }
-    s_return(sc, sc->code);
+    if (type(sc->code) == T_DELAY) {
+      s_return(sc, cdr(sc->code));
+    } else {
+      s_return(sc, sc->code);
+    }
 
   case OP_SAVE_FORCED:         /* Save forced value replacing delay */
     if (!is_cell(sc->code)) {
-      fprintf(stderr, "invalid code\n");
-    }
-    if (!is_cell(sc->value)) {
-      fprintf(stderr, "invalid value\n");
+      s_return(sc, sc->code);
     }
     _set_realized(decode_pointer(sc->code));
-    if (sc->value.as_long == sc->EMPTY.as_long) {
+    if (!is_cell(sc->value)) {
+      car(sc->code) = mk_nil();
+      cdr(sc->code) = sc->value;
+      s_return(sc, sc->value);
+    } else if (sc->value.as_long == sc->EMPTY.as_long) {
       car(sc->code) = cdr(sc->code) = mk_nil();
+      s_return(sc, sc->EMPTY);
     } else {
       car(sc->code) = car(sc->value);
       cdr(sc->code) = cdr(sc->value);
+      s_return(sc, sc->code);
     }
-    s_return(sc, sc->value);
 
   case OP_FLUSH:
     {
@@ -6094,7 +6107,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     }
     if (is_cell(sc->arg0)) {
       nanoclj_cell_t * c = decode_pointer(sc->arg0);
-      if (_type(c) == T_LAZYSEQ) {
+      if (_type(c) == T_LAZYSEQ || _type(c) == T_DELAY) {
 	s_retbool(_is_realized(c));
       }
     }
