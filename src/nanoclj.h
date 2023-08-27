@@ -44,11 +44,6 @@ extern "C" {
 #define USE_TRACING 0
 #endif
 
-/* To force system errors through user-defined error handling (see *error-hook*) */
-#ifndef USE_ERROR_HOOK
-#define USE_ERROR_HOOK 1
-#endif
-
 #ifndef STDIO_ADDS_CR           /* Define if DOS/Windows */
 #define STDIO_ADDS_CR 0
 #endif

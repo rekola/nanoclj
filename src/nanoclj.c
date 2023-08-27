@@ -596,12 +596,6 @@ static inline double to_double(nanoclj_val_t p) {
   return NAN;
 }
 
-#if 0
-inline int_fast16_t typevalue(nanoclj_val_t p) {
-  return ivalue_unchecked(p);
-}
-#endif
-
 static inline bool is_eof(nanoclj_val_t p) {
   return is_character(p) && decode_integer(p) == EOF;
 }
@@ -3536,12 +3530,6 @@ static inline size_t seq_length(nanoclj_t * sc, nanoclj_cell_t * a) {
       a = decode_pointer(b);
       i++;
     }
-
-#if 0
-  default:
-    for (a = seq(sc, a); a; a = next(sc, a), i++) { }
-    return i;
-#endif
   }
   return 1;
 }
@@ -3763,10 +3751,6 @@ static nanoclj_val_t get_in_port(nanoclj_t * sc) {
 
 static inline nanoclj_val_t _Error_1(nanoclj_t * sc, const char *s, size_t len) {
   const char *str = s;
-#if USE_ERROR_HOOK
-  nanoclj_val_t x;
-  nanoclj_val_t hdl = sc->ERROR_HOOK;
-#endif
 
   char sbuf[AUXBUFF_SIZE];
 
@@ -3793,23 +3777,12 @@ static inline nanoclj_val_t _Error_1(nanoclj_t * sc, const char *s, size_t len) 
   }
 
   nanoclj_val_t error_str = mk_counted_string(sc, str, len);
-  
-#if USE_ERROR_HOOK
-  x = find_slot_in_env(sc, sc->envir, hdl, 1);
-  if (x.as_long != sc->EMPTY.as_long) {
-    sc->code = cons(sc, error_str, sc->EMPTY);
-    sc->code = cons(sc, slot_value_in_env(x), sc->code);
-    sc->op = (int) OP_EVAL;
-    return (nanoclj_val_t)kTRUE;
-  }
-#endif
-
 #ifdef VECTOR_ARGS
   sc->args = conj(sc, sc->EMPTYVEC, error_str);
 #else
   sc->args = cons(sc, error_str, sc->EMPTY);
 #endif
-  sc->op = (int) OP_ERR0;
+  sc->op = OP_ERR0;
   return (nanoclj_val_t)kTRUE;
 }
 
@@ -3819,7 +3792,7 @@ static inline nanoclj_val_t _Error_1(nanoclj_t * sc, const char *s, size_t len) 
 #define  BEGIN     do {
 #define  END  } while (0)
 #define s_goto(sc,a) BEGIN                                  \
-    sc->op = (int)(a);                                      \
+    sc->op = (a);                                           \
     return (nanoclj_val_t)kTRUE; END
 
 #define s_return(sc,a) return _s_return(sc,a)
@@ -5019,7 +4992,6 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     if (!unpack_args_1_plus(sc)) {
       Error_0(sc, "Error - Invalid arity");
     }
-
     if (sc->arg_rest.as_long != sc->EMPTY.as_long) {
       sc->envir = car(sc->arg_rest);
     }
@@ -6611,7 +6583,6 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc fr
   sc->UNQUOTESP = def_symbol(sc, "unquote-splicing");
 
   sc->SLASH_HOOK = def_symbol(sc, "*slash-hook*");
-  sc->ERROR_HOOK = def_symbol(sc, "*error-hook*");
   sc->TAG_HOOK = def_symbol(sc, "*default-data-reader-fn*");
   sc->COMPILE_HOOK = def_symbol(sc, "*compile-hook*");
   sc->IN = def_symbol(sc, "*in*");
