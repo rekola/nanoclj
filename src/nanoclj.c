@@ -1345,11 +1345,11 @@ static inline nanoclj_cell_t * get_vector_object(nanoclj_t * sc, int_fast16_t t,
 
 /* Sequence handling */
 
-static inline bool is_empty(nanoclj_t * sc, nanoclj_cell_t * coll) {
+/* Returns nil or not-empty container */
+static inline nanoclj_cell_t * seq(nanoclj_t * sc, nanoclj_cell_t * coll) {
   if (!coll) {
-    return true;
+    return NULL;
   }
-
   if (_type(coll) == T_LAZYSEQ) {
     nanoclj_val_t code = cons(sc, sc->DEREF, cons(sc, mk_pointer(coll), sc->EMPTY));
     nanoclj_val_t r = nanoclj_eval(sc, code);
@@ -1358,7 +1358,7 @@ static inline bool is_empty(nanoclj_t * sc, nanoclj_cell_t * coll) {
 
   switch (_type(coll)) {
   case T_NIL:
-    return true;
+    return NULL;
   case T_PAIR:
   case T_LIST:
   case T_MAPENTRY:
@@ -1366,50 +1366,43 @@ static inline bool is_empty(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_CLOSURE:
   case T_MACRO:
   case T_LAZYSEQ:
-    return false; /* empty was tested already */
+  case T_SEQ:
+    break;
   case T_STRING:
   case T_CHAR_ARRAY:
-    return _strlength(coll) == 0;
+    if (_strlength(coll) == 0) {
+      return NULL;
+    } else {
+      return mk_seq(sc, coll, 0);
+    }
+    break;
   case T_VECTOR:
   case T_ARRAYMAP:
   case T_SORTED_SET:
-    return _size_unchecked(coll) == 0;
+    if (_size_unchecked(coll) == 0) {
+      return NULL;
+    } else {
+      return mk_seq(sc, coll, 0);
+    }
+    break;
   case T_READER: {
     nanoclj_port_t * pt = _port_unchecked(coll);
     int c = inchar(sc, pt);
     if (c == EOF) {
-      return true;
+      return NULL;
     } else {
       backchar(c, pt);
-      return false;
+      return mk_seq(sc, coll, 0);
     }
-  }
-  case T_SEQ:{
-    nanoclj_cell_t * o = _origin_unchecked(coll);
-    size_t pos = _position_unchecked(coll);
-    switch (_type(o)) {
-    case T_VECTOR:
-    case T_ARRAYMAP:
-    case T_SORTED_SET:
-      return pos >= _size_unchecked(o);
-    case T_STRING:
-    case T_CHAR_ARRAY:
-      return pos >= _strlength(o);
-    case T_READER:{
-      nanoclj_port_t * pt = _port_unchecked(o);
-      int c = inchar(sc, pt);
-      if (c == EOF) {
-	return true;
-      } else {
-	backchar(c, pt);
-	return false;
-      }
-    }
-    }    
+    break;
   }
   }
   
-  return false;
+  return coll;
+}
+
+static inline bool is_empty(nanoclj_t * sc, nanoclj_cell_t * coll) {
+  return seq(sc, coll) == NULL;
 }
 
 static inline nanoclj_cell_t * rest(nanoclj_t * sc, nanoclj_cell_t * coll) {
@@ -2148,42 +2141,6 @@ static inline nanoclj_cell_t * subvec(nanoclj_t * sc, nanoclj_cell_t * vec, size
 
 static inline nanoclj_cell_t * mk_sorted_set(nanoclj_t * sc, int len) {
   return get_vector_object(sc, T_SORTED_SET, 0, len > 0 ? mk_vector_store(sc, len) : NULL);
-}
-
-static inline nanoclj_cell_t * mk_seq_2(nanoclj_t * sc, nanoclj_cell_t * coll) {
-  if (coll == NULL) {
-    return &(sc->_EMPTY);
-  }
-  
-  switch (_type(coll)) {
-  case T_VECTOR:
-    if (_size_unchecked(coll) != 0) {
-      return mk_seq(sc, coll, 0);
-    }
-    break;
-  case T_STRING:
-  case T_CHAR_ARRAY:
-    if (_strlength(coll) != 0) {
-      return mk_seq(sc, coll, 0);
-    }
-    break;
-  case T_READER:{
-    nanoclj_port_t * pt = _port_unchecked(coll);
-    int c = inchar(sc, pt);
-    if (c != EOF) {
-      backchar(c, pt);
-      return mk_seq(sc, coll, 0);
-    }
-    break;
-  }
-  case T_NIL:
-  case T_PAIR:
-  case T_LIST:
-  case T_LAZYSEQ:
-  case T_SEQ:
-    return coll;
-  }
-  return &(sc->_EMPTY);
 }
 
 static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t key, nanoclj_val_t * result) {
@@ -3554,20 +3511,13 @@ static inline size_t seq_length(nanoclj_t * sc, nanoclj_cell_t * a) {
     return 2;
     
   case T_SEQ:
-    for (; !is_empty(sc, a); a = rest(sc, a), i++) { }
+  case T_LIST:
+  case T_LAZYSEQ:
+    for (a = seq(sc, a); a; a = next(sc, a), i++) { }
     return i;
 
   case T_VECTOR:
     return _size_unchecked(a);
-    
-  case T_LIST:
-    while ( 1 ) {
-      if (a == &(sc->_EMPTY)) return i;
-      nanoclj_val_t b = _cdr(a);
-      if (!is_cell(b)) return i;
-      a = decode_pointer(b);
-      i++;
-    }
   }
 
   return 1;
@@ -3582,11 +3532,7 @@ static inline nanoclj_val_t mk_mapentry(nanoclj_t * sc, nanoclj_val_t key, nanoc
 }
 
 static inline nanoclj_val_t mk_collection(nanoclj_t * sc, int type, nanoclj_cell_t * args) {
-  int i;
-  int len = seq_length(sc, args);
-  if (len < 0) {
-    return sc->EMPTY;
-  }
+  size_t len = seq_length(sc, args);
   nanoclj_cell_t * coll;
   switch (type) {
   case T_VECTOR:
@@ -3606,14 +3552,14 @@ static inline nanoclj_val_t mk_collection(nanoclj_t * sc, int type, nanoclj_cell
     return sc->sink;
   }
   if (type == T_ARRAYMAP) {    
-    for (i = 0; !is_empty(sc, args); args = rest(sc, args), i++) {
+    for (size_t i = 0; i < len; args = rest(sc, args), i++) {
       nanoclj_val_t key = first(sc, args);
-      args = rest(sc, args);
+      args = next(sc, args);
       nanoclj_val_t val = first(sc, args);
       set_vector_elem(coll, i, mk_mapentry(sc, key, val));
     }
   } else {
-    for (i = 0; !is_empty(sc, args); args = rest(sc, args), i++) {
+    for (size_t i = 0; i < len; args = rest(sc, args), i++) {
       set_vector_elem(coll, i, first(sc, args));
     }
     if (type == T_SORTED_SET) {
@@ -3661,7 +3607,7 @@ static inline nanoclj_val_t mk_format(nanoclj_t * sc, const char * fmt, nanoclj_
   const char * arg0s = NULL, * arg1s = NULL;
   int plan = 0, m = 1;
   
-  for ( ; !is_empty(sc, args); args = rest(sc, args), n_args++, m *= 4) {
+  for (args = seq(sc, args); args; args = next(sc, args), n_args++, m *= 4) {
     nanoclj_val_t arg = first(sc, args);
     long long l;
     double d;
@@ -4073,8 +4019,8 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
     x = first(sc, args);
     y = second(sc, args);
     if (is_cell(y)) {
-      nanoclj_cell_t * coll = decode_pointer(y);
-      return mk_pointer(get_cell(sc, T_LIST, x, mk_pointer(mk_seq_2(sc, coll)), mk_nil()));
+      nanoclj_cell_t * tail = seq(sc, decode_pointer(y));
+      return mk_pointer(get_cell(sc, T_LIST, x, tail ? mk_pointer(tail) : sc->EMPTY, mk_nil()));
     } else {
       return mk_pointer(get_cell(sc, T_PAIR, x, y, mk_nil()));
     }
@@ -4091,12 +4037,10 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
   case T_SEQ:
     x = first(sc, args);
     if (is_cell(x)) {
-      nanoclj_cell_t * coll = decode_pointer(x);
-      if (!is_empty(sc, coll)) {
-	return mk_pointer(mk_seq_2(sc, coll));
-      }
+      return mk_pointer(seq(sc, decode_pointer(x)));
+    } else {
+      return mk_nil();
     }
-    return mk_nil();
 
   case T_LAZYSEQ:
     x = mk_closure(sc, cons(sc, sc->EMPTY, first(sc, args)), sc->envir);

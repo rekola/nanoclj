@@ -324,7 +324,7 @@
   "Prints values to *out* in a format understandable by the Reader"
   [& more] (run! (fn [x]
                    (cond (vector? x) (do (print "[")
-                                         (when (not (empty? x))
+                                         (when (seq x)
                                            (if *print-length*
                                              (let [p (take *print-length* x)
                                                    r (drop *print-length* x)
@@ -334,7 +334,7 @@
                                                  (do
                                                    (pr (first p))
                                                    (run! (fn [x] (print \space) (pr x)) (rest p))
-                                                   (when (not (empty? r))
+                                                   (when (seq r)
                                                      (print " ...")))))
                                              (do
                                                (pr (first x))
