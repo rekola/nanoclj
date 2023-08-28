@@ -1363,9 +1363,12 @@ static inline nanoclj_cell_t * seq(nanoclj_t * sc, nanoclj_cell_t * coll) {
     return NULL;
   }
   if (_type(coll) == T_LAZYSEQ) {
-    nanoclj_val_t code = cons(sc, sc->DEREF, cons(sc, mk_pointer(coll), sc->EMPTY));
-    nanoclj_val_t r = nanoclj_eval(sc, code);
-    coll = decode_pointer(r);
+    if (!_is_realized(coll)) {
+      nanoclj_val_t code = cons(sc, sc->DEREF, cons(sc, mk_pointer(coll), sc->EMPTY));
+      coll = decode_pointer(nanoclj_eval(sc, code));
+    } else if (is_nil(_car(coll)) && is_nil(_cdr(coll))) {
+      return NULL;
+    }
   }
 
   switch (_type(coll)) {
@@ -1419,9 +1422,12 @@ static inline nanoclj_cell_t * rest(nanoclj_t * sc, nanoclj_cell_t * coll) {
   int typ = _type(coll);
 
   if (typ == T_LAZYSEQ) {
-    nanoclj_val_t code = cons(sc, sc->DEREF, cons(sc, mk_pointer(coll), sc->EMPTY));
-    nanoclj_val_t r = nanoclj_eval(sc, code);
-    coll = decode_pointer(r);
+    if (!_is_realized(coll)) {
+      nanoclj_val_t code = cons(sc, sc->DEREF, cons(sc, mk_pointer(coll), sc->EMPTY));
+      coll = decode_pointer(nanoclj_eval(sc, code));
+    } else if (is_nil(_car(coll)) && is_nil(_cdr(coll))) {
+      return &(sc->_EMPTY);
+    }
   }
   
   switch (typ) {
@@ -1497,8 +1503,12 @@ static inline nanoclj_cell_t * rest(nanoclj_t * sc, nanoclj_cell_t * coll) {
 static inline nanoclj_cell_t * next(nanoclj_t * sc, nanoclj_cell_t * coll) {
   nanoclj_cell_t * r = rest(sc, coll);
   if (_type(r) == T_LAZYSEQ) {
-    nanoclj_val_t code = cons(sc, sc->DEREF, cons(sc, mk_pointer(r), sc->EMPTY));
-    r = decode_pointer(nanoclj_eval(sc, code));
+    if (!_is_realized(r)) {
+      nanoclj_val_t code = cons(sc, sc->DEREF, cons(sc, mk_pointer(r), sc->EMPTY));
+      r = decode_pointer(nanoclj_eval(sc, code));
+    } else if (is_nil(_car(r)) && is_nil(_cdr(r))) {
+      return NULL;
+    }
   }
   if (r == &(sc->_EMPTY)) {
     return NULL;
@@ -1512,9 +1522,12 @@ static inline nanoclj_val_t first(nanoclj_t * sc, nanoclj_cell_t * coll) {
   }
 
   if (_type(coll) == T_LAZYSEQ) {
-    nanoclj_val_t code = cons(sc, sc->DEREF, cons(sc, mk_pointer(coll), sc->EMPTY));
-    nanoclj_val_t r = nanoclj_eval(sc, code);
-    coll = decode_pointer(r);
+    if (!_is_realized(coll)) {
+      nanoclj_val_t code = cons(sc, sc->DEREF, cons(sc, mk_pointer(coll), sc->EMPTY));
+      coll = decode_pointer(nanoclj_eval(sc, code));
+    } else if (is_nil(_car(coll)) && is_nil(_cdr(coll))) {
+      return mk_nil();
+    }
   }
   
   switch (_type(coll)) {
