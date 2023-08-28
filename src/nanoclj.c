@@ -1307,7 +1307,17 @@ static inline void backchar(int c, nanoclj_port_t * pt) {
 
 /* get new cons cell */
 static inline nanoclj_val_t cons(nanoclj_t * sc, nanoclj_val_t a, nanoclj_val_t b) {
-  int t = b.as_long == sc->EMPTY.as_long || type(b) == T_LIST ? T_LIST : T_PAIR;
+  int t;
+  if (b.as_long == sc->EMPTY.as_long) {
+    t = T_LIST;
+  } else {
+    t = type(b);
+    if (t == T_LIST || t == T_LAZYSEQ || t == T_SEQ) {
+      t = T_LIST;
+    } else {
+      t = T_PAIR;
+    }
+  }
   return mk_pointer(get_cell(sc, t, a, b, mk_nil()));
 }
 
@@ -1360,13 +1370,14 @@ static inline nanoclj_cell_t * seq(nanoclj_t * sc, nanoclj_cell_t * coll) {
 
   switch (_type(coll)) {
   case T_NIL:
-    return NULL;
-  case T_PAIR:
-  case T_LIST:
+  case T_LONG:
   case T_MAPENTRY:
   case T_ENVIRONMENT:
   case T_CLOSURE:
   case T_MACRO:
+  case T_PAIR:
+    return NULL;
+  case T_LIST:
   case T_LAZYSEQ:
   case T_SEQ:
     break;
@@ -3500,8 +3511,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
 }
 
 static inline size_t seq_length(nanoclj_t * sc, nanoclj_cell_t * a) {
-  size_t i = 0;
-  
+  size_t i = 0;  
   switch (_type(a)) {
   case T_NIL:
     return 0;
@@ -3523,6 +3533,11 @@ static inline size_t seq_length(nanoclj_t * sc, nanoclj_cell_t * a) {
     return _size_unchecked(a);
 
   case T_LIST:
+  case T_LAZYSEQ:
+#if 1
+    for (; !is_empty(sc, a); a = rest(sc, a), i++) { }
+    return i;
+#else
     while ( 1 ) {
       if (a == &(sc->_EMPTY)) return i;
       nanoclj_val_t b = _cdr(a);
@@ -3530,6 +3545,7 @@ static inline size_t seq_length(nanoclj_t * sc, nanoclj_cell_t * a) {
       a = decode_pointer(b);
       i++;
     }
+#endif
   }
   return 1;
 }
@@ -3891,11 +3907,13 @@ static inline bool is_list(nanoclj_val_t a) {
 static inline bool destructure(nanoclj_t * sc, nanoclj_cell_t * binding, nanoclj_cell_t * y, size_t num_args, bool first_level) {
   size_t n = _size_unchecked(binding);
   bool is_multiarity = n >= 2 && vector_elem(binding, n - 2).as_long == sc->AMP.as_long;
-  
-  if (!is_multiarity && num_args != n) {
-    return false;
-  } else if (is_multiarity && first_level && num_args < n - 2) {
-    return false;
+
+  if (first_level) {
+    if (!is_multiarity && num_args != n) {
+      return false;
+    } else if (is_multiarity && num_args < n - 2) {
+      return false;
+    }
   }
 
   for (size_t i = 0; i < n; i++, y = next(sc, y)) {
@@ -3907,7 +3925,7 @@ static inline bool destructure(nanoclj_t * sc, nanoclj_cell_t * binding, nanoclj
 	  new_slot_in_env(sc, vector_elem(binding, i), mk_pointer(y != &sc->_EMPTY ? y : NULL));
 	} else {
 	  nanoclj_cell_t * y2 = next(sc, y);
-	  if (!destructure(sc, decode_pointer(e), y2, seq_length(sc, y2), false)) {
+	  if (!destructure(sc, decode_pointer(e), y2, 0, false)) {
 	    return false;
 	  }
 	}
@@ -3925,7 +3943,7 @@ static inline bool destructure(nanoclj_t * sc, nanoclj_cell_t * binding, nanoclj
 	  return false;
 	} else {
 	  nanoclj_cell_t * y3 = decode_pointer(y2);
-	  if (!destructure(sc, decode_pointer(e), y3, seq_length(sc, y3), false)) {
+	  if (!destructure(sc, decode_pointer(e), y3, 0, false)) {
 	    return false;
 	  }
 	}
@@ -4017,13 +4035,21 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
     y = second(sc, args);
     if (is_cell(y)) {
       nanoclj_cell_t * tail = decode_pointer(y);
-      if (tail && _type(tail) != T_LAZYSEQ) {
-	tail = seq(sc, tail);
+      if (!tail) {
+	return mk_pointer(get_cell(sc, T_LIST, x, sc->EMPTY, mk_nil()));
+      } else {
+	int t = _type(tail);
+	if (t == T_LAZYSEQ || t == T_SEQ || t == T_LIST) {
+	  return mk_pointer(get_cell(sc, T_LIST, x, y, mk_nil()));
+	} else {
+	  tail = seq(sc, tail);
+	  if (tail) {
+	    return mk_pointer(get_cell(sc, T_LIST, x, mk_pointer(tail), mk_nil()));
+	  }
+	}
       }
-      return mk_pointer(get_cell(sc, T_LIST, x, tail ? mk_pointer(tail) : sc->EMPTY, mk_nil()));
-    } else {
-      return mk_pointer(get_cell(sc, T_PAIR, x, y, mk_nil()));
     }
+    return mk_pointer(get_cell(sc, T_PAIR, x, y, mk_nil()));
 
   case T_MAPENTRY:
     return mk_mapentry(sc, first(sc, args), second(sc, args));
@@ -5557,7 +5583,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   case OP_DEREF:
     x = car(sc->args);
     if (!is_cell(x)) {
-      return x;
+      _s_return(sc, x);
     } else {
       sc->code = x;
       if (type(x) == T_LAZYSEQ || type(x) == T_DELAY) {
