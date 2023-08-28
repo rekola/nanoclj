@@ -3906,12 +3906,12 @@ static inline bool is_list(nanoclj_val_t a) {
 
 static inline bool destructure(nanoclj_t * sc, nanoclj_cell_t * binding, nanoclj_cell_t * y, size_t num_args, bool first_level) {
   size_t n = _size_unchecked(binding);
-  bool is_multiarity = n >= 2 && vector_elem(binding, n - 2).as_long == sc->AMP.as_long;
 
   if (first_level) {
-    if (!is_multiarity && num_args != n) {
+    bool multi = n >= 2 && vector_elem(binding, n - 2).as_long == sc->AMP.as_long;
+    if (!multi && num_args != n) {
       return false;
-    } else if (is_multiarity && num_args < n - 2) {
+    } else if (multi && num_args < n - 2) {
       return false;
     }
   }
@@ -3922,7 +3922,7 @@ static inline bool destructure(nanoclj_t * sc, nanoclj_cell_t * binding, nanoclj
       if (++i < n) {
 	e = vector_elem(binding, i);
 	if (is_primitive(e)) {
-	  new_slot_in_env(sc, vector_elem(binding, i), mk_pointer(y != &sc->_EMPTY ? y : NULL));
+	  new_slot_in_env(sc, e, mk_pointer(y != &sc->_EMPTY ? y : NULL));
 	} else {
 	  nanoclj_cell_t * y2 = next(sc, y);
 	  if (!destructure(sc, decode_pointer(e), y2, 0, false)) {
@@ -4737,11 +4737,12 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     if (sc->arg_rest.as_long != sc->EMPTY.as_long) {
       ns = sc->arg0;
       x = car(sc->arg_rest);
+      x = find_slot_in_env(sc, ns, x, 0);
     } else {
       ns = sc->envir;
       x = sc->arg0;
+      x = find_slot_in_env(sc, ns, x, 1);
     }
-    x = find_slot_in_env(sc, ns, x, 1);
     s_return(sc, x.as_long != sc->EMPTY.as_long ? x : mk_nil());
 
   case OP_SET:
