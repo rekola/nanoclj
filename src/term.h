@@ -164,6 +164,38 @@ static bool get_cursor_position(FILE * in, FILE * out, int * x, int * y) {
   }
 }
 
+static inline bool get_bg_color(FILE * in, FILE * out, double * r, double * g, double * b) {
+  if (!isatty(fileno(out))) {
+    return false;
+  }
+
+  char buf[32];
+  unsigned int i = 0;
+  
+  struct termios orig_term = set_raw_mode(fileno(in));
+  
+  if (write(fileno(out), "\033]11;?\a", 7) != 7) {
+    return false;
+  }
+  ms_sleep(100);
+    
+  // ^[]11;rgb:0000/0000/0000^
+  while (i < sizeof(buf)-1) {
+    if (read(fileno(in), buf+i, 1) != 1) {
+      break;
+    }
+    if (buf[i] == '\\') {
+      break;
+    }
+    i++;
+  }
+  buf[i] = '\0';
+  tcsetattr(STDIN_FILENO, TCSADRAIN, &orig_term);
+  
+  fprintf(stderr, "color = %s, i = %d\n", buf, i);
+  return false;
+}
+
 static inline nanoclj_colortype_t get_term_colortype() {
 #ifdef _WIN32
   return nanoclj_colortype_16;

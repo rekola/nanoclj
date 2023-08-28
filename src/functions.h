@@ -8,6 +8,7 @@
 #include <glob.h>
 
 #include "linenoise.h"
+#include "nanoclj_utils.h"
 
 #ifdef WIN32
 #include <direct.h>
@@ -33,10 +34,7 @@
 static nanoclj_val_t Thread_sleep(nanoclj_t * sc, nanoclj_val_t args) {
   long long ms = to_long(car(args));
   if (ms > 0) {
-    struct timespec t, t2;
-    t.tv_sec = ms / 1000;
-    t.tv_nsec = (ms % 1000) * 1000000;
-    nanosleep(&t, &t2);
+    ms_sleep(ms);
   }
   return mk_nil();
 }
