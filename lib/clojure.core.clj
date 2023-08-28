@@ -4,7 +4,7 @@
 (defn keyword? [x] (instance? clojure.lang.Keyword x))
 ; (defn delay? [x] (instance? clojure.lang.Delay x))
 (defn lazy-seq? [x] (instance? clojure.lang.LazySeq x))
-(defn seq? [x] (is-any-of? (type x) nanoclj.core.Seq clojure.lang.PersistentList))
+(defn seq? [x] (is-any-of? (type x) nanoclj.core.Seq clojure.lang.PersistentList clojure.lang.LazySeq))
 (defn map-entry? [x] (instance? clojure.lang.MapEntry x))
 (defn set? [x] (instance? clojure.lang.PersistentTreeSet x))
 (defn map? [x] (instance? clojure.lang.PersistentArrayMap x))
@@ -405,7 +405,6 @@
                                          (set-color (styles- :symbol))
                                          (pr- x)
                                          (restore))
-                         (lazy-seq? x) (pr @x)
                          (image? x) (let [ws *window-size*
                                           f *window-scale-factor*
                                           w (x :width)
