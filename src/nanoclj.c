@@ -3929,7 +3929,7 @@ static inline bool destructure(nanoclj_t * sc, nanoclj_cell_t * binding, nanoclj
     }
   }
 
-  for (size_t i = 0; i < n; i++, y = next(sc, y)) {
+  for (size_t i = 0; i < n; i++, y = rest(sc, y)) {
     nanoclj_val_t e = vector_elem(binding, i);
     if (e.as_long == sc->AMP.as_long) {
       if (++i < n) {
@@ -3937,7 +3937,7 @@ static inline bool destructure(nanoclj_t * sc, nanoclj_cell_t * binding, nanoclj
 	if (is_primitive(e)) {
 	  new_slot_in_env(sc, e, mk_pointer(y != &sc->_EMPTY ? y : NULL));
 	} else {
-	  nanoclj_cell_t * y2 = next(sc, y);
+	  nanoclj_cell_t * y2 = rest(sc, y);
 	  if (!destructure(sc, decode_pointer(e), y2, 0, false)) {
 	    return false;
 	  }
