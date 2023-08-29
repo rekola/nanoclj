@@ -68,6 +68,12 @@ extern "C" {
 #endif
   } dump_stack_frame_t;
 
+  typedef struct c_stack_frame_t {
+    nanoclj_val_t sink;
+    nanoclj_val_t envir;
+    nanoclj_val_t dump;
+  } c_stack_frame_t;
+  
   typedef struct nanoclj_string_store_t {
     char *data;
     size_t size;
@@ -251,8 +257,11 @@ extern "C" {
 
     struct nanoclj_interface *vptr;
     dump_stack_frame_t * dump_base;            /* pointer to base of allocated dump stack */
-    int dump_size;              /* number of frames allocated for dump stack */
-
+    size_t dump_size;              /* number of frames allocated for dump stack */
+    
+    c_stack_frame_t * c_stack_base;
+    size_t c_stack_count, c_stack_size;
+    
     bool sixel_term;
     nanoclj_colortype_t term_colors;
     double window_scale_factor;
