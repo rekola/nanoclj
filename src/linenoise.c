@@ -979,7 +979,9 @@ int linenoiseEditStart(struct linenoiseState *l, int stdin_fd, int stdout_fd, ch
     l->cols = getColumns(stdin_fd, stdout_fd);
     l->oldrows = 0;
     l->history_index = 0;
-    l->utf8 = 1;
+
+    const char * lang = getenv("LANG");
+    l->utf8 = lang && strstr(lang, "UTF-8");
     
     /* Buffer starts empty. */
     l->buf[0] = '\0';
