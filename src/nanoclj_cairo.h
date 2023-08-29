@@ -40,6 +40,10 @@ static inline nanoclj_val_t canvas_create_image(nanoclj_t * sc, void * canvas) {
   return mk_image(sc, width, height, 4, data);
 }
 
+static inline void canvas_flush(void * canvas) {
+  cairo_surface_flush(cairo_get_target((cairo_t *)canvas));
+}
+
 static inline void canvas_set_color(void * canvas, double r, double g, double b) {
   cairo_set_source_rgb((cairo_t *)canvas, r, g, b);
 }

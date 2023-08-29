@@ -187,7 +187,6 @@ extern "C" {
     nanoclj_val_t global_env;         /* pointer to global environment */
     nanoclj_val_t target_env;
     nanoclj_val_t root_env;		/* pointer to the initial root env */
-    nanoclj_val_t c_nest;             /* stack for nested calls from C */
 
 /* global pointers to special symbols */
     nanoclj_val_t LAMBDA;             /* pointer to syntax lambda */
@@ -267,7 +266,7 @@ extern "C" {
     double window_scale_factor;
     
     /* Dynamic printing */
-    nanoclj_val_t active_element;
+    nanoclj_val_t active_element, active_element_target;
     int active_element_x, active_element_y;
   };
 

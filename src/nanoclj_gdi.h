@@ -33,6 +33,10 @@ static inline nanoclj_val_t canvas_create_image(nanoclj_t * sc, void * canvas) {
   return mk_nil();
 }
 
+static inline void canvas_flush(void * canvas) {
+
+}
+
 static inline void canvas_set_color(void * canvas, double r0, double g0, double b0) {
   HDC hdc = (HDC)canvas;
   int r = clamp((int)(r0 / 255), 0, 255), g = clamp((int)(g0 / 255), 0, 255), b = clamp((int)(b0 / 255), 0, 255);
