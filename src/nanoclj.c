@@ -334,7 +334,7 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define _strlength_unchecked(p)        ((p)->_object._string.size)
 
 #define _smallstrvalue_unchecked(p)      (&((p)->_object._small_string.data[0]))
-#define _smallstrlength_unchecked(p)      ((p)->_object._small_string.size)
+#define _sosize_unchecked(p)      ((p)->_so_size)
 
 /* macros for cell operations */
 #define typeflag(p)      (_typeflag(decode_pointer(p)))
@@ -347,7 +347,7 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define strlength_unchecked(p)        (decode_pointer(p)->_object._string.size)
 
 #define smallstrvalue_unchecked(p)      (&(decode_pointer(p)->_object._small_string.data[0]))
-#define smallstrlength_unchecked(p)      (decode_pointer(p)->_object._small_string.size)
+#define sosize_unchecked(p)      (decode_pointer(p)->_sosize)
 
 #define offset_unchecked(p)	  (decode_pointer(p)->_object._collection.offset)
 #define size_unchecked(p)	  (decode_pointer(p)->_object._collection.size)
@@ -508,19 +508,19 @@ static inline const char * strvalue(nanoclj_val_t p) {
   return "";
 }
 
-static inline size_t strlength(nanoclj_val_t p) {
-  if (is_small(p)) {
-    return smallstrlength_unchecked(p);
+static inline size_t _strlength(nanoclj_cell_t * s) {
+  if (_is_small(s)) {
+    return _sosize_unchecked(s);
   } else {
-    return strlength_unchecked(p);
+    return _strlength_unchecked(s);
   }
 }
 
-static inline size_t _strlength(nanoclj_cell_t * s) {
-  if (_is_small(s)) {
-    return _smallstrlength_unchecked(s);
+static inline size_t strlength(nanoclj_val_t p) {
+  if (!is_cell(p)) {
+    return 0;
   } else {
-    return _strlength_unchecked(s);
+    return _strlength(decode_pointer(p));
   }
 }
 
@@ -760,7 +760,7 @@ static inline strview_t _to_strview(nanoclj_cell_t * c) {
   case T_STRING:
   case T_CHAR_ARRAY:
     if (_is_small(c)) {
-      return (strview_t){ _smallstrvalue_unchecked(c), _smallstrlength_unchecked(c) };
+      return (strview_t){ _smallstrvalue_unchecked(c), _sosize_unchecked(c) };
     } else {
       return (strview_t){ _strvalue_unchecked(c), _strlength_unchecked(c) };
     }
@@ -1198,13 +1198,13 @@ static inline nanoclj_val_t mk_counted_string(nanoclj_t * sc, const char *str, s
   nanoclj_cell_t * x = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
   _metadata_unchecked(x) = mk_nil();
 
-  if (len <= 23) {
+  if (len <= 24) {
     _typeflag(x) = T_STRING | T_GC_ATOM | T_SMALL;
     if (str) {
       memcpy(_smallstrvalue_unchecked(x), str, len);
       _smallstrvalue_unchecked(x)[len] = 0;
     }
-    _smallstrlength_unchecked(x) = len;
+    _sosize_unchecked(x) = len;
   } else {
     char * s = (char *)malloc(len);
     memcpy(s, str, len);
@@ -1307,14 +1307,20 @@ static inline void backchar(int c, nanoclj_port_t * pt) {
 /* get new cons cell */
 static inline nanoclj_val_t cons(nanoclj_t * sc, nanoclj_val_t a, nanoclj_val_t b) {
   int t;
-  if (b.as_long == sc->EMPTY.as_long) {
-    t = T_LIST;
+  if (!is_cell(b)) {
+    t = T_PAIR;
   } else {
-    t = type(b);
-    if (t == T_LIST || t == T_LAZYSEQ || t == T_SEQ) {
+    nanoclj_cell_t * c = decode_pointer(b);
+    if (!c) {
+      b = sc->EMPTY;
       t = T_LIST;
     } else {
-      t = T_PAIR;
+      t = _type(c);
+      if (t == T_NIL || t == T_LIST || t == T_LAZYSEQ || t == T_SEQ) {
+	t = T_LIST;
+      } else {
+	t = T_PAIR;
+      }
     }
   }
   return mk_pointer(get_cell(sc, t, a, b, mk_nil()));
@@ -1608,15 +1614,15 @@ static inline nanoclj_val_t first(nanoclj_t * sc, nanoclj_cell_t * coll) {
 }
 
 static nanoclj_val_t second(nanoclj_t * sc, nanoclj_cell_t * a) {
-  if (!a) return sc->EMPTY;
-  int t = _type(a);
-  if (t == T_NIL) {
-    return sc->EMPTY;
-  } else if (t == T_PAIR || t == T_MAPENTRY || t == T_VAR || t == T_RATIO) { 
-    return _cdr(a);
-  } else {
-    return first(sc, rest(sc, a));
+  if (a) {
+    int t = _type(a);
+    if (t == T_PAIR || t == T_MAPENTRY || t == T_VAR || t == T_RATIO) { 
+      return _cdr(a);
+    } else if (t != T_NIL) {
+      return first(sc, rest(sc, a));
+    }
   }
+  return mk_nil();
 }
 
 /* =================== Canvas ====================== */
@@ -1682,7 +1688,7 @@ static inline void new_slot_spec_in_env(nanoclj_t * sc, nanoclj_val_t env,
   }
 }
 
-static inline nanoclj_val_t find_slot_in_env(nanoclj_t * sc, nanoclj_val_t env, nanoclj_val_t hdl, bool all) {
+static inline nanoclj_cell_t * find_slot_in_env(nanoclj_t * sc, nanoclj_val_t env, nanoclj_val_t hdl, bool all) {
   nanoclj_val_t x, y;
 
   for (x = env; x.as_long != sc->EMPTY.as_long; x = cdr(x)) {
@@ -1703,33 +1709,36 @@ static inline nanoclj_val_t find_slot_in_env(nanoclj_t * sc, nanoclj_val_t env, 
       break;
     }
     if (!all) {
-      return sc->EMPTY;
+      return NULL;
     }
   }
   if (x.as_long != sc->EMPTY.as_long) {
-    return car(y);
+    return decode_pointer(car(y));
   }
-  return sc->EMPTY;
+  return NULL;
 }
 
 static inline void new_slot_in_env(nanoclj_t * sc, nanoclj_val_t variable, nanoclj_val_t value) {
   new_slot_spec_in_env(sc, sc->envir, variable, value);
 }
 
-static inline nanoclj_val_t set_slot_in_env(nanoclj_t * sc, nanoclj_val_t slot0, nanoclj_val_t state) {
-  nanoclj_cell_t * slot = decode_pointer(slot0);
+static inline nanoclj_val_t set_slot_in_env(nanoclj_t * sc, nanoclj_cell_t * slot, nanoclj_val_t state) {
   nanoclj_val_t old_state = _cdr(slot);
   _cdr(slot) = state;
   nanoclj_cell_t * watches = decode_pointer(_watches_unchecked(slot));
   for (; !is_empty(sc, watches); watches = rest(sc, watches)) {
     nanoclj_val_t fn = first(sc, watches);
-    nanoclj_call(sc, fn, cons(sc, mk_nil(), cons(sc, slot0, cons(sc, old_state, cons(sc, state, sc->EMPTY)))));
+    nanoclj_call(sc, fn, cons(sc, mk_nil(), cons(sc, mk_pointer(slot), cons(sc, old_state, cons(sc, state, sc->EMPTY)))));
   }
   return state;
 }
 
-static inline nanoclj_val_t slot_value_in_env(nanoclj_val_t slot) {
-  return cdr(slot);
+static inline nanoclj_val_t slot_value_in_env(nanoclj_cell_t * slot) {
+  if (slot) {
+    return _cdr(slot);
+  } else {
+    return mk_nil();
+  }
 }
 
 static inline bool equiv(nanoclj_val_t a, nanoclj_val_t b) {
@@ -3771,27 +3780,15 @@ static inline nanoclj_val_t reverse_in_place(nanoclj_t * sc, nanoclj_val_t term,
 /* ========== Evaluation Cycle ========== */
 
 static nanoclj_val_t get_err_port(nanoclj_t * sc) {
-  nanoclj_val_t x = find_slot_in_env(sc, sc->envir, sc->ERR, 1);
-  if (x.as_long != sc->EMPTY.as_long) {
-    return slot_value_in_env(x);
-  }
-  return mk_nil();
+  return slot_value_in_env(find_slot_in_env(sc, sc->envir, sc->ERR, 1));
 }
 
 static nanoclj_val_t get_out_port(nanoclj_t * sc) {
-  nanoclj_val_t x = find_slot_in_env(sc, sc->envir, sc->OUT, 1);
-  if (x.as_long != sc->EMPTY.as_long) {
-    return slot_value_in_env(x);
-  }
-  return mk_nil();
+  return slot_value_in_env(find_slot_in_env(sc, sc->envir, sc->OUT, 1));
 }
 
 static nanoclj_val_t get_in_port(nanoclj_t * sc) {
-  nanoclj_val_t x = find_slot_in_env(sc, sc->envir, sc->IN, 1);
-  if (x.as_long != sc->EMPTY.as_long) {
-    return slot_value_in_env(x);
-  }
-  return mk_nil();
+  return slot_value_in_env(find_slot_in_env(sc, sc->envir, sc->IN, 1));
 }
 
 static inline nanoclj_val_t _Error_1(nanoclj_t * sc, const char *s, size_t len) {
@@ -4401,9 +4398,9 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	s_return(sc, sc->recur);
 #endif
       } else {
-	x = find_slot_in_env(sc, sc->envir, sc->code, 1);
-	if (x.as_long != sc->EMPTY.as_long) {
-	  s_return(sc, slot_value_in_env(x));
+	nanoclj_cell_t * c = find_slot_in_env(sc, sc->envir, sc->code, 1);
+	if (c) {
+	  s_return(sc, slot_value_in_env(c));
 	} else {
 	  snprintf(sc->strbuff, sc->strbuff_size, "Use of undeclared Var %s", symname(sc->code));
 	  Error_0(sc, sc->strbuff);
@@ -4662,8 +4659,8 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     /* If the hook is defined, apply it to sc->code, otherwise
        set sc->value fall thru */
     {
-      nanoclj_val_t f = find_slot_in_env(sc, sc->envir, sc->COMPILE_HOOK, 1);
-      if (f.as_long == sc->EMPTY.as_long) {
+      nanoclj_cell_t * f = find_slot_in_env(sc, sc->envir, sc->COMPILE_HOOK, 1);
+      if (!f) {
         sc->value = sc->code;
         /* Fallthru */
       } else {
@@ -4710,27 +4707,28 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     s_return(sc, car(sc->code));
 
   case OP_VAR:                 /* var */
-    s_return(sc, find_slot_in_env(sc, sc->envir, car(sc->code), 1));
+    s_return(sc, mk_pointer(find_slot_in_env(sc, sc->envir, car(sc->code), 1)));
 
-  case OP_INTERN:
+  case OP_INTERN:{
     if (!unpack_args_2_plus(sc)) {
       Error_0(sc, "Error - Invalid arity");
     }
 
     ns = sc->arg0; /* namespace */
     x = sc->arg1; /* name */
-    y = find_slot_in_env(sc, ns, x, 0);
+    nanoclj_cell_t * c = find_slot_in_env(sc, ns, x, 0);
 
     /* If symbol does not exist or new value is given */
-    if (y.as_long == sc->EMPTY.as_long || sc->arg_rest.as_long != sc->EMPTY.as_long) {
+    if (!c || sc->arg_rest.as_long != sc->EMPTY.as_long) {
       nanoclj_val_t new_value = sc->arg_rest.as_long != sc->EMPTY.as_long ? car(sc->arg_rest) : sc->EMPTY;
-      if (y.as_long != sc->EMPTY.as_long) {
-	set_slot_in_env(sc, y, new_value);
+      if (c) {
+	set_slot_in_env(sc, c, new_value);
       } else {
 	new_slot_spec_in_env(sc, ns, x, new_value);
       }
     }
     s_return(sc, x);  
+  }
     
   case OP_DEF0:                /* define */    
     x = car(sc->code);
@@ -4750,22 +4748,23 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     s_save(sc, OP_DEF1, y, x);
     s_goto(sc, OP_EVAL);
     
-  case OP_DEF1:                /* define */
+  case OP_DEF1:{                /* define */
     if (!is_nil(sc->args) && is_cell(sc->value)) {
       /* TODO: should value be copied before settings the meta */
       metadata_unchecked(sc->value) = sc->args;
     }
-    x = find_slot_in_env(sc, sc->global_env, sc->code, 0);
-    if (x.as_long != sc->EMPTY.as_long) {
+    nanoclj_cell_t * c = find_slot_in_env(sc, sc->global_env, sc->code, 0);
+    if (c) {
 #if 0
       fprintf(stderr, "%s already refers to a value\n", symname(sc->code));
 #endif
-      set_slot_in_env(sc, x, sc->value);
+      set_slot_in_env(sc, c, sc->value);
     } else {
       new_slot_spec_in_env(sc, sc->global_env, sc->code, sc->value);
     }
     s_return(sc, sc->code);
-
+  }
+    
   case OP_RESOLVE:                /* resolve */
     if (!unpack_args_1_plus(sc)) {
       Error_0(sc, "Error - Invalid arity");
@@ -4774,25 +4773,24 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     if (sc->arg_rest.as_long != sc->EMPTY.as_long) {
       ns = sc->arg0;
       x = car(sc->arg_rest);
-      x = find_slot_in_env(sc, ns, x, 0);
+      s_return(sc, mk_pointer(find_slot_in_env(sc, ns, x, 0)));
     } else {
       ns = sc->envir;
       x = sc->arg0;
-      x = find_slot_in_env(sc, ns, x, 1);
+      s_return(sc, mk_pointer(find_slot_in_env(sc, ns, x, 1)));
     }
-    s_return(sc, x.as_long != sc->EMPTY.as_long ? x : mk_nil());
 
-  case OP_SET:
+  case OP_SET:{
     if (!unpack_args_2(sc)) {
       Error_0(sc, "Error - Invalid arity");
     }
-
-    y = find_slot_in_env(sc, sc->envir, sc->arg0, 1);
-    if (y.as_long != sc->EMPTY.as_long) {
-      s_return(sc, set_slot_in_env(sc, y, sc->arg1));      
+    nanoclj_cell_t * c = find_slot_in_env(sc, sc->envir, sc->arg0, 1);
+    if (c) {
+      s_return(sc, set_slot_in_env(sc, c, sc->arg1));
     } else {
       Error_0(sc, "Use of undeclared var");
     }
+  }
     
   case OP_DO:               /* do */
     if (!is_pair(sc->code)) {
@@ -5025,16 +5023,17 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     s_save(sc, OP_MACRO1, sc->EMPTY, x);
     s_goto(sc, OP_EVAL);
 
-  case OP_MACRO1:              /* macro */
+  case OP_MACRO1:{              /* macro */
     typeflag(sc->value) = T_MACRO;
-    x = find_slot_in_env(sc, sc->envir, sc->code, 0);
-    if (x.as_long != sc->EMPTY.as_long) {
-      set_slot_in_env(sc, x, sc->value);
+    nanoclj_cell_t * c = find_slot_in_env(sc, sc->envir, sc->code, 0);
+    if (c) {
+      set_slot_in_env(sc, c, sc->value);
     } else {
       new_slot_in_env(sc, sc->code, sc->value);
     }
     s_return(sc, sc->code);
-
+  }
+    
   case OP_TRY:
     if (!is_pair(sc->code)) {
       s_return(sc, sc->code);
@@ -5371,8 +5370,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   case OP_FIRST:                 /* first */
     if (!unpack_args_1(sc)) {
       Error_0(sc, "Error - Invalid arity");
-    }
-    if (!is_cell(sc->arg0)) {
+    } else if (!is_cell(sc->arg0)) {
       Error_0(sc, "Error - value is not ISeqable");    
     } else {
       s_return(sc, first(sc, decode_pointer(sc->arg0)));
@@ -5391,8 +5389,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   case OP_NEXT:
     if (!unpack_args_1(sc)) {
       Error_0(sc, "Error - Invalid arity");
-    }
-    if (!is_cell(sc->arg0)) {
+    } else if (!is_cell(sc->arg0)) {
       Error_0(sc, "Error - value is not ISeqable");
     } else {
       nanoclj_cell_t * x2 = decode_pointer(sc->arg0);
@@ -5836,8 +5833,8 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	
       case TOK_TAG:{
 	const char * tag = readstr_upto(sc, DELIMITERS);
-	nanoclj_val_t f = find_slot_in_env(sc, sc->envir, sc->TAG_HOOK, 1);
-	if (f.as_long != sc->EMPTY.as_long) {
+	nanoclj_cell_t * f = find_slot_in_env(sc, sc->envir, sc->TAG_HOOK, 1);
+	if (f) {
 	  nanoclj_val_t hook = slot_value_in_env(f);
 	  if (!is_nil(hook)) {
 	    sc->code = cons(sc, hook, cons(sc, mk_string(sc, tag), sc->EMPTY));
@@ -6038,11 +6035,10 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   case OP_EMPTYP:
     if (!unpack_args_1(sc)) {
       Error_0(sc, "Error - Invalid arity");
-    }
-    if (is_cell(sc->arg0)) {
-      s_retbool(is_empty(sc, decode_pointer(sc->arg0)));
-    } else {
+    } else if (!is_cell(sc->arg0)) {
       Error_0(sc, "Error - value is not ISeqable");
+    } else {
+      s_retbool(is_empty(sc, decode_pointer(sc->arg0)));
     }
     
   case OP_HASH:
@@ -6115,15 +6111,15 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       s_return(sc, mk_nil());
     }
 
-  case OP_IN_NS:
+  case OP_IN_NS:{
     if (!unpack_args_1(sc)) {
       Error_0(sc, "Error - Invalid arity");
     }
     x = sc->arg0;
-    y = find_slot_in_env(sc, sc->envir, x, 1);
+    nanoclj_cell_t * c = find_slot_in_env(sc, sc->envir, x, 1);
     nanoclj_val_t ns;
-    if (y.as_long != sc->EMPTY.as_long) {
-      ns = slot_value_in_env(y);
+    if (c) {
+      ns = slot_value_in_env(c);
     } else {
       ns = def_namespace_with_sym(sc, x);
       new_slot_spec_in_env(sc, sc->root_env, x, ns);
@@ -6131,7 +6127,8 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     sc->envir = ns;
     s_set_return_envir(sc, ns);
     s_return(sc, ns);
-
+  }
+    
   case OP_RE_PATTERN:
     if (!unpack_args_1(sc)) {
       Error_0(sc, "Error - Invalid arity");
@@ -6319,6 +6316,18 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       } else if (pt->rep.callback.restore) {
 	pt->rep.callback.restore(sc->ext_data);
       }
+    }
+    s_return(sc, mk_nil());
+
+  case OP_RESIZE:
+    if (!unpack_args_2(sc)) {
+      Error_0(sc, "Error - Invalid arity");      
+    }
+    x = get_out_port(sc);
+    if (is_canvas(x)) {
+      nanoclj_val_t tmp = mk_canvas(sc, to_int(sc->arg0), to_int(sc->arg1));
+      canvas_unchecked(x) = canvas_unchecked(tmp);
+      canvas_unchecked(tmp) = NULL;      
     }
     s_return(sc, mk_nil());
 
@@ -6839,8 +6848,8 @@ nanoclj_val_t nanoclj_eval_string(nanoclj_t * sc, const char *cmd, size_t len) {
 }
 
 void nanoclj_intern(nanoclj_t * sc, nanoclj_val_t envir, nanoclj_val_t symbol, nanoclj_val_t value) {
-  nanoclj_val_t x = find_slot_in_env(sc, envir, symbol, 0);
-  if (x.as_long != sc->EMPTY.as_long) {
+  nanoclj_cell_t * x = find_slot_in_env(sc, envir, symbol, 0);
+  if (x) {
     set_slot_in_env(sc, x, value);
   } else {
     new_slot_spec_in_env(sc, envir, symbol, value);
@@ -6980,11 +6989,11 @@ int main(int argc, const char **argv) {
 
     /* Call -main if it exists */
     nanoclj_val_t main = def_symbol(&sc, "-main");
-    nanoclj_val_t x = find_slot_in_env(&sc, sc.envir, main, 1);
-    if (x.as_long != sc.EMPTY.as_long) {
-      x = slot_value_in_env(x);
-      x = nanoclj_call(&sc, x, sc.EMPTY);
-      return to_int(x);
+    nanoclj_cell_t * x = find_slot_in_env(&sc, sc.envir, main, 1);
+    if (x) {
+      nanoclj_val_t v = slot_value_in_env(x);
+      v = nanoclj_call(&sc, v, sc.EMPTY);
+      return to_int(v);
     }
   } else {
     const char * expr = "(clojure.repl/repl)";

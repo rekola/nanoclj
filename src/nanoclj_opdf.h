@@ -123,6 +123,7 @@ _OP_DEF("fill", OP_FILL)
 _OP_DEF("get-text-extents", OP_GET_TEXT_EXTENTS)
 _OP_DEF("save", OP_SAVE)
 _OP_DEF("restore", OP_RESTORE)
+_OP_DEF("resize", OP_RESIZE)
 _OP_DEF("flush", OP_FLUSH)
 
 #undef _OP_DEF

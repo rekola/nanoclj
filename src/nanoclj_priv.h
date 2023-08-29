@@ -111,6 +111,7 @@ extern "C" {
 /* cell structure */
   typedef struct nanoclj_cell_t {
     unsigned short _flag;
+    uint8_t _so_size;
     nanoclj_val_t _metadata;
     union {
       struct {
@@ -118,13 +119,15 @@ extern "C" {
         size_t size;
       } _string;
       struct {
-	char data[23];
-	uint8_t size;
+	char data[24];
       } _small_string;
       struct {
 	size_t offset, size;
 	nanoclj_vector_store_t * store;
       } _collection;
+      struct {
+        nanoclj_val_t data[3];
+      } _small_collection;
       long long _lvalue;
       nanoclj_port_t * _port;
       nanoclj_image_t * _image;
