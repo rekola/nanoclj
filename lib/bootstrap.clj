@@ -497,3 +497,5 @@
 
 (macro (when form)
        `(if ,(cadr form) (do ,@(cddr form))))
+
+(macro (delay form) `(clojure.lang.Delay ',(cdr form)))
