@@ -443,13 +443,13 @@
        r
        )))
 
-(def-macro (with-canvas width height body)
+(def-macro (with-out new-out body)
   `(let ((prev-out *out*)
-         (c (canvas width height)))
-     (set! *out* c)
+         (tmp ,new-out))
+     (set! *out* tmp)
      ,body
      (set! *out* prev-out)
-     c))
+     tmp))
 
 (defn pr-str [& xs] (with-out-str (apply pr xs)))
 (defn prn-str [& xs] (with-out-str (apply prn xs)))

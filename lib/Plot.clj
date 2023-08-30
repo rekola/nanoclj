@@ -64,43 +64,49 @@
                                   (print label)
                                   (recur (+ y y-tick-step)))
                                 nil))
-         draw (fn [x y] (if (or (empty? x) (empty? y))
-                          nil
-                          (do
-                            (line-to (fit-x (first x)) (fit-y (first y)))
-                            (recur (rest x) (rest y)))))
-         ]
-     (with-canvas width height
-       (do
-         (set-font-size 10)
-         (set-color box-color)
-         (set-line-width 1)
+         draw-line (fn [x y] (if (or (empty? x) (empty? y))
+                               nil
+                               (do
+                                 (line-to (fit-x (first x)) (fit-y (first y)))
+                                 (recur (rest x) (rest y)))))
+         cx (canvas width height)
+         draw (fn []
+                (set-font-size 10)
+                (set-color box-color)
+                (set-line-width 1)
                                         ; Draw box
-         (move-to margin-left margin-top)
-         (line-to (- width margin-right) margin-top)
-         (line-to (- width margin-right) (- height margin-bottom))
-         (line-to margin-left (- height margin-bottom))
-         (close-path)
-         (stroke)
+                (move-to margin-left margin-top)
+                (line-to (- width margin-right) margin-top)
+                (line-to (- width margin-right) (- height margin-bottom))
+                (line-to margin-left (- height margin-bottom))
+                (close-path)
+                (stroke)
                                         ; Draw ticks
-         (draw-x-ticks (* (int (/ min-x x-tick-step)) x-tick-step))
-         (draw-y-ticks (* (int (/ min-y y-tick-step)) y-tick-step))
+                (draw-x-ticks (* (int (/ min-x x-tick-step)) x-tick-step))
+                (draw-y-ticks (* (int (/ min-y y-tick-step)) y-tick-step))
                                         ; Draw the plots
-         (set-line-width 3)
-         (run! (fn [p]
-                 (let [x (p 0)
-                       y (p 1)
-                       color (p 2)
-                       ]
-                   (set-color color)
-                   (move-to (fit-x (first x)) (fit-y (first y)))
-                   (draw (rest x) (rest y))
-                   (stroke))) plots)
-
+                (set-line-width 3)
+                (run! (fn [p]
+                        (let [x (p 0)
+                              y (p 1)
+                              color (p 2)
+                              ]
+                          (set-color color)
+                          (move-to (fit-x (first x)) (fit-y (first y)))
+                          (draw-line (rest x) (rest y))
+                          (stroke))) plots)
+                )
+         ]
+     (with-out cx
+       (do
+         (draw)
+         
          (add-watch (var *window-size*) 0
                     (fn [key ref old-ws ws]
-                      (println "window-size: " (ws 0) " " (ws 1))
-                      ))
+                      (with-out cx
+                        (resize)
+                        (flush)
+                      )))
          
          (add-watch (var *mouse-pos*) 0
                     (fn [key ref old-pos pos]
