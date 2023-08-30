@@ -4140,9 +4140,7 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
 	  return mk_pointer(get_cell(sc, T_LIST, x, y, mk_nil()));
 	} else {
 	  tail = seq(sc, tail);
-	  if (tail) {
-	    return mk_pointer(get_cell(sc, T_LIST, x, mk_pointer(tail), mk_nil()));
-	  }
+	  return mk_pointer(get_cell(sc, T_LIST, x, tail ? mk_pointer(tail) : sc->EMPTY, mk_nil()));
 	}
       }
     }
