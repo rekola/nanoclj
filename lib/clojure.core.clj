@@ -582,3 +582,6 @@
   ([f g h]) (fn [& args] (f (g (apply h args))))
   )
 
+(defn clojure-version
+  "Returns the nanoclj version string"
+  [] (System/getProperty "nanoclj.version"))

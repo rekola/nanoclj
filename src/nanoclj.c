@@ -116,7 +116,7 @@
 
 #define OBJ_LIST_SIZE 727
 
-#define VERSION "nanoclj (v0.2)"
+#define VERSION "0.2.0"
 
 #include <string.h>
 #include <stdlib.h>
@@ -1699,8 +1699,8 @@ static inline void new_frame_in_env(nanoclj_t * sc, nanoclj_val_t old_env) {
   sc->envir = mk_pointer(get_cell(sc, T_ENVIRONMENT, new_frame, old_env, mk_nil()));
 }
 
-static inline void new_slot_spec_in_env(nanoclj_t * sc, nanoclj_val_t env,
-					nanoclj_val_t variable, nanoclj_val_t value) {
+static inline nanoclj_cell_t * new_slot_spec_in_env(nanoclj_t * sc, nanoclj_val_t env,
+						  nanoclj_val_t variable, nanoclj_val_t value) {
   nanoclj_cell_t * slot0 = get_cell(sc, T_VAR, variable, value, mk_nil());
   _watches_unchecked(slot0) = sc->EMPTY;
   
@@ -1714,6 +1714,7 @@ static inline void new_slot_spec_in_env(nanoclj_t * sc, nanoclj_val_t env,
   } else {     
     car(env) = cons(sc, slot, car(env));
   }
+  return slot0;
 }
 
 static inline nanoclj_cell_t * find_slot_in_env(nanoclj_t * sc, nanoclj_val_t env, nanoclj_val_t hdl, bool all) {
@@ -2326,6 +2327,19 @@ static inline nanoclj_val_t def_symbol(nanoclj_t * sc, const char *name) {
   return def_symbol_from_sv(sc, (strview_t){ name, strlen(name) });
 }
 
+static inline nanoclj_val_t intern(nanoclj_t * sc, nanoclj_val_t envir, nanoclj_val_t symbol, nanoclj_val_t value) {
+  nanoclj_cell_t * var = find_slot_in_env(sc, envir, symbol, false);
+  if (var) set_slot_in_env(sc, var, value);
+  else var = new_slot_spec_in_env(sc, envir, symbol, value);
+  return mk_pointer(var);
+}
+
+static inline nanoclj_val_t intern_symbol(nanoclj_t * sc, nanoclj_val_t envir, nanoclj_val_t symbol) {
+  nanoclj_cell_t * var = find_slot_in_env(sc, envir, symbol, false);
+  if (!var) var = new_slot_spec_in_env(sc, envir, symbol, mk_nil());
+  return mk_pointer(var);
+}
+
 /* get new symbol or keyword. % is aliased to %1 */
 static inline nanoclj_val_t def_symbol_or_keyword(nanoclj_t * sc, const char *name) {
   if (name[0] == ':') return def_keyword(sc, name + 1);
@@ -2335,7 +2349,7 @@ static inline nanoclj_val_t def_symbol_or_keyword(nanoclj_t * sc, const char *na
 
 static inline nanoclj_val_t def_namespace_with_sym(nanoclj_t *sc, nanoclj_val_t sym) {
   nanoclj_val_t ns = mk_pointer(get_cell(sc, T_ENVIRONMENT, sc->EMPTY, sc->root_env, mk_string(sc, symname(sym))));
-  nanoclj_intern(sc, sc->global_env, sym, ns);
+  intern(sc, sc->global_env, sym, ns);
   return ns;
 }
 
@@ -3843,15 +3857,15 @@ static inline nanoclj_val_t reverse_in_place(nanoclj_t * sc, nanoclj_val_t term,
 /* ========== Evaluation Cycle ========== */
 
 static nanoclj_val_t get_err_port(nanoclj_t * sc) {
-  return slot_value_in_env(find_slot_in_env(sc, sc->envir, sc->ERR, 1));
+  return slot_value_in_env(find_slot_in_env(sc, sc->envir, sc->ERR, true));
 }
 
 static nanoclj_val_t get_out_port(nanoclj_t * sc) {
-  return slot_value_in_env(find_slot_in_env(sc, sc->envir, sc->OUT, 1));
+  return slot_value_in_env(find_slot_in_env(sc, sc->envir, sc->OUT, true));
 }
 
 static nanoclj_val_t get_in_port(nanoclj_t * sc) {
-  return slot_value_in_env(find_slot_in_env(sc, sc->envir, sc->IN, 1));
+  return slot_value_in_env(find_slot_in_env(sc, sc->envir, sc->IN, true));
 }
 
 static inline nanoclj_val_t _Error_1(nanoclj_t * sc, const char *s, size_t len) {
@@ -4404,7 +4418,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     /* Set up another iteration of REPL */
     sc->nesting = 0;
     sc->save_inport = get_in_port(sc);
-    nanoclj_intern(sc, sc->root_env, sc->IN, sc->loadport);
+    intern(sc, sc->root_env, sc->IN, sc->loadport);
       
     s_save(sc, OP_T0LVL, sc->EMPTY, sc->EMPTY);
     s_save(sc, OP_T1LVL, sc->EMPTY, sc->EMPTY);
@@ -4414,7 +4428,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 
   case OP_T1LVL:               /* top level */
     sc->code = sc->value;
-    nanoclj_intern(sc, sc->root_env, sc->IN, sc->save_inport);
+    intern(sc, sc->root_env, sc->IN, sc->save_inport);
     s_goto(sc, OP_EVAL);
 
   case OP_READ:                /* read */
@@ -4459,7 +4473,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	s_return(sc, sc->recur);
 #endif
       } else {
-	nanoclj_cell_t * c = find_slot_in_env(sc, sc->envir, sc->code, 1);
+	nanoclj_cell_t * c = find_slot_in_env(sc, sc->envir, sc->code, true);
 	if (c) {
 	  s_return(sc, slot_value_in_env(c));
 	} else {
@@ -4720,7 +4734,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     /* If the hook is defined, apply it to sc->code, otherwise
        set sc->value fall thru */
     {
-      nanoclj_cell_t * f = find_slot_in_env(sc, sc->envir, sc->COMPILE_HOOK, 1);
+      nanoclj_cell_t * f = find_slot_in_env(sc, sc->envir, sc->COMPILE_HOOK, true);
       if (!f) {
         sc->value = sc->code;
         /* Fallthru */
@@ -4768,28 +4782,32 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     s_return(sc, car(sc->code));
 
   case OP_VAR:                 /* var */
-    s_return(sc, mk_pointer(find_slot_in_env(sc, sc->envir, car(sc->code), 1)));
+    s_return(sc, mk_pointer(find_slot_in_env(sc, sc->envir, car(sc->code), true)));
 
-  case OP_INTERN:{
+  case OP_RESOLVE:                /* resolve */
+    if (!unpack_args_1_plus(sc)) {
+      Error_0(sc, "Error - Invalid arity");
+    }
+
+    if (sc->arg_rest.as_long != sc->EMPTY.as_long) {
+      s_return(sc, mk_pointer(find_slot_in_env(sc, sc->arg0, car(sc->arg_rest), false)));
+    } else {
+      s_return(sc, mk_pointer(find_slot_in_env(sc, sc->envir, sc->arg0, true)));
+    }
+
+  case OP_INTERN:
     if (!unpack_args_2_plus(sc)) {
       Error_0(sc, "Error - Invalid arity");
     }
 
     ns = sc->arg0; /* namespace */
     x = sc->arg1; /* name */
-    nanoclj_cell_t * c = find_slot_in_env(sc, ns, x, 0);
 
-    /* If symbol does not exist or new value is given */
-    if (!c || sc->arg_rest.as_long != sc->EMPTY.as_long) {
-      nanoclj_val_t new_value = sc->arg_rest.as_long != sc->EMPTY.as_long ? car(sc->arg_rest) : sc->EMPTY;
-      if (c) {
-	set_slot_in_env(sc, c, new_value);
-      } else {
-	new_slot_spec_in_env(sc, ns, x, new_value);
-      }
+    if (sc->arg_rest.as_long != sc->EMPTY.as_long) {
+      s_return(sc, intern(sc, ns, x, car(sc->arg_rest)));
+    } else {
+      s_return(sc, intern_symbol(sc, ns, x));
     }
-    s_return(sc, x);  
-  }
     
   case OP_DEF0:                /* define */    
     x = car(sc->code);
@@ -4814,7 +4832,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       /* TODO: should value be copied before settings the meta */
       metadata_unchecked(sc->value) = sc->args;
     }
-    nanoclj_cell_t * c = find_slot_in_env(sc, sc->global_env, sc->code, 0);
+    nanoclj_cell_t * c = find_slot_in_env(sc, sc->global_env, sc->code, false);
     if (c) {
 #if 0
       fprintf(stderr, "%s already refers to a value\n", symname(sc->code));
@@ -4826,26 +4844,11 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     s_return(sc, sc->code);
   }
     
-  case OP_RESOLVE:                /* resolve */
-    if (!unpack_args_1_plus(sc)) {
-      Error_0(sc, "Error - Invalid arity");
-    }
-
-    if (sc->arg_rest.as_long != sc->EMPTY.as_long) {
-      ns = sc->arg0;
-      x = car(sc->arg_rest);
-      s_return(sc, mk_pointer(find_slot_in_env(sc, ns, x, 0)));
-    } else {
-      ns = sc->envir;
-      x = sc->arg0;
-      s_return(sc, mk_pointer(find_slot_in_env(sc, ns, x, 1)));
-    }
-
   case OP_SET:{
     if (!unpack_args_2(sc)) {
       Error_0(sc, "Error - Invalid arity");
     }
-    nanoclj_cell_t * c = find_slot_in_env(sc, sc->envir, sc->arg0, 1);
+    nanoclj_cell_t * c = find_slot_in_env(sc, sc->envir, sc->arg0, true);
     if (c) {
       s_return(sc, set_slot_in_env(sc, c, sc->arg1));
     } else {
@@ -5086,7 +5089,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 
   case OP_MACRO1:{              /* macro */
     typeflag(sc->value) = T_MACRO;
-    nanoclj_cell_t * c = find_slot_in_env(sc, sc->envir, sc->code, 0);
+    nanoclj_cell_t * c = find_slot_in_env(sc, sc->envir, sc->code, false);
     if (c) {
       set_slot_in_env(sc, c, sc->value);
     } else {
@@ -5696,7 +5699,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	  s_return(sc, sc->EMPTY);
 	}
       }
-      if (_type(c) == T_DELAY) {
+      if (_type(c) == T_DELAY || _type(c) == T_VAR) {
 	s_return(sc, _cdr(c));
       } else {
 	s_return(sc, x);
@@ -5755,9 +5758,6 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     return sc->EMPTY;
 #endif
     
-  case OP_VERSION:
-    s_return(sc, mk_string(sc, get_version()));
-
   case OP_CLOSE:        /* close */
     if (!unpack_args_1(sc)) {
       Error_0(sc, "Error - Invalid arity");
@@ -5894,7 +5894,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	
       case TOK_TAG:{
 	const char * tag = readstr_upto(sc, DELIMITERS);
-	nanoclj_cell_t * f = find_slot_in_env(sc, sc->envir, sc->TAG_HOOK, 1);
+	nanoclj_cell_t * f = find_slot_in_env(sc, sc->envir, sc->TAG_HOOK, true);
 	if (f) {
 	  nanoclj_val_t hook = slot_value_in_env(f);
 	  if (!is_nil(hook)) {
@@ -6177,7 +6177,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       Error_0(sc, "Error - Invalid arity");
     }
     x = sc->arg0;
-    nanoclj_cell_t * c = find_slot_in_env(sc, sc->envir, x, 1);
+    nanoclj_cell_t * c = find_slot_in_env(sc, sc->envir, x, true);
     nanoclj_val_t ns;
     if (c) {
       ns = slot_value_in_env(c);
@@ -6467,8 +6467,8 @@ static inline void update_window_info(nanoclj_t * sc, nanoclj_val_t out) {
     }
   }
   
-  nanoclj_intern(sc, sc->global_env, sc->WINDOW_SIZE, size);
-  nanoclj_intern(sc, sc->global_env, sc->WINDOW_SCALE_F, mk_real(sc->window_scale_factor));
+  intern(sc, sc->global_env, sc->WINDOW_SIZE, size);
+  intern(sc, sc->global_env, sc->WINDOW_SCALE_F, mk_real(sc->window_scale_factor));
 } 
 
 /* initialization of nanoclj_t */
@@ -6547,6 +6547,10 @@ static size_t size_checked(nanoclj_t * sc, nanoclj_val_t coll) {
   } else {
     return 0;
   }
+}
+
+void nanoclj_intern(nanoclj_t * sc, nanoclj_val_t envir, nanoclj_val_t symbol, nanoclj_val_t value) {
+  intern(sc, envir, symbol, value);  
 }
 
 static struct nanoclj_interface vtbl = {
@@ -6744,9 +6748,9 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc fr
   sc->EMPTYSTR = mk_string(sc, "");
   sc->EMPTYVEC = mk_vector(sc, 0);
 
-  nanoclj_intern(sc, sc->global_env, def_symbol(sc, "root"), sc->root_env);
-  nanoclj_intern(sc, sc->global_env, def_symbol(sc, "nil"), mk_nil());
-  nanoclj_intern(sc, sc->global_env, sc->MOUSE_POS, mk_nil());
+  intern(sc, sc->global_env, def_symbol(sc, "root"), sc->root_env);
+  intern(sc, sc->global_env, def_symbol(sc, "nil"), mk_nil());
+  intern(sc, sc->global_env, sc->MOUSE_POS, mk_nil());
 
   register_functions(sc);
 
@@ -6760,17 +6764,17 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc fr
 
 void nanoclj_set_input_port_file(nanoclj_t * sc, FILE * fin) {
   nanoclj_val_t inport = port_from_file(sc, fin, port_input);
-  nanoclj_intern(sc, sc->global_env, sc->IN, inport);
+  intern(sc, sc->global_env, sc->IN, inport);
 }
 
 void nanoclj_set_input_port_string(nanoclj_t * sc, const char *str, size_t length) {
   nanoclj_val_t inport = port_from_string(sc, (strview_t){ str, length }, port_input);
-  nanoclj_intern(sc, sc->global_env, sc->IN, inport);
+  intern(sc, sc->global_env, sc->IN, inport);
 }
 
 void nanoclj_set_output_port_file(nanoclj_t * sc, FILE * fout) {
   nanoclj_val_t p = port_from_file(sc, fout, port_output);
-  nanoclj_intern(sc, sc->root_env, sc->OUT, p);
+  intern(sc, sc->root_env, sc->OUT, p);
 
   update_window_info(sc, p);
 }
@@ -6782,24 +6786,24 @@ void nanoclj_set_output_port_callback(nanoclj_t * sc,
 				      void (*image) (nanoclj_image_t *, void *)
 				      ) {
   nanoclj_val_t p = port_from_callback(sc, text, color, restore, image, port_output);
-  nanoclj_intern(sc, sc->root_env, sc->OUT, p);
-  nanoclj_intern(sc, sc->global_env, sc->WINDOW_SIZE, mk_nil());
+  intern(sc, sc->root_env, sc->OUT, p);
+  intern(sc, sc->global_env, sc->WINDOW_SIZE, mk_nil());
 }
 
 void nanoclj_set_output_port_string(nanoclj_t * sc, const char * str, size_t length) {
   nanoclj_val_t p = port_from_string(sc, (strview_t){ str, length }, port_output);
-  nanoclj_intern(sc, sc->root_env, sc->OUT, p);
-  nanoclj_intern(sc, sc->global_env, sc->WINDOW_SIZE, mk_nil());
+  intern(sc, sc->root_env, sc->OUT, p);
+  intern(sc, sc->global_env, sc->WINDOW_SIZE, mk_nil());
 }
 
 void nanoclj_set_error_port_callback(nanoclj_t * sc, void (*text) (const char *, size_t, void *)) {
   nanoclj_val_t p = port_from_callback(sc, text, NULL, NULL, NULL, port_output);
-  nanoclj_intern(sc, sc->global_env, sc->ERR, p);
+  intern(sc, sc->global_env, sc->ERR, p);
 }
 
 void nanoclj_set_error_port_file(nanoclj_t * sc, FILE * fout) {
   nanoclj_val_t p = port_from_file(sc, fout, port_output);
-  nanoclj_intern(sc, sc->global_env, sc->ERR, p);
+  intern(sc, sc->global_env, sc->ERR, p);
 }
 
 void nanoclj_set_external_data(nanoclj_t * sc, void *p) {
@@ -6908,15 +6912,6 @@ nanoclj_val_t nanoclj_eval_string(nanoclj_t * sc, const char *cmd, size_t len) {
   return sc->value;
 }
 
-void nanoclj_intern(nanoclj_t * sc, nanoclj_val_t envir, nanoclj_val_t symbol, nanoclj_val_t value) {
-  nanoclj_cell_t * x = find_slot_in_env(sc, envir, symbol, 0);
-  if (x) {
-    set_slot_in_env(sc, x, value);
-  } else {
-    new_slot_spec_in_env(sc, envir, symbol, value);
-  }
-}
-
 static inline void save_from_C_call(nanoclj_t * sc) {
   /* enough room for the next frame? */
   if (sc->c_stack_count >= sc->c_stack_size) {
@@ -6957,7 +6952,7 @@ nanoclj_val_t nanoclj_call(nanoclj_t * sc, nanoclj_val_t func, nanoclj_val_t arg
 
 #if !NANOCLJ_STANDALONE
 void nanoclj_register_foreign_func(nanoclj_t * sc, nanoclj_registerable * sr) {
-  nanoclj_intern(sc, sc->global_env, def_symbol(sc, sr->name), mk_foreign_func(sc, sr->f));
+  intern(sc, sc->global_env, def_symbol(sc, sr->name), mk_foreign_func(sc, sr->f));
 }
 
 void nanoclj_register_foreign_func_list(nanoclj_t * sc,
@@ -6999,7 +6994,7 @@ static inline FILE *open_file(const char *fname) {
 
 int main(int argc, const char **argv) {
   if (argc == 1) {
-    printf("%s\n", get_version());
+    printf("nanoclj %s\n", get_version());
   }
   if (argc == 2 && str_eq(argv[1], "--help")) {
     printf("Usage: %s [switches] [--] [programfile] [arguments]\n", argv[0]);
@@ -7020,7 +7015,7 @@ int main(int argc, const char **argv) {
   nanoclj_set_output_port_file(&sc, stdout);
   nanoclj_set_error_port_file(&sc, stderr);
 #if USE_DL
-  nanoclj_intern(&sc, sc.global_env, def_symbol(&sc, "load-extension"),
+  intern(&sc, sc.global_env, def_symbol(&sc, "load-extension"),
 		mk_foreign_func(&sc, scm_load_ext));
 #endif
 
@@ -7029,7 +7024,7 @@ int main(int argc, const char **argv) {
     nanoclj_val_t value = mk_string(&sc, argv[i]);
     args = cons(&sc, value, args);
   }
-  nanoclj_intern(&sc, sc.global_env, def_symbol(&sc, "*command-line-args*"), args);
+  intern(&sc, sc.global_env, def_symbol(&sc, "*command-line-args*"), args);
   
   FILE * fh = open_file(InitFile);
   nanoclj_load_named_file(&sc, fh, InitFile);
@@ -7050,7 +7045,7 @@ int main(int argc, const char **argv) {
 
     /* Call -main if it exists */
     nanoclj_val_t main = def_symbol(&sc, "-main");
-    nanoclj_cell_t * x = find_slot_in_env(&sc, sc.envir, main, 1);
+    nanoclj_cell_t * x = find_slot_in_env(&sc, sc.envir, main, true);
     if (x) {
       nanoclj_val_t v = slot_value_in_env(x);
       v = nanoclj_call(&sc, v, sc.EMPTY);
