@@ -14,22 +14,15 @@
 #define CELL_NSEGMENT   12
 #endif
 
+#define NANOCLJ_SMALL_VEC_SIZE 3
+#define NANOCLJ_SMALL_STR_SIZE 24
+
 #ifndef MAXFIL
 #define MAXFIL 64
 #endif
 
 #ifndef GC_VERBOSE
 #define GC_VERBOSE 0
-#endif
-
-#ifndef STRBUFF_INITIAL_SIZE
-#define STRBUFF_INITIAL_SIZE 128
-#endif
-#ifndef STRBUFF_MAX_SIZE
-#define STRBUFF_MAX_SIZE 65536
-#endif
-#ifndef AUXBUFF_SIZE
-#define AUXBUFF_SIZE 256
 #endif
 
 #ifdef __cplusplus
@@ -119,14 +112,14 @@ extern "C" {
         size_t size;
       } _string;
       struct {
-	char data[24];
+	char data[NANOCLJ_SMALL_STR_SIZE];
       } _small_string;
       struct {
 	size_t offset, size;
 	nanoclj_vector_store_t * store;
       } _collection;
       struct {
-        nanoclj_val_t data[3];
+        nanoclj_val_t data[NANOCLJ_SMALL_VEC_SIZE];
       } _small_collection;
       long long _lvalue;
       nanoclj_port_t * _port;

@@ -131,6 +131,16 @@
 #define FIRST_CELLSEGS 3
 #endif
 
+#ifndef STRBUFF_INITIAL_SIZE
+#define STRBUFF_INITIAL_SIZE 128
+#endif
+#ifndef STRBUFF_MAX_SIZE
+#define STRBUFF_MAX_SIZE 65536
+#endif
+#ifndef AUXBUFF_SIZE
+#define AUXBUFF_SIZE 256
+#endif
+
 enum nanoclj_types {
   T_CELL = -1,
   T_NIL = 0,
@@ -441,8 +451,7 @@ static inline bool is_coll(nanoclj_val_t p) {
 
 static inline nanoclj_val_t vector_elem(nanoclj_cell_t * vec, size_t ielem) {
   if (_is_small(vec)) {
-    nanoclj_val_t * data = _smalldata_unchecked(vec);
-    return data[ielem];
+    return _smalldata_unchecked(vec)[ielem];
   } else {
     return _store_unchecked(vec)->data[_offset_unchecked(vec) + ielem];
   }
@@ -450,8 +459,7 @@ static inline nanoclj_val_t vector_elem(nanoclj_cell_t * vec, size_t ielem) {
 
 static inline void set_vector_elem(nanoclj_cell_t * vec, size_t ielem, nanoclj_val_t a) {
   if (_is_small(vec)) {
-    nanoclj_val_t * data = _smalldata_unchecked(vec);
-    data[ielem] = a;
+    _smalldata_unchecked(vec)[ielem] = a;
   } else {
     _store_unchecked(vec)->data[_offset_unchecked(vec) + ielem] = a;
   }
@@ -1215,7 +1223,7 @@ static inline nanoclj_val_t mk_counted_string(nanoclj_t * sc, const char *str, s
   nanoclj_cell_t * x = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
   _metadata_unchecked(x) = mk_nil();
 
-  if (len <= 24) {
+  if (len <= NANOCLJ_SMALL_STR_SIZE) {
     _typeflag(x) = T_STRING | T_GC_ATOM | T_SMALL;
     if (str) {
       memcpy(_smallstrvalue_unchecked(x), str, len);
@@ -1365,16 +1373,15 @@ static inline nanoclj_cell_t * _get_vector_object(nanoclj_t * sc, int_fast16_t t
     return &(sc->_sink);
   }
 
-  if (size <= 3 && 0) {
-    _typeflag(main_cell) = t | T_GC_ATOM | T_SMALL;
-    _sosize_unchecked(main_cell) = size;
-  } else {
+  if (store) {
     _typeflag(main_cell) = t | T_GC_ATOM;
     _size_unchecked(main_cell) = size;
     _store_unchecked(main_cell) = store;
     _offset_unchecked(main_cell) = offset;
-
     store->refcnt++;
+  } else {
+    _typeflag(main_cell) = t | T_GC_ATOM | T_SMALL;
+    _sosize_unchecked(main_cell) = size;
   }
   
   _metadata_unchecked(main_cell) = mk_nil();
@@ -1384,7 +1391,7 @@ static inline nanoclj_cell_t * _get_vector_object(nanoclj_t * sc, int_fast16_t t
 
 static inline nanoclj_cell_t * get_vector_object(nanoclj_t * sc, int_fast16_t t, size_t size) {
   nanoclj_vector_store_t * store = NULL;
-  if (size > 3 || 1) store = mk_vector_store(sc, size);
+  if (size > NANOCLJ_SMALL_VEC_SIZE) store = mk_vector_store(sc, size);
   return _get_vector_object(sc, t, 0, size, store);
 }
 
@@ -2152,8 +2159,8 @@ static inline nanoclj_val_t mk_vector_2d(nanoclj_t * sc, double a, double b) {
 /* Copies a vector so that the copy can be mutated */
 static inline nanoclj_cell_t * copy_vector(nanoclj_t * sc, nanoclj_cell_t * vec) {
   size_t len = get_vector_size(vec);
-  if (len <= 3) {
-    nanoclj_cell_t * new_vec = get_vector_object(sc, _type(vec), len);
+  if (_is_small(vec)) {
+    nanoclj_cell_t * new_vec = _get_vector_object(sc, _type(vec), 0, len, NULL);
     nanoclj_val_t * data = _smalldata_unchecked(vec);
     nanoclj_val_t * new_data = _smalldata_unchecked(new_vec);
     memcpy(new_data, data, len * sizeof(nanoclj_val_t));
@@ -2169,10 +2176,10 @@ static inline nanoclj_cell_t * conj(nanoclj_t * sc, nanoclj_cell_t * coll, nanoc
   if (!coll) coll = &(sc->_EMPTY);
 	       
   int t = _type(coll);
-  if (t == T_PAIR || t == T_NIL || t == T_LIST) {
+  if (t == T_NIL || t == T_LIST || t == T_SEQ || t == T_LAZYSEQ) {
     if (t == T_NIL) t = T_LIST;
     return get_cell(sc, t, new_value, mk_pointer(coll), mk_nil());
-  } else {
+  } else if (t == T_VECTOR || t == T_ARRAYMAP || t == T_SORTED_SET) {
     size_t old_size = get_vector_size(coll);
     if (_is_small(coll)) {
       nanoclj_cell_t * new_coll = get_vector_object(sc, t, old_size + 1);
@@ -2182,7 +2189,7 @@ static inline nanoclj_cell_t * conj(nanoclj_t * sc, nanoclj_cell_t * coll, nanoc
       } else {
 	memcpy(_store_unchecked(new_coll)->data, data, old_size * sizeof(nanoclj_val_t));	
       }
-      set_vector_elem(new_coll, old_size + 1, new_value);
+      set_vector_elem(new_coll, old_size, new_value);
       return new_coll;
     } else {
       nanoclj_vector_store_t * s = _store_unchecked(coll);
@@ -2199,6 +2206,8 @@ static inline nanoclj_cell_t * conj(nanoclj_t * sc, nanoclj_cell_t * coll, nanoc
       s->data[s->size++] = new_value;  
       return _get_vector_object(sc, t, old_offset, s->size, s);
     }
+  } else {
+    return NULL;
   }
 }
 
@@ -4366,11 +4375,23 @@ static inline int get_literal_fn_arity(nanoclj_t * sc, nanoclj_val_t body, bool 
   }
 }
 
+static inline const char *procname(enum nanoclj_opcodes op) {
+  const char *name = dispatch_table[(int)op];
+  if (name == 0) {
+    name = "ILLEGAL!";
+  }
+  return name;
+}
+
 static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   nanoclj_val_t x, y, ns, meta;
   int syn;
   nanoclj_val_t params0;
   nanoclj_cell_t * params;
+
+#if 0
+  fprintf(stderr, "opexe %d %s\n", (int)sc->op, procname(sc->op));
+#endif
 
   if (sc->nesting != 0) {
     sc->nesting = 0;
@@ -5500,76 +5521,70 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   case OP_CONJ:             /* conj- */
     if (!unpack_args_2(sc)) {
       Error_0(sc, "Error - Invalid arity");
-    }
-#if 0
-    x = sc->arg0;
-    y = sc->arg1;
-#else
-    x = car(sc->args);
-    y = cadr(sc->args);
-#endif
-    switch (type(x)) {      
-    case T_VECTOR:{
-      nanoclj_cell_t * vec0 = decode_pointer(x);
-      size_t vector_len = get_vector_size(vec0);
+    } else if (!is_cell(sc->arg0)) {
+      Error_0(sc, "Error - No protocol method ICollection.-conj defined");      
+    } else {
+      nanoclj_cell_t * coll = decode_pointer(sc->arg0);
+      y = sc->arg1;
+      switch (_type(coll)) {
+      case T_VECTOR:{
+	size_t vector_len = get_vector_size(coll);
 
-      /* If MapEntry is added to vector, it is an index value pair */
-      if (type(y) == T_MAPENTRY) {
-	long long index = to_long(car(y));
-	nanoclj_val_t value = cdr(y);
-	if (index < 0 || index >= vector_len) {
-	  Error_0(sc, "Error - Index out of bounds");     
-	} else {
-	  nanoclj_cell_t * vec = copy_vector(sc, vec0);
-	  if (sc->no_memory) {
-	    s_return(sc, sc->sink);
+	/* If MapEntry is added to vector, it is an index value pair */
+	if (type(y) == T_MAPENTRY) {
+	  long long index = to_long(car(y));
+	  nanoclj_val_t value = cdr(y);
+	  if (index < 0 || index >= vector_len) {
+	    Error_0(sc, "Error - Index out of bounds");     
+	  } else {
+	    nanoclj_cell_t * vec = copy_vector(sc, coll);
+	    if (sc->no_memory) {
+	      s_return(sc, sc->sink);
+	    }
+	    set_vector_elem(vec, index, value);
+	    s_return(sc, mk_pointer(vec));
 	  }
-	  set_vector_elem(vec, index, value);
-	  s_return(sc, mk_pointer(vec));
+	} else {
+	  s_return(sc, mk_pointer(conj(sc, coll, y)));
 	}
-      } else {
-	nanoclj_cell_t * vec = conj(sc, vec0, y);
-	s_return(sc, mk_pointer(vec));
       }
-    }
+	
+      case T_ARRAYMAP:{
+	/* TODO: check that y is actually a pair */
+	nanoclj_cell_t * p = decode_pointer(y);
+	nanoclj_val_t key = first(sc, p), val = second(sc, p);
+	size_t vector_len = get_vector_size(coll);
+	for (size_t i = 0; i < vector_len; i++) {
+	  if (car(vector_elem(coll, i)).as_long == key.as_long) {
+	    nanoclj_cell_t * vec = copy_vector(sc, coll);
+	    set_vector_elem(vec, i, mk_mapentry(sc, key, val));
+	    s_return(sc, mk_pointer(vec));
+	  }
+	}
+	/* Not found */
+	s_return(sc, mk_pointer(conj(sc, coll, y)));
+      }
       
-    case T_ARRAYMAP:{
-      nanoclj_cell_t * vec = decode_pointer(x);
-      nanoclj_val_t key = car(y);
-      size_t vector_len = get_vector_size(vec);
-      for (size_t i = 0; i < vector_len; i++) {
-	if (car(vector_elem(vec, i)).as_long == key.as_long) {
+      case T_SORTED_SET:{
+	if (!get_elem(sc, coll, y, NULL)) {
+	  nanoclj_cell_t * vec = conj(sc, coll, y);
 	  vec = copy_vector(sc, vec);
-	  set_vector_elem(vec, i, y);
+	  sort_vector_in_place(vec);
 	  s_return(sc, mk_pointer(vec));
+	} else {
+	  s_return(sc, sc->arg0);
 	}
       }
-      /* Not found */
-      vec = conj(sc, vec, y);
-      s_return(sc, mk_pointer(vec));
-    }
-      
-    case T_SORTED_SET:{
-      nanoclj_cell_t * vec = decode_pointer(x);
-      if (!get_elem(sc, vec, y, NULL)) {
-	vec = conj(sc, vec, y);
-	vec = copy_vector(sc, vec);
-	sort_vector_in_place(vec);
+	
+      case T_NIL:
+      case T_LIST:
+      case T_LAZYSEQ:
+      case T_SEQ:
+	s_return(sc, mk_pointer(conj(sc, coll, y)));
+	
+      default:
+	Error_0(sc, "Error - No protocol method ICollection.-conj defined");
       }
-      s_return(sc, mk_pointer(vec));
-    }
-      
-    case T_NIL:
-      if (is_nil(x)) {
-	x = sc->EMPTY;
-      }
-      /* Empty list */
-    case T_PAIR:
-    case T_LIST:
-      s_return(sc, cons(sc, y, x));
-      
-    default:
-      Error_0(sc, "Error - No protocol method ICollection.-conj defined");
     }
 
   case OP_SUBVEC:
@@ -6414,15 +6429,6 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   return (nanoclj_val_t)kTRUE;                 /* NOTREACHED */
 }
  
-static inline const char *procname(nanoclj_val_t x) {
-  int n = decode_integer(x);
-  const char *name = dispatch_table[n];
-  if (name == 0) {
-    name = "ILLEGAL!";
-  }
-  return name;
-}
-
 /* kernel of this interpreter */
 static void Eval_Cycle(nanoclj_t * sc, enum nanoclj_opcodes op) {
   sc->op = op;
