@@ -1,23 +1,19 @@
-; Enable namespaces
-(def *slash-hook* eval)
-
 (def true (equals? 1 1))
 (def false (equals? 1 2))
 
 (def force deref)
-(def car first)
-(def cdr rest)
 (def var-get second)
 
-(def cadr (fn [x] (car (cdr x))))
-(def caddr (fn [x] (car (cdr (cdr x)))))
-(def cadddr (fn [x] (car (cdr (cdr (cdr x))))))
-(def caadr (fn [x] (car (car (cdr x)))))
-(def caar (fn [x] (car (car x))))
-(def cdar (fn [x] (cdr (car x))))
-(def cddr (fn [x] (cdr (cdr x))))
-(def cdadr (fn [x] (cdr (car (cdr x)))))
-(def cdddr (fn [x] (cdr (cdr (cdr x)))))
+; Enable namespaces
+; (def *slash-hook* (fn [sym ns] (var-get (resolve ns sym))))
+(def *slash-hook* eval)
+
+(def car first)
+(def cdr rest)
+(def cadr second)
+(def cddr (fn [x] (rest (rest x))))
+(def caadr (fn [x] (first (second x))))
+(def cdadr (fn [x] (rest (second x))))
 
 ; First define the type for a cons cell
 ; (def cons (type '(1)))
@@ -37,7 +33,6 @@
 (initialize-type- (type true) "Constructs a boolean")
 (initialize-type- (type (type 1)) "Constructs a type")
 (initialize-type- (type '(1)) "Constructs a list")
-; (initialize-type- (type '(1 . 2)) "Constructs a cons pair")
 (initialize-type- (type 1) "Casts argument to int")
 (initialize-type- (type 2147483648) "Casts argument to a long (or int if it is sufficient)")
 (initialize-type- (type 1.1) "Casts argument to a double")
@@ -57,17 +52,17 @@
 (initialize-type- (type (rest [ 1 2 ])) "Constructs a sequence")
 (initialize-type- (type Math/sin) "Constructs a foreign function")
 (initialize-type- (type (divide 1 2)) "Constructs a ratio")
+(initialize-type- (type (var divide)) "Constructs a Var")
 ; (initialize-type- (type (first {1 1})))
 
-(def clojure.lang.Cons (nanoclj.core.Type 8))
 (def clojure.lang.BigInt (nanoclj.core.Type 26))
 (def clojure.lang.MapEntry (nanoclj.core.Type 21))
 (def nanoclj.core.CharArray (nanoclj.core.Type 27))
 (def java.io.InputStream (nanoclj.core.Type 28))
 (def java.io.OutputStream (nanoclj.core.Type 29))
+(def clojure.lang.Delay (nanoclj.core.Type 31))
 (def nanoclj.core.Image (nanoclj.core.Type 32))
 (def nanoclj.core.Canvas (nanoclj.core.Type 33))
-(def clojure.lang.Delay (nanoclj.core.Type 35))
 
 (def symbol clojure.lang.Symbol)
 (def vector clojure.lang.PersistentVector)
@@ -89,8 +84,7 @@
 
 (def instance? (fn [t v] (identical? t (type v))))
 
-(def list? (fn [x] (instance? clojure.lang.PersistentList x)))
-(def pair? (fn [x] (or (instance? clojure.lang.Cons x) (instance? clojure.lang.PersistentList x))))
+(def list? (fn [x] (instance? clojure.lang.Cons x)))
 (def zero? (fn [n] (equiv? n 0)))
 
 (def is-any-of? (fn [x & args] (cond (empty? args) false
@@ -178,10 +172,10 @@
  quasiquote
  (fn [l]
    (let [mcons (fn [f l r]
-                 (if (and (pair? r)
+                 (if (and (list? r)
                           (equals? (car r) 'quote)
                           (equals? (car (cdr r)) (cdr f))
-                          (pair? l)
+                          (list? l)
                           (equals? (car l) 'quote)
                           (equals? (car (cdr l)) (car f)))
                    (if (or (procedure? f) (number? f) (string? f))
@@ -193,13 +187,13 @@
                      )))
          mappend (fn [f l r]
                    (if (or (empty? (cdr f))
-                           (and (pair? r)
+                           (and (list? r)
                                 (equals? (car r) 'quote)
                                 (equals? (car (cdr r)) '())))
                      l
                      (list 'concat l r)))
          foo (fn [level form]
-               (cond (not (pair? form))
+               (cond (not (list? form))
                      (if (or (procedure? form) (number? form) (string? form))
                        form
                        (list 'quote form))
@@ -210,7 +204,7 @@
                              (cond (equals? (car form) 'unquote) (car (cdr form))
                                    (equals? (car form) 'unquote-splicing)
                                    (throw (str "Unquote-splicing wasn't in a list:" form))
-                                   (and (pair? (car form))
+                                   (and (list? (car form))
                                         (equals? (car (car form)) 'unquote-splicing))
                                    (mappend form (car (cdr (car form)))
                                             (foo level (cdr form)))

@@ -132,7 +132,6 @@ extern "C" {
     bool (*is_real) (nanoclj_val_t p);
     bool (*is_character) (nanoclj_val_t p);
     int (*to_int) (nanoclj_val_t p);
-    bool (*is_list) (nanoclj_val_t p);
     bool (*is_vector) (nanoclj_val_t p);
     size_t (*size) (nanoclj_t * sc, nanoclj_val_t vec);
     void (*fill_vector) (nanoclj_val_t vec, nanoclj_val_t elem);
@@ -141,7 +140,7 @@ extern "C" {
     bool (*is_reader) (nanoclj_val_t p);
     bool (*is_writer) (nanoclj_val_t p);
     
-    bool (*is_pair) (nanoclj_val_t p);
+    bool (*is_list) (nanoclj_val_t p);
     nanoclj_val_t (*pair_car) (nanoclj_val_t p);
     nanoclj_val_t (*pair_cdr) (nanoclj_val_t p);
 

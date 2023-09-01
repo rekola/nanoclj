@@ -2,9 +2,9 @@
 
 (defn vector? [x] (instance? clojure.lang.PersistentVector x))
 (defn keyword? [x] (instance? clojure.lang.Keyword x))
-; (defn delay? [x] (instance? clojure.lang.Delay x))
+(defn delay? [x] (instance? clojure.lang.Delay x))
 (defn lazy-seq? [x] (instance? clojure.lang.LazySeq x))
-(defn seq? [x] (is-any-of? (type x) nanoclj.core.Seq clojure.lang.PersistentList clojure.lang.LazySeq))
+(defn seq? [x] (is-any-of? (type x) nanoclj.core.Seq clojure.lang.Cons clojure.lang.LazySeq))
 (defn map-entry? [x] (instance? clojure.lang.MapEntry x))
 (defn set? [x] (instance? clojure.lang.PersistentTreeSet x))
 (defn map? [x] (instance? clojure.lang.PersistentArrayMap x))
@@ -13,9 +13,8 @@
                             clojure.lang.PersistentTreeSet
                             clojure.lang.PersistentArrayMap
                             clojure.lang.PersistentVector
-                            clojure.lang.PersistentList
-                            nanoclj.core.Seq
                             clojure.lang.Cons
+                            nanoclj.core.Seq
                             ))
 (defn associative? [coll] (is-any-of? (type x)
                                       clojure.lang.PersistentVector
@@ -366,11 +365,6 @@
                                                   (pr (first x))
                                                   (run! (fn [x] (print \space) (pr x)) (rest x))
                                                   (print \))))
-                         (pair? x) (do (print "(")
-                                       (pr (first x))
-                                       (print " . ")
-                                       (pr (second x))
-                                       (print ")"))                         
                          (ratio? x) (do (save)
                                         (set-color (styles- :scalar))
                                         (pr- (numerator x))
