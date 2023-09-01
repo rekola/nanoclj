@@ -14,10 +14,10 @@ static inline nanoclj_val_t mk_canvas(nanoclj_t * sc, int width, int height) {
   cairo_t * cr = cairo_create(surface);
   cairo_surface_destroy(surface);
   
-  nanoclj_cell_t * x = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
+  nanoclj_cell_t * x = get_cell_x(sc, NULL, NULL);
   _typeflag(x) = T_CANVAS | T_GC_ATOM;
   _canvas_unchecked(x) = cr;
-  _metadata_unchecked(x) = mk_nil();
+  _metadata_unchecked(x) = NULL;
 
   cairo_set_source_rgba(cr, 1, 1, 1, 1);
   cairo_rectangle(cr, 0, 0, width, height);

@@ -105,7 +105,7 @@ extern "C" {
   typedef struct nanoclj_cell_t {
     unsigned short _flag;
     uint8_t _so_size;
-    nanoclj_val_t _metadata;
+    struct nanoclj_cell_t * _metadata;
     union {
       struct {
         char * data;
@@ -136,7 +136,6 @@ extern "C" {
       } _fo;
       struct {
         nanoclj_val_t car, cdr;
-	nanoclj_val_t watches;
       } _cons;
       struct {
 	struct nanoclj_cell_t * origin;
@@ -217,11 +216,12 @@ extern "C" {
     nanoclj_val_t WIDTH;	  /* :width */
     nanoclj_val_t HEIGHT;	  /* :height */
     nanoclj_val_t CHANNELS;	  /* :channels */
+    nanoclj_val_t WATCHES;	  /* :watches */
+    nanoclj_val_t NAME;		  /* :name */
     
     nanoclj_val_t SORTED_SET;	  /* sorted-set */
     nanoclj_val_t ARRAY_MAP;	  /* array-map */
     nanoclj_val_t REGEX;		  /* regex */
-    nanoclj_val_t EMPTYSTR;		  /* "" */
     nanoclj_val_t EMPTYVEC;
     
     nanoclj_cell_t * free_cell;      /* pointer to top of free cells */

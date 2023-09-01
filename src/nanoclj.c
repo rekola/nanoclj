@@ -312,7 +312,6 @@ static inline bool is_nil(nanoclj_val_t v) {
 
 #define _car(p)		 ((p)->_object._cons.car)
 #define _cdr(p)		 ((p)->_object._cons.cdr)
-#define _watches_unchecked(p)	((p)->_object._cons.watches)
 
 #define _is_realized(p)           (_typeflag(p) & T_REALIZED)
 #define _set_realized(p)          (_typeflag(p) |= T_REALIZED)
@@ -737,7 +736,7 @@ static inline bool is_true(nanoclj_val_t p) {
 #define cadddr(p)        car(cdr(cdr(cdr(p))))
 #define cddddr(p)        cdr(cdr(cdr(cdr(p))))
 
-static void gc(nanoclj_t * sc, nanoclj_val_t a, nanoclj_val_t b);
+static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b);
 static void putstr(nanoclj_t * sc, const char *s, nanoclj_val_t port);
 static nanoclj_val_t get_err_port(nanoclj_t * sc);
 static nanoclj_val_t get_in_port(nanoclj_t * sc);
@@ -920,7 +919,7 @@ static inline int alloc_cellseg(nanoclj_t * sc, int n) {
 
 /* get new cell.  parameter a, b is marked by gc. */
 
-static inline nanoclj_cell_t * get_cell_x(nanoclj_t * sc, nanoclj_val_t a, nanoclj_val_t b) {
+static inline nanoclj_cell_t * get_cell_x(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b) {
   if (sc->no_memory) {
     return &(sc->_sink);
   }
@@ -946,17 +945,17 @@ static inline nanoclj_cell_t * get_cell_x(nanoclj_t * sc, nanoclj_val_t a, nanoc
 /* To retain recent allocs before interpreter knows about them -
    Tehom */
 
-static inline void retain(nanoclj_t * sc, nanoclj_val_t recent, nanoclj_val_t extra) {
+static inline void retain(nanoclj_t * sc, nanoclj_cell_t * recent, nanoclj_cell_t * extra) {
   nanoclj_cell_t * holder = get_cell_x(sc, recent, extra);
   _typeflag(holder) = T_LIST;
-  _car(holder) = recent;
+  _car(holder) = mk_pointer(recent);
   _cdr(holder) = car(sc->sink);
-  _metadata_unchecked(holder) = mk_nil();
+  _metadata_unchecked(holder) = NULL;
   car(sc->sink) = mk_pointer(holder);
 }
 
-static inline nanoclj_cell_t * get_cell(nanoclj_t * sc, int flags, nanoclj_val_t a, nanoclj_val_t b, nanoclj_val_t meta) {
-  nanoclj_cell_t * cell = get_cell_x(sc, a, b);
+static inline nanoclj_cell_t * get_cell(nanoclj_t * sc, int flags, nanoclj_val_t a, nanoclj_val_t b, nanoclj_cell_t * meta) {
+  nanoclj_cell_t * cell = get_cell_x(sc, is_cell(a) ? decode_pointer(a) : NULL, is_cell(b) ? decode_pointer(b) : NULL);
 
   /* For right now, include "a" and "b" in "cell" so that gc doesn't
      think they are garbage. */
@@ -967,64 +966,64 @@ static inline nanoclj_cell_t * get_cell(nanoclj_t * sc, int flags, nanoclj_val_t
   _metadata_unchecked(cell) = meta;
 
 #if 0
-  retain(sc, mk_pointer(cell), sc->EMPTY);
+  retain(sc, cell, NULL);
 #endif
   
   return cell;
 }
 
 static inline nanoclj_val_t mk_reader(nanoclj_t * sc, nanoclj_port_t * p) {
-  nanoclj_cell_t * x = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
+  nanoclj_cell_t * x = get_cell_x(sc, NULL, NULL);
 
   _typeflag(x) = T_READER | T_GC_ATOM;
   _port_unchecked(x) = p;
-  _metadata_unchecked(x) = mk_nil();
+  _metadata_unchecked(x) = NULL;
 
   return mk_pointer(x);
 }
 
 static inline nanoclj_val_t mk_writer(nanoclj_t * sc, nanoclj_port_t * p) {
-  nanoclj_cell_t * x = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
+  nanoclj_cell_t * x = get_cell_x(sc, NULL, NULL);
 
   _typeflag(x) = T_WRITER | T_GC_ATOM;
   _port_unchecked(x) = p;
-  _metadata_unchecked(x) = mk_nil();
+  _metadata_unchecked(x) = NULL;
 
   return mk_pointer(x);
 }
 
 static inline nanoclj_val_t mk_foreign_func(nanoclj_t * sc, foreign_func f) {
-  nanoclj_cell_t * x = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
+  nanoclj_cell_t * x = get_cell_x(sc, NULL, NULL);
 
   _typeflag(x) = T_FOREIGN_FUNCTION | T_GC_ATOM;
   _ff_unchecked(x) = f;
   _min_arity_unchecked(x) = 0;
   _max_arity_unchecked(x) = 0x7fffffff;
-  _metadata_unchecked(x) = mk_nil();
+  _metadata_unchecked(x) = NULL;
   
   return mk_pointer(x);
 }
 
 static inline nanoclj_val_t mk_foreign_object(nanoclj_t * sc, void * o) {
-  nanoclj_cell_t * x = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
+  nanoclj_cell_t * x = get_cell_x(sc, NULL, NULL);
 
   _typeflag(x) = T_FOREIGN_OBJECT | T_GC_ATOM;
   _fo_unchecked(x) = o;
   _min_arity_unchecked(x) = 0;
   _max_arity_unchecked(x) = 0x7fffffff;
-  _metadata_unchecked(x) = mk_nil();
+  _metadata_unchecked(x) = NULL;
   
   return mk_pointer(x);
 }
 
 static inline nanoclj_val_t mk_foreign_func_with_arity(nanoclj_t * sc, foreign_func f, int min_arity, int max_arity) {
-  nanoclj_cell_t * x = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
+  nanoclj_cell_t * x = get_cell_x(sc, NULL, NULL);
 
   _typeflag(x) = T_FOREIGN_FUNCTION | T_GC_ATOM;
   _ff_unchecked(x) = f;
   _min_arity_unchecked(x) = min_arity;
   _max_arity_unchecked(x) = max_arity;
-  _metadata_unchecked(x) = mk_nil();
+  _metadata_unchecked(x) = NULL;
 
   return mk_pointer(x);
 }
@@ -1071,10 +1070,10 @@ static inline nanoclj_val_t mk_real(double n) {
 }
 
 static inline nanoclj_val_t mk_long(nanoclj_t * sc, long long num) {
-  nanoclj_cell_t * x = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
+  nanoclj_cell_t * x = get_cell_x(sc, NULL, NULL);
   _typeflag(x) = T_LONG | T_GC_ATOM;
   _lvalue_unchecked(x) = num;
-  _metadata_unchecked(x) = mk_nil();
+  _metadata_unchecked(x) = NULL;
   return mk_pointer(x);
 }
 
@@ -1089,11 +1088,11 @@ static inline nanoclj_val_t mk_integer(nanoclj_t * sc, long long num) {
 
 static inline nanoclj_val_t mk_image(nanoclj_t * sc, int32_t width, int32_t height,
 				     int32_t channels, unsigned char * data) {
-  nanoclj_cell_t * x = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
+  nanoclj_cell_t * x = get_cell_x(sc, NULL, NULL);
   nanoclj_image_t * image = (nanoclj_image_t*)sc->malloc(sizeof(nanoclj_image_t));
   _typeflag(x) = T_IMAGE | T_GC_ATOM;
   _image_unchecked(x) = image;
-  _metadata_unchecked(x) = mk_nil();
+  _metadata_unchecked(x) = NULL;
 
   size_t size = width * height * channels;
   image->data = (unsigned char *)sc->malloc(size);
@@ -1108,11 +1107,11 @@ static inline nanoclj_val_t mk_image(nanoclj_t * sc, int32_t width, int32_t heig
 
 static inline nanoclj_val_t mk_audio(nanoclj_t * sc, size_t frames, int32_t channels,
 				     int32_t sample_rate, float * data) {
-  nanoclj_cell_t * x = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
+  nanoclj_cell_t * x = get_cell_x(sc, NULL, NULL);
   nanoclj_audio_t * audio = (nanoclj_audio_t*)sc->malloc(sizeof(nanoclj_audio_t));
   _typeflag(x) = T_AUDIO | T_GC_ATOM;
   _audio_unchecked(x) = audio;
-  _metadata_unchecked(x) = mk_nil();
+  _metadata_unchecked(x) = NULL;
 
   size_t size = frames * channels * sizeof(float);
   audio->data = (float *)sc->malloc(size);
@@ -1181,11 +1180,11 @@ static inline long long get_ratio(nanoclj_val_t n, long long * den) {
 }
 
 static inline nanoclj_val_t mk_ratio(nanoclj_t * sc, nanoclj_val_t num, nanoclj_val_t den) {  
-  nanoclj_cell_t * x = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
+  nanoclj_cell_t * x = get_cell_x(sc, is_cell(num) ? decode_pointer(num) : NULL, is_cell(den) ? decode_pointer(den) : NULL);
   _typeflag(x) = T_RATIO | T_GC_ATOM;
   _car(x) = num;
   _cdr(x) = den;
-  _metadata_unchecked(x) = mk_nil();
+  _metadata_unchecked(x) = NULL;
     
   return mk_pointer(x);
 }
@@ -1255,8 +1254,8 @@ static inline char * alloc_c_str(nanoclj_t * sc, strview_t sv) {
 }
 
 static inline nanoclj_val_t mk_counted_string(nanoclj_t * sc, const char *str, size_t len) {
-  nanoclj_cell_t * x = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
-  _metadata_unchecked(x) = mk_nil();
+  nanoclj_cell_t * x = get_cell_x(sc, NULL, NULL);
+  _metadata_unchecked(x) = NULL;
 
   if (len <= NANOCLJ_SMALL_STR_SIZE) {
     _typeflag(x) = T_STRING | T_GC_ATOM | T_SMALL;
@@ -1287,16 +1286,16 @@ static inline nanoclj_val_t mk_string(nanoclj_t * sc, const char *str) {
 }
 
 static inline nanoclj_val_t mk_exception(nanoclj_t * sc, const char * text) {
-  nanoclj_cell_t * x = get_cell(sc, T_EXCEPTION, mk_string(sc, text), sc->EMPTY, mk_nil());
+  nanoclj_cell_t * x = get_cell(sc, T_EXCEPTION, mk_string(sc, text), sc->EMPTY, NULL);
   return mk_pointer(x);
 }
 
 static inline nanoclj_cell_t * mk_seq(nanoclj_t * sc, nanoclj_cell_t * origin, size_t position) {
-  nanoclj_cell_t * x = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
+  nanoclj_cell_t * x = get_cell_x(sc, origin, NULL);
   _typeflag(x) = T_SEQ | T_GC_ATOM;
   _origin_unchecked(x) = origin;
   _position_unchecked(x) = position;
-  _metadata_unchecked(x) = mk_nil();
+  _metadata_unchecked(x) = NULL;
   return x;
 }
 
@@ -1367,7 +1366,7 @@ static inline void backchar(int c, nanoclj_port_t * pt) {
 /* get new cons cell */
 static inline nanoclj_val_t cons(nanoclj_t * sc, nanoclj_val_t a, nanoclj_val_t b) {
   if (is_nil(b)) b = sc->EMPTY;
-  return mk_pointer(get_cell(sc, T_LIST, a, b, mk_nil()));
+  return mk_pointer(get_cell(sc, T_LIST, a, b, NULL));
 }
 
 /* Creates a vector store with double the size requested */
@@ -1386,7 +1385,7 @@ static inline void finalize_vector_store(nanoclj_t * sc, nanoclj_vector_store_t 
 }
 
 static inline nanoclj_cell_t * _get_vector_object(nanoclj_t * sc, int_fast16_t t, size_t offset, size_t size, nanoclj_vector_store_t * store) {
-  nanoclj_cell_t * main_cell = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
+  nanoclj_cell_t * main_cell = get_cell_x(sc, NULL, NULL);
   if (sc->no_memory) {
     /* TODO: free the store */
     return &(sc->_sink);
@@ -1403,7 +1402,7 @@ static inline nanoclj_cell_t * _get_vector_object(nanoclj_t * sc, int_fast16_t t
     _sosize_unchecked(main_cell) = size;
   }
   
-  _metadata_unchecked(main_cell) = mk_nil();
+  _metadata_unchecked(main_cell) = NULL;
 
   return main_cell;
 }
@@ -1677,6 +1676,147 @@ static nanoclj_val_t second(nanoclj_t * sc, nanoclj_cell_t * a) {
   return mk_nil();
 }
 
+static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
+  if (a0.as_long == b0.as_long) {
+    return true;
+  } else if (is_primitive(a0) && is_primitive(b0)) {
+    return false;
+  } else if (is_cell(a0) && is_cell(b0)) {
+    nanoclj_cell_t * a = decode_pointer(a0), * b = decode_pointer(b0);
+    int t_a = _type(a), t_b = _type(b);
+    if (t_a == t_b) {
+      switch (t_a) {
+      case T_STRING:
+      case T_CHAR_ARRAY:{
+	strview_t sv1 = _to_strview(a), sv2 = _to_strview(b);
+	return sv1.size == sv2.size && strncmp(sv1.ptr, sv2.ptr, sv1.size) == 0;
+      }
+      case T_LONG:
+	return _lvalue_unchecked(a) == _lvalue_unchecked(b);
+      case T_VECTOR:
+      case T_SORTED_SET:{
+	size_t l = get_vector_size(a);
+	if (l == get_vector_size(b)) {
+	  for (size_t i = 0; i < l; i++) {
+	    if (!equals(sc, vector_elem(a, i), vector_elem(b, i))) {
+	      return 0;
+	    }
+	  }
+	  return 1;
+	}
+      }
+	break;
+      case T_LIST:
+      case T_MAPENTRY:
+      case T_CLOSURE:
+      case T_LAZYSEQ:
+      case T_MACRO:
+      case T_ENVIRONMENT:
+	if (equals(sc, _car(a), _car(b))) {
+	  return equals(sc, _cdr(a), _cdr(b));
+	}
+	break;
+      }
+    } else if (is_coll_type(t_a) && is_coll_type(t_b)) {
+      for (; !is_empty(sc, a) && !is_empty(sc, b); a = rest(sc, a), b = rest(sc, b)) {
+	if (!equals(sc, first(sc, a), first(sc, b))) {
+	  return 0;
+	}
+      }
+      if (is_empty(sc, a) && is_empty(sc, b)) {
+	return 1;
+      }
+    }
+  } else {
+    int t_a = type(a0), t_b = type(b0);
+    if ((t_a == T_INTEGER && t_b == T_LONG) || (t_a == T_LONG && t_b == T_INTEGER)) {
+      return to_long(a0) == to_long(b0);
+    }
+  }
+  
+  return false;
+}
+
+static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t key, nanoclj_val_t * result) {
+  switch (_type(coll)) {
+  case T_VECTOR:
+    if (is_number(key)) {
+      long long index = to_long(key);
+      if (index >= 0 && index < get_vector_size(coll)) {
+	if (result) *result = vector_elem(coll, index);
+	return true;
+      }
+    }
+    break;
+
+  case T_STRING:
+  case T_CHAR_ARRAY:
+    if (is_number(key)) {
+      long long index = to_long(key);
+      const char * str = _strvalue(coll);
+      const char * end = str + _strlength(coll);
+      
+      for (; index > 0 && str < end; index--) {
+	str = utf8_next(str);
+      }
+      
+      if (index == 0 && str < end) {
+	if (result) *result = mk_character(utf8_decode(str));
+	return true;
+      }
+    }
+    break;
+        
+  case T_ARRAYMAP:{
+    size_t size = get_vector_size(coll);
+    for (int i = 0; i < size; i++) {
+      nanoclj_val_t pair = vector_elem(coll, i);
+      if (equals(sc, key, car(pair))) {
+	if (result) *result = cdr(pair);
+	return true;
+      }    
+    }
+  }
+    break;
+
+  case T_SORTED_SET:{
+    size_t size = get_vector_size(coll);
+    for (int i = 0; i < size; i++) {
+      nanoclj_val_t value = vector_elem(coll, i);
+      if (equals(sc, key, value)) {
+	if (result) *result = value;
+	return true;
+      }    
+    }
+  }
+
+  case T_IMAGE:{
+    nanoclj_image_t * image = _image_unchecked(coll);
+    if (key.as_long == sc->WIDTH.as_long) {
+      if (result) *result = mk_int(image->width);
+    } else if (key.as_long == sc->HEIGHT.as_long) {
+      if (result) *result = mk_int(image->height);
+    } else if (key.as_long == sc->CHANNELS.as_long) {
+      if (result) *result = mk_int(image->channels);
+    } else {
+      return false;
+    }
+    return true;
+  }
+
+  case T_AUDIO:{
+    nanoclj_audio_t * audio = _audio_unchecked(coll);
+    if (key.as_long == sc->CHANNELS.as_long) {
+      if (result) *result = mk_int(audio->channels);
+    } else {
+      return false;
+    }
+    return true;
+  }
+}
+  return false;
+}
+
 /* =================== Canvas ====================== */
 
 #ifdef WIN32
@@ -1720,14 +1860,13 @@ static inline void new_frame_in_env(nanoclj_t * sc, nanoclj_val_t old_env) {
     new_frame = sc->EMPTY;
   }
 
-  sc->envir = mk_pointer(get_cell(sc, T_ENVIRONMENT, new_frame, old_env, mk_nil()));
+  sc->envir = mk_pointer(get_cell(sc, T_ENVIRONMENT, new_frame, old_env, NULL));
 }
 
 static inline nanoclj_cell_t * new_slot_spec_in_env(nanoclj_t * sc, nanoclj_val_t env,
 						  nanoclj_val_t variable, nanoclj_val_t value) {
-  nanoclj_cell_t * slot0 = get_cell(sc, T_VAR, variable, value, mk_nil());
-  _watches_unchecked(slot0) = sc->EMPTY;
-  
+  nanoclj_cell_t * slot0 = get_cell(sc, T_VAR, variable, value, NULL);
+    
   nanoclj_val_t slot = mk_pointer(slot0);
   nanoclj_val_t x = car(env);
   
@@ -1778,10 +1917,16 @@ static inline void new_slot_in_env(nanoclj_t * sc, nanoclj_val_t variable, nanoc
 static inline nanoclj_val_t set_slot_in_env(nanoclj_t * sc, nanoclj_cell_t * slot, nanoclj_val_t state) {
   nanoclj_val_t old_state = _cdr(slot);
   _cdr(slot) = state;
-  nanoclj_cell_t * watches = decode_pointer(_watches_unchecked(slot));
-  for (; !is_empty(sc, watches); watches = rest(sc, watches)) {
-    nanoclj_val_t fn = first(sc, watches);
-    nanoclj_call(sc, fn, cons(sc, mk_nil(), cons(sc, mk_pointer(slot), cons(sc, old_state, cons(sc, state, sc->EMPTY)))));
+  nanoclj_cell_t * md = _metadata_unchecked(slot);
+  if (md) {
+    nanoclj_val_t watches0;
+    if (get_elem(sc, md, sc->WATCHES, &watches0)) {
+      nanoclj_cell_t * watches = seq(sc, decode_pointer(watches0));
+      for (; watches; watches = next(sc, watches)) {
+	nanoclj_val_t fn = first(sc, watches);
+	nanoclj_call(sc, fn, cons(sc, mk_nil(), cons(sc, mk_pointer(slot), cons(sc, old_state, cons(sc, state, sc->EMPTY)))));
+      }
+    }
   }
   return state;
 }
@@ -1937,67 +2082,6 @@ static inline void sort_vector_in_place(nanoclj_cell_t * vec) {
       qsort(_store_unchecked(vec)->data + _offset_unchecked(vec), s, sizeof(nanoclj_val_t), _compare);
     }
   }
-}
-
-static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
-  if (a0.as_long == b0.as_long) {
-    return true;
-  } else if (is_primitive(a0) && is_primitive(b0)) {
-    return false;
-  } else if (is_cell(a0) && is_cell(b0)) {
-    nanoclj_cell_t * a = decode_pointer(a0), * b = decode_pointer(b0);
-    int t_a = _type(a), t_b = _type(b);
-    if (t_a == t_b) {
-      switch (t_a) {
-      case T_STRING:
-      case T_CHAR_ARRAY:{
-	strview_t sv1 = _to_strview(a), sv2 = _to_strview(b);
-	return sv1.size == sv2.size && strncmp(sv1.ptr, sv2.ptr, sv1.size) == 0;
-      }
-      case T_LONG:
-	return _lvalue_unchecked(a) == _lvalue_unchecked(b);
-      case T_VECTOR:
-      case T_SORTED_SET:{
-	size_t l = get_vector_size(a);
-	if (l == get_vector_size(b)) {
-	  for (size_t i = 0; i < l; i++) {
-	    if (!equals(sc, vector_elem(a, i), vector_elem(b, i))) {
-	      return 0;
-	    }
-	  }
-	  return 1;
-	}
-      }
-	break;
-      case T_LIST:
-      case T_MAPENTRY:
-      case T_CLOSURE:
-      case T_LAZYSEQ:
-      case T_MACRO:
-      case T_ENVIRONMENT:
-	if (equals(sc, _car(a), _car(b))) {
-	  return equals(sc, _cdr(a), _cdr(b));
-	}
-	break;
-      }
-    } else if (is_coll_type(t_a) && is_coll_type(t_b)) {
-      for (; !is_empty(sc, a) && !is_empty(sc, b); a = rest(sc, a), b = rest(sc, b)) {
-	if (!equals(sc, first(sc, a), first(sc, b))) {
-	  return 0;
-	}
-      }
-      if (is_empty(sc, a) && is_empty(sc, b)) {
-	return 1;
-      }
-    }
-  } else {
-    int t_a = type(a0), t_b = type(b0);
-    if ((t_a == T_INTEGER && t_b == T_LONG) || (t_a == T_LONG && t_b == T_INTEGER)) {
-      return to_long(a0) == to_long(b0);
-    }
-  }
-  
-  return false;
 }
 
 static int hasheq(nanoclj_val_t v) { 
@@ -2192,7 +2276,7 @@ static inline nanoclj_cell_t * conj(nanoclj_t * sc, nanoclj_cell_t * coll, nanoc
   int t = _type(coll);
   if (t == T_NIL || t == T_LIST || t == T_SEQ || t == T_LAZYSEQ) {
     if (t == T_NIL) t = T_LIST;
-    return get_cell(sc, t, new_value, mk_pointer(coll), mk_nil());
+    return get_cell(sc, t, new_value, mk_pointer(coll), NULL);
   } else if (t == T_VECTOR || t == T_ARRAYMAP || t == T_SORTED_SET) {
     size_t old_size = get_vector_size(coll);
     if (_is_small(coll)) {
@@ -2251,85 +2335,12 @@ static inline nanoclj_cell_t * mk_sorted_set(nanoclj_t * sc, int len) {
   return get_vector_object(sc, T_SORTED_SET, len);
 }
 
-static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t key, nanoclj_val_t * result) {
-  switch (_type(coll)) {
-  case T_VECTOR:
-    if (is_number(key)) {
-      long long index = to_long(key);
-      if (index >= 0 && index < get_vector_size(coll)) {
-	if (result) *result = vector_elem(coll, index);
-	return true;
-      }
-    }
-    break;
-
-  case T_STRING:
-  case T_CHAR_ARRAY:
-    if (is_number(key)) {
-      long long index = to_long(key);
-      const char * str = _strvalue(coll);
-      const char * end = str + _strlength(coll);
-      
-      for (; index > 0 && str < end; index--) {
-	str = utf8_next(str);
-      }
-      
-      if (index == 0 && str < end) {
-	if (result) *result = mk_character(utf8_decode(str));
-	return true;
-      }
-    }
-    break;
-        
-  case T_ARRAYMAP:{
-    size_t size = get_vector_size(coll);
-    for (int i = 0; i < size; i++) {
-      nanoclj_val_t pair = vector_elem(coll, i);
-      if (compare(key, car(pair)) == 0) {
-	if (result) *result = cdr(pair);
-	return true;
-      }    
-    }
-  }
-    break;
-
-  case T_SORTED_SET:{
-    size_t size = get_vector_size(coll);
-    for (int i = 0; i < size; i++) {
-      nanoclj_val_t value = vector_elem(coll, i);
-      if (compare(key, value) == 0) {
-	if (result) *result = value;
-	return true;
-      }    
-    }
-  }
-
-  case T_IMAGE:{
-    nanoclj_image_t * image = _image_unchecked(coll);
-    if (key.as_long == sc->WIDTH.as_long) {
-      if (result) *result = mk_int(image->width);
-    } else if (key.as_long == sc->HEIGHT.as_long) {
-      if (result) *result = mk_int(image->height);
-    } else if (key.as_long == sc->CHANNELS.as_long) {
-      if (result) *result = mk_int(image->channels);
-    } else {
-      return false;
-    }
-    return true;
-  }
-
-  case T_AUDIO:{
-    nanoclj_audio_t * audio = _audio_unchecked(coll);
-    if (key.as_long == sc->CHANNELS.as_long) {
-      if (result) *result = mk_int(audio->channels);
-    } else {
-      return false;
-    }
-    return true;
-  }
+static inline nanoclj_cell_t * mk_arraymap(nanoclj_t * sc, size_t len) {
+  return get_vector_object(sc, T_ARRAYMAP, len);
 }
-  
-  return false;
+
+static inline nanoclj_val_t mk_mapentry(nanoclj_t * sc, nanoclj_val_t key, nanoclj_val_t val) {
+  return mk_pointer(get_cell(sc, T_MAPENTRY, key, val, NULL));
 }
 
 /* get new keyword */
@@ -2383,7 +2394,9 @@ static inline nanoclj_val_t def_symbol_or_keyword(nanoclj_t * sc, const char *na
 }
 
 static inline nanoclj_val_t def_namespace_with_sym(nanoclj_t *sc, nanoclj_val_t sym) {
-  nanoclj_val_t ns = mk_pointer(get_cell(sc, T_ENVIRONMENT, sc->EMPTY, sc->root_env, mk_string(sc, symname(sym))));
+  nanoclj_cell_t * md = mk_arraymap(sc, 1);
+  set_vector_elem(md, 0, mk_mapentry(sc, sc->NAME, mk_string(sc, symname(sym))));
+  nanoclj_val_t ns = mk_pointer(get_cell(sc, T_ENVIRONMENT, sc->EMPTY, sc->root_env, md));
   intern(sc, sc->global_env, sym, ns);
   return ns;
 }
@@ -2585,13 +2598,8 @@ static inline nanoclj_val_t mk_sharp_const(nanoclj_t * sc, char *name) {
  *  sec. 2.3.5), the Schorr-Deutsch-Waite link-inversion algorithm,
  *  for marking.
  */
-static inline void mark(nanoclj_val_t a) {
-  if (is_primitive(a)) {
-    return;
-  }
-  
+static inline void mark(nanoclj_cell_t * p) {
   nanoclj_cell_t * t = NULL;
-  nanoclj_cell_t * p = decode_pointer(a);
   nanoclj_cell_t * q;
   nanoclj_val_t q0;
   
@@ -2603,9 +2611,9 @@ E2:_setmark(p);
     if (_is_small(p)) {
       size_t s = _sosize_unchecked(p);
       nanoclj_val_t * data = _smalldata_unchecked(p);
-      if (s > 0 && !is_nil(data[0])) mark(data[0]);
-      if (s > 1 && !is_nil(data[1])) mark(data[1]);
-      if (s > 2 && !is_nil(data[2])) mark(data[2]);
+      if (s > 0 && is_cell(data[0]) && !is_nil(data[0])) mark(decode_pointer(data[0]));
+      if (s > 1 && is_cell(data[1]) && !is_nil(data[1])) mark(decode_pointer(data[1]));
+      if (s > 2 && is_cell(data[2]) && !is_nil(data[2])) mark(decode_pointer(data[2]));
     } else {
       size_t offset = _offset_unchecked(p);
       size_t num = _size_unchecked(p);
@@ -2613,20 +2621,20 @@ E2:_setmark(p);
       for (size_t i = 0; i < num; i++) {
 	/* Vector cells will be treated like ordinary cells */
 	nanoclj_val_t v = data[offset + i];
-	if (!is_nil(v)) mark(v);      
+	if (is_cell(v) && !is_nil(v)) mark(decode_pointer(v));
       }
     }
   }
     break;
-  case T_SEQ:
-    mark(mk_pointer(_origin_unchecked(p)));
+  case T_SEQ:{
+    nanoclj_cell_t * o = _origin_unchecked(p);
+    if (o) mark(o);
+  }
     break;
   }
 
-  nanoclj_val_t metadata = _metadata_unchecked(p);
-  if (!is_nil(metadata)) {
-    mark(metadata);
-  }
+  nanoclj_cell_t * metadata = _metadata_unchecked(p);
+  if (metadata) mark(metadata);
   
   if (_is_gc_atom(p))
     goto E6;
@@ -2664,6 +2672,10 @@ E6:                            /* up.  Undo the link switching from steps E4 and
     p = q;
     goto E6;
   }
+}
+
+static inline void mark_value(nanoclj_val_t v) {
+  if (is_cell(v) && !is_nil(v)) mark(decode_pointer(v));
 }
 
 static inline void port_close(nanoclj_t * sc, nanoclj_port_t * pt) {
@@ -2719,6 +2731,12 @@ static inline void finalize_cell(nanoclj_t * sc, nanoclj_cell_t * a) {
     sc->free(image);
   }
     break;
+  case T_AUDIO:{
+    nanoclj_audio_t * audio = _audio_unchecked(a);
+    sc->free(audio->data);
+    sc->free(audio);
+  }
+    break;
   case T_CANVAS:
 #if NANOCLJ_HAS_CANVAS
     finalize_canvas(sc, _canvas_unchecked(a));
@@ -2732,67 +2750,64 @@ static inline void dump_stack_mark(nanoclj_t * sc) {
   size_t nframes = decode_integer(sc->dump);
   for (size_t i = 0; i < nframes; i++) {
     dump_stack_frame_t * frame = sc->dump_base + i;
-    mark(frame->args);
-    mark(frame->envir);
-    mark(frame->code);
+    if (frame->is_c_call_return) continue;
+
+    mark_value(frame->args);
+    mark_value(frame->envir);
+    mark_value(frame->code);
   }
 }
 
 static inline void c_stack_mark(nanoclj_t * sc) {
   for (size_t i = 0; i < sc->c_stack_count; i++) {
     c_stack_frame_t * frame = sc->c_stack_base + i;
-    mark(frame->sink);
-    mark(frame->envir);
-    mark(frame->dump);
+    mark_value(frame->sink);
+    mark_value(frame->envir);
+    mark_value(frame->dump);
   }
 }
 
 /* garbage collection. parameter a, b is marked. */
-static void gc(nanoclj_t * sc, nanoclj_val_t a, nanoclj_val_t b) {
+static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b) {
 #if GC_VERBOSE
   putstr(sc, "gc...", get_err_port(sc));
 #endif
 
   /* mark system globals */
-  if (sc->oblist) mark(mk_pointer(sc->oblist));
-  mark(sc->global_env);
+  if (sc->oblist) mark(sc->oblist);
+  mark_value(sc->global_env);
 
   /* mark current registers */
-  mark(sc->args);
-  mark(sc->envir);
-  mark(sc->code);
+  mark_value(sc->args);
+  mark_value(sc->envir);
+  mark_value(sc->code);
 #ifdef USE_RECUR_REGISTER
-  mark(sc->recur);
+  mark_value(sc->recur);
 #endif
   dump_stack_mark(sc);
   c_stack_mark(sc);
-  mark(sc->value);
-  mark(sc->save_inport);
-  mark(sc->loadport);
+  mark_value(sc->value);
+  mark_value(sc->save_inport);
+  mark_value(sc->loadport);
 
-  mark(sc->EMPTYSTR);
-
-  if (!is_nil(sc->active_element)) {
-    mark(sc->active_element);
-  }
-  if (!is_nil(sc->active_element_target)) {
-    mark(sc->active_element_target);
-  }
+  mark_value(sc->active_element);
+  mark_value(sc->active_element_target);
+  mark_value(sc->EMPTYVEC);
   
 #if 0
   fprintf(stderr, "marking sink %p\n", (void *)sc->sink);
 #endif
   
   /* Mark recent objects the interpreter doesn't know about yet. */
-  mark(car(sc->sink));
+  mark_value(car(sc->sink));
 
 #if 0
   fprintf(stderr, "marking sink done\n");
 #endif
   
   /* mark variables a, b */
-  mark(a);
-  mark(b);
+  if (a) mark(a);
+  if (b) mark(b);
 
   /* garbage collect */
   clrmark(sc->EMPTY);
@@ -3707,14 +3722,6 @@ static inline size_t seq_length(nanoclj_t * sc, nanoclj_cell_t * a) {
   return 1;
 }
 
-static inline nanoclj_cell_t * mk_arraymap(nanoclj_t * sc, size_t len) {
-  return get_vector_object(sc, T_ARRAYMAP, len);
-}
-
-static inline nanoclj_val_t mk_mapentry(nanoclj_t * sc, nanoclj_val_t key, nanoclj_val_t val) {
-  return mk_pointer(get_cell(sc, T_MAPENTRY, key, val, mk_nil()));
-}
-
 static inline nanoclj_val_t mk_collection(nanoclj_t * sc, int type, nanoclj_cell_t * args) {
   size_t len = seq_length(sc, args);
 
@@ -3880,7 +3887,7 @@ static inline nanoclj_val_t mk_format(nanoclj_t * sc, const char * fmt, nanoclj_
 
 /* make closure. c is code. e is environment */
 static inline nanoclj_val_t mk_closure(nanoclj_t * sc, nanoclj_val_t c, nanoclj_val_t e) {
-  return mk_pointer(get_cell(sc, T_CLOSURE, c, e, mk_nil()));
+  return mk_pointer(get_cell(sc, T_CLOSURE, c, e, NULL));
 }
 
 /* reverse list --- in-place */
@@ -4165,12 +4172,12 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
 
   case T_ENVIRONMENT:{
     nanoclj_val_t parent = sc->EMPTY;
-    nanoclj_val_t name = sc->EMPTY;
+    nanoclj_cell_t * name = NULL;
     if (!is_empty(sc, args)) {
       parent = first(sc, args);
       args = rest(sc, args);
       if (!is_empty(sc, args)) {
-	name = first(sc, args);
+	name = decode_pointer(first(sc, args));
       }
     } 
     nanoclj_cell_t * vec = get_vector_object(sc, T_VECTOR, OBJ_LIST_SIZE);
@@ -4184,16 +4191,16 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
     if (is_cell(y)) {
       nanoclj_cell_t * tail = decode_pointer(y);
       if (!tail) {
-	return mk_pointer(get_cell(sc, T_LIST, x, sc->EMPTY, mk_nil()));
+	return mk_pointer(get_cell(sc, T_LIST, x, sc->EMPTY, NULL));
       } else {
 	int t = _type(tail);
 	if (t != T_LAZYSEQ && t != T_SEQ && t != T_LIST && is_seqable_type(t)) {
 	  tail = seq(sc, tail);
-	  return mk_pointer(get_cell(sc, T_LIST, x, tail ? mk_pointer(tail) : sc->EMPTY, mk_nil()));
+	  return mk_pointer(get_cell(sc, T_LIST, x, tail ? mk_pointer(tail) : sc->EMPTY, NULL));
 	}
       }
     }
-    return mk_pointer(get_cell(sc, T_LIST, x, y, mk_nil()));
+    return mk_pointer(get_cell(sc, T_LIST, x, y, NULL));
 
   case T_MAPENTRY:
     return mk_mapentry(sc, first(sc, args), second(sc, args));
@@ -4410,7 +4417,8 @@ static inline const char *procname(enum nanoclj_opcodes op) {
 }
 
 static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
-  nanoclj_val_t x, y, ns, meta;
+  nanoclj_val_t x, y, ns;
+  nanoclj_cell_t * meta;
   int syn;
   nanoclj_val_t params0;
   nanoclj_cell_t * params;
@@ -4645,7 +4653,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       switch (_type(code_cell)) {
       case T_FOREIGN_FUNCTION:{
 	/* Keep nested calls from GC'ing the arglist */
-	retain(sc, sc->args, sc->EMPTY);
+	retain(sc, decode_pointer(sc->args), NULL);
 	if (_min_arity_unchecked(code_cell) > 0 || _max_arity_unchecked(code_cell) < 0x7fffffff) {
 	  int n = seq_length(sc, decode_pointer(sc->args));
 	  if (n < _min_arity_unchecked(code_cell) || n > _max_arity_unchecked(code_cell)) {
@@ -4662,7 +4670,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       }
       case T_FOREIGN_OBJECT:{
 	/* Keep nested calls from GC'ing the arglist */
-	retain(sc, sc->args, sc->EMPTY);
+	retain(sc, decode_pointer(sc->args), NULL);
 	x = sc->object_invoke_callback(sc, _fo_unchecked(code_cell), sc->args);
 	s_return(sc, x);
       }
@@ -4699,9 +4707,9 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	y = sc->args;
 	meta = _metadata_unchecked(code_cell);
 	
-	if (!is_nil(meta) && is_string(meta)) {
+	if (meta && _type(meta) == T_STRING) {
 	  /* if the function has a name, bind it */
-	  new_slot_in_env(sc, meta, sc->code);
+	  new_slot_in_env(sc, mk_pointer(meta), sc->code);
 	}
 	
 #ifndef USE_RECUR_REGISTER
@@ -4814,7 +4822,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     x = mk_closure(sc, x, sc->envir);
 
     if (has_name) {
-      metadata_unchecked(x) = name;
+      metadata_unchecked(x) = decode_pointer(name);
     }
     s_return(sc, x);
   }
@@ -4877,7 +4885,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   case OP_DEF1:{                /* define */
     if (!is_nil(sc->args) && is_cell(sc->value)) {
       /* TODO: should value be copied before settings the meta */
-      metadata_unchecked(sc->value) = sc->args;
+      metadata_unchecked(sc->value) = decode_pointer(sc->args);
     }
     nanoclj_cell_t * c = find_slot_in_env(sc, sc->global_env, sc->code, false);
     if (c) {
@@ -6207,8 +6215,8 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     if (!unpack_args_1(sc)) {
       Error_0(sc, "Error - Invalid arity");
     }
-    if (is_cell(sc->arg0)) {
-      s_return(sc, metadata_unchecked(sc->arg0));
+    if (is_cell(sc->arg0) && !is_nil(sc->arg0)) {
+      s_return(sc, mk_pointer(metadata_unchecked(sc->arg0)));
     } else {
       s_return(sc, mk_nil());
     }
@@ -6250,7 +6258,15 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       if (_type(c) != T_VAR) {
 	Error_0(sc, "Error - Watches can only be added to Vars");
       } else {
-	_watches_unchecked(c) = cons(sc, sc->arg2, _watches_unchecked(c));
+	nanoclj_cell_t * md = _metadata_unchecked(c);
+	if (!md) md = mk_arraymap(sc, 0);
+	nanoclj_val_t w;
+	if (get_elem(sc, md, sc->WATCHES, &w)) {
+	  // TODO: append watch
+	} else {
+	  md = conj(sc, md, mk_mapentry(sc, sc->WATCHES, cons(sc, sc->arg2, sc->EMPTY)));
+	}
+	_metadata_unchecked(c) = md;
 	s_return(sc, sc->arg0);
       }      
     }
@@ -6456,7 +6472,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 }
  
 /* kernel of this interpreter */
-static void Eval_Cycle(nanoclj_t * sc, enum nanoclj_opcodes op) {
+static inline void Eval_Cycle(nanoclj_t * sc, enum nanoclj_opcodes op) {
   sc->op = op;
   for (;;) {    
     ok_to_freely_gc(sc);
@@ -6716,7 +6732,6 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc fr
   /* init global_env */
   new_frame_in_env(sc, sc->EMPTY);
   sc->root_env = sc->global_env = sc->envir;
-  metadata_unchecked(sc->global_env) = mk_string(sc, "root");
   
   assign_syntax(sc, "fn", OP_LAMBDA);
   assign_syntax(sc, "quote", OP_QUOTE);
@@ -6771,11 +6786,12 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc fr
   sc->WIDTH = def_keyword(sc, "width");
   sc->HEIGHT = def_keyword(sc, "height");
   sc->CHANNELS = def_keyword(sc, "channels");
+  sc->WATCHES = def_keyword(sc, "watches");
+  sc->NAME = def_keyword(sc, "name");
     
   sc->SORTED_SET = def_symbol(sc, "sorted-set");
   sc->ARRAY_MAP = def_symbol(sc, "array-map");
   sc->REGEX = def_symbol(sc, "regex");
-  sc->EMPTYSTR = mk_string(sc, "");
   sc->EMPTYVEC = mk_vector(sc, 0);
 
   intern(sc, sc->global_env, def_symbol(sc, "root"), sc->root_env);
@@ -6868,7 +6884,7 @@ void nanoclj_deinit(nanoclj_t * sc) {
   sc->loadport = sc->EMPTY;
   sc->free(sc->strbuff);
   sc->free(sc->errbuff);
-  gc(sc, sc->EMPTY, sc->EMPTY);
+  gc(sc, NULL, NULL);
 
   for (i = 0; i <= sc->last_cell_seg; i++) {
     sc->free(sc->alloc_seg[i]);

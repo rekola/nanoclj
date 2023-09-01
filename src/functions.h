@@ -57,7 +57,7 @@ static nanoclj_val_t System_nanoTime(nanoclj_t * sc, nanoclj_val_t args) {
 }
 
 static nanoclj_val_t System_gc(nanoclj_t * sc, nanoclj_val_t args) {
-  gc(sc, sc->EMPTY, sc->EMPTY);
+  gc(sc, NULL, NULL);
   return (nanoclj_val_t)kTRUE;
 }
 
