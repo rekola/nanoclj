@@ -177,7 +177,8 @@ enum nanoclj_types {
   T_DELAY = 31,
   T_IMAGE = 32,
   T_CANVAS = 33,
-  T_VAR = 34
+  T_VAR = 34,
+  T_AUDIO = 35
 };
 
 typedef struct strview_s {
@@ -330,6 +331,7 @@ static inline bool is_nil(nanoclj_val_t v) {
 
 #define _port_unchecked(p)	  ((p)->_object._port)
 #define _image_unchecked(p)	  ((p)->_object._image)
+#define _audio_unchecked(p)	  ((p)->_object._audio)
 #define _canvas_unchecked(p)	  ((p)->_object._canvas)
 #define _metadata_unchecked(p)     ((p)->_metadata)
 #define _origin_unchecked(p)	  ((p)->_object._seq.origin)
@@ -370,6 +372,7 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define position_unchecked(p)	  (decode_pointer(p)->_object._seq.pos)
 #define port_unchecked(p)	  (decode_pointer(p)->_object._port)
 #define image_unchecked(p)	  (decode_pointer(p)->_object._image)
+#define audio_unchecked(p)	  (decode_pointer(p)->_object._audio)
 #define canvas_unchecked(p)	  (decode_pointer(p)->_object._canvas)
 
 static inline int32_t decode_integer(nanoclj_val_t value) {
@@ -396,16 +399,6 @@ static inline bool is_vector(nanoclj_val_t p) {
   nanoclj_cell_t * c = decode_pointer(p);
   return _type(c) == T_VECTOR;
 }
-static inline bool is_arraymap(nanoclj_val_t p) {
-  if (!is_cell(p)) return false;
-  nanoclj_cell_t * c = decode_pointer(p);
-  return _type(c) == T_ARRAYMAP;
-}
-static inline bool is_set(nanoclj_val_t p) {
-  if (!is_cell(p)) return false;
-  nanoclj_cell_t * c = decode_pointer(p);
-  return _type(c) == T_SORTED_SET;
-}
 static inline bool is_seq(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
   nanoclj_cell_t * c = decode_pointer(p);
@@ -414,7 +407,7 @@ static inline bool is_seq(nanoclj_val_t p) {
 static inline bool is_image(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
   nanoclj_cell_t * c = decode_pointer(p);
-  return _type(c) == T_IMAGE;  
+  return _type(c) == T_IMAGE;
 }
 static inline bool is_canvas(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
@@ -790,6 +783,7 @@ static inline const char * typename_from_id(int_fast16_t id) {
   case 32: return "nanoclj.core.Image";
   case 33: return "nanoclj.core.Canvas";
   case 34: return "clojure.lang.Var";
+  case 35: return "nanoclj.core.Audio";
   }
   return "";
 }
@@ -845,6 +839,14 @@ static inline strview_t to_strview(nanoclj_val_t x) {
     return _to_strview(decode_pointer(x));
   }  
   return (strview_t){ "", 0 };
+}
+
+static inline char * to_cstr(nanoclj_t * sc, nanoclj_val_t x) {
+  strview_t sv = to_strview(x);
+  char * s = (char *)sc->malloc(sv.size + 1);
+  memcpy(s, sv.ptr, sv.size);
+  s[sv.size] = 0;
+  return s;
 }
 
 static inline int_fast16_t syntaxnum(nanoclj_val_t p) {
@@ -1088,18 +1090,37 @@ static inline nanoclj_val_t mk_integer(nanoclj_t * sc, long long num) {
 static inline nanoclj_val_t mk_image(nanoclj_t * sc, int32_t width, int32_t height,
 				     int32_t channels, unsigned char * data) {
   nanoclj_cell_t * x = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
-  nanoclj_image_t * image = (nanoclj_image_t*)malloc(sizeof(nanoclj_image_t));
+  nanoclj_image_t * image = (nanoclj_image_t*)sc->malloc(sizeof(nanoclj_image_t));
   _typeflag(x) = T_IMAGE | T_GC_ATOM;
   _image_unchecked(x) = image;
   _metadata_unchecked(x) = mk_nil();
 
   size_t size = width * height * channels;
-  image->data = (unsigned char *)malloc(size);
+  image->data = (unsigned char *)sc->malloc(size);
   image->width = width;
   image->height = height;
   image->channels = channels;
   
   if (data) memcpy(image->data, data, size);
+  
+  return mk_pointer(x);
+}
+
+static inline nanoclj_val_t mk_audio(nanoclj_t * sc, size_t frames, int32_t channels,
+				     int32_t sample_rate, float * data) {
+  nanoclj_cell_t * x = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
+  nanoclj_audio_t * audio = (nanoclj_audio_t*)sc->malloc(sizeof(nanoclj_audio_t));
+  _typeflag(x) = T_AUDIO | T_GC_ATOM;
+  _audio_unchecked(x) = audio;
+  _metadata_unchecked(x) = mk_nil();
+
+  size_t size = frames * channels * sizeof(float);
+  audio->data = (float *)sc->malloc(size);
+  audio->frames = frames;
+  audio->channels = channels;
+  audio->sample_rate = sample_rate;
+  
+  if (data) memcpy(audio->data, data, size);
   
   return mk_pointer(x);
 }
@@ -2289,12 +2310,24 @@ static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t
       if (result) *result = mk_int(image->width);
     } else if (key.as_long == sc->HEIGHT.as_long) {
       if (result) *result = mk_int(image->height);
+    } else if (key.as_long == sc->CHANNELS.as_long) {
+      if (result) *result = mk_int(image->channels);
     } else {
       return false;
     }
     return true;
   }
+
+  case T_AUDIO:{
+    nanoclj_audio_t * audio = _audio_unchecked(coll);
+    if (key.as_long == sc->CHANNELS.as_long) {
+      if (result) *result = mk_int(audio->channels);
+    } else {
+      return false;
+    }
+    return true;
   }
+}
   
   return false;
 }
@@ -3424,6 +3457,25 @@ static inline void print_slashstring(nanoclj_t * sc, strview_t sv, nanoclj_val_t
 static int sixel_write(char *data, int size, void *priv) {
   return fwrite(data, 1, size, (FILE *)priv);
 }
+static inline void print_image_sixel(unsigned char * data, int width, int height) {
+  sixel_dither_t * dither;
+  sixel_dither_new(&dither, -1, NULL);
+  sixel_dither_initialize(dither, data, width, height, SIXEL_PIXELFORMAT_RGB888, SIXEL_LARGE_NORM, SIXEL_REP_CENTER_BOX, SIXEL_QUALITY_HIGHCOLOR);
+  
+  sixel_output_t * output = NULL;
+  sixel_output_new(&output, sixel_write, stdout, NULL);
+  
+  /* convert pixels into sixel format and write it to output context */
+  sixel_encode(data,
+	       width,
+	       height,
+	       8,
+	       dither,
+	       output);
+
+  sixel_output_destroy(output);
+  sixel_dither_destroy(dither);
+}
 #endif
 
 static inline void print_image(nanoclj_t * sc, nanoclj_image_t * img, nanoclj_val_t out) {
@@ -3441,31 +3493,20 @@ static inline void print_image(nanoclj_t * sc, nanoclj_image_t * img, nanoclj_va
   } else {
     if (sc->sixel_term && (pt->kind & port_file) && pt->rep.stdio.file == stdout) {      
 #if NANOCLJ_SIXEL
-      int width = img->width, height = img->height;
-      unsigned char * tmp = malloc(3 * width * height);
-      for (unsigned int i = 0; i < width * height; i++) {
-	tmp[3 * i + 0] = img->data[4 * i + 0];
-	tmp[3 * i + 1] = img->data[4 * i + 1];
-	tmp[3 * i + 2] = img->data[4 * i + 2];
+      if (img->channels == 4) {
+	unsigned char * tmp = (unsigned char *)sc->malloc(3 * img->width * img->height);
+	for (unsigned int i = 0; i < img->width * img->height; i++) {
+	  tmp[3 * i + 0] = img->data[4 * i + 0];
+	  tmp[3 * i + 1] = img->data[4 * i + 1];
+	  tmp[3 * i + 2] = img->data[4 * i + 2];
+	}
+	print_image_sixel(tmp, img->width, img->height);
+	sc->free(tmp);
+	return;
+      } else if (img->channels == 3) {
+	print_image_sixel(img->data, img->width, img->height);
+	return;
       }
-      sixel_dither_t * dither;
-      sixel_dither_new(&dither, -1, NULL);
-      sixel_dither_initialize(dither, tmp, width, height, SIXEL_PIXELFORMAT_RGB888, SIXEL_LARGE_NORM, SIXEL_REP_CENTER_BOX, SIXEL_QUALITY_HIGHCOLOR);
-
-      sixel_output_t * output = NULL;
-      sixel_output_new(&output, sixel_write, stdout, NULL);
-      
-      /* convert pixels into sixel format and write it to output context */
-      sixel_encode(tmp,
-		   img->width,
-		   img->height,
-		   8,
-		   dither,
-		   output);
-      sc->free(tmp);
-      sixel_output_destroy(output);
-      sixel_dither_destroy(dither);
-      return;
 #endif      
     }
 
@@ -4633,7 +4674,8 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       case T_VECTOR:
       case T_ARRAYMAP:
       case T_SORTED_SET:
-      case T_IMAGE:{
+      case T_IMAGE:
+      case T_AUDIO:{
 	if (sc->args.as_long == sc->EMPTY.as_long) {
 	  Error_0(sc, "Error - Invalid arity");
 	}
@@ -6728,6 +6770,7 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc fr
   sc->DOC = def_keyword(sc, "doc");
   sc->WIDTH = def_keyword(sc, "width");
   sc->HEIGHT = def_keyword(sc, "height");
+  sc->CHANNELS = def_keyword(sc, "channels");
     
   sc->SORTED_SET = def_symbol(sc, "sorted-set");
   sc->ARRAY_MAP = def_symbol(sc, "array-map");

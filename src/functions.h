@@ -29,6 +29,9 @@
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
 #include "stb_image_resize.h"
 
+#define DR_WAV_IMPLEMENTATION
+#include "dr_wav.h"
+
 /* Thread */
 
 static nanoclj_val_t Thread_sleep(nanoclj_t * sc, nanoclj_val_t args) {
@@ -198,10 +201,7 @@ static nanoclj_val_t System_getProperty(nanoclj_t * sc, nanoclj_val_t args) {
 }
 
 static inline nanoclj_val_t System_glob(nanoclj_t * sc, nanoclj_val_t args) {
-  strview_t sv = to_strview(car(args));
-  char * tmp = (char *)sc->malloc(sv.size + 1);
-  memcpy(tmp, sv.ptr, sv.size);
-  tmp[sv.size] = 0;
+  char * tmp = to_cstr(sc, car(args));
 
   glob_t gstruct;
   int r = glob(tmp, GLOB_ERR, NULL, &gstruct);
@@ -377,23 +377,14 @@ static nanoclj_val_t numeric_tower_expt(nanoclj_t * sc, nanoclj_val_t args) {
 
 static inline nanoclj_val_t browse_url(nanoclj_t * sc, nanoclj_val_t args) {  
 #ifdef WIN32
-  strview_t sv = to_strview(car(args));
-  char * url = (char *)sc->malloc(sv.size + 1);
-  memcpy(url, sv.ptr, sv.size);
-  url[sv.size] = 0;
-
+  char * url = to_cstr(sc, car(args));
   ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
-  
   sc->free(url);
   return (nanoclj_val_t)kTRUE;
 #else
   pid_t r = fork();
   if (r == 0) {
-    strview_t sv = to_strview(car(args));
-    char * url = (char *)sc->malloc(sv.size + 1);
-    memcpy(url, sv.ptr, sv.size);
-    url[sv.size] = 0;
-
+    char * url = to_cstr(sc, car(args));
     const char * cmd = "xdg-open";
     execlp(cmd, cmd, url, NULL);
     exit(1);
@@ -413,20 +404,12 @@ static inline nanoclj_val_t shell_sh(nanoclj_t * sc, nanoclj_val_t args0) {
 #else
     pid_t r = fork();
     if (r == 0) {
-      strview_t sv0 = to_strview(first(sc, args));
-      char * cmd = (char *)sc->malloc(sv0.size + 1);
-      memcpy(cmd, sv0.ptr, sv0.size);
-      cmd[sv0.size] = 0;
-
+      char * cmd = (char *)to_cstr(sc, first(sc, args));
       args = rest(sc, args);
       n--;
       char ** output_args = (char **)sc->malloc(n * sizeof(char*));
       for (size_t i = 0; i < n; i++, args = rest(sc, args)) {
-	strview_t sv = to_strview(first(sc, args));
-	char * tmp = (char *)sc->malloc(sv.size + 1);
-	memcpy(tmp, sv.ptr, sv.size);
-	tmp[sv.size] = 0;
-	output_args[i] = tmp;
+	output_args[i] = to_cstr(sc, first(sc, args));
       }
       execvp(cmd, output_args);
       exit(1);
@@ -440,10 +423,7 @@ static inline nanoclj_val_t shell_sh(nanoclj_t * sc, nanoclj_val_t args0) {
 }
 
 static inline nanoclj_val_t Image_load(nanoclj_t * sc, nanoclj_val_t args) {
-  strview_t sv = to_strview(car(args));
-  char * filename = (char *)sc->malloc(sv.size + 1);
-  memcpy(filename, sv.ptr, sv.size);
-  filename[sv.size] = 0;
+  char * filename = to_cstr(sc, car(args));
 	    
   int w, h, channels;
   unsigned char * data = stbi_load(filename, &w, &h, &channels, 0);
@@ -526,10 +506,7 @@ static inline nanoclj_val_t Image_save(nanoclj_t * sc, nanoclj_val_t args) {
   nanoclj_cell_t * image0 = decode_pointer(image00);
   nanoclj_image_t * image = _image_unchecked(image0);
 
-  strview_t sv = to_strview(filename0);
-  char * filename = (char *)sc->malloc(sv.size + 1);
-  memcpy(filename, sv.ptr, sv.size);
-  filename[sv.size] = 0;
+  char * filename = to_cstr(sc, filename0);
 
   int w = image->width, h = image->height, channels = image->channels;
   unsigned char * data = image->data;
@@ -716,6 +693,26 @@ nanoclj_val_t Image_gaussian_blur(nanoclj_t * sc, nanoclj_val_t args) {
   return r;
 }
 
+static inline nanoclj_val_t Audio_load(nanoclj_t * sc, nanoclj_val_t args) {
+  char * filename = to_cstr(sc, car(args));
+  drwav wav;
+  if (!drwav_init_file(&wav, filename, NULL)) {
+    return mk_exception(sc, "Failed to load Audio");
+  }
+  sc->free(filename);
+
+  /* Read interleaved frames */
+  float * data = (float *)sc->malloc(wav.totalPCMFrameCount * wav.channels * sizeof(float));
+  size_t samples_decoded = drwav_read_pcm_frames_f32(&wav, wav.totalPCMFrameCount, data);
+
+  nanoclj_val_t audio = mk_audio(sc, samples_decoded, wav.channels, wav.sampleRate, data);
+  sc->free(data);
+  
+  drwav_uninit(&wav);
+  
+  return audio;
+}
+
 #if NANOCLJ_USE_LINENOISE
 #define MAX_COMPLETION_SYMBOLS 65535
 
@@ -880,6 +877,7 @@ static inline void register_functions(nanoclj_t * sc) {
   nanoclj_val_t clojure_java_browse = def_namespace(sc, "clojure.java.browse");
   nanoclj_val_t clojure_java_shell = def_namespace(sc, "clojure.java.shell");
   nanoclj_val_t Image = def_namespace(sc, "Image");
+  nanoclj_val_t Audio = def_namespace(sc, "Audio");
   
   intern(sc, Thread, def_symbol(sc, "sleep"), mk_foreign_func_with_arity(sc, Thread_sleep, 1, 1));
   
@@ -923,6 +921,8 @@ static inline void register_functions(nanoclj_t * sc) {
   intern(sc, Image, def_symbol(sc, "save"), mk_foreign_func_with_arity(sc, Image_save, 2, 2));
   intern(sc, Image, def_symbol(sc, "blur"), mk_foreign_func_with_arity(sc, Image_gaussian_blur, 2, 2));
   intern(sc, Image, def_symbol(sc, "gaussian-blur"), mk_foreign_func_with_arity(sc, Image_gaussian_blur, 2, 2));
+
+  intern(sc, Audio, def_symbol(sc, "load"), mk_foreign_func_with_arity(sc, Audio_load, 1, 1));
   
 #if NANOCLJ_USE_LINENOISE
   nanoclj_val_t linenoise = def_namespace(sc, "linenoise");

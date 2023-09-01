@@ -124,6 +124,7 @@ extern "C" {
       long long _lvalue;
       nanoclj_port_t * _port;
       nanoclj_image_t * _image;
+      nanoclj_audio_t * _audio;
       void * _canvas;
       struct {
 	int min_arity, max_arity;
@@ -215,6 +216,7 @@ extern "C" {
     nanoclj_val_t DOC;		  /* :doc */
     nanoclj_val_t WIDTH;	  /* :width */
     nanoclj_val_t HEIGHT;	  /* :height */
+    nanoclj_val_t CHANNELS;	  /* :channels */
     
     nanoclj_val_t SORTED_SET;	  /* sorted-set */
     nanoclj_val_t ARRAY_MAP;	  /* array-map */

@@ -90,6 +90,7 @@ have been tested:
 
 - linenoise (included)
 - stb_image, stb_image_resize, stb_image_write (included)
+- dr_wav (included)
 - cairo
 - libsixel
 - utf8proc

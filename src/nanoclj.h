@@ -9,6 +9,8 @@
 extern "C" {
 #endif
 
+#include "nanoclj_types.h"
+  
 /* #define USE_RECUR_REGISTER */
 
 /*
@@ -57,12 +59,7 @@ extern "C" {
     uint64_t as_long;
     double as_double;
   } nanoclj_val_t;
-
-  typedef struct {
-    int32_t width, height, channels;
-    unsigned char * data;
-  } nanoclj_image_t;
-
+  
   typedef void *(*func_alloc) (size_t);
   typedef void (*func_dealloc) (void *);
   typedef void *(*func_realloc) (void *, size_t);
