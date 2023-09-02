@@ -393,6 +393,7 @@
   [x n] (bit-xor- x (bit-shift-left 1 n)))
 
 (defn conj
+  ([coll] coll)
   ([coll x] (conj- coll x))
   ([coll x & xs] (reduce conj- (conj- coll x) xs)))
 
