@@ -356,7 +356,7 @@
                                                   (pr (key (first x)))
                                                   (print \space)
                                                   (pr (val (first x)))
-                                                  (run! (fn [x] (print \space) (pr (key x))
+                                                  (run! (fn [x] (print ", ") (pr (key x))
                                                           (print \space) (pr (val x))) (rest x))
                                                   (print \})))
                          (seq? x) (cond (empty? x) (print "()")
@@ -399,6 +399,7 @@
                                          (set-color (styles- :symbol))
                                          (pr- x)
                                          (restore))
+                         (or (closure? x) (macro? x)) (pr (cons 'fn (car x)))
                          (image? x) (let [ws *window-size*
                                           f *window-scale-factor*
                                           w (x :width)
