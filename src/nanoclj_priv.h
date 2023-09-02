@@ -55,7 +55,6 @@ extern "C" {
     nanoclj_val_t args;
     nanoclj_val_t envir;
     nanoclj_val_t code;
-    bool is_c_call_return;
 #ifdef USE_RECUR_REGISTER
     nanoclj_val_t recur;
 #endif

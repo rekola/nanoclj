@@ -1,3 +1,4 @@
+_OP_DEF(0, OP_NIL)
 _OP_DEF("load", OP_LOAD)
 _OP_DEF(0, OP_T0LVL)
 _OP_DEF(0, OP_T1LVL)
