@@ -4310,35 +4310,34 @@ static inline bool unpack_args_0(nanoclj_t * sc) {
   return sc->args.as_long == sc->EMPTY.as_long;  
 }
 
-static inline bool unpack_args_1(nanoclj_t * sc) {
+static inline bool unpack_args_1(nanoclj_t * sc, nanoclj_val_t * arg0) {
   if (sc->args.as_long != sc->EMPTY.as_long) {
     nanoclj_cell_t * c = decode_pointer(sc->args);
-    sc->arg0 = _car(c);
+    *arg0 = _car(c);
     nanoclj_val_t r = _cdr(c);
     return r.as_long == sc->EMPTY.as_long;      
   }
   return false;
 }
 
-static inline bool unpack_args_1_plus(nanoclj_t * sc) {
- if (sc->args.as_long != sc->EMPTY.as_long) {
+static inline bool unpack_args_1_plus(nanoclj_t * sc, nanoclj_val_t * arg0, nanoclj_val_t * arg_rest) {
+  if (sc->args.as_long != sc->EMPTY.as_long) {
     nanoclj_cell_t * c = decode_pointer(sc->args);
-    sc->arg0 = _car(c);
-    sc->arg1 = mk_nil();
-    sc->arg_rest = _cdr(c);
+    *arg0 = _car(c);
+    *arg_rest = _cdr(c);
     return true;
  }
  return false;
 }
 
-static inline bool unpack_args_2(nanoclj_t * sc) {
+static inline bool unpack_args_2(nanoclj_t * sc, nanoclj_val_t * arg0, nanoclj_val_t * arg1) {
   if (sc->args.as_long != sc->EMPTY.as_long) {
     nanoclj_cell_t * c = decode_pointer(sc->args);
-    sc->arg0 = _car(c);
+    *arg0 = _car(c);
     nanoclj_val_t r = _cdr(c);
     if (r.as_long != sc->EMPTY.as_long) {
       c = decode_pointer(r);
-      sc->arg1 = _car(c);
+      *arg1 = _car(c);
       nanoclj_val_t r = _cdr(c);
       return r.as_long == sc->EMPTY.as_long;      
     }
@@ -4346,18 +4345,18 @@ static inline bool unpack_args_2(nanoclj_t * sc) {
   return false;
 }
 
-static inline bool unpack_args_3(nanoclj_t * sc) {
+static inline bool unpack_args_3(nanoclj_t * sc, nanoclj_val_t * arg0, nanoclj_val_t * arg1, nanoclj_val_t * arg2) {
   if (sc->args.as_long != sc->EMPTY.as_long) {
     nanoclj_cell_t * c = decode_pointer(sc->args);
-    sc->arg0 = _car(c);
+    *arg0 = _car(c);
     nanoclj_val_t r = _cdr(c);
     if (r.as_long != sc->EMPTY.as_long) {
       c = decode_pointer(r);
-      sc->arg1 = _car(c);
+      *arg1 = _car(c);
       r = _cdr(c);
       if (r.as_long != sc->EMPTY.as_long) {
 	c = decode_pointer(r);
-	sc->arg2 = _car(c);
+	*arg2 = _car(c);
 	r = _cdr(c);
 	return r.as_long == sc->EMPTY.as_long;	
       }
@@ -4366,26 +4365,27 @@ static inline bool unpack_args_3(nanoclj_t * sc) {
   return false;
 }
 
-static inline bool unpack_args_5(nanoclj_t * sc) {
+static inline bool unpack_args_5(nanoclj_t * sc, nanoclj_val_t * arg0, nanoclj_val_t * arg1,
+				 nanoclj_val_t * arg2, nanoclj_val_t * arg3, nanoclj_val_t * arg4) {
   if (sc->args.as_long != sc->EMPTY.as_long) {
     nanoclj_cell_t * c = decode_pointer(sc->args);
-    sc->arg0 = _car(c);
+    *arg0 = _car(c);
     nanoclj_val_t r = _cdr(c);
     if (r.as_long != sc->EMPTY.as_long) {
       c = decode_pointer(r);
-      sc->arg1 = _car(c);
+      *arg1 = _car(c);
       r = _cdr(c);
       if (r.as_long != sc->EMPTY.as_long) {
 	c = decode_pointer(r);
-	sc->arg2 = _car(c);
+	*arg2 = _car(c);
 	r = _cdr(c);
 	if (r.as_long != sc->EMPTY.as_long) {
 	  c = decode_pointer(r);
-	  sc->arg3 = _car(c);
+	  *arg3 = _car(c);
 	  r = _cdr(c);
 	  if (r.as_long != sc->EMPTY.as_long) {
 	    c = decode_pointer(r);
-	    sc->arg4 = _car(c);
+	    *arg4 = _car(c);
 	    r = _cdr(c);
 	    return r.as_long == sc->EMPTY.as_long;
 	  }
@@ -4396,15 +4396,15 @@ static inline bool unpack_args_5(nanoclj_t * sc) {
   return false;
 }
 
-static inline bool unpack_args_2_plus(nanoclj_t * sc) {
+static inline bool unpack_args_2_plus(nanoclj_t * sc, nanoclj_val_t * arg0, nanoclj_val_t * arg1, nanoclj_val_t * arg_rest) {
   if (sc->args.as_long != sc->EMPTY.as_long) {
     nanoclj_cell_t * c = decode_pointer(sc->args);
-    sc->arg0 = _car(c);
+    *arg0 = _car(c);
     nanoclj_val_t r = _cdr(c);
     if (r.as_long != sc->EMPTY.as_long) {
       c = decode_pointer(r);
-      sc->arg1 = _car(c);
-      sc->arg_rest = _cdr(c);
+      *arg1 = _car(c);
+      *arg_rest = _cdr(c);
       return true;
     }
   }
@@ -4450,7 +4450,8 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   int syn;
   nanoclj_val_t params0;
   nanoclj_cell_t * params;
-
+  nanoclj_val_t arg0, arg1, arg2, arg3, arg4, arg_rest;
+  
 #if 0
   fprintf(stderr, "opexe %d %s\n", (int)sc->op, procname(sc->op));
 #endif
@@ -4463,10 +4464,10 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 
   switch (op) {
   case OP_LOAD:                /* load */
-    if (!unpack_args_1(sc)) {
+    if (!unpack_args_1(sc, &arg0)) {
       Error_0(sc, "Error - Invalid arity");
     } else {
-      strview_t sv = to_strview(sc->arg0);
+      strview_t sv = to_strview(arg0);
       if (!file_push(sc, sv)) {
 	sprintf(sc->strbuff, "Error - unable to open %.*s", (int)sv.size, sv.ptr);
 	Error_0(sc, sc->strbuff);
@@ -4633,12 +4634,12 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 
 #if USE_TRACING
   case OP_TRACING:{
-    if (!unpack_args_1(sc)) {
+    if (!unpack_args_1(sc, &arg0)) {
       Error_0(sc, "Error - Invalid arity");
     }
 
     int tr = sc->tracing;
-    sc->tracing = to_int(sc->arg0);
+    sc->tracing = to_int(arg0);
     s_return(sc, mk_int(sc, tr));
   }
 #endif
@@ -4864,26 +4865,26 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     s_return(sc, mk_pointer(find_slot_in_env(sc, sc->envir, car(sc->code), true)));
 
   case OP_RESOLVE:                /* resolve */
-    if (!unpack_args_1_plus(sc)) {
+    if (!unpack_args_1_plus(sc, &arg0, &arg_rest)) {
       Error_0(sc, "Error - Invalid arity");
     }
 
-    if (sc->arg_rest.as_long != sc->EMPTY.as_long) {
-      s_return(sc, mk_pointer(find_slot_in_env(sc, sc->arg0, car(sc->arg_rest), false)));
+    if (arg_rest.as_long != sc->EMPTY.as_long) {
+      s_return(sc, mk_pointer(find_slot_in_env(sc, arg0, car(arg_rest), false)));
     } else {
-      s_return(sc, mk_pointer(find_slot_in_env(sc, sc->envir, sc->arg0, true)));
+      s_return(sc, mk_pointer(find_slot_in_env(sc, sc->envir, arg0, true)));
     }
 
   case OP_INTERN:
-    if (!unpack_args_2_plus(sc)) {
+    if (!unpack_args_2_plus(sc, &arg0, &arg1, &arg_rest)) {
       Error_0(sc, "Error - Invalid arity");
     }
 
-    ns = sc->arg0; /* namespace */
-    x = sc->arg1; /* name */
+    ns = arg0; /* namespace */
+    x = arg1; /* name */
 
-    if (sc->arg_rest.as_long != sc->EMPTY.as_long) {
-      s_return(sc, intern(sc, ns, x, car(sc->arg_rest)));
+    if (arg_rest.as_long != sc->EMPTY.as_long) {
+      s_return(sc, intern(sc, ns, x, car(arg_rest)));
     } else {
       s_return(sc, intern_symbol(sc, ns, x));
     }
@@ -4924,12 +4925,12 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   }
     
   case OP_SET:{
-    if (!unpack_args_2(sc)) {
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
       Error_0(sc, "Error - Invalid arity");
     }
-    nanoclj_cell_t * c = find_slot_in_env(sc, sc->envir, sc->arg0, true);
+    nanoclj_cell_t * c = find_slot_in_env(sc, sc->envir, arg0, true);
     if (c) {
-      s_return(sc, set_slot_in_env(sc, c, sc->arg1));
+      s_return(sc, set_slot_in_env(sc, c, arg1));
     } else {
       Error_0(sc, "Use of undeclared var");
     }
@@ -5186,45 +5187,45 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     s_return(sc, x);
       
   case OP_PAPPLY:              /* apply* */
-    if (!unpack_args_2(sc)) {
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
       Error_0(sc, "Error - Invalid arity");
     }
 
-    sc->code = sc->arg0;
-    sc->args = sc->arg1;
+    sc->code = arg0;
+    sc->args = arg1;
     s_goto(sc, OP_APPLY);
 
   case OP_PEVAL:               /* eval */
-    if (!unpack_args_1_plus(sc)) {
+    if (!unpack_args_1_plus(sc, &arg0, &arg_rest)) {
       Error_0(sc, "Error - Invalid arity");
     }
-    if (sc->arg_rest.as_long != sc->EMPTY.as_long) {
-      sc->envir = car(sc->arg_rest);
+    if (arg_rest.as_long != sc->EMPTY.as_long) {
+      sc->envir = car(arg_rest);
     }
-    sc->code = sc->arg0;
+    sc->code = arg0;
     s_goto(sc, OP_EVAL);
 
   case OP_RATIONALIZE:
-    if (!unpack_args_1(sc)) {
+    if (!unpack_args_1(sc, &arg0)) {
       Error_0(sc, "Error - Invalid arity");
     }
-    x = sc->arg0;
+    x = arg0;
     if (is_real(x)) {
       if (x.as_double == 0) {
 	Error_0(sc, "Divide by zero");
       } else {
-	s_return(sc, mk_ratio_from_double(sc, sc->arg0));
+	s_return(sc, mk_ratio_from_double(sc, arg0));
       }
     } else {
-      s_return(sc, sc->arg0);
+      s_return(sc, arg0);
     }
     
   case OP_INC:
-    if (!unpack_args_1(sc)) {
+    if (!unpack_args_1(sc, &arg0)) {
       Error_0(sc, "Error - Invalid arity");
     }
 
-    x = sc->arg0;
+    x = arg0;
     
     switch (prim_type(x)) {
     case T_INTEGER: s_return(sc, mk_int(decode_integer(x) + 1));
@@ -5254,11 +5255,11 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     s_return(sc, mk_nil());
 
   case OP_DEC:
-    if (!unpack_args_1(sc)) {
+    if (!unpack_args_1(sc, &arg0)) {
       Error_0(sc, "Error - Invalid arity");
     }
 
-    x = sc->arg0;
+    x = arg0;
     
     switch (prim_type(x)) {
     case T_INTEGER: s_return(sc, mk_int(decode_integer(x) - 1));
@@ -5288,12 +5289,12 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     s_return(sc, mk_nil());
 
   case OP_ADD:{                 /* add */
-    if (!unpack_args_2(sc)) {
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
       Error_0(sc, "Error - Invalid arity");
     }
 
-    x = sc->arg0;
-    y = sc->arg1;
+    x = arg0;
+    y = arg1;
     
     int tx = prim_type(x), ty = prim_type(y);
     if (tx == T_REAL || ty == T_REAL) {
@@ -5327,12 +5328,12 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   }
     
   case OP_SUB:{                 /* minus */
-    if (!unpack_args_2(sc)) {
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
       Error_0(sc, "Error - Invalid arity");
     }
 
-    x = sc->arg0;
-    y = sc->arg1;
+    x = arg0;
+    y = arg1;
     
     int tx = prim_type(x), ty = prim_type(y);
     if (tx == T_REAL || ty == T_REAL) {
@@ -5366,12 +5367,12 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   }
 
   case OP_MUL:{                 /* multiply */
-    if (!unpack_args_2(sc)) {
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
       Error_0(sc, "Error - Invalid arity");
     }
 
-    x = sc->arg0;
-    y = sc->arg1;
+    x = arg0;
+    y = arg1;
     
     int tx = prim_type(x), ty = prim_type(y);
     if (tx == T_REAL || ty == T_REAL) {
@@ -5410,12 +5411,12 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   }
 	
   case OP_DIV:{                 /* divide */
-    if (!unpack_args_2(sc)) {
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
       Error_0(sc, "Error - Invalid arity");
     }
 
-    x = sc->arg0;
-    y = sc->arg1;       
+    x = arg0;
+    y = arg1;       
 
     int tx = prim_type(x), ty = prim_type(y);
     if (tx == T_REAL || ty == T_REAL) {
@@ -5477,11 +5478,11 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   }
     
   case OP_REM: {                 /* rem */
-    if (!unpack_args_2(sc)) {
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
       Error_0(sc, "Error - Invalid arity");
     }
-    x = sc->arg0;
-    y = sc->arg1;       
+    x = arg0;
+    y = arg1;       
 
     int tx = prim_type(x), ty = prim_type(y);
     if (tx == T_REAL || ty == T_REAL) {
@@ -5496,7 +5497,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 
       s_return(sc, mk_real(res));
     } else {
-      long long a = to_long(sc->arg0), b = to_long(sc->arg1);
+      long long a = to_long(arg0), b = to_long(arg1);
       if (b == 0) {
 	Error_0(sc, "Error - division by zero");
       } else {
@@ -5511,29 +5512,29 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   }
     
   case OP_FIRST:                 /* first */
-    if (!unpack_args_1(sc)) {
+    if (!unpack_args_1(sc, &arg0)) {
       Error_0(sc, "Error - Invalid arity");
-    } else if (!is_cell(sc->arg0)) {
+    } else if (!is_cell(arg0)) {
       Error_0(sc, "Error - value is not ISeqable");    
     } else {
-      s_return(sc, first(sc, decode_pointer(sc->arg0)));
+      s_return(sc, first(sc, decode_pointer(arg0)));
     }
 
   case OP_SECOND:
-    if (!unpack_args_1(sc)) {
+    if (!unpack_args_1(sc, &arg0)) {
       Error_0(sc, "Error - Invalid arity");
-    } else if (!is_cell(sc->arg0)) {
+    } else if (!is_cell(arg0)) {
       Error_0(sc, "Error - value is not ISeqable");
     } else {
-      s_return(sc, second(sc, decode_pointer(sc->arg0)));
+      s_return(sc, second(sc, decode_pointer(arg0)));
     }
 
   case OP_REST:                 /* rest */
   case OP_NEXT:
-    if (!unpack_args_1(sc)) {
+    if (!unpack_args_1(sc, &arg0)) {
       Error_0(sc, "Error - Invalid arity");
-    } else if (is_cell(sc->arg0)) {
-      nanoclj_cell_t * c = decode_pointer(sc->arg0);
+    } else if (is_cell(arg0)) {
+      nanoclj_cell_t * c = decode_pointer(arg0);
       if (is_seqable_type(_type(c))) {
 	if (op == OP_NEXT) {
 	  s_return(sc, mk_pointer(next(sc, c)));
@@ -5545,43 +5546,43 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     Error_0(sc, "Error - value is not ISeqable");
 
   case OP_GET:{             /* get */
-    if (!unpack_args_2_plus(sc)) {
+    if (!unpack_args_2_plus(sc, &arg0, &arg1, &arg_rest)) {
       Error_0(sc, "Error - Invalid arity");
     }
 
-    nanoclj_val_t coll = sc->arg0;
-    nanoclj_val_t arg = sc->arg1;
+    nanoclj_val_t coll = arg0;
+    nanoclj_val_t arg = arg1;
     nanoclj_val_t elem;
 
     if (is_cell(coll) && get_elem(sc, decode_pointer(coll), arg, &elem)) {
       s_return(sc, elem);
-    } else if (sc->arg_rest.as_long != sc->EMPTY.as_long) {
+    } else if (arg_rest.as_long != sc->EMPTY.as_long) {
       /* Not found => return the not-found value if provided */
-      s_return(sc, car(sc->arg_rest));
+      s_return(sc, car(arg_rest));
     } else {
       s_return(sc, mk_nil());
     }
   }
 
   case OP_CONTAINSP:
-    if (!unpack_args_2(sc)) {
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
       Error_0(sc, "Error - Invalid arity");
     }
     
-    if (is_cell(sc->arg0) && get_elem(sc, decode_pointer(sc->arg0), sc->arg1, NULL)) {
+    if (is_cell(arg0) && get_elem(sc, decode_pointer(arg0), arg1, NULL)) {
       s_return(sc, (nanoclj_val_t)kTRUE);
     } else {
       s_return(sc, (nanoclj_val_t)kFALSE);
     }
     
   case OP_CONJ:             /* conj- */
-    if (!unpack_args_2(sc)) {
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
       Error_0(sc, "Error - Invalid arity");
-    } else if (!is_cell(sc->arg0)) {
+    } else if (!is_cell(arg0)) {
       Error_0(sc, "Error - No protocol method ICollection.-conj defined");      
     } else {
-      nanoclj_cell_t * coll = decode_pointer(sc->arg0);
-      y = sc->arg1;
+      nanoclj_cell_t * coll = decode_pointer(arg0);
+      y = arg1;
       switch (_type(coll)) {
       case T_VECTOR:{
 	size_t vector_len = get_vector_size(coll);
@@ -5628,7 +5629,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	  sort_vector_in_place(vec);
 	  s_return(sc, mk_pointer(vec));
 	} else {
-	  s_return(sc, sc->arg0);
+	  s_return(sc, arg0);
 	}
       }
 	
@@ -5644,17 +5645,17 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     }
 
   case OP_SUBVEC:
-    if (!unpack_args_2_plus(sc)) {
+    if (!unpack_args_2_plus(sc, &arg0, &arg1, &arg_rest)) {
      Error_0(sc, "Error - Invalid arity");
     }
-    if (!is_cell(sc->arg0)) {
+    if (!is_cell(arg0)) {
       Error_0(sc, "Error - Not a vector");
     } else {
-      nanoclj_cell_t * c = decode_pointer(sc->arg0);
-      long long start = to_long(sc->arg1);
+      nanoclj_cell_t * c = decode_pointer(arg0);
+      long long start = to_long(arg1);
       long long end;
-      if (sc->arg_rest.as_long != sc->EMPTY.as_long) {
-	end = to_long(car(sc->arg_rest));
+      if (arg_rest.as_long != sc->EMPTY.as_long) {
+	end = to_long(car(arg_rest));
       } else {
 	end = get_vector_size(c);
       }
@@ -5662,93 +5663,92 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       s_return(sc, mk_pointer(subvec(sc, c, start, end - start)));
     }
   case OP_NOT:                 /* not */
-    if (!unpack_args_1(sc)) {
+    if (!unpack_args_1(sc, &arg0)) {
       Error_0(sc, "Error - Invalid arity");
     }
-    s_retbool(is_false(sc->arg0));
+    s_retbool(is_false(arg0));
     
   case OP_EQUIV:                  /* equiv */
-    if (!unpack_args_2(sc)) {
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
       Error_0(sc, "Error - Invalid arity");
     }
-    s_retbool(equiv(sc->arg0, sc->arg1));
+    s_retbool(equiv(arg0, arg1));
     
   case OP_LT:                  /* lt */
-    if (!unpack_args_2(sc)) {
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
       Error_0(sc, "Error - Invalid arity");
     }
-    s_retbool(compare(sc->arg0, sc->arg1) < 0);
+    s_retbool(compare(arg0, arg1) < 0);
 
   case OP_GT:                  /* gt */
-    if (!unpack_args_2(sc)) {
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
       Error_0(sc, "Error - Invalid arity");
     }
-    s_retbool(compare(sc->arg0, sc->arg1) > 0);
+    s_retbool(compare(arg0, arg1) > 0);
   
   case OP_LE:                  /* le */
-    if (!unpack_args_2(sc)) {
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
       Error_0(sc, "Error - Invalid arity");
     }
-    s_retbool(compare(sc->arg0, sc->arg1) <= 0);
+    s_retbool(compare(arg0, arg1) <= 0);
 
   case OP_GE:                  /* ge */
-    if (!unpack_args_2(sc)) {
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
       Error_0(sc, "Error - Invalid arity");
     }
-    s_retbool(compare(sc->arg0, sc->arg1) >= 0);
+    s_retbool(compare(arg0, arg1) >= 0);
     
   case OP_EQ:                  /* equals? */
-    if (!unpack_args_2(sc)) {
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
       Error_0(sc, "Error - Invalid arity");
     }
-    s_retbool(equals(sc, sc->arg0, sc->arg1));
+    s_retbool(equals(sc, arg0, arg1));
 
   case OP_BIT_AND:
-    if (!unpack_args_2(sc)) {
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
       Error_0(sc, "Error - Invalid arity");
     }
-    s_return(sc, mk_integer(sc, to_long(sc->arg0) & to_long(sc->arg1)));
+    s_return(sc, mk_integer(sc, to_long(arg0) & to_long(arg1)));
 
   case OP_BIT_OR:
-    if (!unpack_args_2(sc)) {
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
       Error_0(sc, "Error - Invalid arity");
     }
-    s_return(sc, mk_integer(sc, to_long(sc->arg0) | to_long(sc->arg1)));
+    s_return(sc, mk_integer(sc, to_long(arg0) | to_long(arg1)));
 
   case OP_BIT_XOR:
-    if (!unpack_args_2(sc)) {
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
       Error_0(sc, "Error - Invalid arity");
     }
-    s_return(sc, mk_integer(sc, to_long(sc->arg0) ^ to_long(sc->arg1)));
+    s_return(sc, mk_integer(sc, to_long(arg0) ^ to_long(arg1)));
 
   case OP_BIT_SHIFT_LEFT:
-    if (!unpack_args_2(sc)) {
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
       Error_0(sc, "Error - Invalid arity");
     }
-    s_return(sc, mk_integer(sc, to_long(sc->arg0) << to_long(sc->arg1)));
+    s_return(sc, mk_integer(sc, to_long(arg0) << to_long(arg1)));
 
   case OP_BIT_SHIFT_RIGHT:
-    if (!unpack_args_2(sc)) {
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
       Error_0(sc, "Error - Invalid arity");
     }
-    s_return(sc, mk_integer(sc, to_long(sc->arg0) >> to_long(sc->arg1)));
+    s_return(sc, mk_integer(sc, to_long(arg0) >> to_long(arg1)));
 
   case OP_TYPE:                /* type */
-    if (!unpack_args_1(sc)) {
+    if (!unpack_args_1(sc, &arg0)) {
       Error_0(sc, "Error - Invalid arity");
     }
-    x = sc->arg0;
-    if (is_nil(x)) {
+    if (is_nil(arg0)) {
       s_return(sc, mk_nil());
     } else {
-      s_return(sc, mk_type(type(x)));
+      s_return(sc, mk_type(type(arg0)));
     }
 
   case OP_IDENTICALP:                  /* identical? */
-    if (!unpack_args_2(sc)) {
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
       Error_0(sc, "Error - Invalid arity");
     }
-    s_retbool(sc->arg0.as_long == sc->arg1.as_long);
+    s_retbool(arg0.as_long == arg1.as_long);
 
   case OP_DEREF:
     x = car(sc->args);
@@ -5797,18 +5797,18 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     
   case OP_PR:               /* pr- */
   case OP_PRINT:            /* print- */
-    if (!unpack_args_1(sc)) {
+    if (!unpack_args_1(sc, &arg0)) {
       Error_0(sc, "Error - Invalid arity");
     }
-    print_primitive(sc, sc->arg0, op == OP_PR, get_out_port(sc));
+    print_primitive(sc, arg0, op == OP_PR, get_out_port(sc));
     s_return(sc, mk_nil());
   
   case OP_FORMAT:{
-    if (!unpack_args_1_plus(sc)) {
+    if (!unpack_args_1_plus(sc, &arg0, &arg_rest)) {
       Error_0(sc, "Error - Invalid arity");
     }
-    const char * fmt = strvalue(sc->arg0);
-    s_return(sc, mk_format(sc, fmt, decode_pointer(sc->arg_rest)));
+    const char * fmt = strvalue(arg0);
+    s_return(sc, mk_format(sc, fmt, decode_pointer(arg_rest)));
   }
 
   case OP_ERR0:                /* throw */
@@ -5830,14 +5830,14 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 #endif
     
   case OP_CLOSE:        /* close */
-    if (!unpack_args_1(sc)) {
+    if (!unpack_args_1(sc, &arg0)) {
       Error_0(sc, "Error - Invalid arity");
     }
 
-    switch (type(sc->arg0)) {
+    switch (type(arg0)) {
     case T_READER:
     case T_WRITER:
-      port_close(sc, port_unchecked(sc->arg0));
+      port_close(sc, port_unchecked(arg0));
     }
     s_return(sc, mk_nil());
 
@@ -6165,10 +6165,10 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     }
     
   case OP_EMPTYP:
-    if (!unpack_args_1(sc)) {
+    if (!unpack_args_1(sc, &arg0)) {
       Error_0(sc, "Error - Invalid arity");
-    } else if (is_cell(sc->arg0)) {
-      nanoclj_cell_t * c = decode_pointer(sc->arg0);
+    } else if (is_cell(arg0)) {
+      nanoclj_cell_t * c = decode_pointer(arg0);
       if (is_seqable_type(_type(c))) {
 	s_retbool(is_empty(sc, c));
       }
@@ -6176,22 +6176,22 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     Error_0(sc, "Error - value is not ISeqable");
     
   case OP_HASH:
-    if (!unpack_args_1(sc)) {
+    if (!unpack_args_1(sc, &arg0)) {
       Error_0(sc, "Error - Invalid arity");
     }
-    s_return(sc, mk_int(hasheq(sc->arg0)));
+    s_return(sc, mk_int(hasheq(arg0)));
 
   case OP_COMPARE:
-    if (!unpack_args_2(sc)) {
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
       Error_0(sc, "Error - Invalid arity");
     }
-    s_return(sc, mk_int(compare(sc->arg0, sc->arg1)));
+    s_return(sc, mk_int(compare(arg0, arg1)));
 	     
   case OP_SORT:{
-    if (!unpack_args_1(sc)) {
+    if (!unpack_args_1(sc, &arg0)) {
       Error_0(sc, "Error - Invalid arity");
     }
-    x = sc->arg0;
+    x = arg0;
     if (!is_cell(x)) {
       s_return(sc, x);
     }
@@ -6214,11 +6214,11 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   }
 
   case OP_UTF8MAP:{
-    if (!unpack_args_2(sc)) {
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
       Error_0(sc, "Error - Invalid arity");
     }
-    nanoclj_val_t input = sc->arg0;
-    nanoclj_val_t options = sc->arg1;
+    nanoclj_val_t input = arg0;
+    nanoclj_val_t options = arg1;
     utf8proc_uint8_t * dest = NULL;
     strview_t sv = to_strview(input);
     utf8proc_ssize_t s = utf8proc_map((const unsigned char *)sv.ptr,
@@ -6236,20 +6236,20 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   }
 
   case OP_META:
-    if (!unpack_args_1(sc)) {
+    if (!unpack_args_1(sc, &arg0)) {
       Error_0(sc, "Error - Invalid arity");
     }
-    if (is_cell(sc->arg0) && !is_nil(sc->arg0)) {
-      s_return(sc, mk_pointer(metadata_unchecked(sc->arg0)));
+    if (is_cell(arg0) && !is_nil(arg0)) {
+      s_return(sc, mk_pointer(metadata_unchecked(arg0)));
     } else {
       s_return(sc, mk_nil());
     }
 
   case OP_IN_NS:{
-    if (!unpack_args_1(sc)) {
+    if (!unpack_args_1(sc, &arg0)) {
       Error_0(sc, "Error - Invalid arity");
     }
-    x = sc->arg0;
+    x = arg0;
     nanoclj_cell_t * c = find_slot_in_env(sc, sc->envir, x, true);
     nanoclj_val_t ns;
     if (c) {
@@ -6264,21 +6264,21 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   }
     
   case OP_RE_PATTERN:
-    if (!unpack_args_1(sc)) {
+    if (!unpack_args_1(sc, &arg0)) {
       Error_0(sc, "Error - Invalid arity");
     }
-    x = sc->arg0;
+    x = arg0;
     /* TODO: construct a regex */
     s_return(sc, x);
 
   case OP_ADD_WATCH:
-    if (!unpack_args_3(sc)) {
+    if (!unpack_args_3(sc, &arg0, &arg1, &arg2)) {
       Error_0(sc, "Error - Invalid arity");
     }
-    if (!is_cell(sc->arg0)) {
+    if (!is_cell(arg0)) {
       Error_0(sc, "Error - Cannot add watch to a primitive");
     } else {
-      nanoclj_cell_t * c = decode_pointer(sc->arg0);
+      nanoclj_cell_t * c = decode_pointer(arg0);
       if (_type(c) != T_VAR) {
 	Error_0(sc, "Error - Watches can only be added to Vars");
       } else {
@@ -6288,20 +6288,20 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	if (get_elem(sc, md, sc->WATCHES, &w)) {
 	  // TODO: append watch
 	} else {
-	  md = conj(sc, md, mk_mapentry(sc, sc->WATCHES, cons(sc, sc->arg2, sc->EMPTY)));
+	  md = conj(sc, md, mk_mapentry(sc, sc->WATCHES, cons(sc, arg2, sc->EMPTY)));
 	}
 	_metadata_unchecked(c) = md;
-	s_return(sc, sc->arg0);
+	s_return(sc, arg0);
       }      
     }
     break;
 
   case OP_REALIZEDP:
-    if (!unpack_args_1(sc)) {
+    if (!unpack_args_1(sc, &arg0)) {
       Error_0(sc, "Error - Invalid arity");
     }
-    if (is_cell(sc->arg0)) {
-      nanoclj_cell_t * c = decode_pointer(sc->arg0);
+    if (is_cell(arg0)) {
+      nanoclj_cell_t * c = decode_pointer(arg0);
       if (_type(c) == T_LAZYSEQ || _type(c) == T_DELAY) {
 	s_retbool(_is_realized(c));
       }
@@ -6309,7 +6309,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     s_retbool(true);
         
   case OP_SET_COLOR:
-    if (!unpack_args_1(sc)) {
+    if (!unpack_args_1(sc, &arg0)) {
       Error_0(sc, "Error - Invalid arity");
     }
     x = car(sc->args);
@@ -6319,63 +6319,63 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     s_return(sc, mk_nil());
 
   case OP_SET_FONT_SIZE:
-    if (!unpack_args_1(sc)) {
+    if (!unpack_args_1(sc, &arg0)) {
       Error_0(sc, "Error - Invalid arity");
     }
 #if NANOCLJ_HAS_CANVAS
     x = get_out_port(sc);
     if (is_canvas(x)) {
-      canvas_set_font_size(canvas_unchecked(x), to_double(sc->arg0) * sc->window_scale_factor);
+      canvas_set_font_size(canvas_unchecked(x), to_double(arg0) * sc->window_scale_factor);
     }
 #endif
     s_return(sc, mk_nil());
     
   case OP_SET_LINE_WIDTH:
-    if (!unpack_args_1(sc)) {
+    if (!unpack_args_1(sc, &arg0)) {
       Error_0(sc, "Error - Invalid arity");
     }
 #if NANOCLJ_HAS_CANVAS
     x = get_out_port(sc);
     if (is_canvas(x)) {
       /* Do not scale line width whit DPI scale factor */
-      canvas_set_line_width(canvas_unchecked(x), to_double(sc->arg0));
+      canvas_set_line_width(canvas_unchecked(x), to_double(arg0));
     }
 #endif
     s_return(sc, mk_nil());
 
   case OP_MOVETO:
-    if (!unpack_args_2(sc)) {
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
       Error_0(sc, "Error - Invalid arity");
     }
 #if NANOCLJ_HAS_CANVAS
     x = get_out_port(sc);
     if (is_canvas(x)) {
-      canvas_move_to(canvas_unchecked(x), to_double(sc->arg0) * sc->window_scale_factor, to_double(sc->arg1) * sc->window_scale_factor);
+      canvas_move_to(canvas_unchecked(x), to_double(arg0) * sc->window_scale_factor, to_double(arg1) * sc->window_scale_factor);
     }
 #endif
     s_return(sc, mk_nil());
     
   case OP_LINETO:
-    if (!unpack_args_2(sc)) {
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
       Error_0(sc, "Error - Invalid arity");
     }
 #if NANOCLJ_HAS_CANVAS
     x = get_out_port(sc);
     if (is_canvas(x)) {
-      canvas_line_to(canvas_unchecked(x), to_double(sc->arg0) * sc->window_scale_factor, to_double(sc->arg1) * sc->window_scale_factor);
+      canvas_line_to(canvas_unchecked(x), to_double(arg0) * sc->window_scale_factor, to_double(arg1) * sc->window_scale_factor);
     }
 #endif
     s_return(sc, mk_nil());
 
   case OP_ARC:
-    if (!unpack_args_5(sc)) {
+    if (!unpack_args_5(sc, &arg0, &arg1, &arg2, &arg3, &arg4)) {
       Error_0(sc, "Error - Invalid arity");
     }
 #if NANOCLJ_HAS_CANVAS
     x = get_out_port(sc);
     if (is_canvas(x)) {
-      canvas_arc(canvas_unchecked(x), to_double(sc->arg0) * sc->window_scale_factor, to_double(sc->arg1) * sc->window_scale_factor,
-		 to_double(sc->arg2) * sc->window_scale_factor, to_double(sc->arg3), to_double(sc->arg4));
+      canvas_arc(canvas_unchecked(x), to_double(arg0) * sc->window_scale_factor, to_double(arg1) * sc->window_scale_factor,
+		 to_double(arg2) * sc->window_scale_factor, to_double(arg3), to_double(arg4));
     }
 #endif
     s_return(sc, mk_nil());
@@ -6417,14 +6417,14 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     s_return(sc, mk_nil());
 
   case OP_GET_TEXT_EXTENTS:
-    if (!unpack_args_1(sc)) {
+    if (!unpack_args_1(sc, &arg0)) {
       Error_0(sc, "Error - Invalid arity");
     }
 #if NANOCLJ_HAS_CANVAS
     x = get_out_port(sc);
     if (is_canvas(x)) {
       double width, height;
-      canvas_get_text_extents(canvas_unchecked(x), to_strview(sc->arg0), &width, &height);
+      canvas_get_text_extents(canvas_unchecked(x), to_strview(arg0), &width, &height);
       s_return(sc, mk_vector_2d(sc, width / sc->window_scale_factor, height / sc->window_scale_factor));
     }
 #endif
@@ -6462,12 +6462,12 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     s_return(sc, mk_nil());
 
   case OP_RESIZE:
-    if (!unpack_args_2(sc)) {
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
       Error_0(sc, "Error - Invalid arity");      
     }
     x = get_out_port(sc);
     if (is_canvas(x)) {
-      nanoclj_val_t tmp = mk_canvas(sc, to_int(sc->arg0), to_int(sc->arg1));
+      nanoclj_val_t tmp = mk_canvas(sc, to_int(arg0), to_int(arg1));
       canvas_unchecked(x) = canvas_unchecked(tmp);
       canvas_unchecked(tmp) = NULL;      
     }

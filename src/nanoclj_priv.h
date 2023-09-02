@@ -165,14 +165,6 @@ extern "C" {
 #ifdef USE_RECUR_REGISTER    
     nanoclj_val_t recur;		  /* recursion point */
 #endif
-
-/* Temporary registers for argument unpacking */
-    nanoclj_val_t arg0;
-    nanoclj_val_t arg1;
-    nanoclj_val_t arg2;
-    nanoclj_val_t arg3;
-    nanoclj_val_t arg4;
-    nanoclj_val_t arg_rest;
     
     nanoclj_cell_t _sink;
     nanoclj_val_t sink;               /* when mem. alloc. fails */
