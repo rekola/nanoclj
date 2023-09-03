@@ -53,7 +53,7 @@ have been tested:
 - By default 32 bit integers are used, since 64 bit integers don't fit in the NaN boxing.
 - List length has complexity of O(n)
 - Vectors support O(1) append, but update is O(n)
-- Macros and namespace definitions use TinyScheme syntax
+- Macros use the TinyScheme syntax
 - Tail-call optimization
 - sort is not stable and cannot throw on type mismatch
 - License is BSD 2-Clause License instead of EPL
@@ -114,10 +114,11 @@ have been tested:
 - Unchecked operations
 - Autopromoting operations
 - StructMaps
+- Locals cleaning
 - Multithreading and transactions
 - Threading macros (->, -->, some-> and some->>)
 - Classes (class, class?, cast)
-- `*print-length*`, `*print-level*`, `*file*`
+- `*print-length*`, `*print-level*`, `*file*`, `*flush-on-newline*`, `*clojure-version*`
 - Missing core functions and macros
   - doseq, for, dotimes
   - line-seq
@@ -128,7 +129,6 @@ have been tested:
   - keep
   - mapv, filterv
   - sorted-set-by, sorted-map, hash-set
-  - `*clojure-version*`
   - update, update-in, merge, get-in, disj
   - name
   - lazy-cat, realized?
@@ -138,7 +138,6 @@ have been tested:
   - not-every?, not-any?
   - map-indexed, mapcat
   - partition-by
-  - remove
   - merge-with
   - juxt
   - cycle
