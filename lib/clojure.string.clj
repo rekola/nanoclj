@@ -1,4 +1,4 @@
-(def clojure.string (package
+(in-ns 'clojure.string)
 
 (def UTF8PROC_COMPOSE 4)
 (def UTF8PROC_IGNORE 32)
@@ -42,8 +42,6 @@
                  (if (starts-with? s substr)
                    true
                    (recur (rest s) substr))))
-
-))
 
 (defn triml
   [s] (apply str (drop-while (fn [c] (case c

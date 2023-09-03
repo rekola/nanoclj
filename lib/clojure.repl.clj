@@ -1,4 +1,4 @@
-(def clojure.repl (package
+(in-ns 'clojure.repl)
 
 (defn source
   "Returns the source for a macro or function"
@@ -16,7 +16,7 @@
     
 (defn repl
   "Starts the REPL"
-  [] (let [prompt "user> "
+  [] (let [prompt (str (:name (meta *ns*)) "=> ")
            line (linenoise/read-line prompt)]
        (if line (let [r (try (eval (read-string line)))]
                   (prn r)
@@ -25,5 +25,3 @@
                   (def *1 r)
                   (recur))
            nil)))
-
-))

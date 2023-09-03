@@ -166,7 +166,6 @@ extern "C" {
     nanoclj_val_t EMPTY;              /* special cell representing empty list */
     nanoclj_cell_t * oblist;         /* pointer to symbol table */
     nanoclj_val_t global_env;         /* pointer to global environment */
-    nanoclj_val_t target_env;
     nanoclj_val_t root_env;		/* pointer to the initial root env */
 
 /* global pointers to special symbols */

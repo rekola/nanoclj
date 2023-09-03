@@ -1,4 +1,4 @@
-(def sparkline (package
+(in-ns 'sparkline)
 
 (defn bars
   "Draws a sparkline"
@@ -17,7 +17,3 @@
                               7 \u2587
                               8 \u2588)]
                       (recur (rest seq) (conj data c))))))))
-                  
-                  
-          
-))

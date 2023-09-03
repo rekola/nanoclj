@@ -736,7 +736,6 @@ static inline bool is_true(nanoclj_val_t p) {
 #define cadddr(p)        car(cdr(cdr(cdr(p))))
 #define cddddr(p)        cdr(cdr(cdr(cdr(p))))
 
-static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b);
 static void putstr(nanoclj_t * sc, const char *s, nanoclj_val_t port);
 static nanoclj_val_t get_err_port(nanoclj_t * sc);
 static nanoclj_val_t get_in_port(nanoclj_t * sc);
@@ -917,6 +916,81 @@ static inline int alloc_cellseg(nanoclj_t * sc, int n) {
 
   return n;
 }
+
+static inline void port_close(nanoclj_t * sc, nanoclj_port_t * pt) {
+  pt->kind &= ~port_input;
+  pt->kind &= ~port_output;
+  if (pt->kind & port_file) {
+    /* Cleanup is here so (close-*-port) functions could work too */
+    pt->rep.stdio.curr_line = 0;
+    
+    if (pt->rep.stdio.filename) {
+      sc->free(pt->rep.stdio.filename);
+    }
+    FILE * fh = pt->rep.stdio.file;
+    if (fh != stdout && fh != stderr && fh != stdin) {
+      fclose(fh);
+    }
+  } else if (pt->kind & port_string) {
+    sc->free(pt->rep.string.data.data);
+  }
+  pt->kind = port_free;
+}
+
+static inline void finalize_vector_store(nanoclj_t * sc, nanoclj_vector_store_t * s) {
+  sc->free(s->data);
+  sc->free(s);
+}
+
+static inline void finalize_cell(nanoclj_t * sc, nanoclj_cell_t * a) {
+  switch (_type(a)) {
+  case T_STRING:
+  case T_CHAR_ARRAY:
+    if (!_is_small(a)) {
+      sc->free(_strvalue_unchecked(a));
+    }
+    break;
+  case T_VECTOR:
+  case T_ARRAYMAP:
+  case T_SORTED_SET:{
+    if (!_is_small(a)) {
+      nanoclj_vector_store_t * s = _store_unchecked(a);
+      if (s) {
+	s->refcnt--;
+	if (s->refcnt == 0) finalize_vector_store(sc, s);
+      }
+    }
+  }
+    break;
+  case T_READER:
+  case T_WRITER:{
+    nanoclj_port_t * pt = _port_unchecked(a);
+    port_close(sc, pt);    
+    sc->free(pt);
+  }
+    break;
+  case T_IMAGE:{
+    nanoclj_image_t * image = _image_unchecked(a);
+    sc->free(image->data);
+    sc->free(image);
+  }
+    break;
+  case T_AUDIO:{
+    nanoclj_audio_t * audio = _audio_unchecked(a);
+    sc->free(audio->data);
+    sc->free(audio);
+  }
+    break;
+  case T_CANVAS:
+#if NANOCLJ_HAS_CANVAS
+    finalize_canvas(sc, _canvas_unchecked(a));
+    _canvas_unchecked(a) = NULL;
+#endif
+    break;
+  }
+}
+
+#include "nanoclj_gc.h"
 
 /* get new cell.  parameter a, b is marked by gc. */
 
@@ -1378,11 +1452,6 @@ static inline nanoclj_vector_store_t * mk_vector_store(nanoclj_t * sc, size_t le
   s->reserved = (len > 1 ? len : 1) * 2;
   s->refcnt = 0;
   return s;
-}
-
-static inline void finalize_vector_store(nanoclj_t * sc, nanoclj_vector_store_t * s) {
-  sc->free(s->data);
-  sc->free(s);
 }
 
 static inline nanoclj_cell_t * _get_vector_object(nanoclj_t * sc, int_fast16_t t, size_t offset, size_t size, nanoclj_vector_store_t * store) {
@@ -2625,251 +2694,6 @@ static inline nanoclj_val_t mk_sharp_const(nanoclj_t * sc, char *name) {
   }
 }
 
-/* ========== garbage collector ========== */
-
-/*--
- *  We use algorithm E (Knuth, The Art of Computer Programming Vol.1,
- *  sec. 2.3.5), the Schorr-Deutsch-Waite link-inversion algorithm,
- *  for marking.
- */
-static inline void mark(nanoclj_cell_t * p) {
-  nanoclj_cell_t * t = NULL;
-  nanoclj_cell_t * q;
-  nanoclj_val_t q0;
-  
-E2:_setmark(p);
-  switch (_type(p)) {
-  case T_VECTOR:
-  case T_ARRAYMAP:
-  case T_SORTED_SET:{
-    if (_is_small(p)) {
-      size_t s = _sosize_unchecked(p);
-      nanoclj_val_t * data = _smalldata_unchecked(p);
-      if (s > 0 && is_cell(data[0]) && !is_nil(data[0])) mark(decode_pointer(data[0]));
-      if (s > 1 && is_cell(data[1]) && !is_nil(data[1])) mark(decode_pointer(data[1]));
-      if (s > 2 && is_cell(data[2]) && !is_nil(data[2])) mark(decode_pointer(data[2]));
-    } else {
-      size_t offset = _offset_unchecked(p);
-      size_t num = _size_unchecked(p);
-      nanoclj_val_t * data = _store_unchecked(p)->data;
-      for (size_t i = 0; i < num; i++) {
-	/* Vector cells will be treated like ordinary cells */
-	nanoclj_val_t v = data[offset + i];
-	if (is_cell(v) && !is_nil(v)) mark(decode_pointer(v));
-      }
-    }
-  }
-    break;
-  case T_SEQ:{
-    nanoclj_cell_t * o = _origin_unchecked(p);
-    if (o) mark(o);
-  }
-    break;
-  }
-
-  nanoclj_cell_t * metadata = _metadata_unchecked(p);
-  if (metadata) mark(metadata);
-  
-  if (_is_gc_atom(p))
-    goto E6;
-  /* E4: down car */
-  q0 = _car(p);
-  if (!is_primitive(q0) && !is_nil(q0) && !is_mark(q0)) {
-    _set_gc_atom(p);                 /* a note that we have moved car */
-    _car(p) = mk_pointer(t);
-    t = p;
-    p = decode_pointer(q0);
-    goto E2;
-  }
-E5:q0 = _cdr(p);                 /* down cdr */
-  if (!is_primitive(q0) && !is_nil(q0) && !is_mark(q0)) {
-    _cdr(p) = mk_pointer(t);
-    t = p;
-    p = decode_pointer(q0);
-    goto E2;
-  }
-E6:                            /* up.  Undo the link switching from steps E4 and E5. */
-  if (!t) {
-    return;
-  }
-
-  q = t;
-  if (_is_gc_atom(q)) {
-    _clr_gc_atom(q);
-    t = decode_pointer(_car(q));
-    _car(q) = mk_pointer(p);
-    p = q;
-    goto E5;
-  } else {
-    t = decode_pointer(_cdr(q));
-    _cdr(q) = mk_pointer(p);
-    p = q;
-    goto E6;
-  }
-}
-
-static inline void mark_value(nanoclj_val_t v) {
-  if (is_cell(v) && !is_nil(v)) mark(decode_pointer(v));
-}
-
-static inline void port_close(nanoclj_t * sc, nanoclj_port_t * pt) {
-  pt->kind &= ~port_input;
-  pt->kind &= ~port_output;
-  if (pt->kind & port_file) {
-    /* Cleanup is here so (close-*-port) functions could work too */
-    pt->rep.stdio.curr_line = 0;
-    
-    if (pt->rep.stdio.filename) {
-      sc->free(pt->rep.stdio.filename);
-    }
-    FILE * fh = pt->rep.stdio.file;
-    if (fh != stdout && fh != stderr && fh != stdin) {
-      fclose(fh);
-    }
-  } else if (pt->kind & port_string) {
-    sc->free(pt->rep.string.data.data);
-  }
-  pt->kind = port_free;
-}
-
-static inline void finalize_cell(nanoclj_t * sc, nanoclj_cell_t * a) {
-  switch (_type(a)) {
-  case T_STRING:
-  case T_CHAR_ARRAY:
-    if (!_is_small(a)) {
-      sc->free(_strvalue_unchecked(a));
-    }
-    break;
-  case T_VECTOR:
-  case T_ARRAYMAP:
-  case T_SORTED_SET:{
-    if (!_is_small(a)) {
-      nanoclj_vector_store_t * s = _store_unchecked(a);
-      if (s) {
-	s->refcnt--;
-	if (s->refcnt == 0) finalize_vector_store(sc, s);
-      }
-    }
-  }
-    break;
-  case T_READER:
-  case T_WRITER:{
-    nanoclj_port_t * pt = _port_unchecked(a);
-    port_close(sc, pt);    
-    sc->free(pt);
-  }
-    break;
-  case T_IMAGE:{
-    nanoclj_image_t * image = _image_unchecked(a);
-    sc->free(image->data);
-    sc->free(image);
-  }
-    break;
-  case T_AUDIO:{
-    nanoclj_audio_t * audio = _audio_unchecked(a);
-    sc->free(audio->data);
-    sc->free(audio);
-  }
-    break;
-  case T_CANVAS:
-#if NANOCLJ_HAS_CANVAS
-    finalize_canvas(sc, _canvas_unchecked(a));
-    _canvas_unchecked(a) = NULL;
-#endif
-    break;
-  }
-}
-
-static inline void dump_stack_mark(nanoclj_t * sc) {
-  size_t nframes = sc->dump;
-  for (size_t i = 0; i < nframes; i++) {
-    dump_stack_frame_t * frame = sc->dump_base + i;
-    mark_value(frame->args);
-    mark_value(frame->envir);
-    mark_value(frame->code);
-  }
-}
-
-/* garbage collection. parameter a, b is marked. */
-static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b) {
-#if GC_VERBOSE
-  putstr(sc, "gc...", get_err_port(sc));
-#endif
-  
-  /* mark system globals */
-  if (sc->oblist) mark(sc->oblist);
-  mark_value(sc->global_env);
-
-
-  /* mark current registers */
-  mark_value(sc->args);
-  mark_value(sc->envir);
-  mark_value(sc->code);
-#ifdef USE_RECUR_REGISTER
-  mark_value(sc->recur);
-#endif
-  dump_stack_mark(sc);
-
-  mark_value(sc->value);
-  mark_value(sc->save_inport);
-  mark_value(sc->loadport);
-  
-  mark_value(sc->active_element);
-  mark_value(sc->active_element_target);
-  mark_value(sc->EMPTYVEC);
-    
-  /* Mark recent objects the interpreter doesn't know about yet. */
-  mark_value(car(sc->sink));
-  
-  /* mark variables a, b */
-  if (a) mark(a);
-  if (b) mark(b);
-
-  /* garbage collect */
-  clrmark(sc->EMPTY);
-  sc->fcells = 0;
-  nanoclj_cell_t * free_cell = decode_pointer(sc->EMPTY);
-
-  /* free-list is kept sorted by address so as to maintain consecutive
-     ranges, if possible, for use with vectors. Here we scan the cells
-     (which are also kept sorted by address) downwards to build the
-     free-list in sorted order.
-   */
-
-  long total_cells = 0;
-  
-  for (int_fast32_t i = sc->last_cell_seg; i >= 0; i--) {
-    nanoclj_cell_t * min_p = decode_pointer(sc->cell_seg[i]);
-    nanoclj_cell_t * p = min_p + CELL_SEGSIZE;
-
-    while (--p >= min_p) {
-      total_cells++;
-      
-      if (_is_mark(p)) {
-	_clrmark(p);
-      } else {
-        /* reclaim cell */
-        if (_typeflag(p) != 0) {
-	  finalize_cell(sc, p);
-          _typeflag(p) = 0;
-          _car(p) = sc->EMPTY;
-        }
-        ++sc->fcells;
-	_cdr(p) = mk_pointer(free_cell);
-        free_cell = p;
-      }
-    }
-  }
-    
-  sc->free_cell = free_cell;
-
-#if GC_VERBOSE
-  char msg[80];
-  sprintf(msg, "done: %ld / %ld cells were recovered.\n", sc->fcells, total_cells);
-  putstr(sc, msg, get_err_port(sc));
-#endif
-}
-
 /* ========== Routines for Reading ========== */
 
 static inline int file_push(nanoclj_t * sc, strview_t sv) {
@@ -2893,7 +2717,7 @@ static inline int file_push(nanoclj_t * sc, strview_t sv) {
 
     sc->load_stack[sc->file_i].rep.stdio.curr_line = 0;
     if (fname) {
-      sc->load_stack[sc->file_i].rep.stdio.filename = store_string(sc, strlen(fname), fname);
+      sc->load_stack[sc->file_i].rep.stdio.filename = store_string(sc, sv.size, sv.ptr);
     }
   }
   return fin != 0;
@@ -2936,9 +2760,7 @@ static inline nanoclj_val_t port_from_filename(nanoclj_t * sc, strview_t sv, int
   nanoclj_val_t r = mk_nil();
   if (f) {
     nanoclj_port_t * pt = port_rep_from_file(sc, f, prop);
-    if (fn) {
-      pt->rep.stdio.filename = store_string(sc, sv.size, sv.ptr);
-    }
+    pt->rep.stdio.filename = store_string(sc, sv.size, sv.ptr);
     pt->rep.stdio.curr_line = 0;
     
     if (prop & port_input) {
@@ -4010,13 +3832,6 @@ static inline nanoclj_val_t _s_return(nanoclj_t * sc, nanoclj_val_t a) {
   }
 }
 
-static inline void s_set_return_envir(nanoclj_t * sc, nanoclj_val_t env) {
-  if (sc->dump >= 1) {
-    dump_stack_frame_t * frame = sc->dump_base + sc->dump - 1;
-    frame->envir = env;
-  }
-}
-
 static inline void dump_stack_reset(nanoclj_t * sc) {
   /* in this implementation, sc->dump is the number of frames on the stack */
   sc->dump = 0;
@@ -4497,7 +4312,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     switch (prim_type(sc->code)) {
     case T_SYMBOL:
       if (sc->code.as_long == sc->NS.as_long) { /* special symbols */
-	s_return(sc, sc->envir);
+	s_return(sc, sc->global_env);
 #ifdef USE_RECUR_REGISTER
       } else if (sc->code.as_long == sc->RECUR.as_long) {
 	s_return(sc, sc->recur);
@@ -6204,9 +6019,9 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       ns = def_namespace_with_sym(sc, x);
       new_slot_spec_in_env(sc, sc->root_env, x, ns);
     }
-    sc->envir = ns;
-    s_set_return_envir(sc, ns);
-    s_return(sc, ns);
+    x = _s_return(sc, ns);
+    sc->envir = sc->global_env = ns;
+    return x;
   }
     
   case OP_RE_PATTERN:
@@ -6853,7 +6668,7 @@ void nanoclj_deinit(nanoclj_t * sc) {
   sc->free(sc->strbuff);
   sc->free(sc->errbuff);
   gc(sc, NULL, NULL);
-
+  
   for (i = 0; i <= sc->last_cell_seg; i++) {
     sc->free(sc->alloc_seg[i]);
   }
