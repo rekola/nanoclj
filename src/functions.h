@@ -870,14 +870,14 @@ static inline nanoclj_val_t linenoise_readline(nanoclj_t * sc, nanoclj_val_t arg
 #endif
 
 static inline void register_functions(nanoclj_t * sc) {
-  nanoclj_val_t Thread = def_namespace(sc, "Thread");
-  nanoclj_val_t System = def_namespace(sc, "System");
-  nanoclj_val_t Math = def_namespace(sc, "Math");
-  nanoclj_val_t numeric_tower = def_namespace(sc, "clojure.math.numeric-tower");
-  nanoclj_val_t clojure_java_browse = def_namespace(sc, "clojure.java.browse");
-  nanoclj_val_t clojure_java_shell = def_namespace(sc, "clojure.java.shell");
-  nanoclj_val_t Image = def_namespace(sc, "Image");
-  nanoclj_val_t Audio = def_namespace(sc, "Audio");
+  nanoclj_cell_t * Thread = def_namespace(sc, "Thread");
+  nanoclj_cell_t * System = def_namespace(sc, "System");
+  nanoclj_cell_t * Math = def_namespace(sc, "Math");
+  nanoclj_cell_t * numeric_tower = def_namespace(sc, "clojure.math.numeric-tower");
+  nanoclj_cell_t * clojure_java_browse = def_namespace(sc, "clojure.java.browse");
+  nanoclj_cell_t * clojure_java_shell = def_namespace(sc, "clojure.java.shell");
+  nanoclj_cell_t * Image = def_namespace(sc, "Image");
+  nanoclj_cell_t * Audio = def_namespace(sc, "Audio");
   
   intern(sc, Thread, def_symbol(sc, "sleep"), mk_foreign_func_with_arity(sc, Thread_sleep, 1, 1));
   
@@ -925,7 +925,7 @@ static inline void register_functions(nanoclj_t * sc) {
   intern(sc, Audio, def_symbol(sc, "load"), mk_foreign_func_with_arity(sc, Audio_load, 1, 1));
   
 #if NANOCLJ_USE_LINENOISE
-  nanoclj_val_t linenoise = def_namespace(sc, "linenoise");
+  nanoclj_cell_t * linenoise = def_namespace(sc, "linenoise");
   intern(sc, linenoise, def_symbol(sc, "read-line"), mk_foreign_func_with_arity(sc, linenoise_readline, 1, 1));
 #endif  
 }

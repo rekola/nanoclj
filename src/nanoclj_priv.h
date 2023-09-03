@@ -48,17 +48,6 @@ extern "C" {
 #include "nanoclj_opdf.h"
     OP_MAXDEFINED
   };
-
-  /* this structure holds all the interpreter's registers */
-  typedef struct dump_stack_frame_t {
-    enum nanoclj_opcodes op;
-    nanoclj_val_t args;
-    nanoclj_val_t envir;
-    nanoclj_val_t code;
-#ifdef USE_RECUR_REGISTER
-    nanoclj_val_t recur;
-#endif
-  } dump_stack_frame_t;
   
   typedef struct nanoclj_string_store_t {
     char *data;
@@ -137,6 +126,17 @@ extern "C" {
     } _object;
   } nanoclj_cell_t;
 
+  /* this structure holds all the interpreter's registers */
+  typedef struct dump_stack_frame_t {
+    enum nanoclj_opcodes op;
+    nanoclj_val_t args;
+    nanoclj_cell_t * envir;
+    nanoclj_val_t code;
+#ifdef USE_RECUR_REGISTER
+    nanoclj_val_t recur;
+#endif
+  } dump_stack_frame_t;
+
   struct nanoclj_s {
 /* arrays for segments */
     func_alloc malloc;
@@ -153,7 +153,7 @@ extern "C" {
 
 /* We use 5 registers. */
     nanoclj_val_t args;               /* register for arguments of function */
-    nanoclj_val_t envir;              /* stack register for current environment */
+    nanoclj_cell_t * envir;              /* stack register for current environment */
     nanoclj_val_t code;               /* register for current code */
     size_t dump;               /* stack register for next evaluation */
 #ifdef USE_RECUR_REGISTER    
@@ -165,8 +165,8 @@ extern "C" {
     nanoclj_cell_t _EMPTY;
     nanoclj_val_t EMPTY;              /* special cell representing empty list */
     nanoclj_cell_t * oblist;         /* pointer to symbol table */
-    nanoclj_val_t global_env;         /* pointer to global environment */
-    nanoclj_val_t root_env;		/* pointer to the initial root env */
+    nanoclj_cell_t * global_env;         /* pointer to global environment */
+    nanoclj_cell_t * root_env;		/* pointer to the initial root env */
 
 /* global pointers to special symbols */
     nanoclj_val_t LAMBDA;             /* pointer to syntax lambda */
@@ -189,6 +189,7 @@ extern "C" {
     nanoclj_val_t OUT;		  /* *out* */
     nanoclj_val_t ERR;		  /* *err* */
     nanoclj_val_t NS;		  /* *ns* */
+    nanoclj_val_t ENV;	  	  /* *env* */
     nanoclj_val_t WINDOW_SIZE;    /* *window-size* */
     nanoclj_val_t WINDOW_SCALE_F;   /* *window-scale-factor* */
     nanoclj_val_t MOUSE_POS;      /* *mouse-pos* */

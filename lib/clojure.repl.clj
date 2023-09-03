@@ -16,12 +16,15 @@
     
 (defn repl
   "Starts the REPL"
-  [] (let [prompt (str (:name (meta *ns*)) "=> ")
-           line (linenoise/read-line prompt)]
-       (if line (let [r (try (eval (read-string line)))]
-                  (prn r)
-                  (when (defined? '*2) (def *3 *2))
-                  (when (defined? '*1) (def *2 *1))
-                  (def *1 r)
-                  (recur))
-           nil)))
+  []
+  (in-ns 'user)
+  (let [f (fn [] (let [prompt (str (:name (meta *ns*)) "=> ")
+                       line (linenoise/read-line prompt)]
+                   (if line (let [r (try (eval (read-string line)))]
+                              (prn r)
+                              (when (defined? '*2) (def *3 *2))
+                              (when (defined? '*1) (def *2 *1))
+                              (def *1 r)
+                              (recur))
+                       nil)))
+        ] (f)))
