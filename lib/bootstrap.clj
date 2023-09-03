@@ -394,8 +394,8 @@
 
 (defn conj
   ([coll] coll)
-  ([coll x] (conj- coll x))
-  ([coll x & xs] (reduce conj- (conj- coll x) xs)))
+  ([coll x] (-conj coll x))
+  ([coll x & xs] (reduce -conj (-conj coll x) xs)))
 
 (defn =
   "Returns true if the arguments are equal"
@@ -463,7 +463,7 @@
 
 (def sorted-set
   "Creates a sorted set from the arguments"
-  (fn [& keys] (reduce conj- #{} keys)))
+  (fn [& keys] (reduce -conj #{} keys)))
 
 (def array-map
   "Creates an array-map from the arguments"
@@ -471,7 +471,7 @@
     (let [f (fn [val seq]
               (if (empty? seq)
                 val
-                (recur (conj- val
+                (recur (-conj val
                               (map-entry
                                (first seq)
                                (first (rest seq))))

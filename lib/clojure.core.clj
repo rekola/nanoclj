@@ -36,8 +36,8 @@
   "Casts argument to number"
   [x] (if (number? x) x (long x)))
 
-(defn vec [coll] (reduce conj- [] coll))
-(defn set [coll] (reduce conj- #() coll))
+(defn vec [coll] (reduce -conj [] coll))
+(defn set [coll] (reduce -conj #() coll))
 
 (defn run! [proc coll] (if (empty? coll) nil (do (proc (first coll)) (run! proc (rest coll)))))
 
@@ -153,7 +153,7 @@
                           (cons (first coll) (recur (next coll)))
                           '())))
 
-(defn reverse [coll] (reduce conj- '() coll))
+(defn reverse [coll] (reduce -conj '() coll))
 
 (defn interpose [sep coll] (if (empty? coll) '() (cons (first coll) (if (empty? (rest coll)) '() (cons sep (interpose sep (rest coll)))))))
 
@@ -233,9 +233,9 @@
 
 (defn assoc
   "Adds the keys and values to the map"
-  ([map key val] (conj- (or map {}) (map-entry key val)))
+  ([map key val] (-conj (or map {}) (map-entry key val)))
   ([map key val & kvs]
-    (let [new-map (conj- (or map {}) (map-entry key val))]
+    (let [new-map (-conj (or map {}) (map-entry key val))]
       (if kvs
         (if (next kvs)
           (recur new-map (first kvs) (second kvs) (nnext kvs))
@@ -256,7 +256,7 @@
   "Returns new map that does not contain the specified key. Very inefficient."
   (fn
     ([map] map)
-    ([map k] (reduce conj- {} (filter (fn [e] (not= (key e) k)) map)))))
+    ([map k] (reduce -conj {} (filter (fn [e] (not= (key e) k)) map)))))
 
 (defn update
   "Updates a value in map, where k is the key to be updates,
@@ -272,7 +272,7 @@
   (fn
     ([] [])
     ([to] to)
-    ([to from] (reduce conj- to from))))
+    ([to from] (reduce -conj to from))))
 
 (defn frequencies
   "Calculates the counts of unique elements in coll and returns them in a map"
@@ -505,7 +505,7 @@
   [coll] (let [f (fn [coll seen]
                    (cond (empty? coll) '()
                          (contains? seen (first coll)) (recur (rest coll) seen)
-                         (cons (first coll) (lazy-seq (f (rest coll) (conj seen (first coll)))))
+                         (cons (first coll) (lazy-seq (f (rest coll) (-conj seen (first coll)))))
                          )
                    )]
            (f coll #{})))

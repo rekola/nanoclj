@@ -26,7 +26,7 @@
 (def join (fn ([coll]           (apply str coll))
               ([separator coll] (if (empty? coll) "" (if (empty? (rest coll)) (first coll) (str (first coll) separator (join separator (rest coll))))))))
 
-(defn reverse [s] (apply str (reduce conj- '() (seq s))))
+(defn reverse [s] (apply str (reduce -conj '() (seq s))))
 
 (defn starts-with?
   "Returns true if s starts with substr"
