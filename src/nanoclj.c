@@ -1415,30 +1415,16 @@ static inline nanoclj_cell_t * get_vector_object(nanoclj_t * sc, int_fast16_t t,
 }
 
 static inline dump_stack_frame_t * s_add_frame(nanoclj_t * sc) {
-  size_t nframes = decode_integer(sc->dump);
   /* enough room for the next frame? */
-  if (nframes >= sc->dump_size) {
+  if (sc->dump >= sc->dump_size) {
     sc->dump_size *= 2;
     fprintf(stderr, "reallocing dump stack (%zu)\n", sc->dump_size);
     sc->dump_base = (dump_stack_frame_t *)sc->realloc(sc->dump_base, sizeof(dump_stack_frame_t) * sc->dump_size);
   }
-  sc->dump = mk_int(nframes + 1);
-  return sc->dump_base + nframes;
+  return sc->dump_base + sc->dump++;
 }
 
-static inline void save_from_C_call(nanoclj_t * sc) {
-  /* enough room for the next frame? */
-  if (sc->c_stack_count >= sc->c_stack_size) {
-    sc->c_stack_size *= 2;
-    fprintf(stderr, "reallocing c stack (%zu)\n", sc->c_stack_size);
-    sc->c_stack_base = (c_stack_frame_t *)sc->realloc(sc->c_stack_base, sizeof(c_stack_frame_t) * sc->c_stack_size);
-  }
-  c_stack_frame_t * frame = sc->c_stack_base + sc->c_stack_count;
-  sc->c_stack_count++;
-  frame->sink = sc->sink;
-  frame->envir = sc->envir;
-  frame->dump = sc->dump;
-  
+static inline void save_from_C_call(nanoclj_t * sc) { 
   dump_stack_frame_t * next_frame = s_add_frame(sc);
   next_frame->op = 0;
   next_frame->args = sc->args;
@@ -1446,14 +1432,6 @@ static inline void save_from_C_call(nanoclj_t * sc) {
   next_frame->code = sc->code;
 }
  
-static inline void restore_from_C_call(nanoclj_t * sc) {
-  sc->c_stack_count--;
-  c_stack_frame_t * frame = sc->c_stack_base + sc->c_stack_count;
-  car(sc->sink) = frame->sink;
-  sc->envir = frame->envir;
-  sc->dump = frame->dump;
-}
-
 static inline nanoclj_val_t eval(nanoclj_t * sc, nanoclj_val_t obj) {
   save_from_C_call(sc);
 
@@ -1462,7 +1440,6 @@ static inline nanoclj_val_t eval(nanoclj_t * sc, nanoclj_val_t obj) {
   sc->retcode = 0;
 
   Eval_Cycle(sc, OP_EVAL);
-  restore_from_C_call(sc);
   return sc->value;
 }
 
@@ -2804,21 +2781,12 @@ static inline void finalize_cell(nanoclj_t * sc, nanoclj_cell_t * a) {
 }
 
 static inline void dump_stack_mark(nanoclj_t * sc) {
-  size_t nframes = decode_integer(sc->dump);
+  size_t nframes = sc->dump;
   for (size_t i = 0; i < nframes; i++) {
     dump_stack_frame_t * frame = sc->dump_base + i;
     mark_value(frame->args);
     mark_value(frame->envir);
     mark_value(frame->code);
-  }
-}
-
-static inline void c_stack_mark(nanoclj_t * sc) {
-  for (size_t i = 0; i < sc->c_stack_count; i++) {
-    c_stack_frame_t * frame = sc->c_stack_base + i;
-    mark_value(car(frame->sink)); /* ? */
-    mark_value(frame->envir);
-    mark_value(frame->dump);
   }
 }
 
@@ -2841,7 +2809,6 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b) {
   mark_value(sc->recur);
 #endif
   dump_stack_mark(sc);
-  c_stack_mark(sc);
 
   mark_value(sc->value);
   mark_value(sc->save_inport);
@@ -4022,15 +3989,12 @@ static inline void s_save(nanoclj_t * sc, enum nanoclj_opcodes op,
 }
 
 static inline nanoclj_val_t _s_return(nanoclj_t * sc, nanoclj_val_t a) { 
-  int nframes = decode_integer(sc->dump);
-
   sc->value = a;
-  if (nframes <= 0) {
+  if (sc->dump <= 0) {
     return sc->EMPTY;
   }
-  nframes--;
-  dump_stack_frame_t * frame = sc->dump_base + nframes;
-  sc->dump = mk_int(nframes);
+  sc->dump--;
+  dump_stack_frame_t * frame = sc->dump_base + sc->dump;
   
   sc->op = frame->op;
   sc->args = frame->args;
@@ -4047,20 +4011,15 @@ static inline nanoclj_val_t _s_return(nanoclj_t * sc, nanoclj_val_t a) {
 }
 
 static inline void s_set_return_envir(nanoclj_t * sc, nanoclj_val_t env) {
-  int nframes = decode_integer(sc->dump);
-  if (nframes >= 1) {
-    dump_stack_frame_t * frame = sc->dump_base + nframes - 1;
+  if (sc->dump >= 1) {
+    dump_stack_frame_t * frame = sc->dump_base + sc->dump - 1;
     frame->envir = env;
-  }  
+  }
 }
 
 static inline void dump_stack_reset(nanoclj_t * sc) {
   /* in this implementation, sc->dump is the number of frames on the stack */
-  sc->dump = mk_int(0);
-}
-
-static inline void c_stack_reset(nanoclj_t * sc) {
-  sc->c_stack_count = 0;
+  sc->dump = 0;
 }
 
 static inline void dump_stack_initialize(nanoclj_t * sc) {
@@ -4069,24 +4028,11 @@ static inline void dump_stack_initialize(nanoclj_t * sc) {
   dump_stack_reset(sc);
 }
 
-static inline void c_stack_initialize(nanoclj_t * sc) {
-  sc->c_stack_size = 256;
-  sc->c_stack_base = (c_stack_frame_t *)sc->malloc(sizeof(c_stack_frame_t) * sc->c_stack_size);
-  c_stack_reset(sc);
-}
-
 static inline void dump_stack_free(nanoclj_t * sc) {
   free(sc->dump_base);
   sc->dump_base = NULL;
-  sc->dump = mk_int(0);
+  sc->dump = 0;
   sc->dump_size = 0;
-}
-
-static inline void c_stack_free(nanoclj_t * sc) {
-  free(sc->c_stack_base);
-  sc->c_stack_base = NULL;
-  sc->c_stack_count = 0;
-  sc->c_stack_size = 0;
 }
 
 #define s_retbool(tf)    s_return(sc, (tf) ? (nanoclj_val_t)kTRUE : (nanoclj_val_t)kFALSE)
@@ -6738,7 +6684,6 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc fr
     return 0;
   }
   dump_stack_initialize(sc);
-  c_stack_initialize(sc);
   sc->code = sc->EMPTY;
 #ifdef USE_RECUR_REGISTER
   sc->recur = sc->EMPTY;
@@ -6890,7 +6835,6 @@ void nanoclj_deinit(nanoclj_t * sc) {
   sc->oblist = NULL;
   sc->global_env = sc->EMPTY;
   dump_stack_free(sc);
-  c_stack_free(sc);
   sc->envir = sc->EMPTY;
   sc->code = sc->EMPTY;
   sc->args = sc->EMPTY;
@@ -6989,9 +6933,7 @@ nanoclj_val_t nanoclj_call(nanoclj_t * sc, nanoclj_val_t func, nanoclj_val_t arg
   sc->args = args;
   sc->code = func;
   sc->retcode = 0;
-  Eval_Cycle(sc, OP_APPLY);
-  restore_from_C_call(sc);
-  
+  Eval_Cycle(sc, OP_APPLY);  
   return sc->value;
 }
 
