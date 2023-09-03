@@ -135,6 +135,16 @@
 
 ; Sequences
 
+(defn filter [pred coll]
+  (cond (empty? coll) '()
+        (pred (first coll)) (cons (first coll) (filter pred (rest coll)))
+        :else (filter pred (rest coll))))
+
+(defn remove [pred coll]
+  (cond (empty? coll) '()
+        (pred (first coll)) (remove pred (rest coll))
+        :else (cons (first coll) (remove pred (rest coll)))))
+
 (def concat (fn
               ([] '())
               ([x] x)

@@ -107,27 +107,7 @@
 
 (defn third [coll] (first (next (next coll))))
 
-; Lists
-
-(defn filter [pred coll]
-  (cond (empty? coll) '()
-        (pred (first coll)) (cons (first coll) (filter pred (rest coll)))
-        :else (filter pred (rest coll))))
-
-(defn remove [pred coll]
-  (cond (empty? coll) '()
-        (pred (first coll)) (remove pred (rest coll))
-        :else (cons (first coll) (remove pred (rest coll)))))
-
 (defn ns-interns [ns] (doall (map first (reduce concat '() (car ns)))))
-
-; Atoms
-
-; (defn swap! [atom f x] (set! atom (f atom x)))
-; add reset!
-; add compare-and-set!
-
-(macro (package form) `(apply (fn [] ,@(cdr form) *ns*) '()))
 
 (load "clojure.lang.io.clj")
 (load "clojure.string.clj")
