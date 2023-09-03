@@ -195,6 +195,7 @@ struct symbol {
 #define ADJ		64
 #define TYPE_BITS	 6
 #define T_MASKTYPE      63      /* 0000000000111111 */
+#define T_SEQUENCE    1024	/* 0000010000000000 */
 #define T_REALIZED    2048	/* 0000100000000000 */
 #define T_REVERSE     4096      /* 0001000000000000 */
 #define T_SMALL       8192      /* 0010000000000000 */
@@ -318,6 +319,9 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define _is_mark(p)               (_typeflag(p) & MARK)
 #define _setmark(p)               (_typeflag(p) |= MARK)
 #define _clrmark(p)               (_typeflag(p) &= UNMARK)
+#define _is_reverse(p)		  (_typeflag(p) & T_REVERSE)
+#define _is_sequence(p)		  (_typeflag(p) & T_SEQUENCE)
+#define _set_sequence(p)	  (_typeflag(p) |= T_SEQUENCE)
 #define _is_small(p)	          (_typeflag(p) & T_SMALL)
 #define _is_gc_atom(p)            (_typeflag(p) & T_GC_ATOM)
 #define _set_gc_atom(p)           (_typeflag(p) |= T_GC_ATOM)
@@ -858,10 +862,7 @@ static inline int_fast16_t syntaxnum(nanoclj_val_t p) {
 
 /* allocate new cell segment */
 static inline int alloc_cellseg(nanoclj_t * sc, int n) {
-  nanoclj_val_t newp;
-  nanoclj_val_t last;
   nanoclj_val_t p;
-  char *cp;
   long i;
   int k;
   int adj = ADJ;
@@ -873,7 +874,7 @@ static inline int alloc_cellseg(nanoclj_t * sc, int n) {
     if (sc->last_cell_seg >= CELL_NSEGMENT - 1) {
       return k;
     }
-    cp = (char *) sc->malloc(CELL_SEGSIZE * sizeof(nanoclj_cell_t) + adj);
+    char * cp = (char *) sc->malloc(CELL_SEGSIZE * sizeof(nanoclj_cell_t) + adj);
     if (cp == 0) {
       return k;
     }
@@ -884,7 +885,7 @@ static inline int alloc_cellseg(nanoclj_t * sc, int n) {
       cp = (char *) (adj * ((unsigned long) cp / adj + 1));
     }
     /* insert new segment in address order */
-    newp = mk_pointer((nanoclj_cell_t *)cp);
+    nanoclj_val_t newp = mk_pointer((nanoclj_cell_t *)cp);
     sc->cell_seg[i] = newp;
     while (i > 0 && sc->cell_seg[i - 1].as_long > sc->cell_seg[i].as_long) {
       p = sc->cell_seg[i];
@@ -892,7 +893,7 @@ static inline int alloc_cellseg(nanoclj_t * sc, int n) {
       sc->cell_seg[--i] = p;
     }
     sc->fcells += CELL_SEGSIZE;
-    last = mk_pointer(decode_pointer(newp) + CELL_SEGSIZE - 1);
+    nanoclj_val_t last = mk_pointer(decode_pointer(newp) + CELL_SEGSIZE - 1);
     for (p = newp; p.as_long <= last.as_long;
 	 p = mk_pointer(decode_pointer(p) + 1)
 	 ) {
@@ -1514,6 +1515,45 @@ static inline nanoclj_val_t eval(nanoclj_t * sc, nanoclj_val_t obj) {
 
 /* Sequence handling */
 
+static inline nanoclj_cell_t * subvec(nanoclj_t * sc, nanoclj_cell_t * vec, size_t offset, size_t len) {
+  if (_is_small(vec)) {
+    nanoclj_cell_t * new_vec = get_vector_object(sc, _typeflag(vec), len);
+    for (size_t i = 0; i < len; i++) {
+      set_vector_elem(new_vec, i, vector_elem(vec, offset + i));
+    }
+    return new_vec;
+  } else {
+    nanoclj_vector_store_t * s = _store_unchecked(vec);
+    size_t old_size = _size_unchecked(vec);
+    size_t old_offset = _offset_unchecked(vec);
+    
+    if (offset >= old_size) {
+      len = 0;
+    } else if (offset + len > old_size) {
+      len = old_size - offset;
+    }
+    
+    return _get_vector_object(sc, _typeflag(vec), old_offset + offset, len, s);
+  }
+}
+
+static inline nanoclj_cell_t * reverse(nanoclj_t * sc, nanoclj_cell_t * vec) {
+  if (_is_small(vec)) {
+    size_t len = _sosize_unchecked(vec);
+    nanoclj_cell_t * new_vec = get_vector_object(sc, _type(vec), len);
+    for (size_t i = 0; i < len; i++) {
+      set_vector_elem(new_vec, len - 1 - i, vector_elem(vec, i));
+    }
+    return new_vec;
+  } else {
+    nanoclj_vector_store_t * s = _store_unchecked(vec);
+    size_t old_size = _size_unchecked(vec);
+    size_t old_offset = _offset_unchecked(vec);
+        
+    return _get_vector_object(sc, _type(vec) | T_REVERSE, old_offset, old_size, s);
+  }
+}
+
 /* Returns nil or not-empty sequence */
 static inline nanoclj_cell_t * seq(nanoclj_t * sc, nanoclj_cell_t * coll) {
   if (!coll) {
@@ -1553,7 +1593,9 @@ static inline nanoclj_cell_t * seq(nanoclj_t * sc, nanoclj_cell_t * coll) {
     if (get_vector_size(coll) == 0) {
       return NULL;
     } else {
-      return mk_seq(sc, coll, 0);
+      nanoclj_cell_t * s = subvec(sc, coll, 0, get_vector_size(coll));
+      _set_sequence(s);
+      return s;
     }
   case T_READER: {
     nanoclj_port_t * pt = _port_unchecked(coll);
@@ -1596,7 +1638,14 @@ static inline nanoclj_cell_t * rest(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_ARRAYMAP:
   case T_SORTED_SET:
     if (get_vector_size(coll) >= 2) {
-      return mk_seq(sc, coll, 1);
+      nanoclj_cell_t * s;
+      if (_is_reverse(coll)) {
+	s = subvec(sc, coll, 0, get_vector_size(coll) - 1);
+      } else {
+	s = subvec(sc, coll, 1, get_vector_size(coll) - 1);
+      }
+      _set_sequence(s);
+      return s;
     }
     break;
   case T_STRING:
@@ -1623,13 +1672,6 @@ static inline nanoclj_cell_t * rest(nanoclj_t * sc, nanoclj_cell_t * coll) {
     size_t pos = _position_unchecked(coll);
     
     switch (_type(o)) {
-    case T_VECTOR:
-    case T_ARRAYMAP:
-    case T_SORTED_SET:
-      if (pos + 1 < get_vector_size(o)) {
-	return mk_seq(sc, o, pos + 1);
-      }
-      break;
     case T_STRING:
     case T_CHAR_ARRAY:{
       const char * ptr = _strvalue(o);
@@ -1702,7 +1744,11 @@ static inline nanoclj_val_t first(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_ARRAYMAP:
   case T_SORTED_SET:
     if (get_vector_size(coll) > 0) {
-      return vector_elem(coll, 0);
+      if (_is_reverse(coll)) {
+	return vector_elem(coll, get_vector_size(coll) - 1);
+      } else {
+	return vector_elem(coll, 0);
+      }
     }
     break;
   case T_STRING:
@@ -1729,14 +1775,6 @@ static inline nanoclj_val_t first(nanoclj_t * sc, nanoclj_cell_t * coll) {
     size_t pos = _position_unchecked(coll);
     
     switch (_type(o)) {
-    case T_VECTOR:
-    case T_ARRAYMAP:
-    case T_SORTED_SET:{
-      if (pos < get_vector_size(o)) {
-	return vector_elem(o, pos);
-      }
-      break;
-    }
     case T_STRING:
     case T_CHAR_ARRAY:
       if (pos < _strlength(o)) {
@@ -2411,28 +2449,6 @@ static inline nanoclj_cell_t * conj(nanoclj_t * sc, nanoclj_cell_t * coll, nanoc
     }
   } else {
     return NULL;
-  }
-}
-
-static inline nanoclj_cell_t * subvec(nanoclj_t * sc, nanoclj_cell_t * vec, size_t offset, size_t len) {
-  if (_is_small(vec)) {
-    nanoclj_cell_t * new_vec = get_vector_object(sc, T_VECTOR, len);
-    for (size_t i = 0; i < len; i++) {
-      set_vector_elem(new_vec, i, vector_elem(vec, offset + i));
-    }
-    return new_vec;
-  } else {
-    nanoclj_vector_store_t * s = _store_unchecked(vec);
-    size_t old_size = _size_unchecked(vec);
-    size_t old_offset = _offset_unchecked(vec);
-    
-    if (offset >= old_size) {
-      len = 0;
-    } else if (offset + len > old_size) {
-      len = old_size - offset;
-    }
-    
-    return _get_vector_object(sc, T_VECTOR, old_offset + offset, len, s);
   }
 }
 
@@ -5931,6 +5947,45 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       s_return(sc, cons(sc, sc->ARRAY_MAP, sc->value));
     }
     
+  case OP_SEQ:
+    if (!unpack_args_1(sc, &arg0)) {
+      Error_0(sc, "Error - Invalid arity");
+    } else if (is_cell(arg0)) {
+      nanoclj_cell_t * c = decode_pointer(arg0);
+      if (is_seqable_type(_type(c))) {
+	s_return(sc, mk_pointer(seq(sc, c)));
+      }
+    }
+    Error_0(sc, "Error - value is not ISeqable");
+
+  case OP_RSEQ:
+    if (!unpack_args_1(sc, &arg0)) {
+      Error_0(sc, "Error - Invalid arity");
+    } else if (is_cell(arg0)) {
+      nanoclj_cell_t * c = decode_pointer(arg0);
+      int t = _type(c);
+      if (t == T_VECTOR || t == T_ARRAYMAP || t == T_SORTED_SET) {
+	if (get_vector_size(c) == 0) {
+	  s_return(sc, mk_nil());
+	} else {
+	  nanoclj_cell_t * s = reverse(sc, c);
+	  _set_sequence(s);
+	  s_return(sc, mk_pointer(s));
+	}
+      }
+    }
+    Error_0(sc, "Error - value is not reverse seqable");
+
+  case OP_SEQP:
+    if (!unpack_args_1(sc, &arg0)) {
+      Error_0(sc, "Error - Invalid arity");
+    } else if (is_cell(arg0)) {
+      nanoclj_cell_t * c = decode_pointer(arg0);
+      s_retbool(_is_sequence(c) || _type(c) == T_LIST || _type(c) == T_LAZYSEQ || _type(c) == T_SEQ);
+    } else {
+      s_retbool(false);
+    }
+
   case OP_EMPTYP:
     if (!unpack_args_1(sc, &arg0)) {
       Error_0(sc, "Error - Invalid arity");

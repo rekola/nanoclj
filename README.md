@@ -141,7 +141,6 @@ have been tested:
   - merge-with
   - juxt
   - cycle
-  - rseq
   - find
   - flatten
   - zipmap

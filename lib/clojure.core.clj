@@ -4,7 +4,6 @@
 (defn keyword? [x] (instance? clojure.lang.Keyword x))
 (defn delay? [x] (instance? clojure.lang.Delay x))
 (defn lazy-seq? [x] (instance? clojure.lang.LazySeq x))
-(defn seq? [x] (is-any-of? (type x) nanoclj.core.Seq clojure.lang.Cons clojure.lang.LazySeq))
 (defn map-entry? [x] (instance? clojure.lang.MapEntry x))
 (defn set? [x] (instance? clojure.lang.PersistentTreeSet x))
 (defn map? [x] (instance? clojure.lang.PersistentArrayMap x))
@@ -332,7 +331,12 @@
 (defn pr
   "Prints values to *out* in a format understandable by the Reader"
   [& more] (run! (fn [x]
-                   (cond (vector? x) (do (print "[")
+                   (cond (seq? x) (cond (and *print-length* (<= *print-length* 0)) (print "(...)")
+                                        :else (do (print \()
+                                                  (pr (first x))
+                                                  (run! (fn [x] (print \space) (pr x)) (rest x))
+                                                  (print \))))
+                         (vector? x) (do (print "[")
                                          (when (seq x)
                                            (if *print-length*
                                              (let [p (take *print-length* x)
@@ -368,13 +372,7 @@
                                                   (pr (val (first x)))
                                                   (run! (fn [x] (print ", ") (pr (key x))
                                                           (print \space) (pr (val x))) (rest x))
-                                                  (print \})))
-                         (seq? x) (cond (empty? x) (print "()")
-                                        (and *print-length* (<= *print-length* 0)) (print "(...)")
-                                        :else (do (print \()
-                                                  (pr (first x))
-                                                  (run! (fn [x] (print \space) (pr x)) (rest x))
-                                                  (print \))))
+                                                  (print \})))                
                          (ratio? x) (do (save)
                                         (set-color (styles- :scalar))
                                         (pr- (numerator x))
@@ -485,10 +483,6 @@
 (defn line-seq [rdr] (let [line (read-line rdr)]
                        (if line
                          (cons line (lazy-seq (line-seq rdr))))))
-
-; Vectors
-
-(defn rseq [x] (reverse (seq x)))
 
 ; Logic
 
