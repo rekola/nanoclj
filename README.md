@@ -117,7 +117,7 @@ have been tested:
 - Multithreading and transactions
 - Threading macros (->, -->, some-> and some->>)
 - Classes (class, class?, cast)
-- `*print-length*`, `*print-level*`
+- `*print-length*`, `*print-level*`, `*file*`
 - Missing core functions and macros
   - doseq, for, dotimes
   - line-seq
