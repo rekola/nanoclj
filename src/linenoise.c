@@ -588,7 +588,7 @@ static void refreshSingleLine(struct linenoiseState *l, int flags) {
 
     if (flags & REFRESH_WRITE) {
         /* Write the prompt and the current buffer content */
-        abAppend(&ab,l->prompt,strlen(l->prompt));
+        abAppend(&ab,l->prompt,l->plen);
         if (maskmode == 1) {
             while (len--) abAppend(&ab,"*",1);
         } else {
@@ -606,7 +606,7 @@ static void refreshSingleLine(struct linenoiseState *l, int flags) {
         /* Move cursor to original position. */
         int actual_pos;
         if (l->utf8) {
-	    actual_pos = utf8_num_cells(l->prompt, strlen(l->prompt));
+	    actual_pos = utf8_num_cells(l->prompt, l->plen);
 	    actual_pos += utf8_num_cells(buf, pos < len ? pos : len);
 	} else {
 	    actual_pos = (int)(pos+plen);
