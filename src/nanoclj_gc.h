@@ -27,18 +27,13 @@ E2:_setmark(p);
     } else {
       size_t offset = _offset_unchecked(p);
       size_t num = _size_unchecked(p);
-      nanoclj_val_t * data = _store_unchecked(p)->data;
+      nanoclj_val_t * data = _vec_store_unchecked(p)->data;
       for (size_t i = 0; i < num; i++) {
 	/* Vector cells will be treated like ordinary cells */
 	nanoclj_val_t v = data[offset + i];
 	if (is_cell(v) && !is_nil(v)) mark(decode_pointer(v));
       }
     }
-  }
-    break;
-  case T_SEQ:{
-    nanoclj_cell_t * o = _origin_unchecked(p);
-    if (o) mark(o);
   }
     break;
   }

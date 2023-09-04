@@ -49,7 +49,6 @@
 (initialize-type- (type (lazy-seq '())) "Constructs a lazy-seq")
 (initialize-type- (type {}) "Constructs an array-map")
 (initialize-type- (type #{}) "Constructs a sorted-set")
-(initialize-type- (type (rest "Hello")) "Constructs a Seq")
 (initialize-type- (type Math/sin) "Constructs a foreign function")
 (initialize-type- (type (divide 1 2)) "Constructs a ratio")
 (initialize-type- (type (var divide)) "Constructs a Var")

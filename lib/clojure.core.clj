@@ -13,7 +13,6 @@
                             clojure.lang.PersistentArrayMap
                             clojure.lang.PersistentVector
                             clojure.lang.Cons
-                            nanoclj.core.Seq
                             ))
 (defn associative? [coll] (is-any-of? (type x)
                                       clojure.lang.PersistentVector

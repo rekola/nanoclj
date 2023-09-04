@@ -49,11 +49,21 @@ extern "C" {
     OP_MAXDEFINED
   };
   
-  typedef struct nanoclj_string_store_t {
+  typedef struct nanoclj_string_t {
     char *data;
-    size_t size;
-  } nanoclj_string_store_t;
+    size_t size, reserved, refcnt;
+  } nanoclj_string_t;
 
+  typedef struct nanoclj_vector_t {
+    nanoclj_val_t * data;
+    size_t size, reserved, refcnt;
+  } nanoclj_vector_t;
+
+  typedef struct nanoclj_float_array_t {
+    float * data;
+    size_t size, reserved, refcnt;
+  } nanoclj_float_array_t;
+  
   typedef struct nanoclj_port_t {
     unsigned char kind;
     int backchar;
@@ -65,7 +75,7 @@ extern "C" {
       } stdio;
       struct {
 	char *curr;
-	nanoclj_string_store_t data;
+	nanoclj_string_t data;
       } string;
       struct {
 	void (*text) (const char *, size_t, void*);
@@ -75,13 +85,6 @@ extern "C" {
       } callback;
     } rep;
   } nanoclj_port_t;
-
-  typedef struct nanoclj_vector_store_t {
-    nanoclj_val_t * data;
-    size_t size;
-    size_t reserved;
-    size_t refcnt;
-  } nanoclj_vector_store_t;
   
 /* cell structure */
   typedef struct nanoclj_cell_t {
@@ -90,15 +93,14 @@ extern "C" {
     struct nanoclj_cell_t * _metadata;
     union {
       struct {
-        char * data;
-        size_t size;
-      } _string;
-      struct {
 	char data[NANOCLJ_SMALL_STR_SIZE];
       } _small_string;
       struct {
 	size_t offset, size;
-	nanoclj_vector_store_t * store;
+	union {
+	  nanoclj_vector_t * _vec;
+	  nanoclj_string_t * _str;
+	} _store;
       } _collection;
       struct {
         nanoclj_val_t data[NANOCLJ_SMALL_VEC_SIZE];
@@ -119,10 +121,6 @@ extern "C" {
       struct {
         nanoclj_val_t car, cdr;
       } _cons;
-      struct {
-	struct nanoclj_cell_t * origin;
-	size_t pos;
-      } _seq;
     } _object;
   } nanoclj_cell_t;
 
