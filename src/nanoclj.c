@@ -11,6 +11,7 @@
 #include "nanoclj_priv.h"
 
 // #define VECTOR_ARGS
+// #define RETAIN_ALLOCS 1
 
 #ifdef _WIN32
 
@@ -225,25 +226,41 @@ static inline bool is_real(nanoclj_val_t value) {
   return prim_type(value) == T_REAL;
 }
 
-static inline bool is_cell(nanoclj_val_t value) {
-  return prim_type(value) == T_CELL;
+static inline bool is_cell(nanoclj_val_t v) {
+  return (v.as_long & MASK_SIGNATURE) == SIGNATURE_POINTER;
 }
 
-static inline bool is_primitive(nanoclj_val_t value) {
-  return !is_cell(value);
+static inline bool is_primitive(nanoclj_val_t v) {
+  return (v.as_long & MASK_SIGNATURE) != SIGNATURE_POINTER;
+}
+
+static inline bool is_symbol(nanoclj_val_t v) {
+  return (v.as_long & MASK_SIGNATURE) == SIGNATURE_SYMBOL;
+}
+
+static inline bool is_keyword(nanoclj_val_t v) {
+  return (v.as_long & MASK_SIGNATURE) == SIGNATURE_KEYWORD;
+}
+
+static inline bool is_boolean(nanoclj_val_t v) {
+  return (v.as_long & MASK_SIGNATURE) == SIGNATURE_BOOLEAN;
+}
+
+static inline bool is_type(nanoclj_val_t v) {
+  return (v.as_long & MASK_SIGNATURE) == SIGNATURE_TYPE;
+}
+
+static inline bool is_character(nanoclj_val_t v) {
+  return (v.as_long & MASK_SIGNATURE) == SIGNATURE_CHAR;
+}
+
+static inline bool is_proc(nanoclj_val_t v) {
+  return (v.as_long & MASK_SIGNATURE) == SIGNATURE_PROC;
 }
 
 static inline int_fast16_t _type(nanoclj_cell_t * a) {
   if (!a) return T_NIL;
   return a->_flag & T_MASKTYPE;
-}
-
-static inline bool is_symbol(nanoclj_val_t p) {
-  return prim_type(p) == T_SYMBOL;
-}
-
-static inline bool is_keyword(nanoclj_val_t p) {
-  return prim_type(p) == T_KEYWORD;
 }
 
 static inline nanoclj_cell_t * decode_pointer(nanoclj_val_t value) {
@@ -373,10 +390,6 @@ static inline int32_t decode_integer(nanoclj_val_t value) {
   return (int32_t)value.as_long & MASK_PAYLOAD_INT;
 }
 
-static inline bool is_boolean(nanoclj_val_t p) {
-  return (prim_type(p) == T_BOOLEAN);
-}
-
 static inline bool is_string(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
   nanoclj_cell_t * c = decode_pointer(p);
@@ -492,10 +505,6 @@ static inline bool is_integral_type(int_fast16_t type) {
   return false;
 }
 
-static inline bool is_type(nanoclj_val_t p) {
-  return prim_type(p) == T_TYPE;
-}
-
 static inline bool is_number(nanoclj_val_t p) {
   switch (type(p)) {
   case T_INTEGER:
@@ -514,10 +523,6 @@ static inline bool is_integer(nanoclj_val_t p) {
   default:
     return false;
   }
-}
-
-static inline bool is_character(nanoclj_val_t p) {
-  return prim_type(p) == T_CHARACTER;
 }
 
 static inline char * _strvalue(nanoclj_cell_t * s) {
@@ -642,9 +647,6 @@ static inline const char *keywordname(nanoclj_val_t p) {
   return (const char *)decode_pointer(p);
 }
 
-static inline bool is_proc(nanoclj_val_t p) {
-  return prim_type(p) == T_PROC;
-}
 static inline bool is_foreign_function(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
   nanoclj_cell_t * c = decode_pointer(p);
@@ -977,14 +979,14 @@ static inline void finalize_cell(nanoclj_t * sc, nanoclj_cell_t * a) {
 
 /* get new cell.  parameter a, b is marked by gc. */
 
-static inline nanoclj_cell_t * get_cell_x(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b) {
+static inline nanoclj_cell_t * get_cell_x(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_cell_t * c) {
   if (sc->no_memory) {
     return &(sc->_sink);
   }
 
   if (sc->free_cell == &(sc->_EMPTY)) {
     const int min_to_be_recovered = sc->last_cell_seg * 8;
-    gc(sc, a, b);
+    gc(sc, a, b, c);
     if (sc->fcells < min_to_be_recovered || sc->free_cell == &(sc->_EMPTY)) {
       /* if only a few recovered, get more to avoid fruitless gc's */
       if (!alloc_cellseg(sc, 1) && sc->free_cell == &(sc->_EMPTY)) {
@@ -1004,8 +1006,9 @@ static inline nanoclj_cell_t * get_cell_x(nanoclj_t * sc, nanoclj_cell_t * a, na
    Tehom */
 
 static inline void retain(nanoclj_t * sc, nanoclj_cell_t * recent, nanoclj_cell_t * extra) {
-  nanoclj_cell_t * holder = get_cell_x(sc, recent, extra);
+  nanoclj_cell_t * holder = get_cell_x(sc, recent, extra, NULL);
   _typeflag(holder) = T_LIST;
+  _metadata_unchecked(holder) = NULL;
   _car(holder) = mk_pointer(recent);
   _cdr(holder) = car(sc->sink);
   _metadata_unchecked(holder) = NULL;
@@ -1013,7 +1016,7 @@ static inline void retain(nanoclj_t * sc, nanoclj_cell_t * recent, nanoclj_cell_
 }
 
 static inline nanoclj_cell_t * get_cell(nanoclj_t * sc, int flags, nanoclj_val_t a, nanoclj_val_t b, nanoclj_cell_t * meta) {
-  nanoclj_cell_t * cell = get_cell_x(sc, is_cell(a) ? decode_pointer(a) : NULL, is_cell(b) ? decode_pointer(b) : NULL);
+  nanoclj_cell_t * cell = get_cell_x(sc, is_cell(a) ? decode_pointer(a) : NULL, is_cell(b) ? decode_pointer(b) : NULL, meta);
 
   /* For right now, include "a" and "b" in "cell" so that gc doesn't
      think they are garbage. */
@@ -1023,7 +1026,7 @@ static inline nanoclj_cell_t * get_cell(nanoclj_t * sc, int flags, nanoclj_val_t
   _cdr(cell) = b;
   _metadata_unchecked(cell) = meta;
 
-#if 0
+#if RETAIN_ALLOCS
   retain(sc, cell, NULL);
 #endif
   
@@ -1031,39 +1034,51 @@ static inline nanoclj_cell_t * get_cell(nanoclj_t * sc, int flags, nanoclj_val_t
 }
 
 static inline nanoclj_val_t mk_reader(nanoclj_t * sc, nanoclj_port_t * p) {
-  nanoclj_cell_t * x = get_cell_x(sc, NULL, NULL);
+  nanoclj_cell_t * x = get_cell_x(sc, NULL, NULL, NULL);
 
   _typeflag(x) = T_READER | T_GC_ATOM;
   _port_unchecked(x) = p;
   _metadata_unchecked(x) = NULL;
 
+#if RETAIN_ALLOCS
+  retain(sc, x, NULL);
+#endif
+
   return mk_pointer(x);
 }
 
 static inline nanoclj_val_t mk_writer(nanoclj_t * sc, nanoclj_port_t * p) {
-  nanoclj_cell_t * x = get_cell_x(sc, NULL, NULL);
+  nanoclj_cell_t * x = get_cell_x(sc, NULL, NULL, NULL);
 
   _typeflag(x) = T_WRITER | T_GC_ATOM;
   _port_unchecked(x) = p;
   _metadata_unchecked(x) = NULL;
 
+#if RETAIN_ALLOCS
+  retain(sc, x, NULL);
+#endif
+
   return mk_pointer(x);
 }
 
 static inline nanoclj_val_t mk_foreign_func(nanoclj_t * sc, foreign_func f) {
-  nanoclj_cell_t * x = get_cell_x(sc, NULL, NULL);
+  nanoclj_cell_t * x = get_cell_x(sc, NULL, NULL, NULL);
 
   _typeflag(x) = T_FOREIGN_FUNCTION | T_GC_ATOM;
   _ff_unchecked(x) = f;
   _min_arity_unchecked(x) = 0;
   _max_arity_unchecked(x) = 0x7fffffff;
   _metadata_unchecked(x) = NULL;
-  
+
+#if RETAIN_ALLOCS
+  retain(sc, x, NULL);
+#endif
+
   return mk_pointer(x);
 }
 
 static inline nanoclj_val_t mk_foreign_object(nanoclj_t * sc, void * o) {
-  nanoclj_cell_t * x = get_cell_x(sc, NULL, NULL);
+  nanoclj_cell_t * x = get_cell_x(sc, NULL, NULL, NULL);
 
   _typeflag(x) = T_FOREIGN_OBJECT | T_GC_ATOM;
   _fo_unchecked(x) = o;
@@ -1071,17 +1086,25 @@ static inline nanoclj_val_t mk_foreign_object(nanoclj_t * sc, void * o) {
   _max_arity_unchecked(x) = 0x7fffffff;
   _metadata_unchecked(x) = NULL;
   
+#if RETAIN_ALLOCS
+  retain(sc, x, NULL);
+#endif
+
   return mk_pointer(x);
 }
 
 static inline nanoclj_val_t mk_foreign_func_with_arity(nanoclj_t * sc, foreign_func f, int min_arity, int max_arity) {
-  nanoclj_cell_t * x = get_cell_x(sc, NULL, NULL);
+  nanoclj_cell_t * x = get_cell_x(sc, NULL, NULL, NULL);
 
   _typeflag(x) = T_FOREIGN_FUNCTION | T_GC_ATOM;
   _ff_unchecked(x) = f;
   _min_arity_unchecked(x) = min_arity;
   _max_arity_unchecked(x) = max_arity;
   _metadata_unchecked(x) = NULL;
+
+#if RETAIN_ALLOCS
+  retain(sc, x, NULL);
+#endif
 
   return mk_pointer(x);
 }
@@ -1128,10 +1151,15 @@ static inline nanoclj_val_t mk_real(double n) {
 }
 
 static inline nanoclj_val_t mk_long(nanoclj_t * sc, long long num) {
-  nanoclj_cell_t * x = get_cell_x(sc, NULL, NULL);
+  nanoclj_cell_t * x = get_cell_x(sc, NULL, NULL, NULL);
   _typeflag(x) = T_LONG | T_GC_ATOM;
   _lvalue_unchecked(x) = num;
   _metadata_unchecked(x) = NULL;
+
+#if RETAIN_ALLOCS
+  retain(sc, x, NULL);
+#endif
+
   return mk_pointer(x);
 }
 
@@ -1146,7 +1174,7 @@ static inline nanoclj_val_t mk_integer(nanoclj_t * sc, long long num) {
 
 static inline nanoclj_val_t mk_image(nanoclj_t * sc, int32_t width, int32_t height,
 				     int32_t channels, unsigned char * data) {
-  nanoclj_cell_t * x = get_cell_x(sc, NULL, NULL);
+  nanoclj_cell_t * x = get_cell_x(sc, NULL, NULL, NULL);
   nanoclj_image_t * image = (nanoclj_image_t*)sc->malloc(sizeof(nanoclj_image_t));
   _typeflag(x) = T_IMAGE | T_GC_ATOM;
   _image_unchecked(x) = image;
@@ -1159,13 +1187,17 @@ static inline nanoclj_val_t mk_image(nanoclj_t * sc, int32_t width, int32_t heig
   image->channels = channels;
   
   if (data) memcpy(image->data, data, size);
-  
+
+#if RETAIN_ALLOCS
+  retain(sc, x, NULL);
+#endif
+
   return mk_pointer(x);
 }
 
 static inline nanoclj_val_t mk_audio(nanoclj_t * sc, size_t frames, int32_t channels,
 				     int32_t sample_rate, float * data) {
-  nanoclj_cell_t * x = get_cell_x(sc, NULL, NULL);
+  nanoclj_cell_t * x = get_cell_x(sc, NULL, NULL, NULL);
   nanoclj_audio_t * audio = (nanoclj_audio_t*)sc->malloc(sizeof(nanoclj_audio_t));
   _typeflag(x) = T_AUDIO | T_GC_ATOM;
   _audio_unchecked(x) = audio;
@@ -1178,7 +1210,11 @@ static inline nanoclj_val_t mk_audio(nanoclj_t * sc, size_t frames, int32_t chan
   audio->sample_rate = sample_rate;
   
   if (data) memcpy(audio->data, data, size);
-  
+
+#if RETAIN_ALLOCS
+  retain(sc, x, NULL);
+#endif
+
   return mk_pointer(x);
 }
 
@@ -1238,12 +1274,16 @@ static inline long long get_ratio(nanoclj_val_t n, long long * den) {
 }
 
 static inline nanoclj_val_t mk_ratio(nanoclj_t * sc, nanoclj_val_t num, nanoclj_val_t den) {  
-  nanoclj_cell_t * x = get_cell_x(sc, is_cell(num) ? decode_pointer(num) : NULL, is_cell(den) ? decode_pointer(den) : NULL);
+  nanoclj_cell_t * x = get_cell_x(sc, is_cell(num) ? decode_pointer(num) : NULL, is_cell(den) ? decode_pointer(den) : NULL, NULL);
   _typeflag(x) = T_RATIO | T_GC_ATOM;
   _car(x) = num;
   _cdr(x) = den;
   _metadata_unchecked(x) = NULL;
-    
+
+#if RETAIN_ALLOCS
+  retain(sc, x, NULL);
+#endif
+
   return mk_pointer(x);
 }
 
@@ -1321,7 +1361,7 @@ static inline nanoclj_string_t * mk_string_store(nanoclj_t * sc, size_t len) {
 }
  
 static inline nanoclj_cell_t * get_string_object(nanoclj_t * sc, int t, const char *str, size_t len) {
-  nanoclj_cell_t * x = get_cell_x(sc, NULL, NULL);
+  nanoclj_cell_t * x = get_cell_x(sc, NULL, NULL, NULL);
   _metadata_unchecked(x) = NULL;
 
   if (len <= NANOCLJ_SMALL_STR_SIZE) {
@@ -1341,6 +1381,10 @@ static inline nanoclj_cell_t * get_string_object(nanoclj_t * sc, int t, const ch
     _size_unchecked(x) = len;
     _offset_unchecked(x) = 0;
   }
+
+#if RETAIN_ALLOCS
+  retain(sc, x, NULL);
+#endif
 
   return x;
 }
@@ -1440,7 +1484,7 @@ static inline nanoclj_vector_t * mk_vector_store(nanoclj_t * sc, size_t len) {
 }
 
 static inline nanoclj_cell_t * _get_vector_object(nanoclj_t * sc, int_fast16_t t, size_t offset, size_t size, nanoclj_vector_t * store) {
-  nanoclj_cell_t * main_cell = get_cell_x(sc, NULL, NULL);
+  nanoclj_cell_t * main_cell = get_cell_x(sc, NULL, NULL, NULL);
   if (sc->no_memory) {
     /* TODO: free the store */
     return &(sc->_sink);
@@ -1458,6 +1502,10 @@ static inline nanoclj_cell_t * _get_vector_object(nanoclj_t * sc, int_fast16_t t
   }
   
   _metadata_unchecked(main_cell) = NULL;
+
+#if RETAIN_ALLOCS
+  retain(sc, main_cell, NULL);
+#endif
 
   return main_cell;
 }
@@ -2401,6 +2449,37 @@ static inline nanoclj_cell_t * copy_vector(nanoclj_t * sc, nanoclj_cell_t * vec)
   }
 }
 
+static inline size_t char_to_utf8(int c, char *p) {
+  if (c == EOF) {
+    return 0;
+  } else {
+    if (c < 0 || c > 0x10FFFF) {
+      fprintf(stderr, "char_to_utf8: bad char %d\n", c);
+      c = '?';
+    }
+
+    unsigned char *s = (unsigned char *)p;
+ 
+    if (c < 0x80) {
+      *s++ = (unsigned char) c;
+      *s = 0;
+      return 1;
+    } else {
+      int bytes = (c < 0x800) ? 2 : ((c < 0x10000) ? 3 : 4);
+      int len = bytes;
+      s[bytes] = 0;
+      s[0] = 0x80;
+      while (--bytes) {
+	s[0] |= (0x80 >> bytes);
+	s[bytes] = (unsigned char) (0x80 | (c & 0x3F));
+	c >>= 6;
+      }
+      s[0] |= (unsigned char) c;
+      return len;
+    }
+  }
+}
+
 static inline nanoclj_cell_t * conj(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t new_value) {
   if (!coll) coll = &(sc->_EMPTY);
 	       
@@ -2413,11 +2492,13 @@ static inline nanoclj_cell_t * conj(nanoclj_t * sc, nanoclj_cell_t * coll, nanoc
     if (_is_small(coll)) {
       nanoclj_cell_t * new_coll = get_vector_object(sc, t, old_size + 1);
       nanoclj_val_t * data = _smalldata_unchecked(coll);
+      nanoclj_val_t * new_data;
       if (_is_small(new_coll)) {
-	memcpy(_smalldata_unchecked(new_coll), data, old_size * sizeof(nanoclj_val_t));	
+	new_data = _smalldata_unchecked(new_coll);
       } else {
-	memcpy(_vec_store_unchecked(new_coll)->data, data, old_size * sizeof(nanoclj_val_t));	
+	new_data = _vec_store_unchecked(new_coll)->data;
       }
+      memcpy(new_data, data, old_size * sizeof(nanoclj_val_t));	
       set_vector_elem(new_coll, old_size, new_value);
       return new_coll;
     } else {
@@ -2434,6 +2515,24 @@ static inline nanoclj_cell_t * conj(nanoclj_t * sc, nanoclj_cell_t * coll, nanoc
       
       s->data[s->size++] = new_value;  
       return _get_vector_object(sc, t, old_offset, s->size, s);
+    }
+  } else if (t == T_STRING || t == T_CHAR_ARRAY) {
+    size_t old_size = _get_size(coll);
+    size_t input_len = char_to_utf8(decode_integer(new_value), sc->strbuff);
+    if (_is_small(coll)) {
+      nanoclj_cell_t * new_coll = get_string_object(sc, t, NULL, old_size + input_len);
+      const char * data = _smallstrvalue_unchecked(coll);
+      char * new_data;
+      if (_is_small(new_coll)) {
+	new_data = _smallstrvalue_unchecked(new_coll);
+      } else {
+	new_data = _str_store_unchecked(new_coll)->data;
+      }
+      memcpy(new_data, data, old_size * sizeof(char));
+      memcpy(new_data + old_size, sc->strbuff, input_len);
+      return new_coll;
+    } else {
+      return NULL;
     }
   } else {
     return NULL;
@@ -2726,6 +2825,8 @@ static inline int file_push(nanoclj_t * sc, strview_t sv) {
     sc->load_stack[sc->file_i].rep.stdio.curr_line = 0;
     if (fname) {
       sc->load_stack[sc->file_i].rep.stdio.filename = store_string(sc, sv.size, sv.ptr);
+    } else {
+      sc->load_stack[sc->file_i].rep.stdio.filename = NULL;
     }
   }
   return fin != 0;
@@ -2750,6 +2851,7 @@ static inline nanoclj_port_t *port_rep_from_file(nanoclj_t * sc, FILE * f, int p
   pt->kind = port_file | prop;
   pt->backchar = -1;
   pt->rep.stdio.file = f;
+  pt->rep.stdio.filename = NULL;
   return pt;
 }
 
@@ -2868,37 +2970,6 @@ static inline int realloc_port_string(nanoclj_t * sc, nanoclj_port_t * p) {
     return 1;
   } else {
     return 0;
-  }
-}
-
-static inline size_t char_to_utf8(int c, char *p) {
-  if (c == EOF) {
-    return 0;
-  } else {
-    if (c < 0 || c > 0x10FFFF) {
-      fprintf(stderr, "char_to_utf8: bad char %d\n", c);
-      c = '?';
-    }
-
-    unsigned char *s = (unsigned char *)p;
- 
-    if (c < 0x80) {
-      *s++ = (unsigned char) c;
-      *s = 0;
-      return 1;
-    } else {
-      int bytes = (c < 0x800) ? 2 : ((c < 0x10000) ? 3 : 4);
-      int len = bytes;
-      s[bytes] = 0;
-      s[0] = 0x80;
-      while (--bytes) {
-	s[0] |= (0x80 >> bytes);
-	s[bytes] = (unsigned char) (0x80 | (c & 0x3F));
-	c >>= 6;
-      }
-      s[0] |= (unsigned char) c;
-      return len;
-    }
   }
 }
 
@@ -5390,6 +5461,8 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       case T_NIL:
       case T_LIST:
       case T_LAZYSEQ:
+      case T_STRING:
+      case T_CHAR_ARRAY:
 	s_return(sc, mk_pointer(conj(sc, coll, y)));
 	
       default:
@@ -6536,9 +6609,11 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc fr
   /* init sc->EMPTY */
   typeflag(sc->EMPTY) = T_NIL | T_GC_ATOM | MARK;
   car(sc->EMPTY) = cdr(sc->EMPTY) = sc->EMPTY;
+  metadata_unchecked(sc->EMPTY) = NULL;
   /* init sink */
   typeflag(sc->sink) = T_LIST | MARK;
   car(sc->sink) = sc->EMPTY;
+  metadata_unchecked(sc->sink) = NULL;
 
   sc->oblist = oblist_initial_value(sc);
   /* init global_env */
@@ -6680,23 +6755,21 @@ void nanoclj_deinit(nanoclj_t * sc) {
   sc->root_env = sc->global_env = NULL;
   dump_stack_free(sc);
   sc->envir = NULL;
-  sc->code = sc->EMPTY;
-  sc->args = sc->EMPTY;
-  sc->value = sc->EMPTY;
+  sc->code = mk_nil();
+  sc->args = mk_nil();
+  sc->value = mk_nil();
 #ifdef USE_RECUR_REGISTER
-  sc->recur = sc->EMPTY;
+  sc->recur = mk_nil();
 #endif
-  if (is_reader(sc->save_inport)) {
-    typeflag(sc->save_inport) = T_GC_ATOM;
-  }
-  sc->save_inport = sc->EMPTY;
-  if (is_reader(sc->loadport)) {
-    typeflag(sc->loadport) = T_GC_ATOM;
-  }
-  sc->loadport = sc->EMPTY;
+  sc->save_inport = mk_nil();
+  sc->loadport = mk_nil();
   sc->free(sc->strbuff);
   sc->free(sc->errbuff);
-  gc(sc, NULL, NULL);
+
+  sc->active_element = mk_nil();
+  sc->active_element_target = mk_nil();
+
+  gc(sc, NULL, NULL, NULL);
   
   for (i = 0; i <= sc->last_cell_seg; i++) {
     sc->free(sc->alloc_seg[i]);
@@ -6727,6 +6800,7 @@ void nanoclj_load_named_file(nanoclj_t * sc, FILE * fin, const char *filename) {
   sc->load_stack[0].kind = port_input | port_file;
   sc->load_stack[0].backchar = -1;
   sc->load_stack[0].rep.stdio.file = fin;
+  sc->load_stack[0].rep.stdio.filename = NULL;    
   sc->loadport = mk_reader(sc, sc->load_stack);
   sc->retcode = 0;
 

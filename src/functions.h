@@ -57,7 +57,7 @@ static nanoclj_val_t System_nanoTime(nanoclj_t * sc, nanoclj_val_t args) {
 }
 
 static nanoclj_val_t System_gc(nanoclj_t * sc, nanoclj_val_t args) {
-  gc(sc, NULL, NULL);
+  gc(sc, NULL, NULL, NULL);
   return (nanoclj_val_t)kTRUE;
 }
 
@@ -796,7 +796,7 @@ static inline char *complete_parens(const char * input) {
   if (si == 0) {
     return NULL;
   }
-  char * h = (char *)linenoise_sc->malloc(si);
+  char * h = (char *)linenoise_sc->malloc(si + 1);
   int hi = 0;
   for (int i = si - 1; i >= 0; i--) {
     h[hi++] = nest[i];

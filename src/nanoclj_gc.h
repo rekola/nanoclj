@@ -39,7 +39,9 @@ E2:_setmark(p);
   }
 
   nanoclj_cell_t * metadata = _metadata_unchecked(p);
-  if (metadata) mark(metadata);
+  if (metadata) {
+    mark(metadata);
+  }
   
   if (_is_gc_atom(p))
     goto E6;
@@ -94,19 +96,19 @@ static inline void dump_stack_mark(nanoclj_t * sc) {
 }
 
 /* garbage collection. parameter a, b is marked. */
-static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b) {
+static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_cell_t * c) {
 #if GC_VERBOSE
   putstr(sc, "gc...", get_err_port(sc));
 #endif
-  
+
   /* mark system globals */
   if (sc->oblist) mark(sc->oblist);
-  mark(sc->root_env);
-  mark(sc->global_env);
+  if (sc->root_env) mark(sc->root_env);
+  if (sc->global_env) mark(sc->global_env);
  
   /* mark current registers */
   mark_value(sc->args);
-  mark(sc->envir);
+  if (sc->envir) mark(sc->envir);
   mark_value(sc->code);
 #ifdef USE_RECUR_REGISTER
   mark_value(sc->recur);
@@ -116,23 +118,24 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b) {
   mark_value(sc->value);
   mark_value(sc->save_inport);
   mark_value(sc->loadport);
-  
+
   mark_value(sc->active_element);
   mark_value(sc->active_element_target);
   mark_value(sc->EMPTYVEC);
     
   /* Mark recent objects the interpreter doesn't know about yet. */
   mark_value(car(sc->sink));
-  
-  /* mark variables a, b */
+
+  /* mark variables a, b, c */
   if (a) mark(a);
   if (b) mark(b);
+  if (c) mark(c);
 
   /* garbage collect */
   clrmark(sc->EMPTY);
   sc->fcells = 0;
   nanoclj_cell_t * free_cell = decode_pointer(sc->EMPTY);
-
+	
   /* free-list is kept sorted by address so as to maintain consecutive
      ranges, if possible, for use with vectors. Here we scan the cells
      (which are also kept sorted by address) downwards to build the
@@ -144,7 +147,7 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b) {
   for (int_fast32_t i = sc->last_cell_seg; i >= 0; i--) {
     nanoclj_cell_t * min_p = decode_pointer(sc->cell_seg[i]);
     nanoclj_cell_t * p = min_p + CELL_SEGSIZE;
-
+      
     while (--p >= min_p) {
       total_cells++;
       
@@ -155,6 +158,7 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b) {
         if (_typeflag(p) != 0) {
 	  finalize_cell(sc, p);
           _typeflag(p) = 0;
+	  _metadata_unchecked(p) = NULL;
           _car(p) = sc->EMPTY;
         }
         ++sc->fcells;
