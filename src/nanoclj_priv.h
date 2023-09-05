@@ -49,10 +49,10 @@ extern "C" {
     OP_MAXDEFINED
   };
   
-  typedef struct nanoclj_string_t {
+  typedef struct nanoclj_byte_array_t {
     char *data;
     size_t size, reserved, refcnt;
-  } nanoclj_string_t;
+  } nanoclj_byte_array_t;
 
   typedef struct nanoclj_vector_t {
     nanoclj_val_t * data;
@@ -75,7 +75,7 @@ extern "C" {
       } stdio;
       struct {
 	char *curr;
-	nanoclj_string_t data;
+	nanoclj_byte_array_t data;
       } string;
       struct {
 	void (*text) (const char *, size_t, void*);
@@ -99,7 +99,7 @@ extern "C" {
 	size_t offset, size;
 	union {
 	  nanoclj_vector_t * _vec;
-	  nanoclj_string_t * _str;
+	  nanoclj_byte_array_t * _str;
 	} _store;
       } _collection;
       struct {
