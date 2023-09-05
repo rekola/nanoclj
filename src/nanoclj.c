@@ -1699,7 +1699,37 @@ static inline nanoclj_cell_t * seq(nanoclj_t * sc, nanoclj_cell_t * coll) {
 }
 
 static inline bool is_empty(nanoclj_t * sc, nanoclj_cell_t * coll) {
-  return seq(sc, coll) == NULL;
+  if (!coll) {
+    return true;
+  } else if (_is_sequence(coll)) {
+    return false;
+  } else if (_type(coll) == T_LAZYSEQ) {
+    if (!_is_realized(coll)) {
+      nanoclj_val_t code = cons(sc, sc->DEREF, cons(sc, mk_pointer(coll), sc->EMPTY));
+      coll = decode_pointer(eval(sc, code));
+      if (!coll) {
+	return true;
+      }
+    } else if (is_nil(_car(coll)) && is_nil(_cdr(coll))) {
+      return true;
+    }
+  }
+
+  switch (_type(coll)) {
+  case T_NIL:
+    return true;
+  case T_LIST:
+  case T_LAZYSEQ:
+    return false;
+  case T_STRING:
+  case T_CHAR_ARRAY:
+  case T_VECTOR:
+  case T_ARRAYMAP:
+  case T_SORTED_SET:
+    return _get_size(coll) == 0;
+  }  
+  
+  return false;
 }
 
 static inline nanoclj_cell_t * rest(nanoclj_t * sc, nanoclj_cell_t * coll) {
@@ -2064,23 +2094,16 @@ static inline nanoclj_cell_t * find_slot_in_env(nanoclj_t * sc, nanoclj_cell_t *
       int location = hash_fn(symname(hdl), _size_unchecked(c));
       y = vector_elem(c, location);      
     }
-    if (!is_nil(y)) {
-      for (; y.as_long != sc->EMPTY.as_long; y = cdr(y)) {
-	nanoclj_val_t sym = caar(y);
-	if (sym.as_long == hdl.as_long) {
-	  break;
-	}
-      }
-      if (y.as_long != sc->EMPTY.as_long) {
-	break;
+    for (; !is_nil(y) && y.as_long != sc->EMPTY.as_long; y = cdr(y)) {
+      nanoclj_val_t var = car(y);
+      nanoclj_val_t sym = car(var);
+      if (sym.as_long == hdl.as_long) {
+	return decode_pointer(var);
       }
     }
     if (!all) {
       return NULL;
     }
-  }
-  if (x && x != &(sc->_EMPTY)) {
-    return decode_pointer(car(y));
   }
   return NULL;
 }
@@ -3624,9 +3647,12 @@ static inline size_t seq_length(nanoclj_t * sc, nanoclj_cell_t * a) {
     return _get_size(a);
 
   case T_LIST:
+    for (; a; a = next(sc, a), i++) { }
+    return i;
+
   case T_LAZYSEQ:
 #if 1
-    for (; !is_empty(sc, a); a = rest(sc, a), i++) { }
+    for (a = seq(sc, a); a; a = next(sc, a), i++) { }
     return i;
 #else
     while ( 1 ) {
@@ -3936,6 +3962,8 @@ static inline void dump_stack_free(nanoclj_t * sc) {
 static inline bool destructure(nanoclj_t * sc, nanoclj_cell_t * binding, nanoclj_cell_t * y, size_t num_args, bool first_level) {
   size_t n = _get_size(binding);
 
+  y = seq(sc, y);
+  
   if (first_level) {
     bool multi = n >= 2 && vector_elem(binding, n - 2).as_long == sc->AMP.as_long;
     if (!multi && num_args != n) {
@@ -3953,7 +3981,7 @@ static inline bool destructure(nanoclj_t * sc, nanoclj_cell_t * binding, nanoclj
 	if (is_primitive(e)) {
 	  new_slot_in_env(sc, e, mk_pointer(y));
 	} else {
-	  nanoclj_cell_t * y2 = next(sc, y);
+	  nanoclj_cell_t * y2 = next(sc, y); /* TODO: what is this? */
 	  if (!destructure(sc, decode_pointer(e), y2, 0, false)) {
 	    return false;
 	  }
@@ -3981,7 +4009,7 @@ static inline bool destructure(nanoclj_t * sc, nanoclj_cell_t * binding, nanoclj
       return false;
     }
   }
-  if (first_level && !is_empty(sc, y)) {
+  if (first_level && y) {
     /* Too many arguments */
     return false;
   }
@@ -5612,7 +5640,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       car(sc->code) = mk_nil();
       cdr(sc->code) = sc->value;
       s_return(sc, sc->value);
-    } else if (sc->value.as_long == sc->EMPTY.as_long) {
+    } else if (is_nil(sc->value) || sc->value.as_long == sc->EMPTY.as_long) {
       car(sc->code) = cdr(sc->code) = mk_nil();
       s_return(sc, sc->EMPTY);
     } else {
