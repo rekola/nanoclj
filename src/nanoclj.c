@@ -1931,13 +1931,13 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
 	break;
       }
     } else if (is_coll_type(t_a) && is_coll_type(t_b)) {
-      for (; !is_empty(sc, a) && !is_empty(sc, b); a = rest(sc, a), b = rest(sc, b)) {
+      for (a = seq(sc, a), b = seq(sc, b); a && b; a = next(sc, a), b = next(sc, b)) {
 	if (!equals(sc, first(sc, a), first(sc, b))) {
-	  return 0;
+	  return false;
 	}
       }
-      if (is_empty(sc, a) && is_empty(sc, b)) {
-	return 1;
+      if (!a && !b) {
+	return true;
       }
     }
   } else {
@@ -3648,6 +3648,9 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
 }
 
 static inline size_t seq_length(nanoclj_t * sc, nanoclj_cell_t * a) {
+  if (!a) {
+    return 0;
+  }
   size_t i = 0;  
   switch (_type(a)) {
   case T_NIL:
@@ -3684,6 +3687,7 @@ static inline size_t seq_length(nanoclj_t * sc, nanoclj_cell_t * a) {
   return 1;
 }
 
+/* Creates a collection, args are seqed */
 static inline nanoclj_val_t mk_collection(nanoclj_t * sc, int type, nanoclj_cell_t * args) {
   size_t len = seq_length(sc, args);
 
@@ -4035,8 +4039,8 @@ static inline bool destructure(nanoclj_t * sc, nanoclj_cell_t * binding, nanoclj
   return true;
 }
 
-static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoclj_val_t args0) {
-  nanoclj_cell_t * args = decode_pointer(args0);
+/* Constructs an object by type, args are seqed */
+static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoclj_cell_t * args) {
   nanoclj_val_t x, y;
   
   switch (type_id) {
@@ -4062,12 +4066,8 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
     if (car(x).as_long == sc->LAMBDA.as_long) {
       x = cdr(x);
     }
-    args = rest(sc, args);
-    if (is_empty(sc, args)) {
-      y = mk_pointer(sc->envir);
-    } else {
-      y = first(sc, args);
-    }
+    args = next(sc, args);
+    y = args ? first(sc, args) : mk_pointer(sc->envir);
     /* make closure. first is code. second is environment */
     return mk_pointer(get_cell(sc, T_CLOSURE, x, y, NULL));
     
@@ -4090,10 +4090,10 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
   case T_ENVIRONMENT:{
     nanoclj_val_t parent = sc->EMPTY;
     nanoclj_cell_t * name = NULL;
-    if (!is_empty(sc, args)) {
+    if (args) {
       parent = first(sc, args);
-      args = rest(sc, args);
-      if (!is_empty(sc, args)) {
+      args = next(sc, args);
+      if (args) {
 	name = decode_pointer(first(sc, args));
       }
     } 
@@ -4143,7 +4143,7 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
     break;
     
   case T_WRITER:
-    if (is_empty(sc, args)) {
+    if (!args) {
       return port_from_scratch(sc);
     } else {
       x = first(sc, args);
@@ -4155,11 +4155,13 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
 
   case T_CANVAS:
 #if NANOCLJ_HAS_CANVAS
-    return mk_canvas(sc, to_int(first(sc, args)) * sc->window_scale_factor, to_int(second(sc, args)) * sc->window_scale_factor);
+    return mk_canvas(sc,
+		     (int)(to_double(first(sc, args)) * sc->window_scale_factor),
+		     (int)(to_double(second(sc, args)) * sc->window_scale_factor));
 #endif
 
   case T_IMAGE:
-    if (is_empty(sc, args)) {
+    if (!args) {
       return mk_image(sc, 0, 0, 0, NULL);      
     } else {
       x = first(sc, args);
@@ -4173,8 +4175,6 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
   
   return mk_nil();
 }
-
-#define INF_ARG 2147483647
 
 static char * dispatch_table[] = {
 #define _OP_DEF(A,OP) A,
@@ -4538,12 +4538,8 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       s_goto(sc, decode_integer(sc->code));
 
     case T_TYPE:
-      if (1 || sc->args.as_long != sc->EMPTY.as_long) {
-	s_return(sc, construct_by_type(sc, decode_integer(sc->code), sc->args));
-      } else {
-	Error_0(sc, "Error - Invalid arity");
-      }
-
+      s_return(sc, construct_by_type(sc, decode_integer(sc->code), seq(sc, decode_pointer(sc->args))));
+      
     case T_KEYWORD:{
       nanoclj_val_t coll = car(sc->args), elem;
       if (is_cell(coll) && get_elem(sc, decode_pointer(coll), sc->code, &elem)) {
@@ -5979,7 +5975,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   case OP_RDUQTSP:
     s_return(sc, cons(sc, sc->UNQUOTESP, cons(sc, sc->value, sc->EMPTY)));
 
-  case OP_RDVEC:{
+  case OP_RDVEC:
     /*sc->code=cons(sc,mk_proc(sc,OP_VECTOR),sc->value);
        s_goto(sc,OP_EVAL); Cannot be quoted */
     /*x=cons(sc,mk_proc(sc,OP_VECTOR),sc->value);
@@ -5987,13 +5983,11 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     /*sc->code=mk_proc(sc,OP_VECTOR);
        sc->args=sc->value;
        s_goto(sc,OP_APPLY); */
-    nanoclj_cell_t * v = decode_pointer(sc->value);
-    if (is_empty(sc, v)) {
+    if (sc->value.as_long == sc->EMPTY.as_long) {
       s_return(sc, sc->EMPTYVEC);
     } else {
-      s_return(sc, mk_collection(sc, T_VECTOR, v));
+      s_return(sc, mk_collection(sc, T_VECTOR, decode_pointer(sc->value)));
     }
-  }
 
   case OP_RDFN:{
     bool has_rest;
