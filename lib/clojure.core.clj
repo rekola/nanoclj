@@ -330,7 +330,8 @@
 (defn pr
   "Prints values to *out* in a format understandable by the Reader"
   [& more] (run! (fn [x]
-                   (cond (seq? x) (cond (and *print-length* (<= *print-length* 0)) (print "(...)")
+                   (cond (seq? x) (cond (empty? x) (print "()")
+                                        (and *print-length* (<= *print-length* 0)) (print "(...)")
                                         :else (do (print \()
                                                   (pr (first x))
                                                   (run! (fn [x] (print \space) (pr x)) (rest x))
