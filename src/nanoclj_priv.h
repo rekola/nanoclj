@@ -201,11 +201,21 @@ extern "C" {
     nanoclj_val_t CHANNELS;	  /* :channels */
     nanoclj_val_t WATCHES;	  /* :watches */
     nanoclj_val_t NAME;		  /* :name */
+    nanoclj_val_t TYPE;		  /* :type */
     
     nanoclj_val_t SORTED_SET;	  /* sorted-set */
     nanoclj_val_t ARRAY_MAP;	  /* array-map */
     nanoclj_val_t REGEX;		  /* regex */
     nanoclj_val_t EMPTYVEC;
+
+    nanoclj_cell_t * OBJECT;	  /* types */
+    nanoclj_cell_t * INTEGER;	  
+    nanoclj_cell_t * REAL;
+    nanoclj_cell_t * BOOLEAN;
+    nanoclj_cell_t * CHARACTER;
+    nanoclj_cell_t * PROC;
+    nanoclj_cell_t * KEYWORD;
+    nanoclj_cell_t * SYMBOL;
     
     nanoclj_cell_t * free_cell;      /* pointer to top of free cells */
     long fcells;                  /* # of free cells */
@@ -233,7 +243,7 @@ extern "C" {
     void *ext_data;             /* For the benefit of foreign functions */
     nanoclj_val_t (*object_invoke_callback) (nanoclj_t *, void *, nanoclj_val_t);
 
-    size_t gensym_cnt;
+    size_t gensym_cnt, gentypeid_cnt;
 
     struct nanoclj_interface *vptr;
     dump_stack_frame_t * dump_base;            /* pointer to base of allocated dump stack */

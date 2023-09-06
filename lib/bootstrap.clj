@@ -30,20 +30,13 @@
 ; Create symbols for all types
 
 (initialize-type- (type '()) "An empty list")
-(initialize-type- (type true) "Constructs a boolean")
 (initialize-type- (type (type 1)) "Constructs a type")
 (initialize-type- (type '(1)) "Constructs a list")
-(initialize-type- (type 1) "Casts argument to int")
-(initialize-type- (type 2147483648) "Casts argument to a long (or int if it is sufficient)")
-(initialize-type- (type 1.1) "Casts argument to a double")
+(initialize-type- (type 2147483648) "Casts argument to a long (or int if sufficient)")
 (initialize-type- (type "") "Casts argument to a string")
-(initialize-type- (type 'type) "Casts argument to a symbol")
-(initialize-type- (type \a) "Casts argument to a character")
 (initialize-type- (type *in*) "Constructs a reader")
 (initialize-type- (type *out*) "Constructs a writer")
-(initialize-type- (type :else) "Constructs a keyword")
 (initialize-type- (type initialize-type-) "Constructs a function closure")
-(initialize-type- (type type) "Constructs a procedure")
 (initialize-type- (type *ns*) "Constructs a namespace")
 (initialize-type- (type []) "Constructs a vector")
 (initialize-type- (type (lazy-seq '())) "Constructs a lazy-seq")
@@ -52,7 +45,6 @@
 (initialize-type- (type Math/sin) "Constructs a foreign function")
 (initialize-type- (type (divide 1 2)) "Constructs a ratio")
 (initialize-type- (type (var divide)) "Constructs a Var")
-; (initialize-type- (type (first {1 1})))
 
 (def clojure.lang.BigInt (nanoclj.core.Type 26))
 (def clojure.lang.MapEntry (nanoclj.core.Type 21))
@@ -81,8 +73,6 @@
   "Returns true if the argument is not nil"
   (fn [x] (not (identical? x nil))))
 
-(def instance? (fn [t v] (identical? t (type v))))
-
 (def list? (fn [x] (instance? clojure.lang.Cons x)))
 (def zero? (fn [n] (equiv? n 0)))
 
@@ -100,9 +90,7 @@
 
 (def number?
   "Returns true if the argument is a number"
-  (fn [x] (is-any-of? (type x)
-                      java.lang.Integer java.lang.Long java.lang.Double
-                      clojure.lang.BigInt clojure.lang.Ratio)))
+  (fn [x] (instance? java.lang.Number x)))
 
 (def string?
   "Returns true if argument is a string"
@@ -480,7 +468,7 @@
 
 (defn boolean?
   "Returns true if argument is a boolean"
-  [x] (or (= x true) (= x false)))
+  [x] (instance? java.lang.Boolean x))
 
 (defn closure?
   "Returns true if argument is a closure. Note, a macro object is also a closure."

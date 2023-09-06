@@ -17,6 +17,9 @@
 (defn associative? [coll] (is-any-of? (type x)
                                       clojure.lang.PersistentVector
                                       clojure.lang.PersistentArrayMap))
+(defn sequential?
+  "Returns true if coll is sequential (ordered)"
+  [coll] (is-any-of? (type x) clojure.lang.PersistentVector clojure.lang.Cons))
 
 (def keyword clojure.lang.Keyword)
 (def char java.lang.Character)
@@ -27,7 +30,7 @@
 ; Casts argument to int
 (def int java.lang.Integer)
 
-; Casts argument to long (or int if it is sufficient)
+; Casts argument to long (or int if sufficient)
 (def long java.lang.Long)
 
 (defn num
@@ -584,3 +587,9 @@
 (defn clojure-version
   "Returns the nanoclj version string"
   [] (System/getProperty "nanoclj.version"))
+
+(def isa? instance?)
+
+(defn parents
+  "Returns a set with the immmediate parents of the provided object"
+  [t] (conj #{} (rest t)))
