@@ -23,7 +23,20 @@ static inline nanoclj_val_t mk_canvas(nanoclj_t * sc, int width, int height) {
   cairo_rectangle(cr, 0, 0, width, height);
   cairo_fill(cr);
   cairo_set_source_rgba(cr, 0, 0, 0, 1);
-  
+
+  cairo_font_options_t * options = cairo_font_options_create();
+  cairo_font_options_set_antialias(options,
+#if 1
+				   CAIRO_ANTIALIAS_SUBPIXEL
+#else
+				   CAIRO_ANTIALIAS_GRAY
+#endif
+				   );
+  cairo_font_options_set_hint_style(options, CAIRO_HINT_STYLE_FULL);
+  cairo_font_options_set_hint_metrics(options, CAIRO_HINT_METRICS_ON);
+  cairo_set_font_options(cr, options);
+  cairo_font_options_destroy(options);
+
   return mk_pointer(x);  
 }
 
@@ -88,33 +101,23 @@ static inline void canvas_restore(void * canvas) {
   cairo_restore((cairo_t *)canvas);
 }
 
-static inline void canvas_show_text(void * canvas, strview_t text) {
-  char * tmp = (char *)malloc(text.size + 1);
-  if (tmp) {
-    memcpy(tmp, text.ptr, text.size);
-    tmp[text.size] = 0;
-    cairo_show_text((cairo_t *)canvas, tmp);
-    free(tmp);
-  }
+static inline void canvas_show_text(nanoclj_t * sc, void * canvas, strview_t text) {
+  char * tmp = alloc_cstr(sc, text);
+  cairo_show_text((cairo_t *)canvas, tmp);
+  sc->free(tmp);
 }
 
-static inline void canvas_get_text_extents(void * canvas, strview_t text, double * width, double * height) {
-  char * tmp = (char *)malloc(text.size + 1);
-  if (tmp) {
-    memcpy(tmp, text.ptr, text.size);
-    tmp[text.size] = 0;
-    cairo_text_extents_t extents;
-    cairo_text_extents((cairo_t *)canvas, tmp, &extents);
-    *width = extents.width;
-    *height = extents.height;
-    /* double x_bearing;
-       double y_bearing;
-       double x_advance;
-       double y_advance; */
-    free(tmp);
-  } else {
-    *width = *height = 0;
-  }
+static inline void canvas_get_text_extents(nanoclj_t * sc, void * canvas, strview_t text, double * width, double * height) {
+  char * tmp = alloc_cstr(sc, text);
+  cairo_text_extents_t extents;
+  cairo_text_extents((cairo_t *)canvas, tmp, &extents);
+  *width = extents.width;
+  *height = extents.height;
+  /* double x_bearing;
+     double y_bearing;
+     double x_advance;
+     double y_advance; */
+  sc->free(tmp);
 }
 
 #endif
