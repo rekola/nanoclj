@@ -193,9 +193,6 @@ struct symbol {
   const char * name;
 };
 
-/* ADJ is enough slack to align cells in a TYPE_BITS-bit boundary */
-#define ADJ		64
-#define TYPE_BITS	 6
 #define T_MASKTYPE      63      /* 0000000000111111 */
 #define T_SEQUENCE    1024	/* 0000010000000000 */
 #define T_REALIZED    2048	/* 0000100000000000 */
@@ -843,27 +840,16 @@ static inline int_fast16_t syntaxnum(nanoclj_val_t p) {
 /* allocate new cell segment */
 static inline int alloc_cellseg(nanoclj_t * sc, int n) {
   nanoclj_val_t p;
-  long i;
-  int k;
-  int adj = ADJ;
-
-  if (adj < sizeof(nanoclj_cell_t)) {
-    adj = sizeof(nanoclj_cell_t);
-  }
-  for (k = 0; k < n; k++) {
+  for (int k = 0; k < n; k++) {
     if (sc->last_cell_seg >= CELL_NSEGMENT - 1) {
       return k;
     }
-    char * cp = (char *) sc->malloc(CELL_SEGSIZE * sizeof(nanoclj_cell_t) + adj);
+    char * cp = (char *) sc->malloc(CELL_SEGSIZE * sizeof(nanoclj_cell_t));
     if (cp == 0) {
       return k;
     }
-    i = ++sc->last_cell_seg;
-    sc->alloc_seg[i] = cp;
-    /* adjust in TYPE_BITS-bit boundary */
-    if (((unsigned long) cp) % adj != 0) {
-      cp = (char *) (adj * ((unsigned long) cp / adj + 1));
-    }
+    long i = ++sc->last_cell_seg;
+    sc->alloc_seg[i] = cp;    
     /* insert new segment in address order */
     nanoclj_val_t newp = mk_pointer((nanoclj_cell_t *)cp);
     sc->cell_seg[i] = newp;
