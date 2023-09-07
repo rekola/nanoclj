@@ -164,9 +164,10 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_c
 	_clrmark(p);
       } else {
         /* reclaim cell */
-        if (_typeflag(p) != 0) {
+        if (_cell_type(p) != 0 || _cell_flags(p) != 0) {
 	  finalize_cell(sc, p);
-          _typeflag(p) = 0;
+          _cell_type(p) = 0;
+	  _cell_flags(p) = 0;
 	  _metadata_unchecked(p) = NULL;
           _car(p) = sc->EMPTY;
         }

@@ -46,15 +46,15 @@
 (initialize-type- (type (divide 1 2)) "Constructs a ratio")
 (initialize-type- (type (var divide)) "Constructs a Var")
 
-(def clojure.lang.BigInt (nanoclj.core.Type 26))
-(def clojure.lang.MapEntry (nanoclj.core.Type 21))
-(def nanoclj.core.CharArray (nanoclj.core.Type 27))
-(def java.io.InputStream (nanoclj.core.Type 28))
-(def java.io.OutputStream (nanoclj.core.Type 29))
-(def clojure.lang.Delay (nanoclj.core.Type 31))
-(def nanoclj.core.Image (nanoclj.core.Type 32))
-(def nanoclj.core.Canvas (nanoclj.core.Type 33))
-(def java.io.File (nanoclj.core.Type 35))
+(def clojure.lang.BigInt (java.lang.Class 26))
+(def clojure.lang.MapEntry (java.lang.Class 21))
+(def nanoclj.core.CharArray (java.lang.Class 27))
+(def java.io.InputStream (java.lang.Class 28))
+(def java.io.OutputStream (java.lang.Class 29))
+(def clojure.lang.Delay (java.lang.Class 31))
+(def nanoclj.core.Image (java.lang.Class 32))
+(def nanoclj.core.Canvas (java.lang.Class 33))
+(def java.io.File (java.lang.Class 35))
 
 (def symbol clojure.lang.Symbol)
 (def vector clojure.lang.PersistentVector)
@@ -116,9 +116,13 @@
   "Returns true if coll is a sorted collection"
   (fn [x] (instance? clojure.lang.PersistentTreeSet x)))
 
+(def class?
+  "Returns true if x is a Class"
+  (fn [x] (instance? java.lang.Class x)))
+
 (def ifn?
   "Returns true if coll is invokeable"
-  (fn [x] (is-any-of? (type x) nanoclj.core.Procedure nanoclj.core.Closure nanoclj.core.ForeignFunction clojure.lang.PersistentVector nanoclj.core.Macro clojure.lang.LazySeq nanoclj.core.Type clojure.lang.Keyword clojure.lang.PersistentArrayMap clojure.lang.PersistentTreeSet nanoclj.core.ForeignObject)))
+  (fn [x] (is-any-of? (type x) nanoclj.core.Procedure nanoclj.core.Closure nanoclj.core.ForeignFunction clojure.lang.PersistentVector nanoclj.core.Macro clojure.lang.LazySeq java.lang.Class clojure.lang.Keyword clojure.lang.PersistentArrayMap clojure.lang.PersistentTreeSet nanoclj.core.ForeignObject)))
 
 (def defined? (fn [sym] (boolean (resolve sym))))
                         
