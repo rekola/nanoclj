@@ -2085,20 +2085,16 @@ static inline nanoclj_cell_t * new_slot_spec_in_env(nanoclj_t * sc, nanoclj_cell
 }
 
 static inline nanoclj_cell_t * find_slot_in_env(nanoclj_t * sc, nanoclj_cell_t * env, nanoclj_val_t hdl, bool all) {  
-  nanoclj_cell_t * x;
-  nanoclj_val_t y;
-  
-  for (x = env; x && x != &(sc->_EMPTY); x = decode_pointer(_cdr(x))) {
-    y = _car(x);
-    if (is_vector(y)) {
-      nanoclj_cell_t * c = decode_pointer(y);
+  for (nanoclj_cell_t * x = env; x && x != &(sc->_EMPTY); x = decode_pointer(_cdr(x))) {
+    nanoclj_cell_t * y = decode_pointer(_car(x));
+    if (_type(y) == T_VECTOR) {
       const char * sn = symname(hdl);
-      int location = hash_fn(sn, strlen(sn), _size_unchecked(c));
-      y = vector_elem(c, location);      
+      int location = hash_fn(sn, strlen(sn), _size_unchecked(y));
+      y = decode_pointer(vector_elem(y, location));
     }
 	
-    for (; !is_nil(y) && y.as_long != sc->EMPTY.as_long; y = cdr(y)) {
-      nanoclj_val_t var = car(y);
+    for (; y && y != &(sc->_EMPTY); y = decode_pointer(_cdr(y))) {
+      nanoclj_val_t var = _car(y);
       nanoclj_val_t sym = car(var);
       if (sym.as_long == hdl.as_long) {
 	return decode_pointer(var);
@@ -4304,7 +4300,7 @@ static inline const char *procname(enum nanoclj_opcodes op) {
 
 static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   nanoclj_val_t x, y;
-  nanoclj_cell_t * meta, * ns;
+  nanoclj_cell_t * meta;
   int syn;
   nanoclj_val_t params0;
   nanoclj_cell_t * params;
@@ -4732,15 +4728,15 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   case OP_INTERN:
     if (!unpack_args_2_plus(sc, &arg0, &arg1, &arg_rest)) {
       Error_0(sc, "Error - Invalid arity");
-    }
-
-    ns = decode_pointer(arg0); /* namespace */
-    x = arg1; /* name */
-
-    if (arg_rest.as_long != sc->EMPTY.as_long) {
-      s_return(sc, intern(sc, ns, x, car(arg_rest)));
-    } else {
-      s_return(sc, intern_symbol(sc, ns, x));
+    } else if (!is_environment(arg0) || !is_symbol(arg1)) {
+      Error_0(sc, "Error - Invalid types");
+    } else { /* arg0: namespace, arg1: symbol */
+      nanoclj_cell_t * ns = decode_pointer(arg0);
+      if (arg_rest.as_long != sc->EMPTY.as_long) {
+	s_return(sc, intern(sc, ns, arg1, car(arg_rest)));
+      } else {
+	s_return(sc, intern_symbol(sc, ns, arg1));
+      }
     }
     
   case OP_DEF0:                /* define */    
@@ -6148,6 +6144,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       Error_0(sc, "Error - Invalid arity");
     }    
     nanoclj_cell_t * c = find_slot_in_env(sc, sc->root_env, arg0, true);
+    nanoclj_cell_t * ns;
     if (c) {
       ns = decode_pointer(slot_value_in_env(c));
     } else {
