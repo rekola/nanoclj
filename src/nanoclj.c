@@ -727,48 +727,6 @@ static inline const char* get_version() {
   return VERSION;
 }
 
-static inline const char * typename_from_id(int_fast16_t id) {
-  switch (id) {
-  case 0: return "nanoclj.core.EmptyList";
-  case 1: return "java.lang.Boolean";
-  case 2: return "java.lang.String";
-  case 3: return "java.lang.Integer";
-  case 4: return "java.lang.Long";
-  case 5: return "java.lang.Double";
-  case 6: return "clojure.lang.Symbol";
-  case 7: return "nanoclj.core.Procedure";
-  case 8: return "clojure.lang.Cons";
-  case 9: return "nanoclj.core.Closure";
-  case 10: return "java.lang.Exception";	
-  case 11: return "nanoclj.core.ForeignFunction";
-  case 12: return "java.lang.Character";
-  case 13: return "java.io.Reader";
-  case 14: return "java.io.Writer";
-  case 15: return "clojure.lang.PersistentVector";
-  case 16: return "nanoclj.core.Macro";
-  case 17: return "clojure.lang.LazySeq";
-  case 18: return "clojure.lang.Namespace"; /* Environment */
-  case 19: return "java.lang.Class";
-  case 20: return "clojure.lang.Keyword";
-  case 21: return "clojure.lang.MapEntry";
-  case 22: return "clojure.lang.PersistentArrayMap";
-  case 23: return "clojure.lang.PersistentTreeSet";
-  case 24: return "clojure.lang.Var";
-  case 25: return "nanoclj.core.ForeignObject";
-  case 26: return "clojure.lang.BigInt";
-  case 27: return "nanoclj.core.CharArray";
-  case 28: return "java.io.InputStream";
-  case 29: return "java.io.OutputStream";
-  case 30: return "clojure.lang.Ratio";
-  case 31: return "clojure.lang.Delay";
-  case 32: return "nanoclj.core.Image";
-  case 33: return "nanoclj.core.Canvas";
-  case 34: return "nanoclj.core.Audio";
-  case 35: return "java.io.File";
-  }
-  return "";
-}
-
 static inline strview_t _to_strview(nanoclj_cell_t * c) {
   switch (_type(c)) {
   case T_STRING:
@@ -779,10 +737,6 @@ static inline strview_t _to_strview(nanoclj_cell_t * c) {
     } else {
       return (strview_t){ _str_store_unchecked(c)->data + _offset_unchecked(c), _size_unchecked(c) };
     }
-  case T_TYPE: {
-    const char * s = typename_from_id(decode_integer(_car(c)));
-    return (strview_t){ s, strlen(s) };
-  }
   case T_READER:{
     nanoclj_port_t * pt = _port_unchecked(c);
     if (pt->kind & port_string) {
@@ -1466,11 +1420,11 @@ static inline nanoclj_val_t cons(nanoclj_t * sc, nanoclj_val_t a, nanoclj_val_t 
 }
 
 /* Creates a vector store with double the size requested */
-static inline nanoclj_vector_t * mk_vector_store(nanoclj_t * sc, size_t len) {
+static inline nanoclj_vector_t * mk_vector_store(nanoclj_t * sc, size_t len, size_t reserve) {
   nanoclj_vector_t * s = (nanoclj_vector_t *)malloc(sizeof(nanoclj_vector_t));
-  s->data = (nanoclj_val_t*)sc->malloc(2 * len * sizeof(nanoclj_val_t));
+  s->data = (nanoclj_val_t*)sc->malloc(reserve * sizeof(nanoclj_val_t));
   s->size = len;
-  s->reserved = (len > 1 ? len : 1) * 2;
+  s->reserved = reserve;
   s->refcnt = 0;
   return s;
 }
@@ -1504,7 +1458,7 @@ static inline nanoclj_cell_t * _get_vector_object(nanoclj_t * sc, int_fast16_t t
 
 static inline nanoclj_cell_t * get_vector_object(nanoclj_t * sc, int_fast16_t t, size_t size) {
   nanoclj_vector_t * store = NULL;
-  if (size > NANOCLJ_SMALL_VEC_SIZE) store = mk_vector_store(sc, size);
+  if (size > NANOCLJ_SMALL_VEC_SIZE) store = mk_vector_store(sc, size, 2 * size);
   return _get_vector_object(sc, t, 0, size, store);
 }
 
@@ -2443,7 +2397,7 @@ static inline nanoclj_cell_t * copy_vector(nanoclj_t * sc, nanoclj_cell_t * vec)
     memcpy(new_data, data, len * sizeof(nanoclj_val_t));
     return new_vec;
   } else {
-    nanoclj_vector_t * s = mk_vector_store(sc, len);
+    nanoclj_vector_t * s = mk_vector_store(sc, len, 2 * len);
     memcpy(s->data, _vec_store_unchecked(vec)->data + _offset_unchecked(vec), len * sizeof(nanoclj_val_t));
     return _get_vector_object(sc, _type(vec), 0, len, s);
   }
@@ -2504,10 +2458,10 @@ static inline nanoclj_cell_t * conj(nanoclj_t * sc, nanoclj_cell_t * coll, nanoc
       size_t old_offset = _offset_unchecked(coll);
     
       if (!s) {
-	s = mk_vector_store(sc, 0);
+	s = mk_vector_store(sc, old_size, 2 * old_size);
       } else if (!(old_offset + old_size == s->size && s->size < s->reserved)) {
 	nanoclj_vector_t * old_s = s;
-	s = mk_vector_store(sc, old_size);
+	s = mk_vector_store(sc, old_size, 2 * old_size);
 	memcpy(s->data, old_s->data + old_offset, old_size * sizeof(nanoclj_val_t));    
       }
       
@@ -2593,7 +2547,15 @@ static inline nanoclj_val_t intern_symbol(nanoclj_t * sc, nanoclj_cell_t * envir
 }
 
 static inline nanoclj_cell_t * mk_type(nanoclj_t * sc, int type_id, nanoclj_cell_t * parent_type, nanoclj_cell_t * meta) {
-  return get_cell(sc, T_TYPE, mk_int(type_id), mk_pointer(parent_type), meta);
+  if (sc->types->size <= (size_t)type_id) {
+    for (size_t i = sc->types->size; i < (size_t)type_id; i++) {
+      sc->types->data[i] = mk_nil();
+    }
+    sc->types->size = type_id + 1;
+  }
+  nanoclj_cell_t * t = get_cell(sc, T_TYPE, mk_int(type_id), mk_pointer(parent_type), meta);
+  sc->types->data[type_id] = mk_pointer(t);
+  return t;
 }
 
 static inline nanoclj_cell_t * mk_named_type(nanoclj_t * sc, const char * name, int type_id, nanoclj_cell_t * parent_type) {
@@ -3458,7 +3420,7 @@ static inline void print_image(nanoclj_t * sc, nanoclj_image_t * img, nanoclj_va
     }
 
     char * p = sc->strbuff;
-    size_t len = snprintf(sc->strbuff, sc->strbuff_size, "#object[%s %p %d %d %d]", typename_from_id(T_IMAGE), (void *)img, img->width, img->height, img->channels);
+    size_t len = snprintf(sc->strbuff, sc->strbuff_size, "#object[nanoclj.core.Image %p %d %d %d]", (void *)img, img->width, img->height, img->channels);
     putchars(sc, p, 3, out);
   }
 }
@@ -3548,8 +3510,6 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
 	  strview_t name = to_strview(name_v);
 	  p = name.ptr;
 	  plen = name.size;	  
-	} else {
-	  p = typename_from_id(to_int(l));
 	}
 	break;
       case T_LONG:
@@ -3624,7 +3584,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
   
   if (!p) {
     p = sc->strbuff;
-    plen = snprintf(sc->strbuff, sc->strbuff_size, "#object[%s]", typename_from_id(type(l)));
+    plen = snprintf(sc->strbuff, sc->strbuff_size, "#object[%d]", type(l));
   }
   
   if (plen < 0) {
@@ -3999,22 +3959,12 @@ static inline bool destructure(nanoclj_t * sc, nanoclj_cell_t * binding, nanoclj
 }
 
 static inline nanoclj_cell_t * get_type_object(nanoclj_t * sc, nanoclj_val_t v) {
-  int type_id = prim_type(v);
-  switch (type_id) {
-  case T_INTEGER: return sc->INTEGER;
-  case T_REAL: return sc->REAL;
-  case T_BOOLEAN: return sc->BOOLEAN;
-  case T_CHARACTER: return sc->CHARACTER;
-  case T_PROC: return sc->PROC;
-  case T_KEYWORD: return sc->KEYWORD;
-  case T_SYMBOL: return sc->SYMBOL;
-  case T_CELL: {
-    nanoclj_cell_t * c = decode_pointer(v);
-    type_id = _type(c);
-    return mk_type(sc, type_id, sc->OBJECT, NULL);
+  int type_id = type(v);
+  if (type_id >= 0 && (size_t)type_id < sc->types->size) {
+    nanoclj_cell_t * t = decode_pointer(sc->types->data[type_id]);
+    if (t) return t;
   }
-  }
-  return NULL; /* Not reached */
+  return NULL;
 }
 
 /* Constructs an object by type, args are seqed */
@@ -4515,7 +4465,8 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     case T_PROC: 
       s_goto(sc, decode_integer(sc->code));
       
-    case T_KEYWORD:{
+    case T_KEYWORD:
+    case T_SYMBOL:{
       nanoclj_val_t coll = car(sc->args), elem;
       if (is_cell(coll) && get_elem(sc, decode_pointer(coll), sc->code, &elem)) {
 	s_return(sc, elem);
@@ -4524,7 +4475,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       } else {
 	s_return(sc, mk_nil());
       }
-    }	
+    }
 
     case T_CELL:{      
       nanoclj_cell_t * code_cell = decode_pointer(sc->code);
@@ -6721,17 +6672,62 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc fr
   sc->REGEX = def_symbol(sc, "regex");
   sc->EMPTYVEC = mk_vector(sc, 0);
 
-  sc->OBJECT = mk_named_type(sc, "java.lang.Object", gentypeid(sc), &(sc->_EMPTY));
-  nanoclj_cell_t * AFn = mk_named_type(sc, "clojure.lang.AFn", gentypeid(sc), sc->OBJECT);
-  nanoclj_cell_t * NUMBER = mk_named_type(sc, "java.lang.Number", gentypeid(sc), sc->OBJECT);  
-  sc->INTEGER = mk_named_type(sc, "java.lang.Integer", T_INTEGER, NUMBER);
-  sc->REAL = mk_named_type(sc, "java.lang.Double", T_REAL, NUMBER);
-  sc->BOOLEAN = mk_named_type(sc, "java.lang.Boolean", T_BOOLEAN, sc->OBJECT);
-  sc->CHARACTER = mk_named_type(sc, "java.lang.Character", T_CHARACTER, sc->OBJECT);
-  sc->PROC = mk_named_type(sc, "nanoclj.core.Procedure", T_PROC, sc->OBJECT);
-  sc->KEYWORD = mk_named_type(sc, "clojure.lang.Keyword", T_KEYWORD, sc->OBJECT);
-  sc->SYMBOL = mk_named_type(sc, "clojure.lang.Symbol", T_SYMBOL, AFn);
+  sc->types = mk_vector_store(sc, 0, 1024);
+  			      
+  /* Java types */
+
+  nanoclj_cell_t * Object = mk_named_type(sc, "java.lang.Object", gentypeid(sc), &(sc->_EMPTY));
+  nanoclj_cell_t * Number = mk_named_type(sc, "java.lang.Number", gentypeid(sc), Object);
+  nanoclj_cell_t * Throwable = mk_named_type(sc, "java.lang.Throwable", gentypeid(sc), Object);
+  nanoclj_cell_t * AFn = mk_named_type(sc, "clojure.lang.AFn", gentypeid(sc), Object);
+    
+  mk_named_type(sc, "java.lang.Class", T_TYPE, AFn); /* incorrect parent */
+  mk_named_type(sc, "java.lang.String", T_STRING, Object);
+  mk_named_type(sc, "java.lang.Boolean", T_BOOLEAN, Object);
+  mk_named_type(sc, "java.lang.Character", T_CHARACTER, Object);
+  mk_named_type(sc, "java.lang.Integer", T_INTEGER, Number);
+  mk_named_type(sc, "java.lang.Double", T_REAL, Number);
+  mk_named_type(sc, "java.lang.Long", T_LONG, Number);
+  mk_named_type(sc, "java.lang.Exception", T_EXCEPTION, Throwable);
+  mk_named_type(sc, "java.io.Reader", T_READER, Object);
+  mk_named_type(sc, "java.io.Writer", T_WRITER, Object);
+  mk_named_type(sc, "java.io.InputStream", T_INPUT_STREAM, Object);
+  mk_named_type(sc, "java.io.OutputStream", T_OUTPUT_STREAM, Object);
+  mk_named_type(sc, "java.io.File", T_FILE, Object);
+    
+  /* Clojure types */
+  nanoclj_cell_t * AReference = mk_named_type(sc, "clojure.lang.AReference", gentypeid(sc), Object);
+  nanoclj_cell_t * Obj = mk_named_type(sc, "clojure.lang.Obj", gentypeid(sc), Object);
+  nanoclj_cell_t * ASeq = mk_named_type(sc, "clojure.lang.ASeq", gentypeid(sc), Obj);
+    
+  mk_named_type(sc, "clojure.lang.PersistentTreeSet", T_SORTED_SET, AFn);
+  mk_named_type(sc, "clojure.lang.PersistentArrayMap", T_ARRAYMAP, AFn);
+  mk_named_type(sc, "clojure.lang.Symbol", T_SYMBOL, AFn);
+  mk_named_type(sc, "clojure.lang.PersistentVector", T_VECTOR, AFn);
   
+  mk_named_type(sc, "clojure.lang.Keyword", T_KEYWORD, AFn); /* incorrect parent */
+  mk_named_type(sc, "clojure.lang.BigInt", T_BIGINT, Number);
+  mk_named_type(sc, "clojure.lang.Ratio", T_RATIO, Number);
+  mk_named_type(sc, "clojure.lang.Delay", T_DELAY, Object);
+  mk_named_type(sc, "clojure.lang.LazySeq", T_LAZYSEQ, Obj);
+  mk_named_type(sc, "clojure.lang.Cons", T_LIST, ASeq);
+  mk_named_type(sc, "clojure.lang.Namespace", T_ENVIRONMENT, AReference);
+  mk_named_type(sc, "clojure.lang.Var", T_VAR, AReference);
+  mk_named_type(sc, "clojure.lang.MapEntry", T_MAPENTRY, Object);
+  
+  /* nanoclj types */
+  nanoclj_cell_t * Closure = mk_named_type(sc, "nanoclj.core.Closure", T_CLOSURE, AFn);
+  mk_named_type(sc, "nanoclj.core.Procedure", T_PROC, AFn);
+  mk_named_type(sc, "nanoclj.core.Macro", T_MACRO, Closure);
+  mk_named_type(sc, "nanoclj.core.ForeignFunction", T_FOREIGN_FUNCTION, AFn);
+  mk_named_type(sc, "nanoclj.core.ForeignObject", T_FOREIGN_OBJECT, AFn);
+
+  mk_named_type(sc, "nanoclj.core.CharArray", T_CHAR_ARRAY, Object);
+  mk_named_type(sc, "nanoclj.core.Image", T_IMAGE, Object);
+  mk_named_type(sc, "nanoclj.core.Canvas", T_CANVAS, Object);
+  mk_named_type(sc, "nanoclj.core.Audio", T_AUDIO, Object);
+  mk_named_type(sc, "nanoclj.core.EmptyList", T_NIL, Object);
+
   intern(sc, sc->global_env, def_symbol(sc, "root"), mk_pointer(sc->root_env));
   intern(sc, sc->global_env, def_symbol(sc, "nil"), mk_nil());
   intern(sc, sc->global_env, sc->MOUSE_POS, mk_nil());

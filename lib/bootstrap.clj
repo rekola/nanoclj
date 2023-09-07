@@ -15,46 +15,8 @@
 (def caadr (fn [x] (first (second x))))
 (def cdadr (fn [x] (rest (second x))))
 
-; First define the type for a cons cell
-; (def cons (type '(1)))
-
-; And create intern
-
 ; (macro (my-intern- form) (cons 'def (cons (caddr form) (cons (cadddr form) '()))))
 ; (def my-intern (fn [ns name val] (let [s name] (my-intern- ns s val))))
-
-(def initialize-type-
-  "Creates a symbol for the argument type"
-  (fn [t doc] (intern root ((type 'first) t doc) t)))
-
-; Create symbols for all types
-
-(initialize-type- (type '()) "An empty list")
-(initialize-type- (type (type 1)) "Constructs a type")
-(initialize-type- (type '(1)) "Constructs a list")
-(initialize-type- (type 2147483648) "Casts argument to a long (or int if sufficient)")
-(initialize-type- (type "") "Casts argument to a string")
-(initialize-type- (type *in*) "Constructs a reader")
-(initialize-type- (type *out*) "Constructs a writer")
-(initialize-type- (type initialize-type-) "Constructs a function closure")
-(initialize-type- (type *ns*) "Constructs a namespace")
-(initialize-type- (type []) "Constructs a vector")
-(initialize-type- (type (lazy-seq '())) "Constructs a lazy-seq")
-(initialize-type- (type {}) "Constructs an array-map")
-(initialize-type- (type #{}) "Constructs a sorted-set")
-(initialize-type- (type Math/sin) "Constructs a foreign function")
-(initialize-type- (type (divide 1 2)) "Constructs a ratio")
-(initialize-type- (type (var divide)) "Constructs a Var")
-
-(def clojure.lang.BigInt (java.lang.Class 26))
-(def clojure.lang.MapEntry (java.lang.Class 21))
-(def nanoclj.core.CharArray (java.lang.Class 27))
-(def java.io.InputStream (java.lang.Class 28))
-(def java.io.OutputStream (java.lang.Class 29))
-(def clojure.lang.Delay (java.lang.Class 31))
-(def nanoclj.core.Image (java.lang.Class 32))
-(def nanoclj.core.Canvas (java.lang.Class 33))
-(def java.io.File (java.lang.Class 35))
 
 (def symbol clojure.lang.Symbol)
 (def vector clojure.lang.PersistentVector)
@@ -112,6 +74,10 @@
   "Returns true if the argument is a function"
   (fn [x] (is-any-of? (type x) nanoclj.core.Procedure nanoclj.core.Closure nanoclj.core.ForeignFunction)))
 
+(def macro?
+  "Returns true if the argument is a macro"
+  (fn [x] (instance? nanoclj.core.Macro x)))
+
 (def sorted?
   "Returns true if coll is a sorted collection"
   (fn [x] (instance? clojure.lang.PersistentTreeSet x)))
@@ -122,7 +88,7 @@
 
 (def ifn?
   "Returns true if coll is invokeable"
-  (fn [x] (is-any-of? (type x) nanoclj.core.Procedure nanoclj.core.Closure nanoclj.core.ForeignFunction clojure.lang.PersistentVector nanoclj.core.Macro clojure.lang.LazySeq java.lang.Class clojure.lang.Keyword clojure.lang.PersistentArrayMap clojure.lang.PersistentTreeSet nanoclj.core.ForeignObject)))
+  (fn [x] (instance? clojure.lang.AFn x)))
 
 (def defined? (fn [sym] (boolean (resolve sym))))
                         
@@ -211,14 +177,6 @@
                                                 (foo level (cdr form)))))))
          ]
      (foo 0 (car (cdr l))))))
-
-; Implement type and predicate for macros now that we have a macro
-
-(initialize-type- (type quasiquote) "Constructs a macro")
-
-(def macro?
-  "Returns true if the argument is a macro"
-  (fn [x] (instance? nanoclj.core.Macro x)))
 
 ; DEFINE-MACRO Contributed by Andy Gaynor
 (macro (def-macro dform)
@@ -476,7 +434,7 @@
 
 (defn closure?
   "Returns true if argument is a closure. Note, a macro object is also a closure."
-  [x] (or (instance? nanoclj.core.Closure x) (instance? nanoclj.core.Macro x)))
+  [x] (instance? nanoclj.core.Closure x))
 
 (macro (unless form)
      `(if (not ,(cadr form)) (do ,@(cddr form))))

@@ -126,14 +126,10 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_c
   /* Mark recent objects the interpreter doesn't know about yet. */
   mark_value(car(sc->sink));
 
-  /* Mark leaf types */
-  mark(sc->INTEGER);
-  mark(sc->REAL);
-  mark(sc->BOOLEAN);
-  mark(sc->CHARACTER);
-  mark(sc->PROC);
-  mark(sc->KEYWORD);
-  mark(sc->SYMBOL);
+  /* Mark types */  
+  for (size_t i = 0; i < sc->types->size; i++) {
+    mark_value(sc->types->data[i]);
+  }
 
   /* mark variables a, b, c */
   if (a) mark(a);

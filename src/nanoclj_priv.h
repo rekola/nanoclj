@@ -166,6 +166,7 @@ extern "C" {
     nanoclj_cell_t * oblist;         /* pointer to symbol table */
     nanoclj_cell_t * global_env;         /* pointer to global environment */
     nanoclj_cell_t * root_env;		/* pointer to the initial root env */
+    nanoclj_vector_t * types;
 
 /* global pointers to special symbols */
     nanoclj_val_t LAMBDA;             /* pointer to syntax lambda */
@@ -208,15 +209,6 @@ extern "C" {
     nanoclj_val_t ARRAY_MAP;	  /* array-map */
     nanoclj_val_t REGEX;		  /* regex */
     nanoclj_val_t EMPTYVEC;
-
-    nanoclj_cell_t * OBJECT;	  /* types */
-    nanoclj_cell_t * INTEGER;	  
-    nanoclj_cell_t * REAL;
-    nanoclj_cell_t * BOOLEAN;
-    nanoclj_cell_t * CHARACTER;
-    nanoclj_cell_t * PROC;
-    nanoclj_cell_t * KEYWORD;
-    nanoclj_cell_t * SYMBOL;
     
     nanoclj_cell_t * free_cell;      /* pointer to top of free cells */
     long fcells;                  /* # of free cells */
