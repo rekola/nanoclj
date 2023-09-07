@@ -57,7 +57,6 @@ have been tested:
 - Tail-call optimization
 - sort is not stable and cannot throw on type mismatch
 - License is BSD 2-Clause License instead of EPL
-- No type inheritance
 - No 32 bit floating point numbers or small integers
 - (identical 'a 'a) ; => true
 - Primitives such as doubles and 32 bit integers are passed by value, and are in effect, interned
@@ -88,7 +87,7 @@ have been tested:
 
 ## Dependencies
 
-- linenoise (included)
+- linenoise (included, utf8 support added)
 - stb_image, stb_image_resize, stb_image_write (included)
 - dr_wav (included)
 - cairo
@@ -116,8 +115,8 @@ have been tested:
 - StructMaps
 - Locals cleaning
 - Multithreading and transactions
+- Records, Protocols and Multi-methods
 - Threading macros (->, -->, some-> and some->>)
-- Classes (class, class?, cast)
 - `*print-length*`, `*print-level*`, `*file*`, `*flush-on-newline*`, `*clojure-version*`
 - Missing core functions and macros
   - doseq, for, dotimes
@@ -132,6 +131,7 @@ have been tested:
   - update, update-in, merge, get-in, disj
   - name
   - lazy-cat, realized?
+  - cast
   - nthrest, nthnext, nfirst
   - parse-long, parse-double, parse-uuid
   - distinct?
@@ -154,8 +154,8 @@ have been tested:
   - realized?
   - defn-
   - reduced, reduced?
-  - with-local-vars, var-set, find-var, declare
-  - binding, 
+  - with-local-vars, var-set, find-var, declare, binding
+  - as-url
 - clojure.string
   - upper-case
   - clojure.string/capitalize
