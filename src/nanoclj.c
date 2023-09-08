@@ -520,6 +520,8 @@ static inline bool is_number(nanoclj_val_t p) {
   case T_INTEGER:
   case T_LONG:
   case T_REAL:
+  case T_RATIO:
+  case T_BIGINT:
     return true;
   default:
     return false;
@@ -935,7 +937,7 @@ static inline void finalize_cell(nanoclj_t * sc, nanoclj_cell_t * a) {
 
 /* get new cell.  parameter a, b is marked by gc. */
 
-static inline nanoclj_cell_t * get_cell_x(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_cell_t * c) {
+static inline nanoclj_cell_t * get_cell_x(nanoclj_t * sc, uint32_t type_id, uint16_t flags, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_cell_t * c) {
   if (sc->no_memory) {
     return &(sc->_sink);
   }
@@ -955,6 +957,9 @@ static inline nanoclj_cell_t * get_cell_x(nanoclj_t * sc, nanoclj_cell_t * a, na
   nanoclj_cell_t * x = sc->free_cell;
   sc->free_cell = decode_pointer(_cdr(x));
   --sc->fcells;
+
+  x->type = type_id;
+  x->flags = flags;
   
   return x;
 }
@@ -963,22 +968,18 @@ static inline nanoclj_cell_t * get_cell_x(nanoclj_t * sc, nanoclj_cell_t * a, na
    Tehom */
 
 static inline void retain(nanoclj_t * sc, nanoclj_cell_t * recent) {
-  nanoclj_cell_t * holder = get_cell_x(sc, recent, NULL, NULL);
-  holder->type = T_LIST;
-  holder->flags = 0;
+  nanoclj_cell_t * holder = get_cell_x(sc, T_LIST, 0, recent, NULL, NULL);
   _car(holder) = mk_pointer(recent);
   _cdr(holder) = car(sc->sink);
   _metadata(holder) = NULL;
   car(sc->sink) = mk_pointer(holder);
 }
 
-static inline nanoclj_cell_t * get_cell(nanoclj_t * sc, int type, nanoclj_val_t a, nanoclj_val_t b, nanoclj_cell_t * meta) {
-  nanoclj_cell_t * cell = get_cell_x(sc, is_cell(a) ? decode_pointer(a) : NULL, is_cell(b) ? decode_pointer(b) : NULL, meta);
+static inline nanoclj_cell_t * get_cell(nanoclj_t * sc, uint32_t type,
+					nanoclj_val_t a, nanoclj_val_t b, nanoclj_cell_t * meta) {
+  nanoclj_cell_t * cell = get_cell_x(sc, type, 0, is_cell(a) ? decode_pointer(a) : NULL, is_cell(b) ? decode_pointer(b) : NULL, meta);
 
-  /* For right now, include "a" and "b" in "cell" so that gc doesn't
-     think they are garbage. */
-  cell->type = type;
-  cell->flags = 0;
+  /* For right now, include "a" and "b" in "cell" so that gc doesn't think they are garbage. */
   _car(cell) = a;
   _cdr(cell) = b;
   _metadata(cell) = meta;
@@ -991,10 +992,7 @@ static inline nanoclj_cell_t * get_cell(nanoclj_t * sc, int type, nanoclj_val_t 
 }
 
 static inline nanoclj_val_t mk_reader(nanoclj_t * sc, nanoclj_port_t * p) {
-  nanoclj_cell_t * x = get_cell_x(sc, NULL, NULL, NULL);
-
-  x->type = T_READER;
-  x->flags = T_GC_ATOM;
+  nanoclj_cell_t * x = get_cell_x(sc, T_READER, T_GC_ATOM, NULL, NULL, NULL);
   _port_unchecked(x) = p;
 
 #if RETAIN_ALLOCS
@@ -1005,10 +1003,7 @@ static inline nanoclj_val_t mk_reader(nanoclj_t * sc, nanoclj_port_t * p) {
 }
 
 static inline nanoclj_val_t mk_writer(nanoclj_t * sc, nanoclj_port_t * p) {
-  nanoclj_cell_t * x = get_cell_x(sc, NULL, NULL, NULL);
-  
-  x->type = T_WRITER;
-  x->flags = T_GC_ATOM;
+  nanoclj_cell_t * x = get_cell_x(sc, T_WRITER, T_GC_ATOM, NULL, NULL, NULL);
   _port_unchecked(x) = p;
 
 #if RETAIN_ALLOCS
@@ -1019,10 +1014,8 @@ static inline nanoclj_val_t mk_writer(nanoclj_t * sc, nanoclj_port_t * p) {
 }
 
 static inline nanoclj_val_t mk_foreign_func(nanoclj_t * sc, foreign_func f) {
-  nanoclj_cell_t * x = get_cell_x(sc, NULL, NULL, NULL);
+  nanoclj_cell_t * x = get_cell_x(sc, T_FOREIGN_FUNCTION, T_GC_ATOM, NULL, NULL, NULL);
 
-  x->type = T_FOREIGN_FUNCTION;
-  x->flags = T_GC_ATOM;
   _ff_unchecked(x) = f;
   _min_arity_unchecked(x) = 0;
   _max_arity_unchecked(x) = 0x7fffffff;
@@ -1035,10 +1028,8 @@ static inline nanoclj_val_t mk_foreign_func(nanoclj_t * sc, foreign_func f) {
 }
 
 static inline nanoclj_val_t mk_foreign_func_with_arity(nanoclj_t * sc, foreign_func f, int min_arity, int max_arity) {
-  nanoclj_cell_t * x = get_cell_x(sc, NULL, NULL, NULL);
+  nanoclj_cell_t * x = get_cell_x(sc, T_FOREIGN_FUNCTION, T_GC_ATOM, NULL, NULL, NULL);
 
-  x->type = T_FOREIGN_FUNCTION;
-  x->flags = T_GC_ATOM;
   _ff_unchecked(x) = f;
   _min_arity_unchecked(x) = min_arity;
   _max_arity_unchecked(x) = max_arity;
@@ -1051,10 +1042,8 @@ static inline nanoclj_val_t mk_foreign_func_with_arity(nanoclj_t * sc, foreign_f
 }
 
 static inline nanoclj_val_t mk_foreign_object(nanoclj_t * sc, void * o) {
-  nanoclj_cell_t * x = get_cell_x(sc, NULL, NULL, NULL);
+  nanoclj_cell_t * x = get_cell_x(sc, T_FOREIGN_OBJECT, T_GC_ATOM, NULL, NULL, NULL);
 
-  x->type = T_FOREIGN_OBJECT;
-  x->flags = T_GC_ATOM;
   _fo_unchecked(x) = o;
   _min_arity_unchecked(x) = 0;
   _max_arity_unchecked(x) = 0x7fffffff;
@@ -1102,9 +1091,7 @@ static inline nanoclj_val_t mk_real(double n) {
 }
 
 static inline nanoclj_val_t mk_long(nanoclj_t * sc, long long num) {
-  nanoclj_cell_t * x = get_cell_x(sc, NULL, NULL, NULL);
-  x->type = T_LONG;
-  x->flags = T_GC_ATOM;
+  nanoclj_cell_t * x = get_cell_x(sc, T_LONG, T_GC_ATOM, NULL, NULL, NULL);
   _lvalue_unchecked(x) = num;
 
 #if RETAIN_ALLOCS
@@ -1125,20 +1112,30 @@ static inline nanoclj_val_t mk_integer(nanoclj_t * sc, long long num) {
 
 static inline nanoclj_val_t mk_image(nanoclj_t * sc, int32_t width, int32_t height,
 				     int32_t channels, unsigned char * data) {
-  nanoclj_cell_t * x = get_cell_x(sc, NULL, NULL, NULL);
-  nanoclj_image_t * image = (nanoclj_image_t*)sc->malloc(sizeof(nanoclj_image_t));
-  x->type = T_IMAGE;
-  x->flags = T_GC_ATOM;
-  _image_unchecked(x) = image;
-
   size_t size = width * height * channels;
-  image->data = (unsigned char *)sc->malloc(size);
+  unsigned char * r_data = sc->malloc(size);
+  if (!r_data) {
+    return sc->sink;
+  }
+  if (data) memcpy(r_data, data, size);
+
+  nanoclj_image_t * image = (nanoclj_image_t*)sc->malloc(sizeof(nanoclj_image_t));
+  if (!image) {
+    /* TODO: free the previous allocations */
+    return sc->sink;
+  }
+  image->data = r_data;
   image->width = width;
   image->height = height;
   image->channels = channels;
   
-  if (data) memcpy(image->data, data, size);
-
+  nanoclj_cell_t * x = get_cell_x(sc, T_IMAGE, T_GC_ATOM, NULL, NULL, NULL);
+  if (sc->no_memory) {
+    /* TODO: free the previous allocations */
+    return sc->sink;
+  }
+  _image_unchecked(x) = image;
+  
 #if RETAIN_ALLOCS
   retain(sc, x);
 #endif
@@ -1148,20 +1145,30 @@ static inline nanoclj_val_t mk_image(nanoclj_t * sc, int32_t width, int32_t heig
 
 static inline nanoclj_val_t mk_audio(nanoclj_t * sc, size_t frames, int32_t channels,
 				     int32_t sample_rate, float * data) {
-  nanoclj_cell_t * x = get_cell_x(sc, NULL, NULL, NULL);
-  nanoclj_audio_t * audio = (nanoclj_audio_t*)sc->malloc(sizeof(nanoclj_audio_t));
-  x->type = T_AUDIO;
-  x->flags = T_GC_ATOM;
-  _audio_unchecked(x) = audio;
-
   size_t size = frames * channels * sizeof(float);
-  audio->data = (float *)sc->malloc(size);
+  float * r_data = sc->malloc(size);
+  if (!r_data) {
+    return sc->sink;
+  }
+  if (data) memcpy(r_data, data, size);
+
+  nanoclj_audio_t * audio = (nanoclj_audio_t*)sc->malloc(sizeof(nanoclj_audio_t));
+  if (!audio) {
+    /* TODO: release the previous allocation */
+    return sc->sink;
+  }
+  audio->data = r_data;
   audio->frames = frames;
   audio->channels = channels;
   audio->sample_rate = sample_rate;
   
-  if (data) memcpy(audio->data, data, size);
-
+  nanoclj_cell_t * x = get_cell_x(sc, T_AUDIO, T_GC_ATOM, NULL, NULL, NULL);
+  if (sc->no_memory) {
+    /* TODO: release the previous allocation */
+    return sc->sink;
+  }
+  _audio_unchecked(x) = audio;
+  
 #if RETAIN_ALLOCS
   retain(sc, x);
 #endif
@@ -1225,9 +1232,7 @@ static inline long long get_ratio(nanoclj_val_t n, long long * den) {
 }
 
 static inline nanoclj_val_t mk_ratio(nanoclj_t * sc, nanoclj_val_t num, nanoclj_val_t den) {  
-  nanoclj_cell_t * x = get_cell_x(sc, is_cell(num) ? decode_pointer(num) : NULL, is_cell(den) ? decode_pointer(den) : NULL, NULL);
-  x->type = T_RATIO;
-  x->flags = T_GC_ATOM;
+  nanoclj_cell_t * x = get_cell_x(sc, T_RATIO, T_GC_ATOM, is_cell(num) ? decode_pointer(num) : NULL, is_cell(den) ? decode_pointer(den) : NULL, NULL);
   _car(x) = num;
   _cdr(x) = den;
 
@@ -1313,17 +1318,15 @@ static inline nanoclj_byte_array_t * mk_string_store(nanoclj_t * sc, size_t len,
 }
  
 static inline nanoclj_cell_t * get_string_object(nanoclj_t * sc, int32_t t, const char *str, size_t len, size_t padding) {
-  nanoclj_cell_t * x = get_cell_x(sc, NULL, NULL, NULL);
-  x->type = t;
+  nanoclj_cell_t * x = get_cell_x(sc, t, T_GC_ATOM, NULL, NULL, NULL);
 
   if (len + padding <= NANOCLJ_SMALL_STR_SIZE) {
-    x->flags = T_GC_ATOM | T_SMALL;
+    x->flags |= T_SMALL;
     x->so_size = len;
   } else {
     nanoclj_byte_array_t * s = mk_string_store(sc, len, padding);
     s->refcnt++;
     
-    x->flags = T_GC_ATOM;
     _str_store_unchecked(x) = s;
     _size_unchecked(x) = len;
     _offset_unchecked(x) = 0;
@@ -1433,12 +1436,11 @@ static inline nanoclj_vector_t * mk_vector_store(nanoclj_t * sc, size_t len, siz
 }
 
 static inline nanoclj_cell_t * _get_vector_object(nanoclj_t * sc, int_fast16_t t, size_t offset, size_t size, nanoclj_vector_t * store) {
-  nanoclj_cell_t * main_cell = get_cell_x(sc, NULL, NULL, NULL);
+  nanoclj_cell_t * main_cell = get_cell_x(sc, t, T_GC_ATOM, NULL, NULL, NULL);
   if (sc->no_memory) {
     /* TODO: free the store */
     return &(sc->_sink);
   }
-  main_cell->type = t;
 
   if (store) {
     main_cell->flags = T_GC_ATOM;
@@ -1447,7 +1449,7 @@ static inline nanoclj_cell_t * _get_vector_object(nanoclj_t * sc, int_fast16_t t
     _offset_unchecked(main_cell) = offset;
     store->refcnt++;
   } else {
-    main_cell->flags = T_GC_ATOM | T_SMALL;
+    main_cell->flags |= T_SMALL;
     main_cell->so_size = size;
   }
   
@@ -6665,7 +6667,7 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc fr
   			      
   /* Java types */
 
-  nanoclj_cell_t * Object = mk_named_type(sc, "java.lang.Object", gentypeid(sc), &(sc->_EMPTY));
+  nanoclj_cell_t * Object = mk_named_type(sc, "java.lang.Object", gentypeid(sc), sc->global_env);
   nanoclj_cell_t * Number = mk_named_type(sc, "java.lang.Number", gentypeid(sc), Object);
   nanoclj_cell_t * Throwable = mk_named_type(sc, "java.lang.Throwable", gentypeid(sc), Object);
   nanoclj_cell_t * AFn = mk_named_type(sc, "clojure.lang.AFn", gentypeid(sc), Object);
