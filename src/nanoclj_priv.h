@@ -88,9 +88,9 @@ extern "C" {
   
 /* cell structure */
   typedef struct nanoclj_cell_t {
-    uint32_t _type;
-    uint16_t _flag;
-    uint8_t _so_size;
+    uint32_t type;
+    uint16_t flags;
+    uint8_t so_size;
     union {
       struct {
 	char data[NANOCLJ_SMALL_STR_SIZE];
