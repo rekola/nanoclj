@@ -113,9 +113,10 @@ have been tested:
 - Unchecked operations
 - Autopromoting operations
 - StructMaps
+- Interfaces, Records, Protocols and Multi-methods
 - Locals cleaning
 - Multithreading and transactions
-- Records, Protocols and Multi-methods
+- monitor-enter, monitor-exit, and locking
 - Threading macros (->, -->, some-> and some->>)
 - `*print-length*`, `*print-level*`, `*file*`, `*flush-on-newline*`, `*clojure-version*`
 - Missing core functions and macros
@@ -161,7 +162,6 @@ have been tested:
   - clojure.string/capitalize
   - clojure.string/split
   - clojure.string/replace
-  - trim, trimr, trim-newline
 - clojure.set
 - clojure.data.csv
 - ...and lots more...
