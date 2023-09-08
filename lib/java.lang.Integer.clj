@@ -1,4 +1,4 @@
-(in-ns 'Integer)
+(in-ns 'java.lang.Integer)
 
 (def parseInt (fn [str] (let [n (read-string str)] (if (number? n) n false))))
 (def MAX_VALUE 2147483647)

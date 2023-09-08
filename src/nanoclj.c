@@ -163,7 +163,7 @@ enum nanoclj_types {
   T_MACRO = 16,
   T_LAZYSEQ = 17,
   T_ENVIRONMENT = 18,
-  T_TYPE = 19,
+  T_CLASS = 19,
   T_KEYWORD = 20,
   T_MAPENTRY = 21,
   T_ARRAYMAP = 22,
@@ -429,7 +429,7 @@ static inline bool is_seqable_type(int_fast16_t type_id) {
   case T_VECTOR:
   case T_ARRAYMAP:
   case T_SORTED_SET:
-  case T_TYPE:
+  case T_CLASS:
     return true;
   }
   return false;
@@ -559,7 +559,7 @@ static inline long long to_long(nanoclj_val_t p) {
       case T_SORTED_SET:
       case T_ARRAYMAP:
 	return _get_size(c);
-      case T_TYPE:
+      case T_CLASS:
 	return to_long(_car(c));
       }
     }
@@ -588,7 +588,7 @@ static inline int32_t to_int(nanoclj_val_t p) {
       case T_SORTED_SET:
       case T_ARRAYMAP:
 	return _get_size(c);
-      case T_TYPE:
+      case T_CLASS:
 	return to_int(_car(c));
       }
     }     
@@ -689,7 +689,7 @@ static inline bool is_delay(nanoclj_val_t p) {
 static inline bool is_environment(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
   nanoclj_cell_t * c = decode_pointer(p);
-  return _type(c) == T_ENVIRONMENT;
+  return _type(c) == T_ENVIRONMENT || _type(c) == T_CLASS;
 }
 
 /* true or false value functions */
@@ -1609,12 +1609,13 @@ static inline nanoclj_cell_t * seq(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_NIL:
   case T_LONG:
   case T_MAPENTRY:
-  case T_ENVIRONMENT:
   case T_CLOSURE:
   case T_MACRO:
     return NULL;
   case T_LIST:
   case T_LAZYSEQ:
+  case T_ENVIRONMENT:
+  case T_CLASS:
     break;
   case T_STRING:
   case T_CHAR_ARRAY:
@@ -1694,7 +1695,7 @@ static inline nanoclj_cell_t * rest(nanoclj_t * sc, nanoclj_cell_t * coll) {
     break;    
   case T_LIST:
   case T_LAZYSEQ:
-  case T_TYPE:
+  case T_CLASS:
     return decode_pointer(_cdr(coll));    
   case T_VECTOR:
   case T_ARRAYMAP:
@@ -1770,7 +1771,7 @@ static inline nanoclj_val_t first(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_LIST:
   case T_VAR:
   case T_LAZYSEQ:
-  case T_TYPE:
+  case T_CLASS:
     return _car(coll);
   case T_VECTOR:
   case T_ARRAYMAP:
@@ -1865,7 +1866,7 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
       case T_LAZYSEQ:
       case T_MACRO:
       case T_ENVIRONMENT:
-      case T_TYPE:
+      case T_CLASS:
 	if (equals(sc, _car(a), _car(b))) {
 	  return equals(sc, _cdr(a), _cdr(b));
 	}
@@ -2195,7 +2196,8 @@ static inline int compare(nanoclj_val_t a, nanoclj_val_t b) {
       case T_CLOSURE:
       case T_LAZYSEQ:
       case T_MACRO:
-      case T_ENVIRONMENT:{
+      case T_ENVIRONMENT:
+      case T_CLASS:{
 	int r = compare(_car(a2), _car(b2));
 	if (r) return r;
 	return compare(_cdr(a2), _cdr(b2));
@@ -2553,7 +2555,14 @@ static inline nanoclj_cell_t * mk_type(nanoclj_t * sc, int type_id, nanoclj_cell
     }
     sc->types->size = type_id + 1;
   }
-  nanoclj_cell_t * t = get_cell(sc, T_TYPE, mk_int(type_id), mk_pointer(parent_type), meta);
+#if 0
+  nanoclj_cell_t * vec = get_vector_object(sc, T_VECTOR, OBJ_LIST_SIZE);
+  fill_vector(vec, mk_nil());
+  nanoclj_val_t v = mk_pointer(vec);
+#else
+  nanoclj_val_t v = mk_int(type_id);
+#endif
+  nanoclj_cell_t * t = get_cell(sc, T_CLASS, v, mk_pointer(parent_type), meta);
   sc->types->data[type_id] = mk_pointer(t);
   return t;
 }
@@ -3504,7 +3513,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
       case T_NIL:
 	p = "()";
 	break;
-      case T_TYPE:
+      case T_CLASS:
 	nanoclj_val_t name_v;
 	if (get_elem(sc, _metadata_unchecked(c), sc->NAME, &name_v)) {
 	  strview_t name = to_strview(name_v);
@@ -3701,7 +3710,6 @@ static inline nanoclj_val_t mk_format(nanoclj_t * sc, const char * fmt, nanoclj_
     switch (type(arg)) {
     case T_INTEGER:
     case T_LONG:
-    case T_TYPE:
     case T_PROC:
     case T_BOOLEAN:
       l = to_long(arg);
@@ -4012,7 +4020,7 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
   case T_CHARACTER:
     return mk_character(to_int(first(sc, args)));
 
-  case T_TYPE:
+  case T_CLASS:
     return mk_pointer(mk_type(sc, to_int(first(sc, args)), rest(sc, args), NULL));
 
   case T_ENVIRONMENT:{
@@ -4480,7 +4488,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     case T_CELL:{      
       nanoclj_cell_t * code_cell = decode_pointer(sc->code);
       switch (_type(code_cell)) {
-      case T_TYPE:
+      case T_CLASS:
 	s_return(sc, construct_by_type(sc, to_int(sc->code), seq(sc, decode_pointer(sc->args))));
 	
       case T_FOREIGN_FUNCTION:{
@@ -5541,17 +5549,17 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     if (!unpack_args_2(sc, &arg0, &arg1)) {
       Error_0(sc, "Error - Invalid arity");
     } else { /* arg0: type, arg1: object */
-       if (!is_nil(arg1)) {
-	 nanoclj_cell_t * t = get_type_object(sc, arg1);
-	 while (t) {
-	   // fprintf(stderr, "comparing type %d to type %d\n", to_int(mk_pointer(t)), to_int(arg0));
-	   if (equals(sc, mk_pointer(t), arg0)) {
-	     s_retbool(true);
-	   }
-	   t = next(sc, t);
-	 }
-       }
-       s_retbool(false);
+      if (!is_nil(arg1)) {
+	nanoclj_cell_t * t0 = decode_pointer(arg0);
+	nanoclj_cell_t * t1 = get_type_object(sc, arg1);
+	while (t1) {
+	  if (t0 == t1) {
+	    s_retbool(true);
+	  }
+	  t1 = next(sc, t1);
+	}
+      }
+      s_retbool(false);
     }
 
   case OP_IDENTICALP:                  /* identical? */
@@ -6681,7 +6689,7 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc fr
   nanoclj_cell_t * Throwable = mk_named_type(sc, "java.lang.Throwable", gentypeid(sc), Object);
   nanoclj_cell_t * AFn = mk_named_type(sc, "clojure.lang.AFn", gentypeid(sc), Object);
     
-  mk_named_type(sc, "java.lang.Class", T_TYPE, AFn); /* incorrect parent */
+  mk_named_type(sc, "java.lang.Class", T_CLASS, AFn); /* non-standard parent */
   mk_named_type(sc, "java.lang.String", T_STRING, Object);
   mk_named_type(sc, "java.lang.Boolean", T_BOOLEAN, Object);
   mk_named_type(sc, "java.lang.Character", T_CHARACTER, Object);
@@ -6705,7 +6713,7 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc fr
   mk_named_type(sc, "clojure.lang.Symbol", T_SYMBOL, AFn);
   mk_named_type(sc, "clojure.lang.PersistentVector", T_VECTOR, AFn);
   
-  mk_named_type(sc, "clojure.lang.Keyword", T_KEYWORD, AFn); /* incorrect parent */
+  mk_named_type(sc, "clojure.lang.Keyword", T_KEYWORD, AFn); /* non-standard parent */
   mk_named_type(sc, "clojure.lang.BigInt", T_BIGINT, Number);
   mk_named_type(sc, "clojure.lang.Ratio", T_RATIO, Number);
   mk_named_type(sc, "clojure.lang.Delay", T_DELAY, Object);
