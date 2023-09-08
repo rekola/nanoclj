@@ -44,6 +44,7 @@
                    (recur (rest s) substr))))
 
 (defn triml
+  "Trims whitespace from the left side of a string"
   [s] (apply str (drop-while (fn [c] (case c
                                        \space true
                                        \newline true
@@ -54,3 +55,26 @@
                                        false
                                        )) s)))
 
+(defn trimr
+  "Trims whitespace from the right side of a string"
+  [s] (apply str (reverse (drop-while (fn [c] (case c
+                                       \space true
+                                       \newline true
+                                       \return true
+                                       \tab true
+                                       \formfeed true
+                                       \backspace true
+                                       false
+                                       )) (rseq s)))))
+
+(defn trim
+  "Trims whitespace from both sides of a string"
+  [s] (triml (trimr s)))
+
+(defn trim-newline
+  "Trims trailing newlines and carriage returns from a string"
+  [s] (apply str (reverse (drop-while (fn [c] (case c
+                                       \newline true
+                                       \return true                                       
+                                       false
+                                       )) (rseq s)))))
