@@ -91,7 +91,6 @@ extern "C" {
     uint32_t _type;
     uint16_t _flag;
     uint8_t _so_size;
-    struct nanoclj_cell_t * _metadata;
     union {
       struct {
 	char data[NANOCLJ_SMALL_STR_SIZE];
@@ -121,6 +120,7 @@ extern "C" {
       } _fo;
       struct {
         nanoclj_val_t car, cdr;
+	struct nanoclj_cell_t * meta;
       } _cons;
     } _object;
   } nanoclj_cell_t;

@@ -8,7 +8,7 @@
   (println "-------------------------")
   `(do
      (println ',name)
-     (println (:doc (meta ,name)))))
+     (println (:doc (meta (var ,name))))))
 
 (defn apropos
   "Returns a list of functions whose name contains str"

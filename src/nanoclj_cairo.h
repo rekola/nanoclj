@@ -18,7 +18,6 @@ static inline nanoclj_val_t mk_canvas(nanoclj_t * sc, int width, int height) {
   _cell_type(x) = T_CANVAS;
   _cell_flags(x) = T_GC_ATOM;
   _canvas_unchecked(x) = cr;
-  _metadata_unchecked(x) = NULL;
 
   cairo_set_source_rgba(cr, 1, 1, 1, 1);
   cairo_rectangle(cr, 0, 0, width, height);

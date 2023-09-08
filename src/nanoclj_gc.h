@@ -15,6 +15,20 @@ static inline void mark(nanoclj_cell_t * p) {
   
 E2:_setmark(p);
   switch (_type(p)) {
+  case T_CLASS:
+  case T_ENVIRONMENT:
+  case T_LIST:
+  case T_VAR:
+  case T_CLOSURE:
+  case T_MACRO:
+  case T_LAZYSEQ:
+  case T_DELAY:{
+    nanoclj_cell_t * meta = _metadata(p);
+    if (meta) {
+      mark(meta);
+    }
+    break;
+  }
   case T_VECTOR:
   case T_ARRAYMAP:
   case T_SORTED_SET:{
@@ -37,14 +51,10 @@ E2:_setmark(p);
   }
     break;
   }
-
-  nanoclj_cell_t * metadata = _metadata_unchecked(p);
-  if (metadata) {
-    mark(metadata);
-  }
   
   if (_is_gc_atom(p))
     goto E6;
+  
   /* E4: down car */
   q0 = _car(p);
   if (!is_primitive(q0) && !is_nil(q0) && !is_mark(q0)) {
@@ -164,7 +174,7 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_c
 	  finalize_cell(sc, p);
           _cell_type(p) = 0;
 	  _cell_flags(p) = 0;
-	  _metadata_unchecked(p) = NULL;
+	  _metadata(p) = NULL;
           _car(p) = sc->EMPTY;
         }
         ++sc->fcells;
