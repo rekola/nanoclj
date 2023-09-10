@@ -99,7 +99,7 @@ static inline void dump_stack_mark(nanoclj_t * sc) {
   size_t nframes = sc->dump;
   for (size_t i = 0; i < nframes; i++) {
     dump_stack_frame_t * frame = sc->dump_base + i;
-    mark_value(frame->args);
+    if (frame->args) mark(frame->args);
     mark(frame->envir);
     mark_value(frame->code);
   }
@@ -117,7 +117,7 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_c
   if (sc->global_env) mark(sc->global_env);
  
   /* mark current registers */
-  mark_value(sc->args);
+  if (sc->args) mark(sc->args);
   if (sc->envir) mark(sc->envir);
   mark_value(sc->code);
 #ifdef USE_RECUR_REGISTER

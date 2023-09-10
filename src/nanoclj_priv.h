@@ -128,7 +128,7 @@ extern "C" {
   /* this structure holds all the interpreter's registers */
   typedef struct dump_stack_frame_t {
     enum nanoclj_opcodes op;
-    nanoclj_val_t args;
+    nanoclj_cell_t * args;
     nanoclj_cell_t * envir;
     nanoclj_val_t code;
 #ifdef USE_RECUR_REGISTER
@@ -151,7 +151,7 @@ extern "C" {
     int last_cell_seg;
 
 /* We use 5 registers. */
-    nanoclj_val_t args;               /* register for arguments of function */
+    nanoclj_cell_t * args;               /* register for arguments of function */
     nanoclj_cell_t * envir;              /* stack register for current environment */
     nanoclj_val_t code;               /* register for current code */
     size_t dump;               /* stack register for next evaluation */
