@@ -2835,33 +2835,27 @@ static inline nanoclj_val_t mk_sharp_const(nanoclj_t * sc, char *name) {
 
 /* ========== Routines for Reading ========== */
 
-static inline int file_push(nanoclj_t * sc, strview_t sv) {
+static inline bool file_push(nanoclj_t * sc, strview_t sv) {
   if (sc->file_i == MAXFIL - 1) {
     return 0;
   }
-  char * fname = (char *)sc->malloc(sv.size + 1);
-  memcpy(fname, sv.ptr, sv.size);
-  fname[sv.size] = 0;
+  char * filename = alloc_c_str(sc, sv);
+  FILE * fh = fopen(filename, "r");
   
-  FILE * fin = fopen(fname, "r");
-  sc->free(fname);
-  
-  if (fin != 0) {
+  if (fh) {
     sc->file_i++;
     sc->load_stack[sc->file_i].kind = port_file | port_input;
     sc->load_stack[sc->file_i].backchar[0] = sc->load_stack[sc->file_i].backchar[1] = -1;
-    sc->load_stack[sc->file_i].rep.stdio.file = fin;
+    sc->load_stack[sc->file_i].rep.stdio.file = fh;
     sc->nesting_stack[sc->file_i] = 0;
     port_unchecked(sc->loadport) = sc->load_stack + sc->file_i;
 
     sc->load_stack[sc->file_i].rep.stdio.curr_line = 0;
-    if (fname) {
-      sc->load_stack[sc->file_i].rep.stdio.filename = store_string(sc, sv.size, sv.ptr);
-    } else {
-      sc->load_stack[sc->file_i].rep.stdio.filename = NULL;
-    }
+    sc->load_stack[sc->file_i].rep.stdio.filename = filename;
+  } else {
+    sc->free(filename);
   }
-  return fin != 0;
+  return fh != 0;
 }
 
 static inline void file_pop(nanoclj_t * sc) {
@@ -2873,15 +2867,17 @@ static inline void file_pop(nanoclj_t * sc) {
   }
 }
 
-static inline nanoclj_port_t *port_rep_from_file(nanoclj_t * sc, FILE * f, int prop) {
-  nanoclj_port_t *pt;
-
-  pt = (nanoclj_port_t *) sc->malloc(sizeof *pt);
-  if (pt == NULL) {
-    return NULL;
-  }
-  pt->kind = port_file | prop;
+static inline nanoclj_port_t * mk_port(nanoclj_t * sc, int kind) {
+  nanoclj_port_t * pt = sc->malloc(sizeof(nanoclj_port_t));
+  if (!pt) return NULL;
   pt->backchar[0] = pt->backchar[1] = -1;
+  pt->kind = kind;
+  return pt;
+}
+
+static inline nanoclj_port_t *port_rep_from_file(nanoclj_t * sc, FILE * f, int prop) {
+  nanoclj_port_t *pt = mk_port(sc, port_file | prop);
+  if (!pt) return NULL;
   pt->rep.stdio.file = f;
   pt->rep.stdio.filename = NULL;
   return pt;
@@ -2959,34 +2955,26 @@ static inline nanoclj_val_t port_from_callback(nanoclj_t * sc,
 					       void (*restore) (void *),
 					       void (*image) (nanoclj_image_t*, void*),
 					       int prop) {
-  nanoclj_port_t *pt = (nanoclj_port_t *)sc->malloc(sizeof *pt);
-  if (!pt) {
-    return sc->EMPTY;
-  }
-  pt->kind = port_callback | prop;
-  pt->backchar[0] = pt->backchar[1] = -1;
+  nanoclj_port_t * pt = mk_port(sc, port_callback | prop);
+  if (!pt) return mk_nil();
   pt->rep.callback.text = text;
   pt->rep.callback.color = color;
   pt->rep.callback.restore = restore;
   pt->rep.callback.image = image;
-
   return mk_writer(sc, pt);
 }
 
 static inline nanoclj_val_t port_from_string(nanoclj_t * sc, strview_t sv, int prop) {
-  nanoclj_port_t * pt = (nanoclj_port_t *)sc->malloc(sizeof(nanoclj_port_t));
-  if (!pt) {
-    return sc->EMPTY;
-  }
+  nanoclj_port_t * pt = mk_port(sc, port_string | prop);
+  if (!pt) return mk_nil();
+
   char * buffer = (char *)sc->malloc(sv.size);
   memcpy(buffer, sv.ptr, sv.size);
   
-  pt->kind = port_string | prop;
-  pt->backchar[0] = pt->backchar[1] = -1;
   pt->rep.string.curr = buffer;
   pt->rep.string.data.data = buffer;
   pt->rep.string.data.size = sv.size;
-
+  
   if (prop & port_input) {
     return mk_reader(sc, pt);
   } else {
@@ -2997,17 +2985,15 @@ static inline nanoclj_val_t port_from_string(nanoclj_t * sc, strview_t sv, int p
 #define INITIAL_STRING_LENGTH 256
 
 static inline nanoclj_val_t port_from_scratch(nanoclj_t * sc) {
-  nanoclj_port_t * pt = (nanoclj_port_t *)sc->malloc(sizeof(nanoclj_port_t));
-  if (!pt) {
-    return mk_nil();
-  }
+  nanoclj_port_t * pt = mk_port(sc, port_string | port_output);
+  if (!pt) return mk_nil();
+
   char * start = sc->malloc(INITIAL_STRING_LENGTH);
   if (!start) {
     sc->free(pt);
     return mk_nil();
   }
-  pt->kind = port_string | port_output;
-  pt->backchar[0] = pt->backchar[1] = -1;
+  
   pt->rep.string.curr = start;
   pt->rep.string.data.data = start;
   pt->rep.string.data.size = INITIAL_STRING_LENGTH;
