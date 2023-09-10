@@ -15,6 +15,7 @@ static inline void * http_load(void *ptr) {
   
   if (curl) {
     curl_easy_setopt(curl, CURLOPT_URL, d->url);
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, d->useragent);
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
@@ -30,6 +31,7 @@ static inline void * http_load(void *ptr) {
   }
   
   free(d->url);
+  free(d->useragent);
   close(d->fd);
   free(d);
   

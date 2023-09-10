@@ -249,6 +249,8 @@ extern "C" {
     /* Dynamic printing */
     nanoclj_val_t active_element, active_element_target;
     int active_element_x, active_element_y;
+
+    nanoclj_cell_t * properties;
   };
 
 #if 0

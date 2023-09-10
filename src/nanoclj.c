@@ -36,6 +36,8 @@
 #include <assert.h>
 #include <signal.h>
 #include <pthread.h>
+#include <sys/utsname.h>
+#include <pwd.h>
 
 #include <utf8proc.h>
 #include <sixel/sixel.h>
@@ -198,6 +200,7 @@ typedef struct {
 
 typedef struct {
   char * url;
+  char * useragent;
   int fd;
 } http_load_t;
 
@@ -2890,10 +2893,18 @@ static inline int http_open_thread(nanoclj_t * sc, strview_t sv) {
   }
 
   char * url = alloc_cstr(sc, sv);
+  char * useragent = NULL;
+  nanoclj_val_t ua;    
+  if (get_elem(sc, sc->properties, mk_string(sc, "http.agent"), &ua)) {
+    useragent = alloc_cstr(sc, to_strview(ua));
+  }
+  
   pthread_t thread;
   http_load_t * d = malloc(sizeof(http_load_t));
   d->url = url;
+  d->useragent = useragent;
   d->fd = pipefd[1];
+
   pthread_attr_t attr;
   pthread_attr_init(&attr);
   pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
@@ -3706,14 +3717,14 @@ static inline size_t seq_length(nanoclj_t * sc, nanoclj_cell_t * a) {
 }
 
 /* Creates a collection, args are seqed */
-static inline nanoclj_val_t mk_collection(nanoclj_t * sc, int type, nanoclj_cell_t * args) {
+static inline nanoclj_cell_t * mk_collection(nanoclj_t * sc, int type, nanoclj_cell_t * args) {
   size_t len = seq_length(sc, args);
 
   if (type == T_ARRAYMAP) len /= 2;
   
   nanoclj_cell_t * coll = get_vector_object(sc, type, len);
   if (sc->no_memory) {
-    return sc->sink;
+    return NULL;
   }
   
   if (type == T_ARRAYMAP) {    
@@ -3731,7 +3742,7 @@ static inline nanoclj_val_t mk_collection(nanoclj_t * sc, int type, nanoclj_cell
       sort_vector_in_place(coll);
     }   
   }
-  return mk_pointer(coll);
+  return coll;
 }
 
 static inline nanoclj_val_t mk_format_va(nanoclj_t * sc, char *fmt, ...) {
@@ -4059,7 +4070,7 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
   case T_VECTOR:
   case T_ARRAYMAP:
   case T_SORTED_SET:
-    return mk_collection(sc, type_id, args);
+    return mk_pointer(mk_collection(sc, type_id, args));
 
   case T_CLOSURE:
     x = first(sc, args);
@@ -6003,7 +6014,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     if (sc->value.as_long == sc->EMPTY.as_long) {
       s_return(sc, sc->EMPTYVEC);
     } else {
-      s_return(sc, mk_collection(sc, T_VECTOR, decode_pointer(sc->value)));
+      s_return(sc, mk_pointer(mk_collection(sc, T_VECTOR, decode_pointer(sc->value))));
     }
 
   case OP_RDFN:{
@@ -6612,6 +6623,90 @@ int nanoclj_init(nanoclj_t * sc) {
   return nanoclj_init_custom_alloc(sc, malloc, free, realloc);
 }
 
+static inline nanoclj_cell_t * mk_properties(nanoclj_t * sc) {
+#ifdef _WIN32
+  const char * term = "Windows";
+#else
+  const char * term = getenv("TERM_PROGRAM");
+  if (!term && getenv("MLTERM")) term = "mlterm";
+  else if (!term && getenv("XTERM_VERSION")) term = "XTerm";
+#endif
+  
+  const char *user_home = NULL, *user_name = NULL;
+  const char *os_name = NULL, *os_version = NULL, *os_arch = NULL;
+  
+#ifndef _WIN32
+  struct utsname buf;
+  if (uname(&buf) == 0) {
+    os_name = buf.sysname;
+    os_version = buf.version;
+    os_arch = buf.machine;
+  }
+  struct passwd pwd;
+  struct passwd *result;
+  
+  size_t pw_bufsize = sysconf(_SC_GETPW_R_SIZE_MAX);
+  if (pw_bufsize == -1) pw_bufsize = 16384;
+  
+  char * pw_buf = sc->malloc(pw_bufsize);
+  if (pw_buf) {
+    getpwuid_r(getuid(), &pwd, pw_buf, pw_bufsize, &result);
+    if (result) {
+      user_name = result->pw_name;
+      user_home = result->pw_dir;
+    }
+  }
+#endif
+
+  char cwd_buf[FILENAME_MAX];
+  const char * user_dir = getcwd(cwd_buf, FILENAME_MAX);
+
+#ifdef _WIN32
+  const char * file_separator = "\\";
+  const char * path_separator = ";";
+  const char * line_separator = "\r\n";
+#else
+  const char * file_separator = "/";
+  const char * path_separator = ":";
+  const char * line_separator = "\n";
+#endif
+
+  int ua_len = sprintf(sc->strbuff, "nanoclj/%s", get_version());
+  nanoclj_val_t ua = mk_string_from_sv(sc, (strview_t){sc->strbuff, ua_len});
+
+  nanoclj_val_t l = sc->EMPTY;
+  l = cons(sc, mk_string(sc, user_name), l);
+  l = cons(sc, mk_string(sc, "user.name"), l);
+  l = cons(sc, mk_string(sc, line_separator), l);
+  l = cons(sc, mk_string(sc, "line.separator"), l);
+  l = cons(sc, mk_string(sc, file_separator), l);
+  l = cons(sc, mk_string(sc, "file.separator"), l);
+  l = cons(sc, mk_string(sc, path_separator), l);
+  l = cons(sc, mk_string(sc, "path.separator"), l);
+  l = cons(sc, mk_string(sc, user_home), l);
+  l = cons(sc, mk_string(sc, "user.home"), l);
+  l = cons(sc, mk_string(sc, user_dir), l);
+  l = cons(sc, mk_string(sc, "user.dir"), l);
+  l = cons(sc, mk_string(sc, os_name), l);
+  l = cons(sc, mk_string(sc, "os.name"), l);
+  l = cons(sc, mk_string(sc, os_version), l);
+  l = cons(sc, mk_string(sc, "os.version"), l);
+  l = cons(sc, mk_string(sc, os_arch), l);
+  l = cons(sc, mk_string(sc, "os.arch"), l);
+  l = cons(sc, mk_nil(), l);
+  l = cons(sc, mk_string(sc, "java.class.path"), l);
+  l = cons(sc, mk_string(sc, term), l);
+  l = cons(sc, mk_string(sc, "term"), l);
+  l = cons(sc, mk_string(sc, get_version()), l);
+  l = cons(sc, mk_string(sc, "nanoclj.version"), l);
+  l = cons(sc, ua, l);
+  l = cons(sc, mk_string(sc, "http.agent"), l);
+  
+  sc->free(pw_buf);
+
+  return mk_collection(sc, T_ARRAYMAP, decode_pointer(l));
+}
+
 #include "functions.h"
  
 int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc free, func_realloc realloc) {  
@@ -6801,7 +6896,9 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc fr
   sc->window_scale_factor = 1.0;
 
   sc->term_colors = get_term_colortype();
-  
+
+  sc->properties = mk_properties(sc);
+    
   return !sc->no_memory;
 }
 
