@@ -42,6 +42,12 @@ if(SIXEL_LIBRARY)
   target_link_libraries(nanoclj sixel)
 endif()
 
+FIND_PACKAGE(CURL)
+if(CURL_FOUND)
+  include_directories(${CURL_INCLUDE_DIR})
+  target_link_libraries(nanoclj ${CURL_LIBRARIES})
+endif()
+
 configure_file(lib/init.clj init.clj @ONLY)
 configure_file(lib/bootstrap.clj bootstrap.clj @ONLY)
 configure_file(lib/clojure.core.clj clojure.core.clj @ONLY)

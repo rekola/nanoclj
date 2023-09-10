@@ -293,7 +293,8 @@
 
 (defn slurp
   "Reads a file"
-  [fn] (apply* str (clojure.lang.io/reader fn)))
+  [fn] (let [f (fn [rdr s] (let [c (.read rdr)] (if (= c ##Eof) s (recur rdr (conj s c)))))]
+         (f (clojure.lang.io/reader fn) "")))
 
 (defn spit
   "Writes content to a file"

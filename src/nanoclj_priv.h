@@ -66,7 +66,7 @@ extern "C" {
   
   typedef struct nanoclj_port_t {
     unsigned char kind;
-    int backchar;
+    int backchar[2];
     union {
       struct {
         FILE *file;

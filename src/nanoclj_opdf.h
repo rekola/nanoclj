@@ -3,6 +3,7 @@ _OP_DEF("load", OP_LOAD)
 _OP_DEF(0, OP_T0LVL)
 _OP_DEF(0, OP_T1LVL)
 _OP_DEF("read", OP_READ)
+_OP_DEF(".read", OP_READM)
 _OP_DEF("gensym", OP_GENSYM)
 _OP_DEF(0, OP_EVAL)
 #if USE_TRACING

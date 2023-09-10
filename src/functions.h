@@ -740,9 +740,9 @@ static inline void completion(const char *input, linenoiseCompletions *lc) {
       for ( ; sym.as_long != linenoise_sc->EMPTY.as_long && num_completion_symbols < MAX_COMPLETION_SYMBOLS; sym = cdr(sym)) {
 	nanoclj_val_t v = car(sym);
 	if (is_symbol(v)) {
-	  completion_symbols[num_completion_symbols++] = symname(v);
+	  completion_symbols[num_completion_symbols++] = decode_symbol(v)->name;
 	} else if (is_mapentry(v)) {
-	  completion_symbols[num_completion_symbols++] = symname(car(v));
+	  completion_symbols[num_completion_symbols++] = decode_symbol(car(v))->name;
 	}
       }
     }
