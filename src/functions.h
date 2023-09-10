@@ -47,11 +47,11 @@ static nanoclj_val_t System_exit(nanoclj_t * sc, nanoclj_val_t args) {
 }
 
 static nanoclj_val_t System_currentTimeMillis(nanoclj_t * sc, nanoclj_val_t args) {
-  return mk_long(sc, system_time() / 1000);
+  return mk_integer(sc, system_time() / 1000);
 }
 
 static nanoclj_val_t System_nanoTime(nanoclj_t * sc, nanoclj_val_t args) {
-  return mk_long(sc, 1000 * system_time());
+  return mk_integer(sc, 1000 * system_time());
 }
 
 static nanoclj_val_t System_gc(nanoclj_t * sc, nanoclj_val_t args) {
@@ -77,7 +77,7 @@ static nanoclj_val_t System_getenv(nanoclj_t * sc, nanoclj_val_t args) {
       }
       nanoclj_val_t key = mk_counted_string(sc, p, j);
       nanoclj_val_t val = p[j] == '=' ? mk_string(sc, p + j + 1) : mk_nil();
-      set_vector_elem(map, i, cons(sc, key, val));
+      set_vector_elem(map, i, mk_mapentry(sc, key, val));
     }
 
     return mk_pointer(map);
@@ -112,7 +112,7 @@ static inline nanoclj_val_t System_glob(nanoclj_t * sc, nanoclj_val_t args) {
 
   glob_t gstruct;
   int r = glob(tmp, GLOB_ERR, NULL, &gstruct);
-  nanoclj_val_t x = sc->EMPTY;
+  nanoclj_cell_t * x = NULL;
   if (r == 0) {
     for (char ** found = gstruct.gl_pathv; *found; found++) {
       x = cons(sc, mk_string(sc, *found), x);
@@ -124,7 +124,7 @@ static inline nanoclj_val_t System_glob(nanoclj_t * sc, nanoclj_val_t args) {
   if (r != 0 && r != GLOB_NOMATCH) {
     return mk_nil();
   } else {
-    return x;
+    return mk_pointer(x);
   }
 }
 
@@ -164,8 +164,8 @@ static nanoclj_val_t Math_acos(nanoclj_t * sc, nanoclj_val_t args) {
 
 static nanoclj_val_t Math_atan(nanoclj_t * sc, nanoclj_val_t args) {
   if (cdr(args).as_long != sc->EMPTY.as_long) {
-    nanoclj_val_t x = car(sc->args);
-    nanoclj_val_t y = cadr(sc->args);
+    nanoclj_val_t x = car(args);
+    nanoclj_val_t y = cadr(args);
     return mk_real(atan2(to_double(x), to_double(y)));
   } else {
     nanoclj_val_t x = car(args);
@@ -182,7 +182,7 @@ static nanoclj_val_t Math_cbrt(nanoclj_t * sc, nanoclj_val_t args) {
 }
 
 static nanoclj_val_t Math_pow(nanoclj_t * sc, nanoclj_val_t args) {
-  return mk_real(pow(to_double(car(sc->args)), to_double(cadr(sc->args))));
+  return mk_real(pow(to_double(car(args)), to_double(cadr(args))));
 }
 
 static nanoclj_val_t Math_floor(nanoclj_t * sc, nanoclj_val_t args) {
@@ -230,8 +230,8 @@ static inline bool ipow_overflow(long long base, int_fast8_t exp, long long * re
 }
 
 static nanoclj_val_t numeric_tower_expt(nanoclj_t * sc, nanoclj_val_t args) {
-  nanoclj_val_t x = car(sc->args);
-  nanoclj_val_t y = cadr(sc->args);
+  nanoclj_val_t x = car(args);
+  nanoclj_val_t y = cadr(args);
 
   int tx = prim_type(x), ty = prim_type(y);
 
