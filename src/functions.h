@@ -97,6 +97,16 @@ static nanoclj_val_t System_getProperty(nanoclj_t * sc, nanoclj_val_t args) {
   }
 }
 
+static nanoclj_val_t System_setProperty(nanoclj_t * sc, nanoclj_val_t args0) {
+  nanoclj_cell_t * args = decode_pointer(args0);
+  nanoclj_val_t key = first(sc, args);
+  nanoclj_val_t val = second(sc, args);
+
+  /* TODO: Implement */
+
+  return mk_nil();  
+}
+
 static inline nanoclj_val_t System_glob(nanoclj_t * sc, nanoclj_val_t args) {
   char * tmp = alloc_cstr(sc, to_strview(car(args)));
 
@@ -784,6 +794,7 @@ static inline void register_functions(nanoclj_t * sc) {
   intern(sc, System, def_symbol(sc, "gc"), mk_foreign_func_with_arity(sc, System_gc, 0, 0));
   intern(sc, System, def_symbol(sc, "getenv"), mk_foreign_func_with_arity(sc, System_getenv, 0, 1));
   intern(sc, System, def_symbol(sc, "getProperty"), mk_foreign_func_with_arity(sc, System_getProperty, 0, 1));
+  intern(sc, System, def_symbol(sc, "setProperty"), mk_foreign_func_with_arity(sc, System_setProperty, 0, 1));
   intern(sc, System, def_symbol(sc, "glob"), mk_foreign_func_with_arity(sc, System_glob, 1, 1));
   
   intern(sc, Math, def_symbol(sc, "sin"), mk_foreign_func_with_arity(sc, Math_sin, 1, 1));
