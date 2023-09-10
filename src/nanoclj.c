@@ -5107,14 +5107,11 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     if (!unpack_args_1(sc, &arg0)) {
       Error_0(sc, "Error - Invalid arity");
     }
-
-    x = arg0;
-    
-    switch (prim_type(x)) {
-    case T_INTEGER: s_return(sc, mk_int(decode_integer(x) + 1));
-    case T_REAL: s_return(sc, mk_real(x.as_double + 1.0));
+    switch (prim_type(arg0)) {
+    case T_INTEGER: s_return(sc, mk_integer(sc, decode_integer(arg0) + 1));
+    case T_REAL: s_return(sc, mk_real(arg0.as_double + 1.0));
     case T_CELL: {
-      nanoclj_cell_t * c = decode_pointer(x);
+      nanoclj_cell_t * c = decode_pointer(arg0);
       switch (_type(c)) {
       case T_LONG: {
 	long long v = _lvalue_unchecked(c);
@@ -5141,14 +5138,11 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     if (!unpack_args_1(sc, &arg0)) {
       Error_0(sc, "Error - Invalid arity");
     }
-
-    x = arg0;
-    
     switch (prim_type(x)) {
-    case T_INTEGER: s_return(sc, mk_int(decode_integer(x) - 1));
-    case T_REAL: s_return(sc, mk_real(x.as_double - 1.0));
+    case T_INTEGER: s_return(sc, mk_integer(sc, decode_integer(arg0) - 1));
+    case T_REAL: s_return(sc, mk_real(arg0.as_double - 1.0));
     case T_CELL: {
-      nanoclj_cell_t * c = decode_pointer(x);
+      nanoclj_cell_t * c = decode_pointer(arg0);
       switch (_type(c)) {
       case T_LONG:{
 	long long v = _lvalue_unchecked(c);
@@ -5171,228 +5165,209 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     }
     s_return(sc, mk_nil());
 
-  case OP_ADD:{                 /* add */
+  case OP_ADD:                 /* add */
     if (!unpack_args_2(sc, &arg0, &arg1)) {
       Error_0(sc, "Error - Invalid arity");
-    }
-
-    x = arg0;
-    y = arg1;
-    
-    int tx = prim_type(x), ty = prim_type(y);
-    if (tx == T_REAL || ty == T_REAL) {
-      s_return(sc, mk_real(to_double(x) + to_double(y)));
-    } else if (tx == T_INTEGER && ty == T_INTEGER) {
-      s_return(sc, mk_integer(sc, (long long)decode_integer(x) + (long long)decode_integer(y)));
     } else {
-      tx = expand_type(x, tx);
-      ty = expand_type(y, ty);
-            
-      if (tx == T_RATIO || ty == T_RATIO) {
-	long long den_x, den_y, den;
-	long long num_x = get_ratio(x, &den_x);
-	long long num_y = get_ratio(y, &den_y);
-	long long num = normalize(num_x * den_y + num_y * den_x,
-				  den_x * den_y, &den);
-	if (den == 1) {
-	  s_return(sc, mk_integer(sc, num));
-	} else {
-	  s_return(sc, mk_ratio_long(sc, num, den));
-	}
+      int tx = prim_type(arg0), ty = prim_type(arg1);
+      if (tx == T_REAL || ty == T_REAL) {
+	s_return(sc, mk_real(to_double(arg0) + to_double(arg1)));
+      } else if (tx == T_INTEGER && ty == T_INTEGER) {
+	s_return(sc, mk_integer(sc, (long long)decode_integer(arg0) + (long long)decode_integer(arg1)));
       } else {
-	long long res;
-	if (__builtin_saddll_overflow(to_long(x), to_long(y), &res) == false) {
-	  s_return(sc, mk_integer(sc, res));
-	} else {
-	  Error_0(sc, "Error - Integer overflow");
-	}
-      }
-    }
-  }
-    
-  case OP_SUB:{                 /* minus */
-    if (!unpack_args_2(sc, &arg0, &arg1)) {
-      Error_0(sc, "Error - Invalid arity");
-    }
-
-    x = arg0;
-    y = arg1;
-    
-    int tx = prim_type(x), ty = prim_type(y);
-    if (tx == T_REAL || ty == T_REAL) {
-      s_return(sc, mk_real(to_double(x) - to_double(y)));
-    } else if (tx == T_INTEGER && ty == T_INTEGER) {
-      s_return(sc, mk_integer(sc, (long long)decode_integer(x) - (long long)decode_integer(y)));
-    } else {
-      tx = expand_type(x, tx);
-      ty = expand_type(y, ty);
-            
-      if (tx == T_RATIO || ty == T_RATIO) {
-	long long den_x, den_y, den;
-	long long num_x = get_ratio(x, &den_x);
-	long long num_y = get_ratio(y, &den_y);
-	long long num = normalize(num_x * den_y - num_y * den_x,
-				  den_x * den_y, &den);
-	if (den == 1) {
-	  s_return(sc, mk_integer(sc, num));
-	} else {
-	  s_return(sc, mk_ratio_long(sc, num, den));
-	}
-      } else {
-	long long res;
-	if (__builtin_ssubll_overflow(to_long(x), to_long(y), &res) == false) {
-	  s_return(sc, mk_integer(sc, res));
-	} else {
-	  Error_0(sc, "Error - Integer overflow");
-	}
-      }
-    }
-  }
-
-  case OP_MUL:{                 /* multiply */
-    if (!unpack_args_2(sc, &arg0, &arg1)) {
-      Error_0(sc, "Error - Invalid arity");
-    }
-
-    x = arg0;
-    y = arg1;
-    
-    int tx = prim_type(x), ty = prim_type(y);
-    if (tx == T_REAL || ty == T_REAL) {
-      s_return(sc, mk_real(to_double(x) * to_double(y)));
-    } else if (tx == T_INTEGER && ty == T_INTEGER) {
-      s_return(sc, mk_integer(sc, (long long)decode_integer(x) * (long long)decode_integer(y)));
-    } else {
-      tx = expand_type(x, tx);
-      ty = expand_type(y, ty);
-            
-      if (tx == T_RATIO || ty == T_RATIO) {
-	long long den_x, den_y;
-	long long num_x = get_ratio(x, &den_x);
-	long long num_y = get_ratio(y, &den_y);
-	long long num, den;
-	if (__builtin_smulll_overflow(num_x, num_y, &num) ||
-	    __builtin_smulll_overflow(den_x, den_y, &den)) {
-	  Error_0(sc, "Error - Integer overflow");
-	}
-	num = normalize(num, den, &den);
-	if (den == 1) {
-	  s_return(sc, mk_integer(sc, num));
-	} else {
-	  s_return(sc, mk_ratio_long(sc, num, den));
-	}
-      } else {
-	long long res;
-	if (__builtin_smulll_overflow(to_long(x), to_long(y), &res) == false) {
-	  s_return(sc, mk_integer(sc, res));
-	} else {
-	  Error_0(sc, "Error - Integer overflow");
-	} 
-	s_return(sc, mk_integer(sc, res));
-      }
-    }
-  }
+	tx = expand_type(arg0, tx);
+	ty = expand_type(arg1, ty);
 	
-  case OP_DIV:{                 /* divide */
-    if (!unpack_args_2(sc, &arg0, &arg1)) {
-      Error_0(sc, "Error - Invalid arity");
-    }
-
-    x = arg0;
-    y = arg1;       
-
-    int tx = prim_type(x), ty = prim_type(y);
-    if (tx == T_REAL || ty == T_REAL) {
-      s_return(sc, mk_real(to_double(x) / to_double(y)));
-    } else if (tx == T_INTEGER && ty == T_INTEGER) {
-      int divisor = decode_integer(y);
-      if (divisor == 0) {
-	Error_0(sc, "Divide by zero");
-      } else {
-	int dividend = decode_integer(x);
-	if (dividend % divisor == 0) {
-	  s_return(sc, mk_integer(sc, dividend / divisor));
+	if (tx == T_RATIO || ty == T_RATIO) {
+	  long long den_x, den_y, den;
+	  long long num_x = get_ratio(arg0, &den_x);
+	  long long num_y = get_ratio(arg1, &den_y);
+	  long long num = normalize(num_x * den_y + num_y * den_x,
+				    den_x * den_y, &den);
+	  if (den == 1) {
+	    s_return(sc, mk_integer(sc, num));
+	  } else {
+	    s_return(sc, mk_ratio_long(sc, num, den));
+	  }
 	} else {
-	  long long den;
-	  long long num = normalize(dividend, divisor, &den);
-	  s_return(sc, mk_ratio_long(sc, num, den));
+	  long long res;
+	  if (__builtin_saddll_overflow(to_long(arg0), to_long(arg1), &res) == false) {
+	    s_return(sc, mk_integer(sc, res));
+	  } else {
+	    Error_0(sc, "Error - Integer overflow");
+	  }
 	}
       }
+    }
+    
+  case OP_SUB:                 /* minus */
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
+      Error_0(sc, "Error - Invalid arity");
     } else {
-      tx = expand_type(x, tx);
-      ty = expand_type(y, ty);
-
-      if (tx == T_RATIO || ty == T_RATIO) {
-	long long den_x, den_y;
-	long long num_x = get_ratio(x, &den_x);
-	long long num_y = get_ratio(y, &den_y);
-	long long num, den;
-	if (__builtin_smulll_overflow(num_x, den_y, &num) ||
-	    __builtin_smulll_overflow(den_x, num_y, &den)) {
-	  Error_0(sc, "Error - Integer overflow");
-	}
-	num = normalize(num, den, &den);
-	if (den == 1) {
-	  s_return(sc, mk_integer(sc, num));
-	} else {
-	  s_return(sc, mk_ratio_long(sc, num, den));
-	}
-	s_return(sc, mk_nil());
+      int tx = prim_type(arg0), ty = prim_type(arg1);
+      if (tx == T_REAL || ty == T_REAL) {
+	s_return(sc, mk_real(to_double(arg0) - to_double(arg1)));
+      } else if (tx == T_INTEGER && ty == T_INTEGER) {
+	s_return(sc, mk_integer(sc, (long long)decode_integer(arg0) - (long long)decode_integer(arg1)));
       } else {
-	long long divisor = to_long(y);
+	tx = expand_type(arg0, tx);
+	ty = expand_type(arg1, ty);
+	
+	if (tx == T_RATIO || ty == T_RATIO) {
+	  long long den_x, den_y, den;
+	  long long num_x = get_ratio(arg0, &den_x);
+	  long long num_y = get_ratio(arg1, &den_y);
+	  long long num = normalize(num_x * den_y - num_y * den_x,
+				    den_x * den_y, &den);
+	  if (den == 1) {
+	    s_return(sc, mk_integer(sc, num));
+	  } else {
+	    s_return(sc, mk_ratio_long(sc, num, den));
+	  }
+	} else {
+	  long long res;
+	  if (__builtin_ssubll_overflow(to_long(arg0), to_long(arg1), &res) == false) {
+	    s_return(sc, mk_integer(sc, res));
+	  } else {
+	    Error_0(sc, "Error - Integer overflow");
+	  }
+	}
+      }
+    }
+  
+  case OP_MUL:                 /* multiply */
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
+      Error_0(sc, "Error - Invalid arity");
+    } else {
+      int tx = prim_type(arg0), ty = prim_type(arg1);
+      if (tx == T_REAL || ty == T_REAL) {
+	s_return(sc, mk_real(to_double(arg0) * to_double(arg1)));
+      } else if (tx == T_INTEGER && ty == T_INTEGER) {
+	s_return(sc, mk_integer(sc, (long long)decode_integer(arg0) * (long long)decode_integer(arg1)));
+      } else {
+	tx = expand_type(arg0, tx);
+	ty = expand_type(arg1, ty);
+            
+	if (tx == T_RATIO || ty == T_RATIO) {
+	  long long den_x, den_y;
+	  long long num_x = get_ratio(arg0, &den_x);
+	  long long num_y = get_ratio(arg1, &den_y);
+	  long long num, den;
+	  if (__builtin_smulll_overflow(num_x, num_y, &num) ||
+	      __builtin_smulll_overflow(den_x, den_y, &den)) {
+	    Error_0(sc, "Error - Integer overflow");
+	  }
+	  num = normalize(num, den, &den);
+	  if (den == 1) {
+	    s_return(sc, mk_integer(sc, num));
+	  } else {
+	    s_return(sc, mk_ratio_long(sc, num, den));
+	  }
+	} else {
+	  long long res;
+	  if (__builtin_smulll_overflow(to_long(arg0), to_long(arg1), &res) == false) {
+	    s_return(sc, mk_integer(sc, res));
+	  } else {
+	    Error_0(sc, "Error - Integer overflow");
+	  } 
+	  s_return(sc, mk_integer(sc, res));
+	}
+      }
+    }
+	
+  case OP_DIV:                 /* divide */
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
+      Error_0(sc, "Error - Invalid arity");
+    } else {
+      int tx = prim_type(arg0), ty = prim_type(arg1);
+      if (tx == T_REAL || ty == T_REAL) {
+	s_return(sc, mk_real(to_double(arg0) / to_double(arg1)));
+      } else if (tx == T_INTEGER && ty == T_INTEGER) {
+	int divisor = decode_integer(arg1);
 	if (divisor == 0) {
 	  Error_0(sc, "Divide by zero");
 	} else {
-	  long long dividend = to_long(x);
+	  int dividend = decode_integer(arg0);
 	  if (dividend % divisor == 0) {
-	    if (dividend == LLONG_MIN && divisor == -1) {
-	      Error_0(sc, "Error - Integer overflow");
-	    } else {
-	      s_return(sc, mk_integer(sc, dividend / divisor));
-	    }
+	    s_return(sc, mk_integer(sc, dividend / divisor));
 	  } else {
 	    long long den;
 	    long long num = normalize(dividend, divisor, &den);
 	    s_return(sc, mk_ratio_long(sc, num, den));
 	  }
 	}
+      } else {
+	tx = expand_type(x, tx);
+	ty = expand_type(y, ty);
+	
+	if (tx == T_RATIO || ty == T_RATIO) {
+	  long long den_x, den_y;
+	  long long num_x = get_ratio(arg0, &den_x);
+	  long long num_y = get_ratio(arg1, &den_y);
+	  long long num, den;
+	  if (__builtin_smulll_overflow(num_x, den_y, &num) ||
+	      __builtin_smulll_overflow(den_x, num_y, &den)) {
+	    Error_0(sc, "Error - Integer overflow");
+	  }
+	  num = normalize(num, den, &den);
+	  if (den == 1) {
+	    s_return(sc, mk_integer(sc, num));
+	  } else {
+	    s_return(sc, mk_ratio_long(sc, num, den));
+	  }
+	  s_return(sc, mk_nil());
+	} else {
+	  long long divisor = to_long(arg1);
+	  if (divisor == 0) {
+	    Error_0(sc, "Divide by zero");
+	  } else {
+	    long long dividend = to_long(arg0);
+	    if (dividend % divisor == 0) {
+	      if (dividend == LLONG_MIN && divisor == -1) {
+		Error_0(sc, "Error - Integer overflow");
+	      } else {
+		s_return(sc, mk_integer(sc, dividend / divisor));
+	      }
+	    } else {
+	      long long den;
+	      long long num = normalize(dividend, divisor, &den);
+	      s_return(sc, mk_ratio_long(sc, num, den));
+	    }
+	  }
+	}
       }
     }
-  }
     
-  case OP_REM: {                 /* rem */
+  case OP_REM:                 /* rem */
     if (!unpack_args_2(sc, &arg0, &arg1)) {
       Error_0(sc, "Error - Invalid arity");
-    }
-    x = arg0;
-    y = arg1;       
-
-    int tx = prim_type(x), ty = prim_type(y);
-    if (tx == T_REAL || ty == T_REAL) {
-      double a = to_double(x), b = to_double(y);
-      if (b == 0) {
-	Error_0(sc, "Error - division by zero");
-      }
-      double res = fmod(a, b);
-      /* remainder should have same sign as first operand */
-      if (res > 0 && a < 0) res -= fabs(b);
-      else if (res < 0 && a > 0) res += fabs(b);
-
-      s_return(sc, mk_real(res));
     } else {
-      long long a = to_long(arg0), b = to_long(arg1);
-      if (b == 0) {
-	Error_0(sc, "Error - division by zero");
-      } else {
-	long long res = a % b;
+      int tx = prim_type(arg0), ty = prim_type(arg1);
+      if (tx == T_REAL || ty == T_REAL) {
+	double a = to_double(arg0), b = to_double(arg1);
+	if (b == 0) {
+	  Error_0(sc, "Error - division by zero");
+	}
+	double res = fmod(a, b);
 	/* remainder should have same sign as first operand */
-	if (res > 0 && a < 0) res -= labs(b);
-	else if (res < 0 && a > 0) res += labs(b);
-
-	s_return(sc, mk_integer(sc, res));
+	if (res > 0 && a < 0) res -= fabs(b);
+	else if (res < 0 && a > 0) res += fabs(b);
+	
+	s_return(sc, mk_real(res));
+      } else {
+	long long a = to_long(arg0), b = to_long(arg1);
+	if (b == 0) {
+	  Error_0(sc, "Error - division by zero");
+	} else {
+	  long long res = a % b;
+	  /* remainder should have same sign as first operand */
+	  if (res > 0 && a < 0) res -= labs(b);
+	  else if (res < 0 && a > 0) res += labs(b);
+	  
+	  s_return(sc, mk_integer(sc, res));
+	}
       }
     }
-  }
     
   case OP_FIRST:                 /* first */
     if (!unpack_args_1(sc, &arg0)) {
