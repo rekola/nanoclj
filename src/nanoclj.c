@@ -3801,7 +3801,7 @@ static inline nanoclj_val_t mk_format(nanoclj_t * sc, strview_t fmt0, nanoclj_ce
   double arg0d = 0.0, arg1d = 0.0;
   strview_t arg0s, arg1s;
   
-  for (args = seq(sc, args); args; args = next(sc, args), n_args++, m *= 4) {
+  for (; args; args = next(sc, args), n_args++, m *= 4) {
     nanoclj_val_t arg = first(sc, args);
     
     switch (type(arg)) {
@@ -4216,10 +4216,11 @@ static inline bool unpack_args_1(nanoclj_t * sc, nanoclj_val_t * arg0) {
   return false;
 }
 
-static inline bool unpack_args_1_plus(nanoclj_t * sc, nanoclj_val_t * arg0, nanoclj_cell_t ** arg_rest) {
+static inline bool unpack_args_1_plus(nanoclj_t * sc, nanoclj_val_t * arg0, nanoclj_cell_t ** arg_next) {
   if (sc->args && sc->args != &(sc->_EMPTY)) {
     *arg0 = _car(sc->args);
-    *arg_rest = decode_pointer(_cdr(sc->args));
+    nanoclj_cell_t * x = decode_pointer(_cdr(sc->args));
+    *arg_next = x == &(sc->_EMPTY) ? NULL : x;
     return true;
   }
   return false;
@@ -4288,14 +4289,15 @@ static inline bool unpack_args_5(nanoclj_t * sc, nanoclj_val_t * arg0, nanoclj_v
   return false;
 }
 
-static inline bool unpack_args_2_plus(nanoclj_t * sc, nanoclj_val_t * arg0, nanoclj_val_t * arg1, nanoclj_cell_t ** arg_rest) {
+static inline bool unpack_args_2_plus(nanoclj_t * sc, nanoclj_val_t * arg0, nanoclj_val_t * arg1, nanoclj_cell_t ** arg_next) {
   if (sc->args && sc->args != &(sc->_EMPTY)) {
     *arg0 = _car(sc->args);
     nanoclj_val_t r = _cdr(sc->args);
     if (r.as_long != sc->EMPTY.as_long) {
       nanoclj_cell_t * c = decode_pointer(r);
       *arg1 = _car(c);
-      *arg_rest = decode_pointer(_cdr(c));
+      nanoclj_cell_t * x = decode_pointer(_cdr(c));
+      *arg_next = x == &(sc->_EMPTY) ? NULL : x;
       return true;
     }
   }
@@ -4342,7 +4344,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   nanoclj_val_t params0;
   nanoclj_cell_t * params;
   nanoclj_val_t arg0, arg1, arg2, arg3, arg4;
-  nanoclj_cell_t * arg_rest;
+  nanoclj_cell_t * arg_next;
   
 #if 0
   fprintf(stderr, "opexe %d %s\n", (int)sc->op, procname(sc->op));
@@ -4755,25 +4757,23 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     }
 
   case OP_RESOLVE:                /* resolve */
-    if (!unpack_args_1_plus(sc, &arg0, &arg_rest)) {
+    if (!unpack_args_1_plus(sc, &arg0, &arg_next)) {
       Error_0(sc, "Error - Invalid arity");
-    }
-
-    if (arg_rest != &(sc->_EMPTY)) {
-      s_return(sc, mk_pointer(find_slot_in_env(sc, decode_pointer(arg0), _car(arg_rest), false)));
+    } else if (arg_next) {
+      s_return(sc, mk_pointer(find_slot_in_env(sc, decode_pointer(arg0), _car(arg_next), false)));
     } else {
       s_return(sc, mk_pointer(find_slot_in_env(sc, sc->envir, arg0, true)));
     }
 
   case OP_INTERN:
-    if (!unpack_args_2_plus(sc, &arg0, &arg1, &arg_rest)) {
+    if (!unpack_args_2_plus(sc, &arg0, &arg1, &arg_next)) {
       Error_0(sc, "Error - Invalid arity");
     } else if (!is_environment(arg0) || !is_symbol(arg1)) {
       Error_0(sc, "Error - Invalid types");
     } else { /* arg0: namespace, arg1: symbol */
       nanoclj_cell_t * ns = decode_pointer(arg0);
-      if (arg_rest != &(sc->_EMPTY)) {
-	s_return(sc, intern(sc, ns, arg1, _car(arg_rest)));
+      if (arg_next) {
+	s_return(sc, intern(sc, ns, arg1, _car(arg_next)));
       } else {
 	s_return(sc, intern_symbol(sc, ns, arg1));
       }
@@ -5079,14 +5079,15 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     s_goto(sc, OP_APPLY);
 
   case OP_PEVAL:               /* eval */
-    if (!unpack_args_1_plus(sc, &arg0, &arg_rest)) {
+    if (!unpack_args_1_plus(sc, &arg0, &arg_next)) {
       Error_0(sc, "Error - Invalid arity");
+    } else {
+      if (arg_next) {
+	sc->envir = decode_pointer(_car(arg_next));
+      }
+      sc->code = arg0;
+      s_goto(sc, OP_EVAL);
     }
-    if (arg_rest != &(sc->_EMPTY)) {
-      sc->envir = decode_pointer(_car(arg_rest));
-    }
-    sc->code = arg0;
-    s_goto(sc, OP_EVAL);
 
   case OP_RATIONALIZE:
     if (!unpack_args_1(sc, &arg0)) {
@@ -5404,14 +5405,13 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     Error_0(sc, "Error - value is not ISeqable");
 
   case OP_GET:             /* get */
-    if (!unpack_args_2_plus(sc, &arg0, &arg1, &arg_rest)) {
+    if (!unpack_args_2_plus(sc, &arg0, &arg1, &arg_next)) {
       Error_0(sc, "Error - Invalid arity");
-    }
-    if (is_cell(arg0) && get_elem(sc, decode_pointer(arg0), arg1, &x)) {
+    } else if (is_cell(arg0) && get_elem(sc, decode_pointer(arg0), arg1, &x)) {
       s_return(sc, x);
     } else {
       /* Not found => return the not-found value if provided */
-      s_return(sc, first(sc, arg_rest));
+      s_return(sc, first(sc, arg_next));
     }
 
   case OP_CONTAINSP:
@@ -5492,17 +5492,16 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     }
 
   case OP_SUBVEC:
-    if (!unpack_args_2_plus(sc, &arg0, &arg1, &arg_rest)) {
-     Error_0(sc, "Error - Invalid arity");
-    }
-    if (!is_cell(arg0)) {
+    if (!unpack_args_2_plus(sc, &arg0, &arg1, &arg_next)) {
+      Error_0(sc, "Error - Invalid arity");
+    } else if (!is_cell(arg0)) {
       Error_0(sc, "Error - Not a vector");
     } else {
       nanoclj_cell_t * c = decode_pointer(arg0);
       long long start = to_long(arg1);
       long long end;
-      if (arg_rest != &(sc->_EMPTY)) {
-	end = to_long(_car(arg_rest));
+      if (arg_next) {
+	end = to_long(_car(arg_next));
       } else {
 	end = _get_size(c);
       }
@@ -5674,10 +5673,10 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     s_return(sc, mk_nil());
   
   case OP_FORMAT:
-    if (!unpack_args_1_plus(sc, &arg0, &arg_rest)) {
+    if (!unpack_args_1_plus(sc, &arg0, &arg_next)) {
       Error_0(sc, "Error - Invalid arity");
     }
-    s_return(sc, mk_format(sc, to_strview(arg0), arg_rest));
+    s_return(sc, mk_format(sc, to_strview(arg0), arg_next));
 
   case OP_ERR0:                /* throw */
     sc->retcode = -1;
