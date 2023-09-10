@@ -201,6 +201,9 @@ typedef struct {
 typedef struct {
   char * url;
   char * useragent;
+  bool http_keepalive;
+  int http_max_connections;
+  int http_max_redirects;
   int fd;
 } http_load_t;
 
@@ -2892,19 +2895,29 @@ static inline int http_open_thread(nanoclj_t * sc, strview_t sv) {
     return 0;
   }
 
-  char * url = alloc_cstr(sc, sv);
-  char * useragent = NULL;
-  nanoclj_val_t ua;    
-  if (get_elem(sc, sc->properties, mk_string(sc, "http.agent"), &ua)) {
-    useragent = alloc_cstr(sc, to_strview(ua));
+  http_load_t * d = malloc(sizeof(http_load_t));
+  d->url = alloc_cstr(sc, sv);
+  d->useragent = NULL;
+  d->http_keepalive = true;
+  d->http_max_connections = 0;
+  d->http_max_redirects = 0;
+  d->fd = pipefd[1];
+
+  nanoclj_val_t v;
+  if (get_elem(sc, sc->properties, mk_string(sc, "http.agent"), &v)) {
+    d->useragent = alloc_cstr(sc, to_strview(v));
+  }
+  if (get_elem(sc, sc->properties, mk_string(sc, "http.keepalive"), &v)) {
+    d->http_keepalive = to_int(v);
+  }
+  if (get_elem(sc, sc->properties, mk_string(sc, "http.maxConnections"), &v)) {
+    d->http_max_connections = to_int(v);
+  }
+  if (get_elem(sc, sc->properties, mk_string(sc, "http.maxRedirects"), &v)) {
+    d->http_max_redirects = to_int(v);
   }
   
   pthread_t thread;
-  http_load_t * d = malloc(sizeof(http_load_t));
-  d->url = url;
-  d->useragent = useragent;
-  d->fd = pipefd[1];
-
   pthread_attr_t attr;
   pthread_attr_init(&attr);
   pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
@@ -6701,6 +6714,12 @@ static inline nanoclj_cell_t * mk_properties(nanoclj_t * sc) {
   l = cons(sc, mk_string(sc, "nanoclj.version"), l);
   l = cons(sc, ua, l);
   l = cons(sc, mk_string(sc, "http.agent"), l);
+  l = cons(sc, mk_boolean(true), l);
+  l = cons(sc, mk_string(sc, "http.keepalive"), l);
+  l = cons(sc, mk_int(5), l);
+  l = cons(sc, mk_string(sc, "http.maxConnections"), l);
+  l = cons(sc, mk_int(20), l);
+  l = cons(sc, mk_string(sc, "http.maxRedirects"), l);
   
   sc->free(pw_buf);
 

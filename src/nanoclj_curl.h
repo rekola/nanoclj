@@ -21,6 +21,12 @@ static inline void * http_load(void *ptr) {
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, d);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_write_data_func);
+    if (d->http_max_connections) {
+      curl_easy_setopt(curl, CURLOPT_MAXCONNECTS, d->http_max_connections);
+    }
+    curl_easy_setopt(curl, CURLOPT_MAXREDIRS, d->http_max_redirects);
+    curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, d->http_keepalive ? 0 : 1);
+    curl_easy_setopt(curl, CURLOPT_FORBID_REUSE, d->http_keepalive ? 0 : 1);
 
     CURLcode res = curl_easy_perform(curl);
     if (res != CURLE_OK) {
