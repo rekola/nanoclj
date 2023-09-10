@@ -5139,7 +5139,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     if (!unpack_args_1(sc, &arg0)) {
       Error_0(sc, "Error - Invalid arity");
     }
-    switch (prim_type(x)) {
+    switch (prim_type(arg0)) {
     case T_INTEGER: s_return(sc, mk_integer(sc, decode_integer(arg0) - 1));
     case T_REAL: s_return(sc, mk_real(arg0.as_double - 1.0));
     case T_CELL: {
@@ -5298,8 +5298,8 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	  }
 	}
       } else {
-	tx = expand_type(x, tx);
-	ty = expand_type(y, ty);
+	tx = expand_type(arg0, tx);
+	ty = expand_type(arg1, ty);
 	
 	if (tx == T_RATIO || ty == T_RATIO) {
 	  long long den_x, den_y;
