@@ -567,7 +567,7 @@ static inline const char * strvalue(nanoclj_val_t p) {
   return "";
 }
 
-static inline long long to_long(nanoclj_val_t p) {
+static inline long long to_long_w_def(nanoclj_val_t p, long long def) {
   switch (prim_type(p)) {
   case T_INTEGER:
   case T_PROC:
@@ -582,7 +582,7 @@ static inline long long to_long(nanoclj_val_t p) {
       case T_LONG:
 	return _lvalue_unchecked(c);
       case T_RATIO:
-	return to_long(_car(c)) / to_long(_cdr(c));
+	return to_long_w_def(_car(c), 0) / to_long_w_def(_cdr(c), 1);
       case T_VECTOR:
       case T_SORTED_SET:
       case T_ARRAYMAP:
@@ -593,7 +593,11 @@ static inline long long to_long(nanoclj_val_t p) {
     }
   }
   
-  return 0;
+  return def;
+}
+
+static inline long long to_long(nanoclj_val_t p) {
+  return to_long_w_def(p, 0);
 }
 
 static inline int32_t to_int(nanoclj_val_t p) {
@@ -1854,7 +1858,6 @@ static inline nanoclj_val_t first(nanoclj_t * sc, nanoclj_cell_t * coll) {
 	const char * start = _strvalue(coll);
 	const char * end = start + _get_size(coll);
 	const char * last = utf8_prev(end);
-	fprintf(stderr, "char len = %d\n", (int)(end - last));
 	return mk_character(utf8_decode(last));
       } else {
 	return mk_character(utf8_decode(_strvalue(coll)));
@@ -1945,22 +1948,21 @@ static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t
   if (!coll) {
     return false;
   }
+  long long index;
   switch (_type(coll)) {
   case T_VECTOR:
-    if (is_number(key)) {
-      long long index = to_long(key);
-      if (index >= 0 && index < _get_size(coll)) {
-	if (result) *result = vector_elem(coll, index);
-	return true;
-      }
+    index = to_long_w_def(key, -1);
+    if (index >= 0 && index < _get_size(coll)) {
+      if (result) *result = vector_elem(coll, index);
+      return true;
     }
     break;
 
   case T_STRING:
   case T_CHAR_ARRAY:
   case T_FILE:
-    if (is_number(key)) {
-      long long index = to_long(key);
+    index = to_long_w_def(key, -1);
+    if (index >= 0) {
       const char * str = _strvalue(coll);
       const char * end = str + _get_size(coll);
       
@@ -2021,7 +2023,7 @@ static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t
     }
     return true;
   }
-}
+  }
   return false;
 }
 
@@ -5738,15 +5740,14 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	}
 	
       case TOK_VEC:
-	s_save(sc, OP_RDVEC, NULL, sc->EMPTY);      
 	sc->tok = token(sc, inport);
 	if (sc->tok == TOK_RSQUARE) {	/* Empty vector */
-	  s_return(sc, sc->EMPTY);
+	  s_return(sc, sc->EMPTYVEC);
 	} else if (sc->tok == TOK_DOT) {
 	  Error_0(sc, "Error - illegal dot expression");
 	} else {
 	  sc->nesting_stack[sc->file_i]++;
-	  s_save(sc, OP_RDVEC_ELEMENT, NULL, sc->EMPTY);
+	  s_save(sc, OP_RDVEC_ELEMENT, decode_pointer(sc->EMPTYVEC), sc->EMPTY);
 	  s_goto(sc, OP_RDSEXPR);
 	}      
 	
@@ -5902,7 +5903,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       Error_0(sc, "Error - not a reader");
     } else {
       nanoclj_port_t * inport = port_unchecked(x);
-      sc->args = cons(sc, sc->value, sc->args);
+      sc->args = conj(sc, sc->args, sc->value);
       sc->tok = token(sc, inport);
       if (sc->tok == TOK_EOF) {
 	s_return(sc, mk_character(EOF));
@@ -5915,7 +5916,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	  sc->load_stack[sc->file_i].rep.stdio.curr_line++;
 	}
 	sc->nesting_stack[sc->file_i]--;
-	s_return(sc, mk_pointer(reverse_in_place(sc, sc->EMPTY, sc->args)));
+	s_return(sc, mk_pointer(sc->args));
       } else {
 	s_save(sc, OP_RDVEC_ELEMENT, sc->args, sc->EMPTY);
 	s_goto(sc, OP_RDSEXPR);
@@ -5985,21 +5986,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 
   case OP_RDUQTSP:
     s_return(sc, mk_pointer(cons(sc, sc->UNQUOTESP, cons(sc, sc->value, NULL))));
-
-  case OP_RDVEC:
-    /*sc->code=cons(sc,mk_proc(sc,OP_VECTOR),sc->value);
-       s_goto(sc,OP_EVAL); Cannot be quoted */
-    /*x=cons(sc,mk_proc(sc,OP_VECTOR),sc->value);
-       s_return(sc,x); Cannot be part of pairs */
-    /*sc->code=mk_proc(sc,OP_VECTOR);
-       sc->args=sc->value;
-       s_goto(sc,OP_APPLY); */
-    if (sc->value.as_long == sc->EMPTY.as_long) {
-      s_return(sc, sc->EMPTYVEC);
-    } else {
-      s_return(sc, mk_pointer(mk_collection(sc, T_VECTOR, decode_pointer(sc->value))));
-    }
-
+    
   case OP_RDFN:{
     bool has_rest;
     int n_args = get_literal_fn_arity(sc, sc->value, &has_rest);
