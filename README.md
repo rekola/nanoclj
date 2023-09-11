@@ -121,9 +121,8 @@ have been tested:
 - `*print-length*`, `*print-level*`, `*file*`, `*flush-on-newline*`, `*clojure-version*`
 - Missing core functions and macros
   - doseq, for, dotimes
-  - line-seq
   - bit-and-not, unsigned-bit-shift-right
-  - file, file-seq
+  - file-seq
   - sort-by
   - letfn
   - keep
