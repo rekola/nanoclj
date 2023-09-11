@@ -12,7 +12,7 @@
 
 (defn apropos
   "Returns a list of functions whose name contains str"
-  [pattern] (filter (fn [s] (clojure.string/includes? (str s) pattern)) (symbols root)))
+  [pattern] (filter (fn [s] (clojure.string/includes? (str s) pattern)) (ns-interns root)))
     
 (defn repl
   "Starts the REPL"
