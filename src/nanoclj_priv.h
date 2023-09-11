@@ -208,7 +208,7 @@ extern "C" {
     nanoclj_val_t SORTED_SET;	  /* sorted-set */
     nanoclj_val_t ARRAY_MAP;	  /* array-map */
     nanoclj_val_t REGEX;		  /* regex */
-    nanoclj_val_t EMPTYVEC;
+    nanoclj_cell_t * EMPTYVEC;
     
     nanoclj_cell_t * free_cell;      /* pointer to top of free cells */
     long fcells;                  /* # of free cells */

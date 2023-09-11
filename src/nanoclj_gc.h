@@ -131,7 +131,7 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_c
 
   mark_value(sc->active_element);
   mark_value(sc->active_element_target);
-  mark_value(sc->EMPTYVEC);
+  mark(sc->EMPTYVEC);
     
   /* Mark recent objects the interpreter doesn't know about yet. */
   mark_value(car(sc->sink));
