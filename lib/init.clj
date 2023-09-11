@@ -6,7 +6,7 @@
 ;;;;; I/O
 
 (defn call-with-input-file [s p]
-  (let [inport (clojure.lang.io/reader s)]
+  (let [inport (clojure.java.io/reader s)]
     (if (= inport false)
       false
       (let [res (p inport)]
@@ -14,7 +14,7 @@
         res))))
 
 (defn call-with-output-file [s p]
-  (let [outport (clojure.lang.io/writer s)
+  (let [outport (clojure.java.io/writer s)
         old-outport *out*]
     (if outport
       (do (set! *out* outport)
@@ -26,7 +26,7 @@
       false)))
 
 (defn with-input-from-file [s p]
-  (let [inport (clojure.lang.io/reader s)]
+  (let [inport (clojure.java.io/reader s)]
     (if (= inport false)
       false
       (let [prev-inport *in*]
@@ -37,7 +37,7 @@
           res)))))
 
 (defn with-output-to-file [s p]
-  (let [outport (clojure.lang.io/writer s)]
+  (let [outport (clojure.java.io/writer s)]
     (if (= outport false)
       false
       (let [prev-outport *out*]
@@ -48,8 +48,8 @@
           res)))))
 
 (defn with-input-output-from-to-files [si so p]
-  (let [inport (clojure.lang.io/reader si)
-        outport (clojure.lang.io/writer so)]
+  (let [inport (clojure.java.io/reader si)
+        outport (clojure.java.io/writer so)]
     (if (not (and inport outport))
       (do
         (close inport)
@@ -109,7 +109,7 @@
 
 (defn ns-interns [ns] (doall (map first (reduce concat '() (car ns)))))
 
-(load "clojure.lang.io.clj")
+(load "clojure.java.io.clj")
 (load "clojure.string.clj")
 (load "clojure.repl.clj")
 (load "java.lang.Integer.clj")
