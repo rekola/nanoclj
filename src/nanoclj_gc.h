@@ -31,7 +31,9 @@ E2:_setmark(p);
   }
   case T_VECTOR:
   case T_ARRAYMAP:
-  case T_SORTED_SET:{
+  case T_SORTED_SET:
+  case T_MAPENTRY:
+  case T_RATIO:{
     if (_is_small(p)) {
       size_t s = _sosize_unchecked(p);
       nanoclj_val_t * data = _smalldata_unchecked(p);

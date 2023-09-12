@@ -394,6 +394,7 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define cell_type(p)      	  (decode_pointer(p)->type)
 #define cell_flags(p)      	  (decode_pointer(p)->flags)
 #define is_small(p)	 	  (cell_flags(p)&T_SMALL)
+#define is_gc_atom(p)             (decode_pointer(p)->flags & T_GC_ATOM)
 
 #define car(p)           	  _car(decode_pointer(p))
 #define cdr(p)           	  _cdr(decode_pointer(p))
@@ -587,7 +588,7 @@ static inline long long to_long_w_def(nanoclj_val_t p, long long def) {
       case T_LONG:
 	return _lvalue_unchecked(c);
       case T_RATIO:
-	return to_long_w_def(_car(c), 0) / to_long_w_def(_cdr(c), 1);
+	return to_long_w_def(vector_elem(c, 0), 0) / to_long_w_def(vector_elem(c, 1), 1);
       case T_VECTOR:
       case T_SORTED_SET:
       case T_ARRAYMAP:
@@ -620,7 +621,7 @@ static inline int32_t to_int(nanoclj_val_t p) {
       case T_LONG:
 	return _lvalue_unchecked(c);
       case T_RATIO:
-	return to_long(_car(c)) / to_long(_cdr(c));
+	return to_long(vector_elem(c, 0)) / to_long(vector_elem(c, 1));
       case T_VECTOR:
       case T_SORTED_SET:
       case T_ARRAYMAP:
@@ -643,7 +644,7 @@ static inline double to_double(nanoclj_val_t p) {
     nanoclj_cell_t * c = decode_pointer(p);
     switch (_type(c)) {
     case T_LONG: return (double)lvalue_unchecked(p);
-    case T_RATIO: return to_double(_car(c)) / to_double(_cdr(c));
+    case T_RATIO: return to_double(vector_elem(c, 0)) / to_double(vector_elem(c, 1));
     }
   }
   }
@@ -1245,69 +1246,13 @@ static inline long long get_ratio(nanoclj_val_t n, long long * den) {
       *den = 1;
       return _lvalue_unchecked(c);
     case T_RATIO:
-      *den = to_long(_cdr(c));
-      return to_long(_car(c));
+      *den = to_long(vector_elem(c, 1));
+      return to_long(vector_elem(c, 0));
     }
   }
   }
   *den = 1;
   return 0;
-}
-
-static inline nanoclj_val_t mk_ratio(nanoclj_t * sc, nanoclj_val_t num, nanoclj_val_t den) {  
-  nanoclj_cell_t * x = get_cell_x(sc, T_RATIO, T_GC_ATOM, is_cell(num) ? decode_pointer(num) : NULL, is_cell(den) ? decode_pointer(den) : NULL, NULL);
-  _car(x) = num;
-  _cdr(x) = den;
-
-#if RETAIN_ALLOCS
-  retain(sc, x);
-#endif
-
-  return mk_pointer(x);
-}
-
-static inline nanoclj_val_t mk_ratio_long(nanoclj_t * sc, long long num, long long den) {
-  return mk_ratio(sc, mk_integer(sc, num), mk_integer(sc, den));
-}
-
-static inline uint64_t get_mantissa(nanoclj_val_t a) {
-  return (1ULL << 52) + (a.as_long & 0xFFFFFFFFFFFFFULL);
-}
-
-static inline int_fast16_t get_exponent(nanoclj_val_t a) {
-  return ((a.as_long & (0x7FFULL << 52)) >> 52) - 1023;
-}
-
-static inline int_fast8_t number_of_trailing_zeros(uint64_t a) {
-  int n = 0;
-  while ((a & 1) == 0) {
-    n++;
-    a >>= 1;
-  }
-  return n;
-}
-
-/* Creates an exact rational representation of a (normalized) double (or overflows) */
-static inline nanoclj_val_t mk_ratio_from_double(nanoclj_t * sc, nanoclj_val_t a) {
-  if (isnan(a.as_double)) {
-    return mk_ratio_long(sc, 0, 0);
-  } else if (!isfinite(a.as_double)) {
-    return mk_ratio_long(sc, a.as_double < 0 ? -1 : 1, 0);
-  }
-  long long numerator = get_mantissa(a);
-  int_fast16_t exponent = get_exponent(a) - 52;
-  while ((numerator & 1) == 0) {
-    numerator >>= 1;
-    exponent++;
-  }
-  if (a.as_double < 0) numerator *= -1;
-
-  /* TODO: check for overflows and use BigInt if necessary */
-  if (exponent < 0) {
-    return mk_ratio_long(sc, numerator, 1ULL << -exponent);
-  } else {
-    return mk_integer(sc, numerator << exponent);
-  }
 }
 
 /* allocate name to string area */
@@ -1528,6 +1473,64 @@ static inline void resize_vector(nanoclj_t * sc, nanoclj_cell_t * vec, size_t ne
   }
 }
 
+static inline nanoclj_val_t mk_mapentry(nanoclj_t * sc, nanoclj_val_t key, nanoclj_val_t val) {
+  nanoclj_cell_t * vec = get_vector_object(sc, T_MAPENTRY, 2);
+  set_vector_elem(vec, 0, key);
+  set_vector_elem(vec, 1, val);
+  return mk_pointer(vec);
+}
+
+static inline nanoclj_val_t mk_ratio(nanoclj_t * sc, nanoclj_val_t num, nanoclj_val_t den) {  
+  nanoclj_cell_t * vec = get_vector_object(sc, T_MAPENTRY, 2);
+  set_vector_elem(vec, 0, num);
+  set_vector_elem(vec, 1, den);
+  return mk_pointer(vec);
+}
+
+static inline nanoclj_val_t mk_ratio_long(nanoclj_t * sc, long long num, long long den) {
+  return mk_ratio(sc, mk_integer(sc, num), mk_integer(sc, den));
+}
+
+static inline uint64_t get_mantissa(nanoclj_val_t a) {
+  return (1ULL << 52) + (a.as_long & 0xFFFFFFFFFFFFFULL);
+}
+
+static inline int_fast16_t get_exponent(nanoclj_val_t a) {
+  return ((a.as_long & (0x7FFULL << 52)) >> 52) - 1023;
+}
+
+static inline int_fast8_t number_of_trailing_zeros(uint64_t a) {
+  int n = 0;
+  while ((a & 1) == 0) {
+    n++;
+    a >>= 1;
+  }
+  return n;
+}
+
+/* Creates an exact rational representation of a (normalized) double (or overflows) */
+static inline nanoclj_val_t mk_ratio_from_double(nanoclj_t * sc, nanoclj_val_t a) {
+  if (isnan(a.as_double)) {
+    return mk_ratio_long(sc, 0, 0);
+  } else if (!isfinite(a.as_double)) {
+    return mk_ratio_long(sc, a.as_double < 0 ? -1 : 1, 0);
+  }
+  long long numerator = get_mantissa(a);
+  int_fast16_t exponent = get_exponent(a) - 52;
+  while ((numerator & 1) == 0) {
+    numerator >>= 1;
+    exponent++;
+  }
+  if (a.as_double < 0) numerator *= -1;
+
+  /* TODO: check for overflows and use BigInt if necessary */
+  if (exponent < 0) {
+    return mk_ratio_long(sc, numerator, 1ULL << -exponent);
+  } else {
+    return mk_integer(sc, numerator << exponent);
+  }
+}
+
 static inline dump_stack_frame_t * s_add_frame(nanoclj_t * sc) {
   /* enough room for the next frame? */
   if (sc->dump >= sc->dump_size) {
@@ -1682,11 +1685,6 @@ static inline nanoclj_cell_t * seq(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_CLOSURE:
   case T_MACRO:
     return NULL;
-  case T_LIST:
-  case T_LAZYSEQ:
-  case T_ENVIRONMENT:
-  case T_CLASS:
-    break;
   case T_STRING:
   case T_CHAR_ARRAY:
   case T_FILE:
@@ -1733,15 +1731,14 @@ static inline bool is_empty(nanoclj_t * sc, nanoclj_cell_t * coll) {
   switch (_type(coll)) {
   case T_NIL:
     return true;
-  case T_LIST:
-  case T_LAZYSEQ:
-    return false;
   case T_STRING:
   case T_CHAR_ARRAY:
   case T_FILE:
   case T_VECTOR:
   case T_ARRAYMAP:
   case T_SORTED_SET:
+  case T_MAPENTRY:
+  case T_RATIO:
     return _get_size(coll) == 0;
   }  
   
@@ -1834,11 +1831,9 @@ static inline nanoclj_val_t first(nanoclj_t * sc, nanoclj_cell_t * coll) {
   switch (_type(coll)) {
   case T_NIL:
     break;
-  case T_MAPENTRY:
   case T_CLOSURE:
   case T_MACRO:
   case T_ENVIRONMENT:
-  case T_RATIO:
   case T_LIST:
   case T_VAR:
   case T_LAZYSEQ:
@@ -1847,6 +1842,8 @@ static inline nanoclj_val_t first(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_VECTOR:
   case T_ARRAYMAP:
   case T_SORTED_SET:
+  case T_RATIO:
+  case T_MAPENTRY:
     if (_get_size(coll) > 0) {
       if (_is_reverse(coll)) {
 	return vector_elem(coll, _get_size(coll) - 1);
@@ -1877,8 +1874,12 @@ static inline nanoclj_val_t first(nanoclj_t * sc, nanoclj_cell_t * coll) {
 static nanoclj_val_t second(nanoclj_t * sc, nanoclj_cell_t * a) {
   if (a) {
     int t = _type(a);
-    if (t == T_MAPENTRY || t == T_VAR || t == T_RATIO) { 
+    if (t == T_VAR) { 
       return _cdr(a);
+    } else if (t == T_VECTOR || t == T_RATIO || t == T_ARRAYMAP || t == T_SORTED_SET || t == T_MAPENTRY) {
+      if (_get_size(a)) {
+	return vector_elem(a, 1);
+      }
     } else if (t != T_NIL) {
       return first(sc, rest(sc, a));
     }
@@ -1905,7 +1906,9 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
       case T_LONG:
 	return _lvalue_unchecked(a) == _lvalue_unchecked(b);
       case T_VECTOR:
-      case T_SORTED_SET:{
+      case T_SORTED_SET:
+      case T_RATIO:
+      case T_MAPENTRY:{
 	size_t l = _get_size(a);
 	if (l == _get_size(b)) {
 	  for (size_t i = 0; i < l; i++) {
@@ -1920,12 +1923,12 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
 	size_t l = _get_size(a);
 	if (l == _get_size(b)) {
 	  for (size_t i = 0; i < l; i++) {
-	    nanoclj_val_t pa = vector_elem(a, i);
-	    nanoclj_val_t key = car(pa), val = cdr(pa);
+	    nanoclj_cell_t * ea = decode_pointer(vector_elem(a, i));
+	    nanoclj_val_t key = vector_elem(ea, 0), val = vector_elem(ea, 1);
 	    size_t j = 0;
 	    for (; j < l; j++) {
-	      nanoclj_val_t pb = vector_elem(b, j);
-	      if (equals(sc, key, car(pb)) && equals(sc, val, cdr(pb))) {
+	      nanoclj_cell_t * eb = decode_pointer(vector_elem(b, j));
+	      if (equals(sc, key, vector_elem(eb, 0)) && equals(sc, val, vector_elem(eb, 1))) {
 		break;
 	      }
 	    }
@@ -1936,7 +1939,6 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
       }
 	break;
       case T_LIST:
-      case T_MAPENTRY:
       case T_CLOSURE:
       case T_LAZYSEQ:
       case T_MACRO:
@@ -1974,6 +1976,8 @@ static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t
   long long index;
   switch (_type(coll)) {
   case T_VECTOR:
+  case T_RATIO:
+  case T_MAPENTRY:
     index = to_long_w_def(key, -1);
     if (index >= 0 && index < _get_size(coll)) {
       if (result) *result = vector_elem(coll, index);
@@ -2003,9 +2007,9 @@ static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t
   case T_ARRAYMAP:{
     size_t size = _get_size(coll);
     for (int i = 0; i < size; i++) {
-      nanoclj_val_t pair = vector_elem(coll, i);
-      if (equals(sc, key, car(pair))) {
-	if (result) *result = cdr(pair);
+      nanoclj_cell_t * entry = decode_pointer(vector_elem(coll, i));
+      if (equals(sc, key, vector_elem(entry, 0))) {
+	if (result) *result = vector_elem(entry, 1);
 	return true;
       }    
     }
@@ -2247,7 +2251,8 @@ static inline int compare(nanoclj_val_t a, nanoclj_val_t b) {
       }
 	
       case T_VECTOR:
-      case T_SORTED_SET:{
+      case T_SORTED_SET:
+      case T_MAPENTRY:{
 	size_t la = _get_size(a2), lb = _get_size(b2);
 	if (la < lb) return -1;
 	else if (la > lb) return +1;
@@ -2272,7 +2277,6 @@ static inline int compare(nanoclj_val_t a, nanoclj_val_t b) {
       }
 	
       case T_LIST:
-      case T_MAPENTRY:
       case T_CLOSURE:
       case T_LAZYSEQ:
       case T_MACRO:
@@ -2349,13 +2353,8 @@ static int hasheq(nanoclj_val_t v) {
       return murmur3_hash_int(hashcode);
     }
 
-    case T_MAPENTRY:{
-      uint32_t hash = 1;
-      hash = 31 * hash + (uint32_t)hasheq(_car(c));
-      hash = 31 * hash + (uint32_t)hasheq(_cdr(c));
-      return murmur3_hash_coll(hash, 2);
-    }      
-
+    case T_RATIO: /* Is this correct? */
+    case T_MAPENTRY:
     case T_VECTOR:
     case T_SORTED_SET:{
       uint32_t hash = 1;
@@ -2515,7 +2514,7 @@ static inline size_t char_to_utf8(int c, char *p) {
   }
 }
 
-static inline nanoclj_cell_t * conj(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t new_value) {
+static inline nanoclj_cell_t * conjoin(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t new_value) {
   if (!coll) coll = &(sc->_EMPTY);
 	       
   int t = _type(coll);
@@ -2593,10 +2592,6 @@ static inline nanoclj_cell_t * mk_sorted_set(nanoclj_t * sc, int len) {
 
 static inline nanoclj_cell_t * mk_arraymap(nanoclj_t * sc, size_t len) {
   return get_vector_object(sc, T_ARRAYMAP, len);
-}
-
-static inline nanoclj_val_t mk_mapentry(nanoclj_t * sc, nanoclj_val_t key, nanoclj_val_t val) {
-  return mk_pointer(get_cell(sc, T_MAPENTRY, key, val, NULL));
 }
 
 /* get new keyword */
@@ -3550,9 +3545,18 @@ static inline void print_image(nanoclj_t * sc, nanoclj_image_t * img, nanoclj_va
     }
 
     char * p = sc->strbuff;
-    size_t len = snprintf(sc->strbuff, sc->strbuff_size, "#object[nanoclj.core.Image %p %d %d %d]", (void *)img, img->width, img->height, img->channels);
+    size_t len = snprintf(sc->strbuff, sc->strbuff_size, "#<Image %d %d %d>", img->width, img->height, img->channels);
     putchars(sc, p, 3, out);
   }
+}
+
+static inline nanoclj_cell_t * get_type_object(nanoclj_t * sc, nanoclj_val_t v) {
+  int type_id = type(v);
+  if (type_id >= 0 && (size_t)type_id < sc->types->size) {
+    nanoclj_cell_t * t = decode_pointer(sc->types->data[type_id]);
+    if (t) return t;
+  }
+  return NULL;
 }
 
 /* Uses internal buffer unless string pointer is already available */
@@ -3718,8 +3722,14 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
   }
   
   if (!p) {
-    p = sc->strbuff;
-    plen = snprintf(sc->strbuff, sc->strbuff_size, "#object[%d]", type(l));
+    nanoclj_val_t name_v;
+    if (get_elem(sc, _metadata(get_type_object(sc, l)), sc->NAME, &name_v)) {
+      strview_t sv = to_strview(name_v);
+      p = sc->strbuff;
+      plen = snprintf(sc->strbuff, sc->strbuff_size, "#object[%.*s]", (int)sv.size, sv.ptr);
+    } else {
+      p = "#object[unknown]";
+    }
   }
   
   if (plen < 0) {
@@ -3742,15 +3752,16 @@ static inline size_t seq_length(nanoclj_t * sc, nanoclj_cell_t * a) {
     return 1;
     
   case T_VAR:
-  case T_RATIO:
     return 2;    
     
   case T_VECTOR:
   case T_ARRAYMAP:
   case T_SORTED_SET:
+  case T_RATIO:
   case T_STRING:
   case T_CHAR_ARRAY:
   case T_FILE:
+  case T_MAPENTRY:
     return _get_size(a);
 
   case T_LIST:
@@ -3968,7 +3979,7 @@ static inline nanoclj_val_t _Error_1(nanoclj_t * sc, const char *s, size_t len) 
   }
 
   nanoclj_val_t error_str = mk_pointer(get_string_object(sc, T_STRING, str, len, 0));
-  sc->args = conj(sc, sc->EMPTYVEC, error_str);
+  sc->args = conjoin(sc, sc->EMPTYVEC, error_str);
   sc->op = OP_ERR0;
   return (nanoclj_val_t)kTRUE;
 }
@@ -4093,15 +4104,6 @@ static inline bool destructure(nanoclj_t * sc, nanoclj_cell_t * binding, nanoclj
     return false;
   }
   return true;
-}
-
-static inline nanoclj_cell_t * get_type_object(nanoclj_t * sc, nanoclj_val_t v) {
-  int type_id = type(v);
-  if (type_id >= 0 && (size_t)type_id < sc->types->size) {
-    nanoclj_cell_t * t = decode_pointer(sc->types->data[type_id]);
-    if (t) return t;
-  }
-  return NULL;
 }
 
 /* Constructs an object by type, args are seqed */
@@ -4562,7 +4564,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 
   case OP_E1ARGS:              /* eval arguments */
 #ifdef VECTOR_ARGS
-    sc->args = conj(sc, sc->args, sc->value);
+    sc->args = conjoin(sc, sc->args, sc->value);
 #else
     sc->args = cons(sc, sc->value, sc->args);
 #endif
@@ -5170,7 +5172,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	}
       }
       case T_RATIO:{
-	long long num = to_long(_car(c)), den = to_long(_cdr(c)), res;
+	long long num = to_long(vector_elem(c, 0)), den = to_long(vector_elem(c, 1)), res;
 	if (__builtin_saddll_overflow(num, den, &res) == false) {
 	  s_return(sc, mk_ratio_long(sc, res, den));
 	} else {
@@ -5200,7 +5202,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	  Error_0(sc, "Error - Integer overflow");
 	}
       case T_RATIO:{
-	long long num = to_long(_car(c)), den = to_long(_cdr(c)), res;
+	long long num = to_long(vector_elem(c, 0)), den = to_long(vector_elem(c, 1)), res;
 	if (__builtin_ssubll_overflow(num, den, &res) == false) {
 	  s_return(sc, mk_ratio_long(sc, res, den));
 	} else {
@@ -5481,8 +5483,9 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 
 	/* If MapEntry is added to vector, it is an index value pair */
 	if (type(y) == T_MAPENTRY) {
-	  long long index = to_long(car(y));
-	  nanoclj_val_t value = cdr(y);
+	  nanoclj_cell_t * y2 = decode_pointer(y);
+	  long long index = to_long_w_def(first(sc, y2), -1);
+	  nanoclj_val_t value = second(sc, y2);
 	  if (index < 0 || index >= vector_len) {
 	    Error_0(sc, "Error - Index out of bounds");     
 	  } else {
@@ -5494,29 +5497,30 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	    s_return(sc, mk_pointer(vec));
 	  }
 	} else {
-	  s_return(sc, mk_pointer(conj(sc, coll, y)));
+	  s_return(sc, mk_pointer(conjoin(sc, coll, y)));
 	}
       }
 	
       case T_ARRAYMAP:{
-	/* TODO: check that y is actually a pair */
+	/* TODO: check that y is actually a vector */
 	nanoclj_cell_t * p = decode_pointer(y);
 	nanoclj_val_t key = first(sc, p), val = second(sc, p);
 	size_t vector_len = _get_size(coll);
 	for (size_t i = 0; i < vector_len; i++) {
 	  if (car(vector_elem(coll, i)).as_long == key.as_long) {
 	    nanoclj_cell_t * vec = copy_vector(sc, coll);
+	    /* Rebuild the mapentry in case the input is not mapentry */
 	    set_vector_elem(vec, i, mk_mapentry(sc, key, val));
 	    s_return(sc, mk_pointer(vec));
 	  }
 	}
 	/* Not found */
-	s_return(sc, mk_pointer(conj(sc, coll, y)));
+	s_return(sc, mk_pointer(conjoin(sc, coll, y)));
       }
       
       case T_SORTED_SET:{
 	if (!get_elem(sc, coll, y, NULL)) {
-	  nanoclj_cell_t * vec = conj(sc, coll, y);
+	  nanoclj_cell_t * vec = conjoin(sc, coll, y);
 	  vec = copy_vector(sc, vec);
 	  sort_vector_in_place(vec);
 	  s_return(sc, mk_pointer(vec));
@@ -5531,7 +5535,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       case T_STRING:
       case T_CHAR_ARRAY:
       case T_FILE:
-	s_return(sc, mk_pointer(conj(sc, coll, y)));
+	s_return(sc, mk_pointer(conjoin(sc, coll, y)));
 	
       default:
 	Error_0(sc, "Error - No protocol method ICollection.-conj defined");
@@ -5947,7 +5951,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       Error_0(sc, "Error - not a reader");
     } else {
       nanoclj_port_t * inport = port_unchecked(x);
-      sc->args = conj(sc, sc->args, sc->value);
+      sc->args = conjoin(sc, sc->args, sc->value);
       sc->tok = token(sc, inport);
       if (sc->tok == TOK_EOF) {
 	s_return(sc, mk_character(EOF));
@@ -6138,7 +6142,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       sort_vector_in_place(vec);
       nanoclj_cell_t * r = 0;
       for (int i = (int)l - 1; i >= 0; i--) {
-	r = conj(sc, r, vector_elem(vec, i));
+	r = conjoin(sc, r, vector_elem(vec, i));
       }
       s_return(sc, mk_pointer(r));
     }
@@ -6219,7 +6223,7 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	if (get_elem(sc, md, sc->WATCHES, &w)) {
 	  // TODO: append watch
 	} else {
-	  md = conj(sc, md, mk_mapentry(sc, sc->WATCHES, mk_pointer(cons(sc, arg2, NULL))));
+	  md = conjoin(sc, md, mk_mapentry(sc, sc->WATCHES, mk_pointer(cons(sc, arg2, NULL))));
 	}
 	_metadata(c) = md;
 	s_return(sc, arg0);
@@ -6485,20 +6489,16 @@ static const char * checked_strvalue(nanoclj_val_t p) {
 }
 
 static nanoclj_val_t checked_car(nanoclj_val_t p) {
-  switch (type(p)) {
-  case T_NIL:
-  case T_LIST:
+  if (is_cell(p) && !is_gc_atom(p)) {
     return car(p);
-  default:
+  } else {
     return mk_nil();
   }
 }
 static nanoclj_val_t checked_cdr(nanoclj_val_t p) {
-  switch (type(p)) {
-  case T_NIL:
-  case T_LIST:
+  if (is_cell(p) && !is_gc_atom(p)) {
     return cdr(p);
-  default:
+  } else {
     return mk_nil();
   }
 }
@@ -6878,11 +6878,11 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc fr
   nanoclj_cell_t * AReference = mk_named_type(sc, "clojure.lang.AReference", gentypeid(sc), Object);
   nanoclj_cell_t * Obj = mk_named_type(sc, "clojure.lang.Obj", gentypeid(sc), Object);
   nanoclj_cell_t * ASeq = mk_named_type(sc, "clojure.lang.ASeq", gentypeid(sc), Obj);
+  nanoclj_cell_t * PersistentVector = mk_named_type(sc, "clojure.lang.PersistentVector", T_VECTOR, AFn);
     
   mk_named_type(sc, "clojure.lang.PersistentTreeSet", T_SORTED_SET, AFn);
   mk_named_type(sc, "clojure.lang.PersistentArrayMap", T_ARRAYMAP, AFn);
   mk_named_type(sc, "clojure.lang.Symbol", T_SYMBOL, AFn);
-  mk_named_type(sc, "clojure.lang.PersistentVector", T_VECTOR, AFn);
   
   mk_named_type(sc, "clojure.lang.Keyword", T_KEYWORD, AFn); /* non-standard parent */
   mk_named_type(sc, "clojure.lang.BigInt", T_BIGINT, Number);
@@ -6892,7 +6892,7 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc fr
   mk_named_type(sc, "clojure.lang.Cons", T_LIST, ASeq);
   mk_named_type(sc, "clojure.lang.Namespace", T_ENVIRONMENT, AReference);
   mk_named_type(sc, "clojure.lang.Var", T_VAR, AReference);
-  mk_named_type(sc, "clojure.lang.MapEntry", T_MAPENTRY, Object);
+  mk_named_type(sc, "clojure.lang.MapEntry", T_MAPENTRY, PersistentVector);
   
   /* nanoclj types */
   nanoclj_cell_t * Closure = mk_named_type(sc, "nanoclj.core.Closure", T_CLOSURE, AFn);
