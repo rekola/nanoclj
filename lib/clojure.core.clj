@@ -294,12 +294,12 @@
 (defn slurp
   "Reads a file"
   [fn] (let [f (fn [rdr s] (let [c (.read rdr)] (if (= c ##Eof) s (recur rdr (conj s c)))))]
-         (f (clojure.lang.io/reader fn) "")))
+         (f (clojure.java.io/reader fn) "")))
 
 (defn spit
   "Writes content to a file"
   [f content] (let [prev-out *out*
-                    w (clojure.lang.io/writer f)
+                    w (clojure.java.io/writer f)
                     ]
                 (set! *out* w)
                 (print (str content))
@@ -434,7 +434,7 @@
 
 (def-macro (with-out-str body)
    `(let [ prev-out *out*
-           w (clojure.lang.io/writer)
+           w (clojure.java.io/writer)
          ] (set! *out* w)
 	   ,body
            (set! *out* prev-out)
@@ -442,7 +442,7 @@
 
 (def-macro (with-in-str s body)
   `(let ((prev-in *in*)
-         (rdr (clojure.lang.io/reader (char-array ,s)))
+         (rdr (clojure.java.io/reader (char-array ,s)))
          )
      (set! *in* rdr)
      (let ((r ,body))
@@ -465,15 +465,16 @@
 
 (def read-line (fn
                  ([] (read-line *in*))
-                 ([rdr] (defn rls [acc]
-                          (let [c (first rdr)]
-                            (rest rdr)
-                            (if (= c \newline)
-                              (if (and (list? acc) (= (car acc) \return))
-                                (cdr acc) acc)
-                              (rls (cons c acc))))
-                          )
-                  (apply str (reverse (rls '()))))))
+                 ([rdr] (let [rls (fn [acc]
+                                  (let [c (.read rdr)]
+                                    (if (or (= c \newline) (= c ##Eof))
+                                      (if (and (list? acc) (= (car acc) \return))
+                                        (cdr acc) acc)
+                                      (rls (cons c acc))))
+                                    )
+                              line (rls '())
+                              ]
+                          (if (empty? line) nil (apply str (reverse line)))))))
 
 (defn read-string [s] (with-in-str s (read)))
 (defn load-string [s] (eval (read-string s)))
