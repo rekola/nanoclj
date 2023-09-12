@@ -205,6 +205,10 @@ typedef struct {
   int http_max_connections;
   int http_max_redirects;
   int fd;
+
+  func_alloc malloc;
+  func_dealloc free;
+  func_realloc realloc;
 } http_load_t;
 
 #define T_TYPE	       256	/* 0000000100000000 */
@@ -1912,6 +1916,24 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
 	  return 1;
 	}
       }
+      case T_ARRAYMAP:{
+	size_t l = _get_size(a);
+	if (l == _get_size(b)) {
+	  for (size_t i = 0; i < l; i++) {
+	    nanoclj_val_t pa = vector_elem(a, i);
+	    nanoclj_val_t key = car(pa), val = cdr(pa);
+	    size_t j = 0;
+	    for (; j < l; j++) {
+	      nanoclj_val_t pb = vector_elem(b, j);
+	      if (equals(sc, key, car(pb)) && equals(sc, val, cdr(pb))) {
+		break;
+	      }
+	    }
+	    if (j == l) return false;
+	  }
+	  return true;
+	}
+      }
 	break;
       case T_LIST:
       case T_MAPENTRY:
@@ -2238,6 +2260,16 @@ static inline int compare(nanoclj_val_t a, nanoclj_val_t b) {
 	}
       }
 	break;
+
+      case T_ARRAYMAP:{
+	size_t la = _get_size(a2), lb = _get_size(b2);
+	if (la < lb) return -1;
+	else if (la > lb) return +1;
+	else {
+	  /* TODO: implement map comparison */
+	  return 0;
+	}
+      }
 	
       case T_LIST:
       case T_MAPENTRY:
@@ -2907,6 +2939,9 @@ static inline int http_open_thread(nanoclj_t * sc, strview_t sv) {
   d->http_max_connections = 0;
   d->http_max_redirects = 0;
   d->fd = pipefd[1];
+  d->malloc = sc->malloc;
+  d->free = sc->free;
+  d->realloc = sc->realloc;
 
   nanoclj_val_t v;
   if (get_elem(sc, sc->properties, mk_string(sc, "http.agent"), &v)) {
@@ -3711,6 +3746,11 @@ static inline size_t seq_length(nanoclj_t * sc, nanoclj_cell_t * a) {
     return 2;    
     
   case T_VECTOR:
+  case T_ARRAYMAP:
+  case T_SORTED_SET:
+  case T_STRING:
+  case T_CHAR_ARRAY:
+  case T_FILE:
     return _get_size(a);
 
   case T_LIST:
@@ -4366,7 +4406,9 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       /* If we reached the end of file, this loop is done. */
     if (port_unchecked(sc->loadport)->kind & port_saw_EOF) {
       if (sc->global_env != sc->root_env) {
+#if 0
 	fprintf(stderr, "restoring root env\n");
+#endif
 	sc->envir = sc->global_env = sc->root_env;
       }
       
@@ -4530,9 +4572,9 @@ static inline nanoclj_val_t opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       sc->args = NULL;
       s_goto(sc, OP_EVAL);
     } else {                    /* end */
-#ifndef VECTOR_ARGS
-      sc->args = reverse_in_place(sc, sc->EMPTY, sc->args);
-#endif
+      if (_type(sc->args) == T_LIST) {
+	sc->args = reverse_in_place(sc, sc->EMPTY, sc->args);
+      }
       sc->code = first(sc, sc->args);
       sc->args = next(sc, sc->args);
       s_goto(sc, OP_APPLY);
@@ -6813,6 +6855,10 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc fr
   nanoclj_cell_t * Object = mk_named_type(sc, "java.lang.Object", gentypeid(sc), sc->global_env);
   nanoclj_cell_t * Number = mk_named_type(sc, "java.lang.Number", gentypeid(sc), Object);
   nanoclj_cell_t * Throwable = mk_named_type(sc, "java.lang.Throwable", gentypeid(sc), Object);
+  nanoclj_cell_t * Exception = mk_named_type(sc, "java.lang.Exception", T_EXCEPTION, Throwable);
+  nanoclj_cell_t * RuntimeException = mk_named_type(sc, "java.lang.RuntimeException", gentypeid(sc), Exception);
+  nanoclj_cell_t * NullPointerException = mk_named_type(sc, "java.lang.NullPointerException", gentypeid(sc), RuntimeException);
+
   nanoclj_cell_t * AFn = mk_named_type(sc, "clojure.lang.AFn", gentypeid(sc), Object);
     
   mk_named_type(sc, "java.lang.Class", T_CLASS, AFn); /* non-standard parent */
@@ -6822,7 +6868,6 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc fr
   mk_named_type(sc, "java.lang.Integer", T_INTEGER, Number);
   mk_named_type(sc, "java.lang.Double", T_REAL, Number);
   mk_named_type(sc, "java.lang.Long", T_LONG, Number);
-  mk_named_type(sc, "java.lang.Exception", T_EXCEPTION, Throwable);
   mk_named_type(sc, "java.io.Reader", T_READER, Object);
   mk_named_type(sc, "java.io.Writer", T_WRITER, Object);
   mk_named_type(sc, "java.io.InputStream", T_INPUT_STREAM, Object);

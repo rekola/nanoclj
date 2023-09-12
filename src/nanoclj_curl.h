@@ -36,10 +36,10 @@ static inline void * http_load(void *ptr) {
     curl_easy_cleanup(curl);
   }
   
-  free(d->url);
-  free(d->useragent);
+  d->free(d->url);
+  d->free(d->useragent);
   close(d->fd);
-  free(d);
+  d->free(d);
   
   return 0;
 }
