@@ -33,7 +33,7 @@
 /* Thread */
 
 static nanoclj_val_t Thread_sleep(nanoclj_t * sc, nanoclj_val_t args) {
-  long long ms = to_long(car(args));
+  long long ms = to_long(first(sc, decode_pointer(args)));
   if (ms > 0) {
     ms_sleep(ms);
   }
@@ -43,7 +43,7 @@ static nanoclj_val_t Thread_sleep(nanoclj_t * sc, nanoclj_val_t args) {
 /* System */
 
 static nanoclj_val_t System_exit(nanoclj_t * sc, nanoclj_val_t args) {
-  exit(to_int(car(args)));
+  exit(to_int(first(sc, decode_pointer(args))));
 }
 
 static nanoclj_val_t System_currentTimeMillis(nanoclj_t * sc, nanoclj_val_t args) {
@@ -59,9 +59,12 @@ static nanoclj_val_t System_gc(nanoclj_t * sc, nanoclj_val_t args) {
   return (nanoclj_val_t)kTRUE;
 }
 
-static nanoclj_val_t System_getenv(nanoclj_t * sc, nanoclj_val_t args) {
-  if (args.as_long != sc->EMPTY.as_long) {
-    const char * v = getenv(strvalue(car(args)));
+static nanoclj_val_t System_getenv(nanoclj_t * sc, nanoclj_val_t args0) {
+  nanoclj_cell_t * args = decode_pointer(args0);
+  if (args) {
+    char * name = alloc_cstr(sc, to_strview(first(sc, args)));
+    const char * v = getenv(name);
+    sc->free(name);
     return v ? mk_string(sc, v) : mk_nil();
   } else {
     extern char **environ;
@@ -84,16 +87,17 @@ static nanoclj_val_t System_getenv(nanoclj_t * sc, nanoclj_val_t args) {
   }
 }
 
-static nanoclj_val_t System_getProperty(nanoclj_t * sc, nanoclj_val_t args) {
-  if (args.as_long == sc->EMPTY.as_long) {
-    return mk_pointer(sc->properties);
-  } else {
+static nanoclj_val_t System_getProperty(nanoclj_t * sc, nanoclj_val_t args0) {
+  nanoclj_cell_t * args = decode_pointer(args0);
+  if (args) {
     nanoclj_val_t v;
-    if (get_elem(sc, sc->properties, car(args), &v)) {
+    if (get_elem(sc, sc->properties, first(sc, args), &v)) {
       return v;
     } else {
       return mk_nil();
     }
+  } else {
+    return mk_pointer(sc->properties);
   }
 }
 
@@ -107,8 +111,9 @@ static nanoclj_val_t System_setProperty(nanoclj_t * sc, nanoclj_val_t args0) {
   return mk_nil();  
 }
 
-static inline nanoclj_val_t System_glob(nanoclj_t * sc, nanoclj_val_t args) {
-  char * tmp = alloc_cstr(sc, to_strview(car(args)));
+static inline nanoclj_val_t System_glob(nanoclj_t * sc, nanoclj_val_t args0) {
+  nanoclj_cell_t * args = decode_pointer(args0);
+  char * tmp = alloc_cstr(sc, to_strview(first(sc, args)));
 
   glob_t gstruct;
   int r = glob(tmp, GLOB_ERR, NULL, &gstruct);
@@ -162,13 +167,14 @@ static nanoclj_val_t Math_acos(nanoclj_t * sc, nanoclj_val_t args) {
   return mk_real(acos(to_double(car(args))));
 }
 
-static nanoclj_val_t Math_atan(nanoclj_t * sc, nanoclj_val_t args) {
-  if (cdr(args).as_long != sc->EMPTY.as_long) {
-    nanoclj_val_t x = car(args);
-    nanoclj_val_t y = cadr(args);
+static nanoclj_val_t Math_atan(nanoclj_t * sc, nanoclj_val_t args0) {
+  nanoclj_cell_t * args = decode_pointer(args0);
+  nanoclj_val_t x = first(sc, args);
+  args = next(sc, args);
+  if (args) {
+    nanoclj_val_t y = first(sc, args);
     return mk_real(atan2(to_double(x), to_double(y)));
   } else {
-    nanoclj_val_t x = car(args);
     return mk_real(atan(to_double(x)));
   }
 }
