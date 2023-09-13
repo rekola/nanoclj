@@ -18,29 +18,29 @@ E2:_setmark(p);
   case T_CLASS:
   case T_ENVIRONMENT:
   case T_LIST:
-  case T_VAR:
   case T_CLOSURE:
   case T_MACRO:
   case T_LAZYSEQ:
   case T_EXCEPTION:
   case T_DELAY:{
-    nanoclj_cell_t * meta = _metadata(p);
-    if (meta) {
-      mark(meta);
-    }
+    nanoclj_cell_t * meta = _cons_metadata(p);
+    if (meta) mark(meta);
     break;
   }
   case T_VECTOR:
   case T_ARRAYMAP:
   case T_SORTED_SET:
   case T_MAPENTRY:
+  case T_VAR:
   case T_RATIO:{
     if (_is_small(p)) {
+      nanoclj_cell_t * meta = _so_vector_metadata(p);
+      if (meta) mark(meta);
+
       size_t s = _sosize_unchecked(p);
       nanoclj_val_t * data = _smalldata_unchecked(p);
       if (s > 0 && is_cell(data[0]) && !is_nil(data[0])) mark(decode_pointer(data[0]));
       if (s > 1 && is_cell(data[1]) && !is_nil(data[1])) mark(decode_pointer(data[1]));
-      if (s > 2 && is_cell(data[2]) && !is_nil(data[2])) mark(decode_pointer(data[2]));
     } else {
       size_t offset = _offset_unchecked(p);
       size_t num = _size_unchecked(p);
@@ -177,7 +177,7 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_c
 	  finalize_cell(sc, p);
           p->type = 0;
 	  p->flags = 0;
-	  _metadata(p) = NULL;
+	  _cons_metadata(p) = NULL;
           _set_car(p, sc->EMPTY);
         }
         ++sc->fcells;

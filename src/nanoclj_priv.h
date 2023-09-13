@@ -14,7 +14,7 @@
 #define CELL_NSEGMENT   12
 #endif
 
-#define NANOCLJ_SMALL_VEC_SIZE 3
+#define NANOCLJ_SMALL_VEC_SIZE 2
 #define NANOCLJ_SMALL_STR_SIZE 24
 
 #ifndef MAXFIL
@@ -57,6 +57,7 @@ extern "C" {
   typedef struct nanoclj_vector_t {
     nanoclj_val_t * data;
     size_t size, reserved, refcnt;
+    struct nanoclj_cell_t * meta;
   } nanoclj_vector_t;
 
   typedef struct nanoclj_float_array_t {
@@ -104,6 +105,7 @@ extern "C" {
       } _collection;
       struct {
         nanoclj_val_t data[NANOCLJ_SMALL_VEC_SIZE];
+	struct nanoclj_cell_t * meta;
       } _small_collection;
       long long _lvalue;
       nanoclj_port_t * _port;

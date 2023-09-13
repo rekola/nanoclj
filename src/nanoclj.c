@@ -363,7 +363,8 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define set_car(p, v)         	  _car(decode_pointer(p)) = v
 #define set_cdr(p, v)         	  _cdr(decode_pointer(p)) = v
 
-#define _metadata(p)     	  ((p)->_object._cons.meta)
+#define _so_vector_metadata(p)	  ((p)->_object._small_collection.meta)
+#define _cons_metadata(p)	  ((p)->_object._cons.meta)
 
 #define _is_realized(p)           (p->flags & T_REALIZED)
 #define _set_realized(p)          (p->flags |= T_REALIZED)
@@ -401,8 +402,6 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define cell_flags(p)      	  (decode_pointer(p)->flags)
 #define is_small(p)	 	  (cell_flags(p)&T_SMALL)
 #define is_gc_atom(p)             (decode_pointer(p)->flags & T_GC_ATOM)
-
-#define metadata(p)	     	  _metadata(decode_pointer(p))
 
 #define smallstrvalue_unchecked(p)      (_smallstrvalue_unchecked(decode_pointer(p)))
 #define sosize_unchecked(p)       (_sosize_unchecked(decode_pointer(p)))
@@ -523,6 +522,43 @@ static void fill_vector(nanoclj_cell_t * vec, nanoclj_val_t elem) {
   size_t num = _get_size(vec);
   for (size_t i = 0; i < num; i++) {
     set_vector_elem(vec, i, elem);
+  }
+}
+
+static inline nanoclj_cell_t * get_metadata(nanoclj_cell_t * c) {
+  switch (_type(c)) {
+  case T_VECTOR:
+  case T_ARRAYMAP:
+  case T_SORTED_SET:
+  case T_VAR:
+    if (_is_small(c)) {
+      return _so_vector_metadata(c);
+    }
+  case T_LIST:
+  case T_CLOSURE:
+  case T_MACRO:
+  case T_CLASS:
+  case T_ENVIRONMENT:
+    return _cons_metadata(c);
+  }
+  return NULL;
+}
+
+static inline void set_metadata(nanoclj_cell_t * c, nanoclj_cell_t * meta) {
+  switch (_type(c)) {
+  case T_VECTOR:
+  case T_ARRAYMAP:
+  case T_SORTED_SET:
+  case T_VAR:
+    if (_is_small(c)) {
+      _so_vector_metadata(c) = meta;
+    }
+    break;
+  case T_LIST:
+  case T_CLOSURE:
+  case T_MACRO:
+    _cons_metadata(c) = meta;
+    break;
   }
 }
 
@@ -999,7 +1035,7 @@ static inline void retain(nanoclj_t * sc, nanoclj_cell_t * recent) {
   nanoclj_cell_t * holder = get_cell_x(sc, T_LIST, 0, recent, NULL, NULL);
   _set_car(holder, mk_pointer(recent));
   _set_cdr(holder, car(sc->sink));
-  _metadata(holder) = NULL;
+  _cons_metadata(holder) = NULL;
   set_car(sc->sink, mk_pointer(holder));
 }
 
@@ -1010,7 +1046,7 @@ static inline nanoclj_cell_t * get_cell(nanoclj_t * sc, uint32_t type, uint16_t 
   /* For right now, include "a" and "b" in "cell" so that gc doesn't think they are garbage. */
   _set_car(cell, a);
   _set_cdr(cell, b);
-  _metadata(cell) = meta;
+  _cons_metadata(cell) = meta;
 
 #if RETAIN_ALLOCS
   retain(sc, cell);
@@ -1842,7 +1878,6 @@ static inline nanoclj_val_t first(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_MACRO:
   case T_ENVIRONMENT:
   case T_LIST:
-  case T_VAR:
   case T_LAZYSEQ:
   case T_CLASS:
     return _car(coll);
@@ -1851,6 +1886,7 @@ static inline nanoclj_val_t first(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_SORTED_SET:
   case T_RATIO:
   case T_MAPENTRY:
+  case T_VAR:
     if (_get_size(coll) > 0) {
       if (_is_reverse(coll)) {
 	return vector_elem(coll, _get_size(coll) - 1);
@@ -1881,9 +1917,7 @@ static inline nanoclj_val_t first(nanoclj_t * sc, nanoclj_cell_t * coll) {
 static nanoclj_val_t second(nanoclj_t * sc, nanoclj_cell_t * a) {
   if (a) {
     int t = _type(a);
-    if (t == T_VAR) { 
-      return _cdr(a);
-    } else if (t == T_VECTOR || t == T_RATIO || t == T_ARRAYMAP || t == T_SORTED_SET || t == T_MAPENTRY) {
+    if (t == T_VECTOR || t == T_RATIO || t == T_ARRAYMAP || t == T_SORTED_SET || t == T_MAPENTRY || t == T_VAR) {
       if (_get_size(a)) {
 	return vector_elem(a, 1);
       }
@@ -1915,6 +1949,7 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
       case T_VECTOR:
       case T_SORTED_SET:
       case T_RATIO:
+      case T_VAR:
       case T_MAPENTRY:{
 	size_t l = _get_size(a);
 	if (l == _get_size(b)) {
@@ -1985,6 +2020,7 @@ static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t
   case T_VECTOR:
   case T_RATIO:
   case T_MAPENTRY:
+  case T_VAR:
     index = to_long_w_def(key, -1);
     if (index >= 0 && index < _get_size(coll)) {
       if (result) *result = vector_elem(coll, index);
@@ -2101,7 +2137,10 @@ static inline void new_frame_in_env(nanoclj_t * sc, nanoclj_cell_t * old_env) {
 static inline nanoclj_cell_t * new_slot_spec_in_env(nanoclj_t * sc, nanoclj_cell_t * env,
 						    nanoclj_val_t variable, nanoclj_val_t value,
 						    nanoclj_cell_t * meta) {
-  nanoclj_cell_t * slot0 = get_cell(sc, T_VAR, 0, variable, value, meta);
+  nanoclj_cell_t * slot0 = get_vector_object(sc, T_VAR, 2);
+  set_vector_elem(slot0, 0, variable);
+  set_vector_elem(slot0, 1, value);
+  _so_vector_metadata(slot0) = meta;
     
   nanoclj_val_t slot = mk_pointer(slot0);
   nanoclj_val_t x = _car(env);
@@ -2128,10 +2167,10 @@ static inline nanoclj_cell_t * find_slot_in_env(nanoclj_t * sc, nanoclj_cell_t *
     }
 	
     for (; y && y != &(sc->_EMPTY); y = decode_pointer(_cdr(y))) {
-      nanoclj_val_t var = _car(y);
-      nanoclj_val_t sym = car(var);
+      nanoclj_cell_t * var = decode_pointer(_car(y));
+      nanoclj_val_t sym = vector_elem(var, 0);
       if (sym.as_long == hdl.as_long) {
-	return decode_pointer(var);
+	return var;
       }
     }
 
@@ -2149,11 +2188,12 @@ static inline void new_slot_in_env(nanoclj_t * sc, nanoclj_val_t variable, nanoc
 
 static inline nanoclj_val_t set_slot_in_env(nanoclj_t * sc, nanoclj_cell_t * slot, nanoclj_val_t state, nanoclj_cell_t * meta) {
   nanoclj_val_t old_state = _cdr(slot);
-  _set_cdr(slot, state);
-  if (meta) _metadata(slot) = meta;
+  set_vector_elem(slot, 1, state);
+  if (meta) _so_vector_metadata(slot) = meta;
+  else meta = _so_vector_metadata(slot);
   
   nanoclj_val_t watches0;
-  if (get_elem(sc, _metadata(slot), sc->WATCHES, &watches0)) {
+  if (get_elem(sc, meta, sc->WATCHES, &watches0)) {
     nanoclj_cell_t * watches = seq(sc, decode_pointer(watches0));
     for (; watches; watches = next(sc, watches)) {
       nanoclj_val_t fn = first(sc, watches);
@@ -2165,7 +2205,7 @@ static inline nanoclj_val_t set_slot_in_env(nanoclj_t * sc, nanoclj_cell_t * slo
 
 static inline nanoclj_val_t slot_value_in_env(nanoclj_cell_t * slot) {
   if (slot) {
-    return _cdr(slot);
+    return vector_elem(slot, 1);
   } else {
     return mk_nil();
   }
@@ -2259,7 +2299,8 @@ static inline int compare(nanoclj_val_t a, nanoclj_val_t b) {
 	
       case T_VECTOR:
       case T_SORTED_SET:
-      case T_MAPENTRY:{
+      case T_MAPENTRY:
+      case T_VAR:{
 	size_t la = _get_size(a2), lb = _get_size(b2);
 	if (la < lb) return -1;
 	else if (la > lb) return +1;
@@ -2363,7 +2404,8 @@ static int hasheq(nanoclj_val_t v) {
     case T_RATIO: /* Is this correct? */
     case T_MAPENTRY:
     case T_VECTOR:
-    case T_SORTED_SET:{
+    case T_SORTED_SET:
+    case T_VAR:{
       uint32_t hash = 1;
       size_t n = _get_size(c);
       for (size_t i = 0; i < n; i++) {
@@ -3631,7 +3673,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
 	break;
       case T_CLASS:
 	nanoclj_val_t name_v;
-	if (get_elem(sc, _metadata(c), sc->NAME, &name_v)) {
+	if (get_elem(sc, _cons_metadata(c), sc->NAME, &name_v)) {
 	  strview_t name = to_strview(name_v);
 	  p = name.ptr;
 	  plen = name.size;	  
@@ -3660,7 +3702,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
       case T_ENVIRONMENT:{
 	nanoclj_val_t name_v;
 	strview_t name;
-	if (get_elem(sc, _metadata(c), sc->NAME, &name_v)) {
+	if (get_elem(sc, _cons_metadata(c), sc->NAME, &name_v)) {
 	  name = to_strview(name_v);	  
 	} else {
 	  name = (strview_t){ "", 0 };
@@ -3709,12 +3751,12 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
   
   if (!p) {
     nanoclj_val_t name_v;
-    if (get_elem(sc, _metadata(get_type_object(sc, l)), sc->NAME, &name_v)) {
+    if (get_elem(sc, _cons_metadata(get_type_object(sc, l)), sc->NAME, &name_v)) {
       strview_t sv = to_strview(name_v);
       p = sc->strbuff;
       plen = snprintf(sc->strbuff, sc->strbuff_size, "#object[%.*s]", (int)sv.size, sv.ptr);
     } else {
-      p = "#object[unknown]";
+      p = "#object";
     }
   }
   
@@ -3736,10 +3778,7 @@ static inline size_t seq_length(nanoclj_t * sc, nanoclj_cell_t * a) {
 
   case T_LONG:
     return 1;
-    
-  case T_VAR:
-    return 2;    
-    
+        
   case T_VECTOR:
   case T_ARRAYMAP:
   case T_SORTED_SET:
@@ -3748,6 +3787,7 @@ static inline size_t seq_length(nanoclj_t * sc, nanoclj_cell_t * a) {
   case T_CHAR_ARRAY:
   case T_FILE:
   case T_MAPENTRY:
+  case T_VAR:
     return _get_size(a);
 
   case T_LIST:
@@ -4666,7 +4706,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	/* make environment */
 	new_frame_in_env(sc, closure_env(code_cell));
 	x = closure_code(code_cell);
-	meta = _metadata(code_cell);
+	meta = _cons_metadata(code_cell);
 	
 	if (meta && _type(meta) == T_STRING) {
 	  /* if the function has a name, bind it */
@@ -5628,7 +5668,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     } else {
       if (op == OP_TYPE && is_cell(arg0)) {
 	nanoclj_cell_t * c = decode_pointer(arg0);
-	if (c && !_is_gc_atom(c) && get_elem(sc, _metadata(c), sc->TYPE, &x)) {
+	if (c && !_is_gc_atom(c) && get_elem(sc, _cons_metadata(c), sc->TYPE, &x)) {
 	  s_return(sc, x);
 	}
       }
@@ -5678,8 +5718,10 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	  s_return(sc, sc->EMPTY);
 	}
       }
-      if (_type(c) == T_DELAY || _type(c) == T_VAR) {
-	s_return(sc, _cdr(c));
+      if (_type(c) == T_DELAY) {
+	s_return(sc, _car(c));
+      } else if (_type(c) == T_VAR) {
+	s_return(sc, vector_elem(c, 0));
       } else {
 	s_return(sc, x);
       }
@@ -5691,8 +5733,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     }
     _set_realized(decode_pointer(sc->code));
     if (type(sc->code) == T_DELAY) {
-      set_car(sc->code, mk_nil());
-      set_cdr(sc->code, sc->value);
+      set_car(sc->code, sc->value);
+      set_cdr(sc->code, sc->EMPTY);
       s_return(sc, sc->value);
     } else if (is_nil(sc->value) || sc->value.as_long == sc->EMPTY.as_long) {
       set_car(sc->code, mk_nil());
@@ -6144,9 +6186,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     }
     if (is_cell(arg0)) {
       nanoclj_cell_t * c = decode_pointer(arg0);
-      if (c && !_is_gc_atom(c)) {
-	s_return(sc, mk_pointer(_metadata(c)));
-      }
+      if (c) s_return(sc, mk_pointer(get_metadata(c)));
     }
     s_return(sc, mk_nil());
     
@@ -6185,7 +6225,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       if (_type(c) != T_VAR) {
 	Error_0(sc, "Error - Watches can only be added to Vars");
       } else {
-	nanoclj_cell_t * md = _metadata(c);
+	nanoclj_cell_t * md = _so_vector_metadata(c);
 	if (!md) md = mk_arraymap(sc, 0);
 	nanoclj_val_t w;
 	if (get_elem(sc, md, sc->WATCHES, &w)) {
@@ -6193,7 +6233,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	} else {
 	  md = conjoin(sc, md, mk_mapentry(sc, sc->WATCHES, mk_pointer(cons(sc, arg2, NULL))));
 	}
-	_metadata(c) = md;
+	_so_vector_metadata(c) = md;
 	s_return(sc, arg0);
       }      
     }
@@ -6738,17 +6778,18 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc fr
   sc->tracing = 0;
 
   /* init sc->EMPTY */
-  cell_type(sc->EMPTY) = T_NIL;
-  cell_flags(sc->EMPTY) = T_GC_ATOM | MARK;
-  set_car(sc->EMPTY, sc->EMPTY);
-  set_cdr(sc->EMPTY, sc->EMPTY);
-  metadata(sc->EMPTY) = NULL;
+  sc->_EMPTY.type = T_NIL;
+  sc->_EMPTY.flags = T_GC_ATOM | MARK;
+  _set_car(&(sc->_EMPTY), sc->EMPTY);
+  _set_cdr(&(sc->_EMPTY), sc->EMPTY);
+  _cons_metadata(&(sc->_EMPTY)) = NULL;
+  
   /* init sink */
-  cell_type(sc->sink) = T_LIST;
-  cell_flags(sc->sink) = MARK;
-  set_car(sc->sink, sc->EMPTY);
-  set_cdr(sc->sink, sc->EMPTY);
-  metadata(sc->sink) = NULL;
+  sc->_sink.type = T_LIST;
+  sc->_sink.flags = MARK;
+  _set_car(&(sc->_sink), sc->EMPTY);
+  _set_cdr(&(sc->_sink), sc->EMPTY);
+  _cons_metadata(&(sc->_sink)) = NULL;
 
   sc->oblist = oblist_initial_value(sc);
   /* init global_env */
