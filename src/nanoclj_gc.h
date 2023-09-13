@@ -22,6 +22,7 @@ E2:_setmark(p);
   case T_CLOSURE:
   case T_MACRO:
   case T_LAZYSEQ:
+  case T_EXCEPTION:
   case T_DELAY:{
     nanoclj_cell_t * meta = _metadata(p);
     if (meta) {
@@ -61,14 +62,14 @@ E2:_setmark(p);
   q0 = _car(p);
   if (!is_primitive(q0) && !is_nil(q0) && !is_mark(q0)) {
     _set_gc_atom(p);                 /* a note that we have moved car */
-    _car(p) = mk_pointer(t);
+    _set_car(p, mk_pointer(t));
     t = p;
     p = decode_pointer(q0);
     goto E2;
   }
 E5:q0 = _cdr(p);                 /* down cdr */
   if (!is_primitive(q0) && !is_nil(q0) && !is_mark(q0)) {
-    _cdr(p) = mk_pointer(t);
+    _set_cdr(p, mk_pointer(t));
     t = p;
     p = decode_pointer(q0);
     goto E2;
@@ -82,12 +83,12 @@ E6:                            /* up.  Undo the link switching from steps E4 and
   if (_is_gc_atom(q)) {
     _clr_gc_atom(q);
     t = decode_pointer(_car(q));
-    _car(q) = mk_pointer(p);
+    _set_car(q, mk_pointer(p));
     p = q;
     goto E5;
   } else {
     t = decode_pointer(_cdr(q));
-    _cdr(q) = mk_pointer(p);
+    _set_cdr(q, mk_pointer(p));
     p = q;
     goto E6;
   }
@@ -177,10 +178,10 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_c
           p->type = 0;
 	  p->flags = 0;
 	  _metadata(p) = NULL;
-          _car(p) = sc->EMPTY;
+          _set_car(p, sc->EMPTY);
         }
         ++sc->fcells;
-	_cdr(p) = mk_pointer(free_cell);
+	_set_cdr(p, mk_pointer(free_cell));
         free_cell = p;
       }
     }
