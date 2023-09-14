@@ -379,9 +379,7 @@
                                                   (print \})))                
                          (ratio? x) (do (save)
                                         (set-color (styles- :scalar))
-                                        (pr- (numerator x))
-                                        (print \/)
-                                        (pr- (denominator x))
+                                        (pr- x)
                                         (restore))
                          (nil? x) (do (save)
                                       (set-color (styles- :nil))
@@ -497,6 +495,12 @@
 
 ; Collections
 
+(defn flatten
+  "Breaks any nested structure in the coll and returns the content in a flat sequence."  
+  [coll] (cond (empty? coll) '()
+               (coll? (first coll)) (concat (flatten (first coll)) (flatten (rest coll)))
+               :else (cons (first coll) (flatten (rest coll)))))
+                                                                               
 (defn partition
   "Partitions the collection into n sized blocks"
   [n coll] (if (empty? coll)
