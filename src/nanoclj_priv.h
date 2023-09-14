@@ -281,9 +281,6 @@ extern "C" {
   int is_foreign(nanoclj_val_t p);
   const char *syntaxname(nanoclj_val_t p);
   int is_closure(nanoclj_val_t p);
-#if 0
-  int is_macro(nanoclj_val_t p);
-#endif
   nanoclj_val_t closure_code(nanoclj_val_t p);
   nanoclj_val_t closure_env(nanoclj_val_t p);
 

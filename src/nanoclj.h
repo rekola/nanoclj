@@ -109,7 +109,7 @@ extern "C" {
 #if USE_INTERFACE
   struct nanoclj_interface {
     void (*nanoclj_intern) (nanoclj_t * sc, nanoclj_val_t ns, nanoclj_val_t symbol, nanoclj_val_t value);
-    nanoclj_val_t (*cons) (nanoclj_t * sc, nanoclj_val_t a, nanoclj_val_t b);
+    nanoclj_val_t (*cons) (nanoclj_t * sc, nanoclj_val_t head, nanoclj_val_t tail);
     nanoclj_val_t (*mk_integer) (nanoclj_t * sc, long long num);
     nanoclj_val_t (*mk_real) (double num);
     nanoclj_val_t (*mk_symbol) (nanoclj_t * sc, const char *name);
@@ -127,7 +127,6 @@ extern "C" {
     double (*to_double) (nanoclj_val_t p);
     bool (*is_integer) (nanoclj_val_t p);
     bool (*is_real) (nanoclj_val_t p);
-    bool (*is_character) (nanoclj_val_t p);
     int (*to_int) (nanoclj_val_t p);
     bool (*is_vector) (nanoclj_val_t p);
     size_t (*size) (nanoclj_t * sc, nanoclj_val_t vec);
