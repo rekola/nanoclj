@@ -1042,10 +1042,11 @@ static inline void retain(nanoclj_t * sc, nanoclj_cell_t * recent) {
 }
 
 static inline nanoclj_cell_t * get_cell(nanoclj_t * sc, uint32_t type, uint16_t flags,
-					nanoclj_val_t head, nanoclj_val_t tail, nanoclj_cell_t * meta) {
-  nanoclj_cell_t * cell = get_cell_x(sc, type, flags, is_cell(head) ? decode_pointer(head) : NULL, is_cell(tail) ? decode_pointer(tail) : NULL, meta);
+					nanoclj_val_t head, nanoclj_cell_t * tail, nanoclj_cell_t * meta) {
+  if (!tail) tail = &(sc->_EMPTY);
+  nanoclj_cell_t * cell = get_cell_x(sc, type, flags, is_cell(head) ? decode_pointer(head) : NULL, tail, meta);
   _set_car(cell, head);
-  _set_cdr(cell, tail);
+  _set_cdr(cell, mk_pointer(tail));
   _cons_metadata(cell) = meta;
 
 #if RETAIN_ALLOCS
@@ -1369,7 +1370,7 @@ static inline nanoclj_val_t mk_string_from_sv(nanoclj_t * sc, strview_t sv) {
 }
 
 static inline nanoclj_val_t mk_exception(nanoclj_t * sc, const char * text) {
-  return mk_pointer(get_cell(sc, T_EXCEPTION, 0, mk_string(sc, text), sc->EMPTY, NULL));
+  return mk_pointer(get_cell(sc, T_EXCEPTION, 0, mk_string(sc, text), NULL, NULL));
 }
 
 static inline int basic_inchar(nanoclj_port_t * pt) {
@@ -1449,8 +1450,7 @@ static inline void backchar(int c, nanoclj_port_t * pt) {
 
 /* get new cons cell */
 static inline nanoclj_cell_t * cons(nanoclj_t * sc, nanoclj_val_t head, nanoclj_cell_t * tail) {
-  if (!tail) tail = &(sc->_EMPTY);
-  return get_cell(sc, T_LIST, 0, head, mk_pointer(tail), NULL);
+  return get_cell(sc, T_LIST, 0, head, tail, NULL);
 }
 
 /* Creates a vector store with double the size requested */
@@ -1612,12 +1612,16 @@ static inline nanoclj_cell_t * remove_prefix(nanoclj_t * sc, nanoclj_cell_t * st
   while (n > 0 && new_ptr < end_ptr) {
     new_ptr = utf8_next(new_ptr);
     n--;
-  }
-
+  }  
+  size_t new_size = end_ptr - new_ptr;
+  
   if (_is_small(str)) {
-    return get_string_object(sc, str->type, new_ptr, end_ptr - new_ptr, 0);
+    return get_string_object(sc, str->type, new_ptr, new_size, 0);
   } else {
-    return str;
+    size_t new_offset = new_ptr - old_ptr;
+    nanoclj_byte_array_t * s = _str_store_unchecked(str);
+    s->refcnt++;
+    return _get_string_object(sc, str->type, _offset_unchecked(str) + new_offset, new_size, s);
   }
 }
 
@@ -2131,7 +2135,7 @@ static inline void new_frame_in_env(nanoclj_t * sc, nanoclj_cell_t * old_env) {
     new_frame = sc->EMPTY;
   }
 
-  sc->envir = get_cell(sc, T_ENVIRONMENT, 0, new_frame, old_env ? mk_pointer(old_env) : sc->EMPTY, NULL);
+  sc->envir = get_cell(sc, T_ENVIRONMENT, 0, new_frame, old_env, NULL);
 }
 
 static inline nanoclj_cell_t * new_slot_spec_in_env(nanoclj_t * sc, nanoclj_cell_t * env,
@@ -2541,8 +2545,7 @@ static inline nanoclj_cell_t * conjoin(nanoclj_t * sc, nanoclj_cell_t * coll, na
 	       
   int t = _type(coll);
   if (_is_sequence(coll) || t == T_NIL || t == T_LIST || t == T_LAZYSEQ) {
-    if (t == T_NIL) t = T_LIST;
-    return get_cell(sc, t, 0, new_value, mk_pointer(coll), NULL);
+    return get_cell(sc, T_LIST, 0, new_value, coll, NULL);
   } else if (t == T_VECTOR || t == T_ARRAYMAP || t == T_SORTED_SET) {
     size_t old_size = _get_size(coll);
     if (_is_small(coll)) {
@@ -2668,7 +2671,7 @@ static inline nanoclj_cell_t * mk_type(nanoclj_t * sc, int type_id, nanoclj_cell
   }
   nanoclj_cell_t * vec = get_vector_object(sc, T_VECTOR, OBJ_LIST_SIZE);
   fill_vector(vec, mk_nil());
-  nanoclj_cell_t * t = get_cell(sc, type_id, T_TYPE, mk_pointer(vec), mk_pointer(parent_type), meta);
+  nanoclj_cell_t * t = get_cell(sc, type_id, T_TYPE, mk_pointer(vec), parent_type, meta);
   sc->types->data[type_id] = mk_pointer(t);
   return t;
 }
@@ -2694,7 +2697,7 @@ static inline nanoclj_cell_t * def_namespace_with_sym(nanoclj_t *sc, nanoclj_val
   nanoclj_cell_t * vec = get_vector_object(sc, T_VECTOR, OBJ_LIST_SIZE);
   fill_vector(vec, mk_nil());
 
-  nanoclj_cell_t * ns = get_cell(sc, T_ENVIRONMENT, 0, mk_pointer(vec), mk_pointer(sc->root_env), md);
+  nanoclj_cell_t * ns = get_cell(sc, T_ENVIRONMENT, 0, mk_pointer(vec), sc->root_env, md);
   intern(sc, sc->global_env, sym, mk_pointer(ns));
   return ns;
 }
@@ -4109,6 +4112,7 @@ static inline bool destructure(nanoclj_t * sc, nanoclj_cell_t * binding, nanoclj
 /* Constructs an object by type, args are seqed */
 static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoclj_cell_t * args) {
   nanoclj_val_t x, y;
+  nanoclj_cell_t * z;
   
   switch (type_id) {
   case T_NIL:
@@ -4134,9 +4138,9 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
       x = mk_pointer(rest(sc, decode_pointer(x)));
     }
     args = next(sc, args);
-    y = args ? first(sc, args) : mk_pointer(sc->envir);
+    z = args ? decode_pointer(first(sc, args)) : sc->envir;
     /* make closure. first is code. second is environment */
-    return mk_pointer(get_cell(sc, T_CLOSURE, 0, x, y, NULL));
+    return mk_pointer(get_cell(sc, T_CLOSURE, 0, x, z, NULL));
     
   case T_INTEGER:
     return mk_int(to_int(first(sc, args)));
@@ -4155,9 +4159,9 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
     return mk_pointer(mk_type(sc, to_int(first(sc, args)), rest(sc, args), NULL));
 
   case T_ENVIRONMENT:{
-    nanoclj_val_t parent = sc->EMPTY;
+    nanoclj_cell_t * parent = NULL;
     if (args) {
-      parent = first(sc, args);
+      parent = decode_pointer(first(sc, args));
     }
     nanoclj_cell_t * vec = get_vector_object(sc, T_VECTOR, OBJ_LIST_SIZE);
     fill_vector(vec, mk_nil());
@@ -4170,16 +4174,16 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
     if (is_cell(y)) {
       nanoclj_cell_t * tail = decode_pointer(y);
       if (!tail) {
-	return mk_pointer(get_cell(sc, T_LIST, 0, x, sc->EMPTY, NULL));
+	return mk_pointer(get_cell(sc, T_LIST, 0, x, NULL, NULL));
       } else {
 	int t = _type(tail);
 	if (!_is_sequence(tail) && t != T_LAZYSEQ && t != T_LIST && is_seqable_type(t)) {
 	  tail = seq(sc, tail);
-	  return mk_pointer(get_cell(sc, T_LIST, 0, x, tail ? mk_pointer(tail) : sc->EMPTY, NULL));
 	}
+	return mk_pointer(get_cell(sc, T_LIST, 0, x, tail, NULL));
       }
     }
-    return mk_pointer(get_cell(sc, T_LIST, 0, x, y, NULL));
+    return mk_pointer(get_cell(sc, T_LIST, 0, x, NULL, NULL));
 
   case T_MAPENTRY:
     return mk_mapentry(sc, first(sc, args), second(sc, args));
@@ -4193,7 +4197,7 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
   case T_LAZYSEQ:
   case T_DELAY:
     /* make closure. first is code. second is environment */
-    return mk_pointer(get_cell(sc, type_id, 0, mk_pointer(cons(sc, sc->EMPTY, decode_pointer(first(sc, args)))), mk_pointer(sc->envir), NULL));
+    return mk_pointer(get_cell(sc, type_id, 0, mk_pointer(cons(sc, sc->EMPTY, decode_pointer(first(sc, args)))), sc->envir, NULL));
 
   case T_READER:
     x = first(sc, args);
@@ -4792,7 +4796,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     }
     
     /* make closure. first is code. second is environment */
-    s_return(sc, mk_pointer(get_cell(sc, T_CLOSURE, 0, x, mk_pointer(sc->envir), decode_pointer(name))));
+    s_return(sc, mk_pointer(get_cell(sc, T_CLOSURE, 0, x, sc->envir, decode_pointer(name))));
   }
    
   case OP_QUOTE:               /* quote */
@@ -4999,7 +5003,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       }
       /* make closure. first is code. second is environment */
       x = mk_pointer(get_cell(sc, T_CLOSURE, 0, mk_pointer(cons(sc, mk_pointer(reverse_in_place(sc, sc->EMPTY, sc->args)),
-								decode_pointer(cddr(sc->code)))), mk_pointer(sc->envir), NULL));
+								 decode_pointer(cddr(sc->code)))), sc->envir, NULL));
 
       new_slot_in_env(sc, car(sc->code), x);
       sc->code = cddr(sc->code);
@@ -5047,7 +5051,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     }
     
   case OP_LAZYSEQ:               /* lazy-seq */
-    s_return(sc, mk_pointer(get_cell(sc, T_LAZYSEQ, 0, mk_pointer(cons(sc, sc->EMPTY, decode_pointer(sc->code))), mk_pointer(sc->envir), NULL)));
+    s_return(sc, mk_pointer(get_cell(sc, T_LAZYSEQ, 0, mk_pointer(cons(sc, sc->EMPTY, decode_pointer(sc->code))), sc->envir, NULL)));
 
   case OP_AND0:                /* and */
     if (sc->code.as_long == sc->EMPTY.as_long) {
