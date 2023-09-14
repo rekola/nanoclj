@@ -717,16 +717,6 @@ static inline bool is_mapentry(nanoclj_val_t p) {
   return _type(c) == T_MAPENTRY;
 }
 
-static inline strview_t symname(nanoclj_val_t p) {
-  symbol_t * s = decode_symbol(p);
-  return (strview_t){ s->name, s->name_size };
-}
-
-static inline strview_t keywordname(nanoclj_val_t p) {
-  const char * s = (const char *)decode_pointer(p);
-  return (strview_t){ s, strlen(s) };
-}
-
 static inline bool is_foreign_function(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
   nanoclj_cell_t * c = decode_pointer(p);
@@ -847,12 +837,17 @@ static inline strview_t _to_strview(nanoclj_cell_t * c) {
 
 static inline strview_t to_strview(nanoclj_val_t x) {
   switch (prim_type(x)) {
-  case T_SYMBOL: {
+  case T_BOOLEAN:
+    return decode_integer(x) == 0 ? (strview_t){ "false", 5 } : (strview_t){ "true", 4 };
+    
+  case T_SYMBOL:{
     symbol_t * s = decode_symbol(x);
     return (strview_t){ s->name, s->name_size };
   }
-  case T_KEYWORD:
-    return keywordname(x);    
+  case T_KEYWORD:{
+    const char * s = (const char *)decode_pointer(x);
+    return (strview_t){ s, strlen(s) };
+  }
   case T_CELL:
     return _to_strview(decode_pointer(x));
   }  
@@ -2473,7 +2468,7 @@ static inline nanoclj_val_t oblist_find_item(nanoclj_t * sc, uint32_t type, cons
 	    return y;
 	  }
 	} else {
-	  strview_t sv = keywordname(y);
+	  strview_t sv = to_strview(y);
 	  if (sv.size == len && strncmp(name, sv.ptr, len) == 0) {
 	    return y;
 	  }
@@ -2693,7 +2688,7 @@ static inline nanoclj_val_t def_symbol_or_keyword(nanoclj_t * sc, const char *na
 
 static inline nanoclj_cell_t * def_namespace_with_sym(nanoclj_t *sc, nanoclj_val_t sym) {
   nanoclj_cell_t * md = mk_arraymap(sc, 1);
-  set_vector_elem(md, 0, mk_mapentry(sc, sc->NAME, mk_string_from_sv(sc, symname(sym))));
+  set_vector_elem(md, 0, mk_mapentry(sc, sc->NAME, mk_string_from_sv(sc, to_strview(sym))));
   nanoclj_cell_t * vec = get_vector_object(sc, T_VECTOR, OBJ_LIST_SIZE);
   fill_vector(vec, mk_nil());
 
@@ -3570,9 +3565,6 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
   int plen = -1;
 
   switch (prim_type(l)) {
-  case T_BOOLEAN:
-    p = decode_integer(l) == 0 ? "false" : "true";
-    break;
   case T_INTEGER:
     p = sc->strbuff;
     plen = sprintf(sc->strbuff, "%d", (int)decode_integer(l));
@@ -3627,14 +3619,15 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
       }
     }
     break;
+  case T_BOOLEAN:
   case T_SYMBOL:{
-    strview_t sv = symname(l);
+    strview_t sv = to_strview(l);
     p = sv.ptr;
     plen = sv.size;
   }
     break;
   case T_KEYWORD:{
-    strview_t sv = keywordname(l);
+    strview_t sv = to_strview(l);
     p = sc->strbuff;
     plen = snprintf(sc->strbuff, sc->strbuff_size, ":%s", sv.ptr);
   }
@@ -3687,6 +3680,10 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
 	p = sc->strbuff;
 	plen = snprintf(sc->strbuff, sc->strbuff_size, "#<Namespace %.*s>", (int)name.size, name.ptr);
       }
+	break;
+      case T_RATIO:
+	p = sc->strbuff;
+	plen = snprintf(sc->strbuff, sc->strbuff_size, "%lld/%lld", to_long(vector_elem(c, 0)), to_long(vector_elem(c, 1)));
 	break;
       case T_FILE:
 	p = sc->strbuff;
@@ -3889,23 +3886,11 @@ static inline nanoclj_val_t mk_format(nanoclj_t * sc, strview_t fmt0, nanoclj_ce
     case T_STRING:
     case T_CHAR_ARRAY:
     case T_FILE:
+    case T_SYMBOL:
+    case T_KEYWORD:
       switch (n_args) {
       case 0: arg0s = to_strview(arg); break;
       case 1: arg1s = to_strview(arg); break;
-      }
-      plan += 3 * m;
-      break;
-    case T_KEYWORD:
-      switch (n_args) {
-      case 0: arg0s = keywordname(arg); break;
-      case 1: arg1s = keywordname(arg); break;
-      }
-      plan += 3 * m;
-      break;
-    case T_SYMBOL:
-      switch (n_args) {
-      case 0: arg0s = symname(arg); break;
-      case 1: arg1s = symname(arg); break;
       }
       plan += 3 * m;
       break;
@@ -6222,14 +6207,20 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   case OP_REALIZEDP:
     if (!unpack_args_1(sc, &arg0)) {
       Error_0(sc, "Error - Invalid arity");
-    }
-    if (is_cell(arg0)) {
+    } else if (is_cell(arg0)) {
       nanoclj_cell_t * c = decode_pointer(arg0);
       if (_type(c) == T_LAZYSEQ || _type(c) == T_DELAY) {
 	s_retbool(_is_realized(c));
       }
     }
     s_retbool(true);
+
+  case OP_NAME:
+    if (!unpack_args_1(sc, &arg0)) {
+      Error_0(sc, "Error - Invalid arity");
+    } else {
+      s_return(sc, mk_string_from_sv(sc, to_strview(arg0)));
+    }
     
   case OP_SET_COLOR:
     if (!unpack_args_1(sc, &arg0)) {

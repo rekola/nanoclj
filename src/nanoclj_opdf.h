@@ -114,6 +114,7 @@ _OP_DEF("in-ns", OP_IN_NS)
 _OP_DEF("re-pattern", OP_RE_PATTERN)
 _OP_DEF("add-watch", OP_ADD_WATCH)
 _OP_DEF("realized?", OP_REALIZEDP)
+_OP_DEF("name", OP_NAME)
 
 /* Canvas ops */
 _OP_DEF("set-color", OP_SET_COLOR)
