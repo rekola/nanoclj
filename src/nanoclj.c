@@ -792,9 +792,6 @@ static inline bool is_true(nanoclj_val_t p) {
 #define cadddr(p)        car(cdr(cdr(cdr(p))))
 #define cddddr(p)        cdr(cdr(cdr(cdr(p))))
 
-static void putstr(nanoclj_t * sc, const char *s, nanoclj_val_t port);
-static nanoclj_val_t get_err_port(nanoclj_t * sc);
-static nanoclj_val_t get_in_port(nanoclj_t * sc);
 static void Eval_Cycle(nanoclj_t * sc, enum nanoclj_opcodes op);
 
 static inline const char* get_version() {
@@ -3195,9 +3192,8 @@ static inline bool is_one_of(char *s, int c) {
 }
 
 /* read characters up to delimiter, but cater to character constants */
-static inline char *readstr_upto(nanoclj_t * sc, char *delim) {
+static inline char *readstr_upto(nanoclj_t * sc, char *delim, nanoclj_port_t * inport) {
   char *p = sc->strbuff;
-  nanoclj_port_t * inport = port_unchecked(get_in_port(sc));
   bool found_delim = false;
   
   while (1) {
@@ -3226,13 +3222,11 @@ static inline char *readstr_upto(nanoclj_t * sc, char *delim) {
 }
 
 /* read string expression "xxx...xxx" */
-static inline nanoclj_val_t readstrexp(nanoclj_t * sc) {
+static inline nanoclj_val_t readstrexp(nanoclj_t * sc, nanoclj_port_t * inport) {
   char *p = sc->strbuff;
   int c;
   int c1 = 0;
   enum { st_ok, st_bsl, st_x1, st_x2, st_oct1, st_oct2 } state = st_ok;
-
-  nanoclj_port_t * inport = port_unchecked(get_in_port(sc));
 
   for (;;) {
     c = inchar(inport);
@@ -3642,17 +3636,22 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
 	p = "()";
 	break;
       case T_CLASS:
+      case T_VAR:
 	nanoclj_val_t name_v;
 	if (get_elem(sc, _cons_metadata(c), sc->NAME, &name_v)) {
 	  strview_t name = to_strview(name_v);
 	  p = name.ptr;
-	  plen = name.size;	  
+	  plen = name.size;
+	  if (_type(c) == T_VAR) {
+	    plen = sprintf(sc->strbuff, "#'%.*s", (int)plen, p);
+	    p = sc->strbuff;
+	  }
 	}
 	break;
       case T_LONG:
 	p = sc->strbuff;
 	plen = sprintf(sc->strbuff, "%lld", _lvalue_unchecked(c));
-	break;
+	break;	
       case T_STRING:
 	if (!print_flag) {
 	  p = _strvalue(c);
@@ -4820,19 +4819,25 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     
   case OP_DEF0:{                /* define */    
     x = car(sc->code);
-    nanoclj_cell_t * meta = NULL;
-    if (caddr(sc->code).as_long != sc->EMPTY.as_long) {
-      meta = mk_arraymap(sc, 1);
-      set_vector_elem(meta, 0, mk_mapentry(sc, sc->DOC, cadr(sc->code)));
-      sc->code = caddr(sc->code);
-    } else {
-      y = mk_nil();
-      sc->code = cadr(sc->code);
-    }
-
     if (!is_symbol(x)) {
       Error_0(sc, "Error - variable is not a symbol");
     }
+    nanoclj_cell_t * meta = mk_arraymap(sc, 1);
+    set_vector_elem(meta, 0, mk_mapentry(sc, sc->NAME, mk_string_from_sv(sc, to_strview(x))));
+      
+    if (caddr(sc->code).as_long != sc->EMPTY.as_long) {
+      meta = conjoin(sc, meta, mk_mapentry(sc, sc->DOC, cadr(sc->code)));
+      sc->code = caddr(sc->code);
+    } else {
+      sc->code = cadr(sc->code);
+    }
+
+    nanoclj_port_t * port = &(sc->load_stack[sc->file_i]);
+    if (port->kind & port_file) {
+      meta = conjoin(sc, meta, mk_mapentry(sc, sc->LINE, mk_int(port->rep.stdio.curr_line + 1)));
+      meta = conjoin(sc, meta, mk_mapentry(sc, sc->FILE, mk_string(sc, port->rep.stdio.filename)));
+    }       
+    
     s_save(sc, OP_DEF1, meta, x);
     s_goto(sc, OP_EVAL);
   }
@@ -5848,35 +5853,35 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	sc->tok = token(sc, inport);
 	s_goto(sc, OP_RDSEXPR);
       case TOK_PRIMITIVE:
-	x = mk_primitive(sc, readstr_upto(sc, DELIMITERS));
+	x = mk_primitive(sc, readstr_upto(sc, DELIMITERS, inport));
 	if (is_nil(x)) {
 	  Error_0(sc, "Invalid number format");
 	} else {
 	  s_return(sc, x);
 	}
       case TOK_DQUOTE:
-	x = readstrexp(sc);
+	x = readstrexp(sc, inport);
 	if (is_false(x)) {
 	  Error_0(sc, "Error - reading string");
 	}
 	s_return(sc, x);
 	
       case TOK_REGEX:
-	x = readstrexp(sc);
+	x = readstrexp(sc, inport);
 	if (is_false(x)) {
 	  Error_0(sc, "Error - reading regex");
 	}
 	s_return(sc, mk_pointer(cons(sc, sc->REGEX, cons(sc, x, NULL))));
 	
       case TOK_CHAR_CONST:
-	if ((x = mk_char_const(sc, readstr_upto(sc, DELIMITERS))).as_long == sc->EMPTY.as_long) {
+	if ((x = mk_char_const(sc, readstr_upto(sc, DELIMITERS, inport))).as_long == sc->EMPTY.as_long) {
 	  Error_0(sc, "Error - undefined character literal");
 	} else {
 	  s_return(sc, x);
 	}
 	
       case TOK_TAG:{
-	const char * tag = readstr_upto(sc, DELIMITERS);
+	const char * tag = readstr_upto(sc, DELIMITERS, inport);
 	nanoclj_cell_t * f = find_slot_in_env(sc, sc->envir, sc->TAG_HOOK, true);
 	if (f) {
 	  nanoclj_val_t hook = slot_value_in_env(f);
@@ -5890,7 +5895,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       }
 	
       case TOK_IGNORE:
-	readstr_upto(sc, DELIMITERS);
+	readstr_upto(sc, DELIMITERS, inport);
 	sc->tok = token(sc, inport);
 	if (sc->tok == TOK_EOF) {
 	  s_return(sc, mk_character(EOF));
@@ -5898,7 +5903,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	s_goto(sc, OP_RDSEXPR);      
 	
       case TOK_SHARP_CONST:
-	if ((x = mk_sharp_const(sc, readstr_upto(sc, DELIMITERS))).as_long == sc->EMPTY.as_long) {
+	if ((x = mk_sharp_const(sc, readstr_upto(sc, DELIMITERS, inport))).as_long == sc->EMPTY.as_long) {
 	  Error_0(sc, "Error - undefined sharp expression");
 	} else {
 	  s_return(sc, x);
@@ -6831,7 +6836,9 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc fr
   sc->WATCHES = def_keyword(sc, "watches");
   sc->NAME = def_keyword(sc, "name");
   sc->TYPE = def_keyword(sc, "type");
-    
+  sc->LINE = def_keyword(sc, "line");
+  sc->FILE = def_keyword(sc, "file");
+  
   sc->SORTED_SET = def_symbol(sc, "sorted-set");
   sc->ARRAY_MAP = def_symbol(sc, "array-map");
   sc->REGEX = def_symbol(sc, "regex");

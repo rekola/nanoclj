@@ -206,6 +206,8 @@ extern "C" {
     nanoclj_val_t WATCHES;	  /* :watches */
     nanoclj_val_t NAME;		  /* :name */
     nanoclj_val_t TYPE;		  /* :type */
+    nanoclj_val_t LINE;		  /* :line */
+    nanoclj_val_t FILE;		  /* :file */
     
     nanoclj_val_t SORTED_SET;	  /* sorted-set */
     nanoclj_val_t ARRAY_MAP;	  /* array-map */
