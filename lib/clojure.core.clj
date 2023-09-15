@@ -496,6 +496,15 @@
 
 ; Collections
 
+(defn cycle
+  "Returns a repeating, lazy, infinite sequence of the elements in coll"
+  [coll] (if (empty? coll) '()
+             (let [f (fn [remaining all]
+                       (if remaining
+                         (cons (first remaining) (lazy-seq (f (next remaining) all)))
+                         (cons (first all) (lazy-seq (f (next all) all)))))]
+               (f nil coll))))
+                             
 (defn flatten
   "Breaks any nested structure in the coll and returns the content in a flat sequence."  
   [coll] (cond (empty? coll) '()

@@ -87,6 +87,7 @@ have been tested:
 
 ## Dependencies
 
+- ggml (included)
 - linenoise (included, utf8 support added)
 - stb_image, stb_image_resize, stb_image_write (included)
 - dr_wav (included)
@@ -123,14 +124,11 @@ have been tested:
   - doseq, for, dotimes
   - bit-and-not, unsigned-bit-shift-right
   - file-seq
-  - sort-by
-  - letfn
   - keep
   - mapv, filterv
-  - sorted-set-by, sorted-map, hash-set
+  - sort-by, sorted-set-by, sorted-map, hash-set
   - update, update-in, merge, get-in, disj
-  - name
-  - lazy-cat, realized?
+  - lazy-cat
   - cast
   - nthrest, nthnext, nfirst
   - parse-long, parse-double, parse-uuid
@@ -140,22 +138,18 @@ have been tested:
   - partition-by
   - merge-with
   - juxt
-  - cycle
   - find
-  - flatten
   - zipmap
   - memoize
   - group-by
   - condp
   - doto
-  - when-not, when-let
-  - if-not
-  - if-let
+  - when-not, when-let, if-not, if-let, letfn
   - realized?
   - defn-
   - reduced, reduced?
   - with-local-vars, var-set, find-var, declare, binding
-  - as-url
+  - as-url, resource
 - clojure.string
   - upper-case
   - clojure.string/capitalize
