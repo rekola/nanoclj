@@ -14,10 +14,18 @@ if(DEFINED ENV{WARN_ERROR_BUILD})
     add_compile_options(-Werror)
 endif()
 
+# Data types, macros and functions related to controlling CPU affinity
+# are available on Linux through GNU extensions in libc
+if (CMAKE_SYSTEM_NAME MATCHES "Linux")
+  add_compile_definitions(_GNU_SOURCE)
+endif()
+  
 set(SOURCE_FILES
     src/nanoclj.c
     src/linenoise.c
     src/wcwidth.c
+    src/ggml.c
+    src/ggml-alloc.c
     )
 
 add_executable(nanoclj ${SOURCE_FILES})

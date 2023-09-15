@@ -147,8 +147,6 @@ extern "C" {
     bool (*is_symbol) (nanoclj_val_t p);
     bool (*is_keyword) (nanoclj_val_t p);
 
-    bool (*is_proc) (nanoclj_val_t p);
-    bool (*is_foreign) (nanoclj_val_t p);
     bool (*is_closure) (nanoclj_val_t p);
     bool (*is_macro) (nanoclj_val_t p);
     bool (*is_mapentry) (nanoclj_val_t p);

@@ -111,7 +111,7 @@ extern "C" {
       nanoclj_port_t * _port;
       nanoclj_image_t * _image;
       nanoclj_audio_t * _audio;
-      void * _canvas;
+      void * _opaque_ptr;
       struct {
 	int min_arity, max_arity;
 	foreign_func ptr;
@@ -255,6 +255,8 @@ extern "C" {
     int active_element_x, active_element_y;
 
     nanoclj_cell_t * properties;
+
+    void * tensor_ctx;
   };
 
 #if 0
@@ -279,8 +281,6 @@ extern "C" {
 
   int is_syntax(nanoclj_val_t p);
   
-  int is_proc(nanoclj_val_t p);
-  int is_foreign(nanoclj_val_t p);
   const char *syntaxname(nanoclj_val_t p);
   int is_closure(nanoclj_val_t p);
   nanoclj_val_t closure_code(nanoclj_val_t p);

@@ -183,6 +183,7 @@ enum nanoclj_types {
   T_CANVAS = 33,
   T_AUDIO = 34,
   T_FILE = 35,
+  T_TENSOR = 36,
   T_MAX_TYPE
 };
 
@@ -257,14 +258,6 @@ static inline bool is_symbol(nanoclj_val_t v) {
 
 static inline bool is_keyword(nanoclj_val_t v) {
   return (v.as_long & MASK_SIGNATURE) == SIGNATURE_KEYWORD;
-}
-
-static inline bool is_boolean(nanoclj_val_t v) {
-  return (v.as_long & MASK_SIGNATURE) == SIGNATURE_BOOLEAN;
-}
-
-static inline bool is_proc(nanoclj_val_t v) {
-  return (v.as_long & MASK_SIGNATURE) == SIGNATURE_PROC;
 }
 
 static inline int_fast16_t _type(nanoclj_cell_t * a) {
@@ -393,7 +386,8 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define _port_unchecked(p)	  ((p)->_object._port)
 #define _image_unchecked(p)	  ((p)->_object._image)
 #define _audio_unchecked(p)	  ((p)->_object._audio)
-#define _canvas_unchecked(p)	  ((p)->_object._canvas)
+#define _canvas_unchecked(p)	  ((p)->_object._opaque_ptr)
+#define _tensor_unchecked(p)	  ((p)->_object._opaque_ptr)
 #define _lvalue_unchecked(p)      ((p)->_object._lvalue)
 #define _ff_unchecked(p)	  ((p)->_object._ff.ptr)
 #define _fo_unchecked(p)	  ((p)->_object._fo.ptr)
@@ -715,18 +709,6 @@ static inline bool is_mapentry(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
   nanoclj_cell_t * c = decode_pointer(p);
   return _type(c) == T_MAPENTRY;
-}
-
-static inline bool is_foreign_function(nanoclj_val_t p) {
-  if (!is_cell(p)) return false;
-  nanoclj_cell_t * c = decode_pointer(p);
-  return _type(c) == T_FOREIGN_FUNCTION;
-}
-
-static inline bool is_foreign_object(nanoclj_val_t p) {
-  if (!is_cell(p)) return false;
-  nanoclj_cell_t * c = decode_pointer(p);
-  return _type(c) == T_FOREIGN_OBJECT;
 }
 
 static inline bool is_closure(nanoclj_val_t p) {
@@ -1924,6 +1906,20 @@ static nanoclj_val_t second(nanoclj_t * sc, nanoclj_cell_t * a) {
   return mk_nil();
 }
 
+static nanoclj_val_t third(nanoclj_t * sc, nanoclj_cell_t * a) {
+  if (a) {
+    int t = _type(a);
+    if (t == T_VECTOR || t == T_RATIO || t == T_ARRAYMAP || t == T_SORTED_SET || t == T_MAPENTRY || t == T_VAR) {
+      if (_get_size(a)) {
+	return vector_elem(a, 2);
+      }
+    } else if (t != T_NIL) {
+      return first(sc, rest(sc, rest(sc, a)));
+    }
+  }
+  return mk_nil();
+}
+
 static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
   if (a0.as_long == b0.as_long) {
     return true;
@@ -2094,15 +2090,16 @@ static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t
 }
 
 /* =================== Canvas ====================== */
-
 #ifdef WIN32
 #include "nanoclj_gdi.h"
 #else
 #include "nanoclj_cairo.h"
 #endif
 
-/* =================== HTTP ======================== */
+/* =================== Tensors ===================== */
+#include "nanoclj_ggml.h"
 
+/* =================== HTTP ======================== */
 #include "nanoclj_curl.h"
 
 /* ========== Environment implementation  ========== */
@@ -3481,6 +3478,37 @@ static inline void print_slashstring(nanoclj_t * sc, strview_t sv, nanoclj_val_t
   putcharacter(sc, '"', out);
 }
 
+static void print_tensor(nanoclj_t * sc, void * tensor, nanoclj_val_t out) {
+  switch (tensor_get_n_dims(tensor)) {
+  case 1:{
+    putchars(sc, "[", 1, out);
+    int w = tensor_get_dim(tensor, 0);
+    for (int x = 0; x < w; x++) {
+      int l = sprintf(sc->strbuff, " %.15g", tensor_get1f(tensor, x));
+      putchars(sc, sc->strbuff, l, out);
+    }
+    putchars(sc, " ]", 2, out);
+  }
+    break;
+  case 2:{
+    int w = tensor_get_dim(tensor, 0), h = tensor_get_dim(tensor, 1);
+    for (int y = 0; y < h; y++) {
+      putchars(sc, y == 0 ? "[" : " ", 1, out);
+      for (int x = 0; x < w; x++) {
+	int l = sprintf(sc->strbuff, " %.15g", tensor_get2f(tensor, x, y));
+	putchars(sc, sc->strbuff, l, out);
+      }
+      if (y + 1 < h) {
+	putchars(sc, " ;\n", 3, out);
+      } else {
+	putchars(sc, "\n]", 2, out);
+      }
+    }
+  }
+    break;
+  }
+}
+
 #if NANOCLJ_SIXEL
 static int sixel_write(char *data, int size, void *priv) {
   return fwrite(data, 1, size, (FILE *)priv);
@@ -3688,6 +3716,9 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
 	p = sc->strbuff;
 	plen = snprintf(sc->strbuff, sc->strbuff_size, "#<File %.*s>", (int)_get_size(c), _strvalue(c)); 
 	break;
+      case T_TENSOR:
+	print_tensor(sc, _tensor_unchecked(c), out);
+	return;
       case T_IMAGE:
 	print_image(sc, _image_unchecked(c), out);
 	return;
@@ -4231,6 +4262,13 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
 	return canvas_create_image(sc, canvas_unchecked(x));
 #endif
       }
+    }
+
+  case T_TENSOR:
+    switch (seq_length(sc, args)) {
+    case 1: return mk_tensor_1f(sc, to_long(first(sc, args)));
+    case 2: return mk_tensor_2f(sc, to_long(first(sc, args)), to_long(second(sc, args)));
+    case 3: return mk_tensor_3f(sc, to_long(first(sc, args)), to_long(second(sc, args)), to_long(third(sc, args)));
     }
   }
   
@@ -6598,8 +6636,6 @@ static struct nanoclj_interface vtbl = {
   is_symbol,
   is_keyword,
 
-  is_proc,
-  is_foreign_function,
   is_closure,
   is_macro,
   is_mapentry,  
@@ -6910,8 +6946,9 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc fr
   mk_named_type(sc, "nanoclj.core.Image", T_IMAGE, Object);
   mk_named_type(sc, "nanoclj.core.Canvas", T_CANVAS, Object);
   mk_named_type(sc, "nanoclj.core.Audio", T_AUDIO, Object);
+  mk_named_type(sc, "nanoclj.core.Tensor", T_TENSOR, Object);
   mk_named_type(sc, "nanoclj.core.EmptyList", T_NIL, Object);
-
+  
   intern(sc, sc->global_env, def_symbol(sc, "root"), mk_pointer(sc->root_env));
   intern(sc, sc->global_env, def_symbol(sc, "nil"), mk_nil());
   intern(sc, sc->global_env, sc->MOUSE_POS, mk_nil());
@@ -6924,7 +6961,8 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc fr
   sc->term_colors = get_term_colortype();
 
   sc->properties = mk_properties(sc);
-    
+  sc->tensor_ctx = mk_tensor_context();
+  
   return !sc->no_memory;
 }
 
