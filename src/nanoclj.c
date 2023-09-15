@@ -4016,6 +4016,17 @@ static inline bool _s_return(nanoclj_t * sc, nanoclj_val_t a) {
   }
 }
 
+static inline void s_rewind(nanoclj_t * sc) {
+  while (sc->dump > 0) {
+    dump_stack_frame_t * frame = sc->dump_base + sc->dump - 1;
+    if (frame->op) {
+      sc->dump--;
+    } else {
+      break;
+    }
+  }
+}
+
 static inline void dump_stack_reset(nanoclj_t * sc) {
   /* in this implementation, sc->dump is the number of frames on the stack */
   sc->dump = 0;
@@ -5742,11 +5753,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       putchars(sc, "\n", 1, err);
     }
     reset_color(stderr);
-#if 1
-    s_goto(sc, OP_T0LVL);
-#else
-    return sc->EMPTY;
-#endif
+
+    s_rewind(sc);
+    s_return(sc, mk_nil());
     
   case OP_CLOSE:        /* close */
     if (!unpack_args_1(sc, &arg0)) {
