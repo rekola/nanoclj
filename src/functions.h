@@ -120,7 +120,8 @@ static inline nanoclj_val_t System_glob(nanoclj_t * sc, nanoclj_val_t args0) {
   nanoclj_cell_t * x = NULL;
   if (r == 0) {
     for (char ** found = gstruct.gl_pathv; *found; found++) {
-      x = cons(sc, mk_string(sc, *found), x);
+      nanoclj_cell_t * str = get_string_object(sc, T_FILE, *found, strlen(*found), 0);
+      x = cons(sc, mk_pointer(str), x);
     }
   }
   sc->free(tmp);

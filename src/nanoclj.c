@@ -3720,8 +3720,13 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
 	plen = snprintf(sc->strbuff, sc->strbuff_size, "%lld/%lld", to_long(vector_elem(c, 0)), to_long(vector_elem(c, 1)));
 	break;
       case T_FILE:
-	p = sc->strbuff;
-	plen = snprintf(sc->strbuff, sc->strbuff_size, "#<File %.*s>", (int)_get_size(c), _strvalue(c)); 
+	if (!print_flag) {
+	  p = _strvalue(c);
+	  plen = _get_size(c);
+	} else {
+	  p = sc->strbuff;
+	  plen = snprintf(sc->strbuff, sc->strbuff_size, "#<File %.*s>", (int)_get_size(c), _strvalue(c));
+	}
 	break;
       case T_TENSOR:
 	print_tensor(sc, _tensor_unchecked(c), out);
