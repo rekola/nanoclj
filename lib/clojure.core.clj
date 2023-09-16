@@ -138,6 +138,7 @@
 ; Sequences
 
 (defn filter [pred coll]
+  "Returns a sequence with the elements from coll for which the pred returns true"
   (cond (empty? coll) '()
         (pred (first coll)) (cons (first coll) (filter pred (rest coll)))
         :else (filter pred (rest coll))))
@@ -197,6 +198,20 @@
 (defn nnext [x] (next (next x)))
 (defn nfirst [x] (next (first x)))
 
+; Vectors
+
+(def mapv
+  "Returns a vector with each element mapped using f"
+  (fn
+    ([f coll] (loop [ coll coll acc [] ] (if (empty? coll) acc (recur (rest coll) (conj acc (f (first coll)))))))
+    ([f c1 c2] (loop [ c1 c1 c2 c2 acc [] ] (if (or (empty? c1) (empty? c2)) acc (recur (rest c1) (rest c2) (conj acc (f (first c1) (first c2)))))))))
+
+(defn filterv
+  "Returns a vector with the elements from coll for which the pred returns true"
+  [pred coll] (loop [coll coll acc []] (cond (empty? coll) acc
+                                             (pred (first coll)) (recur (rest coll) (conj acc (first coll)))
+                                             :else (recur (rest coll) acc))))
+
 ; Stacks
 
 (def peek (fn [coll] (cond (empty? coll) '()
@@ -225,7 +240,6 @@
   (fn
     ([f coll] (if (empty? coll) '() (cons (f (first coll)) (lazy-seq (map f (rest coll))))))
     ([f c1 c2] (if (or (empty? c1) (empty? c2)) '() (cons (f (first c1) (first c2)) (lazy-seq (map f (rest c1) (rest c2))))))))
-  
 
 (def repeatedly (fn ([f]   (cons (f) (lazy-seq (repeatedly f))))
                     ([n f] (if (<= n 0) '() (cons (f) (lazy-seq (repeatedly (dec n) f)))))))
@@ -335,7 +349,12 @@
 (defn pr
   "Prints values to *out* in a format understandable by the Reader"
   [& more] (run! (fn [x]
-                   (cond (seq? x) (cond (empty? x) (print "()")
+                   (cond (map-entry? x) (do (print \[)
+                                            (pr (key x))
+                                            (print \space)
+                                            (pr (val x))
+                                            (print \]))
+                         (seq? x) (cond (empty? x) (print "()")
                                         (and *print-length* (<= *print-length* 0)) (print "(...)")
                                         :else (do (print \()
                                                   (pr (first x))
@@ -358,11 +377,6 @@
                                                (pr (first x))
                                                (run! (fn [x] (print \space) (pr x)) (rest x)))))
                                          (print \]))
-                         (map-entry? x) (do (print \[)
-                                            (pr (key x))
-                                            (print \space)
-                                            (pr (val x))
-                                            (print \]))
                          (set? x) (cond (empty? x) (print "#{}")
                                         (and *print-length* (<= *print-length* 0)) (print "#{...}")
                                         :else (do (print "#{")

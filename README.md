@@ -125,7 +125,6 @@ have been tested:
   - bit-and-not, unsigned-bit-shift-right
   - file-seq
   - keep
-  - mapv, filterv
   - sort-by, sorted-set-by, sorted-map, hash-set
   - update, update-in, merge, get-in, disj
   - lazy-cat
@@ -138,7 +137,6 @@ have been tested:
   - partition-by
   - merge-with
   - juxt
-  - find
   - zipmap
   - memoize
   - group-by

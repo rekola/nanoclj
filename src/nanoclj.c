@@ -2003,6 +2003,17 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
   return false;
 }
 
+static inline nanoclj_cell_t * find(nanoclj_t * sc, nanoclj_cell_t * map, nanoclj_val_t key) {
+  size_t size = _get_size(map);
+  for (size_t i = 0; i < size; i++) {
+    nanoclj_cell_t * entry = decode_pointer(vector_elem(map, i));
+    if (equals(sc, key, vector_elem(entry, 0))) {
+      return entry;
+    }    
+  }
+  return NULL;
+}
+
 static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t key, nanoclj_val_t * result) {
   if (!coll) {
     return false;
@@ -2040,17 +2051,13 @@ static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t
     break;
         
   case T_ARRAYMAP:{
-    size_t size = _get_size(coll);
-    for (int i = 0; i < size; i++) {
-      nanoclj_cell_t * entry = decode_pointer(vector_elem(coll, i));
-      if (equals(sc, key, vector_elem(entry, 0))) {
-	if (result) *result = vector_elem(entry, 1);
-	return true;
-      }    
+    nanoclj_cell_t * e = find(sc, coll, key);
+    if (e) {
+      if (result) *result = vector_elem(e, 1);
+      return true;
     }
   }
-    break;
-
+    
   case T_SORTED_SET:{
     size_t size = _get_size(coll);
     for (int i = 0; i < size; i++) {
@@ -5506,6 +5513,17 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       /* Not found => return the not-found value if provided */
       s_return(sc, first(sc, arg_next));
     }
+
+  case OP_FIND:
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
+      Error_0(sc, "Error - Invalid arity");
+    } else if (is_cell(arg0)) {
+      nanoclj_cell_t * coll = decode_pointer(arg0);
+      if (_type(coll) == T_ARRAYMAP) {
+	s_return(sc, mk_pointer(find(sc, coll, arg1)));
+      }
+    }
+    s_return(sc, mk_nil());
 
   case OP_CONTAINSP:
     if (!unpack_args_2(sc, &arg0, &arg1)) {
