@@ -503,9 +503,23 @@
 
 ; Logic
 
-(defn every? [pred coll] (cond (empty? coll) true
-                               (pred (first coll)) (recur pred (rest coll))
-                               :else false))
+(defn every?
+  "Returns true if pred is true for every item in the collection"
+  [pred coll] (cond (empty? coll) true
+                    (pred (first coll)) (recur pred (rest coll))
+                    :else false))
+
+(defn not-every?
+  "Returns false if pred is true for every item in the collection"
+  [pred coll] (cond (empty? coll) false
+                    (pred (first coll)) (recur pred (rest coll))
+                    :else true))
+
+(defn not-any?
+  "Returns false if pred is true for any item in the collection"
+  [pred coll] (cond (empty? coll) true
+                    (pred (first coll)) false
+                    :else (recur pred (rest coll))))
 
 ; Collections
 

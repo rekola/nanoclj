@@ -127,7 +127,6 @@ have been tested:
   - update, update-in, merge, get-in, disj
   - cast
   - parse-long, parse-double, parse-uuid
-  - not-every?, not-any?
   - map-indexed, mapcat, zipmap, lazy-cat
   - partition-by
   - merge-with
@@ -136,7 +135,7 @@ have been tested:
   - group-by
   - condp
   - doto
-  - when-not, when-let, if-not, if-let, letfn
+  - when-let, if-let, letfn
   - defn-
   - reduced, reduced?
   - with-local-vars, var-set, find-var, declare, binding
