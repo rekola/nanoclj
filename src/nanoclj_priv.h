@@ -107,11 +107,16 @@ extern "C" {
         nanoclj_val_t data[NANOCLJ_SMALL_VEC_SIZE];
 	struct nanoclj_cell_t * meta;
       } _small_collection;
+      struct {
+	void * impl;
+      } _canvas;
+      struct {
+	void * impl;
+      } _tensor;
       long long _lvalue;
       nanoclj_port_t * _port;
       nanoclj_image_t * _image;
       nanoclj_audio_t * _audio;
-      void * _opaque_ptr;
       struct {
 	int min_arity, max_arity;
 	foreign_func ptr;
