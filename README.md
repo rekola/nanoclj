@@ -128,7 +128,6 @@ have been tested:
   - cast
   - nthrest, nthnext, nfirst
   - parse-long, parse-double, parse-uuid
-  - distinct?
   - not-every?, not-any?
   - map-indexed, mapcat, zipmap, lazy-cat
   - partition-by

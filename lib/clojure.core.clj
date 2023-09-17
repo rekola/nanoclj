@@ -547,6 +547,18 @@
                    )]
            (f coll #{})))
 
+(defn distinct?
+  "Returns true if none of the arguments are equal to any other"
+  ([x] true)
+  ([x y] (not= x y))
+  ([x y & more] (if (= x y) false
+                    (let [f (fn [s coll]
+                              (cond (empty? coll) true
+                                    (contains? s (first coll)) false
+                                    :else (recur (conj s (first coll)) (rest coll))
+                                    ))]
+                      (f #{ x y } more)))))
+                     
 (defn dedupe
   "Returns a lazy sequence with the consecutive duplicates removed"
   [coll] (if (empty? coll) '()
