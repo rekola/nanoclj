@@ -691,6 +691,18 @@ static inline double to_double(nanoclj_val_t p) {
   return NAN;
 }
 
+static inline void * to_tensor(nanoclj_t * sc, nanoclj_val_t p) {
+  switch (prim_type(p)) {
+  case T_CELL:{
+    nanoclj_cell_t * c = decode_pointer(p);
+    switch (_type(c)) {
+    case T_TENSOR: return _tensor_unchecked(c);
+    }
+  }
+  }
+  return NULL;
+}
+
 static inline bool is_reader(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
   nanoclj_cell_t * c = decode_pointer(p);
@@ -5275,33 +5287,30 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     if (!unpack_args_2(sc, &arg0, &arg1)) {
       Error_0(sc, "Error - Invalid arity");
     } else {
-      int tx = prim_type(arg0), ty = prim_type(arg1);
-      if (tx == T_REAL || ty == T_REAL) {
+      int tx = type(arg0), ty = type(arg1);
+      if (tx == T_TENSOR || ty == T_TENSOR) {
+	s_return(sc, tensor_add(sc, to_tensor(sc, arg0), to_tensor(sc, arg1)));
+      } else if (tx == T_REAL || ty == T_REAL) {
 	s_return(sc, mk_real(to_double(arg0) + to_double(arg1)));
       } else if (tx == T_INTEGER && ty == T_INTEGER) {
 	s_return(sc, mk_integer(sc, (long long)decode_integer(arg0) + (long long)decode_integer(arg1)));
-      } else {
-	tx = expand_type(arg0, tx);
-	ty = expand_type(arg1, ty);
-	
-	if (tx == T_RATIO || ty == T_RATIO) {
-	  long long den_x, den_y, den;
-	  long long num_x = get_ratio(arg0, &den_x);
-	  long long num_y = get_ratio(arg1, &den_y);
-	  long long num = normalize(num_x * den_y + num_y * den_x,
-				    den_x * den_y, &den);
-	  if (den == 1) {
-	    s_return(sc, mk_integer(sc, num));
-	  } else {
-	    s_return(sc, mk_ratio_long(sc, num, den));
-	  }
+      } else if (tx == T_RATIO || ty == T_RATIO) {
+	long long den_x, den_y, den;
+	long long num_x = get_ratio(arg0, &den_x);
+	long long num_y = get_ratio(arg1, &den_y);
+	long long num = normalize(num_x * den_y + num_y * den_x,
+				  den_x * den_y, &den);
+	if (den == 1) {
+	  s_return(sc, mk_integer(sc, num));
 	} else {
-	  long long res;
-	  if (__builtin_saddll_overflow(to_long(arg0), to_long(arg1), &res) == false) {
-	    s_return(sc, mk_integer(sc, res));
-	  } else {
-	    Error_0(sc, "Error - Integer overflow");
-	  }
+	  s_return(sc, mk_ratio_long(sc, num, den));
+	}
+      } else {
+	long long res;
+	if (__builtin_saddll_overflow(to_long(arg0), to_long(arg1), &res) == false) {
+	  s_return(sc, mk_integer(sc, res));
+	} else {
+	  Error_0(sc, "Error - Integer overflow");
 	}
       }
     }
@@ -6296,6 +6305,18 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     } else {
       s_return(sc, mk_string_from_sv(sc, to_strview(arg0)));
     }
+
+  case OP_TENSOR_SET:
+    if (!unpack_args_3(sc, &arg0, &arg1, &arg2)) {
+      Error_0(sc, "Error - Invalid arity");
+    } else if (is_cell(arg0)) {
+      nanoclj_cell_t * t = decode_pointer(arg0);
+      if (_type(t) == T_TENSOR) {
+	tensor_set1f(_tensor_unchecked(t), to_long(arg1), to_double(arg2));
+	s_return(sc, mk_nil());
+      }
+    }     
+    Error_0(sc, "Error - Invalid arguments");
     
   case OP_SET_COLOR:
     if (!unpack_args_1(sc, &arg0)) {

@@ -117,6 +117,9 @@ _OP_DEF("add-watch", OP_ADD_WATCH)
 _OP_DEF("realized?", OP_REALIZEDP)
 _OP_DEF("name", OP_NAME)
 
+/* Tensor ops */
+_OP_DEF("tensor-set!", OP_TENSOR_SET)
+
 /* Canvas ops */
 _OP_DEF("set-color", OP_SET_COLOR)
 _OP_DEF("set-font-size", OP_SET_FONT_SIZE)
@@ -132,5 +135,4 @@ _OP_DEF("save", OP_SAVE)
 _OP_DEF("restore", OP_RESTORE)
 _OP_DEF("resize", OP_RESIZE)
 _OP_DEF("flush", OP_FLUSH)
-
 #undef _OP_DEF
