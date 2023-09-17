@@ -116,3 +116,5 @@
 (load "java.lang.Long.clj")
 (load "sparkline.clj")
 (load "Plot.clj")
+(load "nanoclj.core.Tensor.clj")
+

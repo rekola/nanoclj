@@ -8,7 +8,7 @@ endif()
 add_definitions(-DNANOCLJ_STANDALONE -DNANOCLJ_USE_LINENOISE)
 
 # The math optimizations are not necessary, but they do not cause harm. Since NaNs are needed -ffast-math or -ffinite-math-only cannot be used.
-add_compile_options(-std=gnu99 -Wall -O3 -march=native -funsafe-math-optimizations -fno-math-errno -fno-rounding-math -fno-signaling-nans -fcx-limited-range -ffp-contract=fast -Wno-unused-value -Wno-unused-variable -Wno-unused-function -Werror=implicit-function-declaration)
+add_compile_options(-std=gnu99 -Wall -O3 -march=native -funsafe-math-optimizations -fno-math-errno -fno-rounding-math -fno-signaling-nans -fcx-limited-range -ffp-contract=fast -Wno-unused-value -Wno-unused-variable -Wno-unused-function -Werror=implicit-function-declaration -Wno-unused-but-set-variable -Werror=return-type)
 
 if(DEFINED ENV{WARN_ERROR_BUILD})
     add_compile_options(-Werror)
@@ -66,3 +66,4 @@ configure_file(lib/java.lang.Integer.clj java.lang.Integer.clj @ONLY)
 configure_file(lib/java.lang.Long.clj java.lang.Long.clj @ONLY)
 configure_file(lib/sparkline.clj sparkline.clj @ONLY)
 configure_file(lib/Plot.clj Plot.clj @ONLY)
+configure_file(lib/nanoclj.core.Tensor.clj nanoclj.core.Tensor.clj @ONLY)

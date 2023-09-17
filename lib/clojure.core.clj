@@ -26,7 +26,6 @@
 (def short java.lang.Integer)
 (def double java.lang.Double)
 (def float java.lang.Double)
-(def tensor nanoclj.core.Tensor)
   
 ; Casts argument to int
 (def int java.lang.Integer)
