@@ -126,7 +126,6 @@ have been tested:
   - sort-by, sorted-set-by, sorted-map, hash-set
   - update, update-in, merge, get-in, disj
   - cast
-  - nthrest, nthnext, nfirst
   - parse-long, parse-double, parse-uuid
   - not-every?, not-any?
   - map-indexed, mapcat, zipmap, lazy-cat
@@ -138,7 +137,6 @@ have been tested:
   - condp
   - doto
   - when-not, when-let, if-not, if-let, letfn
-  - realized?
   - defn-
   - reduced, reduced?
   - with-local-vars, var-set, find-var, declare, binding

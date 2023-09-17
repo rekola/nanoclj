@@ -510,6 +510,18 @@
 
 ; Collections
 
+(defn nthrest
+  "Returns the nth rest of coll"
+  [coll n] (cond (< n 0) (throw "Invalid argument")
+                 (= n 0) coll
+                 :else (recur (rest coll) (dec n))))
+
+(defn nthnext
+  "Returns the nth next of coll"
+  [coll n] (cond (< n 0) (throw "Invalid argument")
+                 (= n 0) (seq coll)
+                 :else (recur (next coll) (dec n))))
+
 (defn cycle
   "Returns a repeating, lazy, infinite sequence of the elements in coll"
   [coll] (if (empty? coll) '()
