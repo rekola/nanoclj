@@ -113,6 +113,7 @@ extern "C" {
       struct {
 	uint8_t kind;
 	int backchar[2];
+	int nesting;
 	nanoclj_port_rep_t * rep;
       } _port;
       nanoclj_image_t * _image;
@@ -225,7 +226,6 @@ extern "C" {
     nanoclj_val_t save_inport;
 
     nanoclj_val_t load_stack[MAXFIL];    /* Stack of open files for port -1 (LOADing) */
-    int nesting_stack[MAXFIL];
     int file_i;
     
     bool no_memory;             /* Whether mem. alloc. has failed */

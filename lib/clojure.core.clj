@@ -290,6 +290,11 @@
     ([map] map)
     ([map k] (reduce -conj {} (filter (fn [e] (not= (key e) k)) map)))))
 
+(defn disj
+  "Removes keys from a set"
+  ([set] set)
+  ([set key] (-disj set key)))
+
 (defn update
   "Updates a value in map, where k is the key to be updates,
   f is a function that takes the old value and extra values starting from x,

@@ -386,6 +386,7 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define _rep_unchecked(p)	  ((p)->_object._port.rep)
 #define _backchar_unchecked(p)	  ((p)->_object._port.backchar)
 #define _kind_unchecked(p)	  ((p)->_object._port.kind)
+#define _nesting_unchecked(p)     ((p)->_object._port.nesting)
 
 #define _image_unchecked(p)	  ((p)->_object._image)
 #define _audio_unchecked(p)	  ((p)->_object._audio)
@@ -418,6 +419,7 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define rep_unchecked(p)	  _rep_unchecked(decode_pointer(p))
 #define backchar_unchecked(p)	  _backchar_unchecked(decode_pointer(p))
 #define kind_unchecked(p)	  _kind_unchecked(decode_pointer(p))
+#define nesting_unchecked(p)      _nesting_unchecked(decode_pointer(p))
 
 #define image_unchecked(p)	  (_image_unchecked(decode_pointer(p)))
 #define audio_unchecked(p)	  (_audio_unchecked(decode_pointer(p)))
@@ -2008,6 +2010,26 @@ static inline nanoclj_cell_t * find(nanoclj_t * sc, nanoclj_cell_t * map, nanocl
   return NULL;
 }
 
+static inline int find_index(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t key) {
+  size_t i = 0, size = _get_size(coll);
+  if (_type(coll) == T_ARRAYMAP) {
+    for ( ; i < size; i++) {
+      nanoclj_cell_t * entry = decode_pointer(vector_elem(coll, i));
+      if (equals(sc, key, vector_elem(entry, 0))) {
+	break;
+      }
+    }
+  } else {
+    for ( ; i < size; i++) {
+      nanoclj_val_t v = vector_elem(coll, i);
+      if (equals(sc, key, v)) {
+	break;
+      }
+    }
+  }
+  return i;
+}
+
 static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t key, nanoclj_val_t * result) {
   if (!coll) {
     return false;
@@ -2902,6 +2924,7 @@ static inline nanoclj_cell_t * get_port_object(nanoclj_t * sc, uint32_t type, in
   x->_object._port.rep = pr;
   _backchar_unchecked(x)[0] = _backchar_unchecked(x)[1] = -1;
   _kind_unchecked(x) = kind;
+  _nesting_unchecked(x) = 0;
 
 #if RETAIN_ALLOCS
   retain(sc, x);
@@ -2930,8 +2953,7 @@ static inline bool file_push(nanoclj_t * sc, strview_t sv) {
   pr->stdio.filename = filename;
   
   sc->load_stack[sc->file_i] = mk_pointer(p);
-  sc->nesting_stack[sc->file_i] = 0;
-
+  
   return true;
 }
 
@@ -4446,7 +4468,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	sc->envir = sc->global_env = sc->root_env;
       }
 
-      if (sc->nesting_stack[sc->file_i] != 0) {
+      if (nesting_unchecked(sc->load_stack[sc->file_i]) != 0) {
 	sc->retcode = -1;
 	Error_0(sc, "Error - unmatched parentheses");
       }
@@ -5593,6 +5615,31 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       }
     }
 
+  case OP_DISJ:
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
+      Error_0(sc, "Error - Invalid arity");
+    } else if (is_cell(arg0)) {
+      nanoclj_cell_t * c = decode_pointer(arg0);
+      if (_type(c) == T_SORTED_SET) {
+	size_t i = find_index(sc, c, arg1), n = _get_size(c);
+	if (i == n) {
+	  s_return(sc, arg0);
+	} else {
+	  nanoclj_cell_t * new_set;
+	  if (i == 0) {
+	    new_set = subvec(sc, c, 1, n - 1);
+	  } else {
+	    new_set = subvec(sc, c, 0, i);
+	    for (i++; i < n; i++) {
+	      new_set = conjoin(sc, new_set, vector_elem(c, i));
+	    }
+	  }
+	  s_return(sc, mk_pointer(new_set));
+	}
+      }
+    }    
+    Error_0(sc, "Error - No protocol method ICollection.-disjoin defined for type");      
+
   case OP_SUBVEC:
     if (!unpack_args_2_plus(sc, &arg0, &arg1, &arg_next)) {
       Error_0(sc, "Error - Invalid arity");
@@ -5836,7 +5883,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	} else if (sc->tok == TOK_DOT) {
 	  Error_0(sc, "Error - illegal dot expression");
 	} else {
-	  sc->nesting_stack[sc->file_i]++;
+	  nesting_unchecked(inport)++;
 	  s_save(sc, OP_RDLIST, NULL, sc->EMPTY);
 	  s_goto(sc, OP_RDSEXPR);
 	}
@@ -5848,7 +5895,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	} else if (sc->tok == TOK_DOT) {
 	  Error_0(sc, "Error - illegal dot expression");
 	} else {
-	  sc->nesting_stack[sc->file_i]++;
+	  nesting_unchecked(inport)++;
 	  s_save(sc, OP_RDVEC_ELEMENT, sc->EMPTYVEC, sc->EMPTY);
 	  s_goto(sc, OP_RDSEXPR);
 	}      
@@ -5866,7 +5913,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	} else if (sc->tok == TOK_DOT) {
 	  Error_0(sc, "Error - illegal dot expression");
 	} else {
-	  sc->nesting_stack[sc->file_i]++;
+	  nesting_unchecked(inport)++;
 	  s_save(sc, OP_RDMAP_ELEMENT, NULL, sc->EMPTY);
 	  s_goto(sc, OP_RDSEXPR);
 	}
@@ -5979,7 +6026,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       if (sc->tok == TOK_EOF) {
 	s_return(sc, mk_character(EOF));
       } else if (sc->tok == TOK_RPAREN) {
-	sc->nesting_stack[sc->file_i]--;
+	nesting_unchecked(inport)--;
 	s_return(sc, mk_pointer(reverse_in_place(sc, sc->EMPTY, sc->args)));
       } else if (sc->tok == TOK_DOT) {
 	s_save(sc, OP_RDDOT, sc->args, sc->EMPTY);
@@ -5997,12 +6044,13 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     if (!is_reader(x)) {
       Error_0(sc, "Error - not a reader");
     } else {
+      nanoclj_val_t inport = x;
       sc->args = conjoin(sc, sc->args, sc->value);
-      sc->tok = token(sc, x);
+      sc->tok = token(sc, inport);
       if (sc->tok == TOK_EOF) {
 	s_return(sc, mk_character(EOF));
       } else if (sc->tok == TOK_RSQUARE) {
-	sc->nesting_stack[sc->file_i]--;
+	nesting_unchecked(inport)--;
 	s_return(sc, mk_pointer(sc->args));
       } else {
 	s_save(sc, OP_RDVEC_ELEMENT, sc->args, sc->EMPTY);
@@ -6015,12 +6063,13 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     if (!is_reader(x)) {
       Error_0(sc, "Error - not a reader");
     } else {
+      nanoclj_val_t inport = x;
       sc->args = cons(sc, sc->value, sc->args);
-      sc->tok = token(sc, x);
+      sc->tok = token(sc, inport);
       if (sc->tok == TOK_EOF) {
 	s_return(sc, mk_character(EOF));
       } else if (sc->tok == TOK_RCURLY) {
-	sc->nesting_stack[sc->file_i]--;
+	nesting_unchecked(inport)--;
 	s_return(sc, mk_pointer(reverse_in_place(sc, sc->EMPTY, sc->args)));
       } else {
 	s_save(sc, OP_RDMAP_ELEMENT, sc->args, sc->EMPTY);
@@ -6033,10 +6082,11 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     if (!is_reader(x)) {
       Error_0(sc, "Error - not a reader");
     } else {
-      if (token(sc, x) != TOK_RPAREN) {
+      nanoclj_val_t inport = x;
+      if (token(sc, inport) != TOK_RPAREN) {
 	Error_0(sc, "Error - illegal dot expression");
       } else {
-	sc->nesting_stack[sc->file_i]--;
+	nesting_unchecked(inport)--;
 	s_return(sc, mk_pointer(reverse_in_place(sc, sc->value, sc->args)));
       }
     }
