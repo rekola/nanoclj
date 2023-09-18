@@ -65,28 +65,24 @@ extern "C" {
     size_t size, reserved, refcnt;
   } nanoclj_float_array_t;
   
-  typedef struct nanoclj_port_t {
-    unsigned char kind;
-    int backchar[2];
-    union {
-      struct {
-        FILE *file;
-        int curr_line;
-        char *filename;
-      } stdio;
-      struct {
-	char *curr;
-	nanoclj_byte_array_t data;
-      } string;
-      struct {
-	void (*text) (const char *, size_t, void*);
-	void (*color) (double r, double g, double b, void*);
-	void (*restore) (void*);
-	void (*image) (nanoclj_image_t*, void*);
-      } callback;
-    } rep;
-  } nanoclj_port_t;
-  
+  typedef union {
+    struct {
+      FILE *file;
+      int curr_line;
+      char *filename;
+    } stdio;
+    struct {
+      char *curr;
+      nanoclj_byte_array_t data;
+    } string;
+    struct {
+      void (*text) (const char *, size_t, void*);
+      void (*color) (double r, double g, double b, void*);
+      void (*restore) (void*);
+      void (*image) (nanoclj_image_t*, void*);
+    } callback;
+  } nanoclj_port_rep_t;
+
 /* cell structure */
   typedef struct nanoclj_cell_t {
     uint32_t type;
@@ -114,7 +110,11 @@ extern "C" {
 	void * impl;
       } _tensor;
       long long _lvalue;
-      nanoclj_port_t * _port;
+      struct {
+	uint8_t kind;
+	int backchar[2];
+	nanoclj_port_rep_t * rep;
+      } _port;
       nanoclj_image_t * _image;
       nanoclj_audio_t * _audio;
       struct {
