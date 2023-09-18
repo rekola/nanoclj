@@ -70,7 +70,6 @@ extern "C" {
   NANOCLJ_EXPORT int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc, func_dealloc, func_realloc);
   NANOCLJ_EXPORT void nanoclj_deinit(nanoclj_t * sc);
   void nanoclj_set_input_port_file(nanoclj_t * sc, FILE * fin);
-  void nanoclj_set_input_port_string(nanoclj_t * sc, const char *str, size_t length);
   NANOCLJ_EXPORT void nanoclj_set_output_port_file(nanoclj_t * sc, FILE * fin);
   NANOCLJ_EXPORT void nanoclj_set_output_port_callback(nanoclj_t * sc,
 						       void (*text) (const char*, size_t, void*),
@@ -78,7 +77,6 @@ extern "C" {
 						       void (*restore) (void*),
 						       void (*image) (nanoclj_image_t*, void*));
   NANOCLJ_EXPORT void nanoclj_set_error_port_callback(nanoclj_t * sc, void (*text) (const char *, size_t, void *));
-  void nanoclj_set_output_port_string(nanoclj_t * sc, const char *str, size_t length);
   NANOCLJ_EXPORT void nanoclj_load_file(nanoclj_t * sc, FILE * fin);
   NANOCLJ_EXPORT void nanoclj_load_named_file(nanoclj_t * sc, FILE * fin, const char *filename);
   NANOCLJ_EXPORT nanoclj_val_t nanoclj_eval_string(nanoclj_t * sc, const char *cmd, size_t len);

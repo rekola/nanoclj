@@ -223,13 +223,11 @@ extern "C" {
     long fcells;                  /* # of free cells */
     
     nanoclj_val_t save_inport;
-    nanoclj_val_t loadport;
 
-    nanoclj_port_t load_stack[MAXFIL];    /* Stack of open files for port -1 (LOADing) */
+    nanoclj_val_t load_stack[MAXFIL];    /* Stack of open files for port -1 (LOADing) */
     int nesting_stack[MAXFIL];
     int file_i;
-    int nesting;
-
+    
     bool no_memory;             /* Whether mem. alloc. has failed */
 
     char *strbuff;

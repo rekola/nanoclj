@@ -130,7 +130,10 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_c
 
   mark_value(sc->value);
   mark_value(sc->save_inport);
-  mark_value(sc->loadport);
+
+  for (int i = 0; i <= sc->file_i; i++) {
+    mark_value(sc->load_stack[i]);
+  }
 
   mark_value(sc->active_element);
   mark_value(sc->active_element_target);
