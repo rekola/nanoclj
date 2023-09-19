@@ -2586,7 +2586,7 @@ static inline nanoclj_cell_t * conjoin(nanoclj_t * sc, nanoclj_cell_t * coll, na
       }
       
       s->data[s->size++] = new_value;
-      return _get_vector_object(sc, t, old_offset, s->size, s);
+      return _get_vector_object(sc, t, old_offset, old_size + 1, s);
     }
   } else if (t == T_STRING || t == T_CHAR_ARRAY || t == T_FILE) {
     size_t old_size = _get_size(coll);
