@@ -295,6 +295,10 @@
   ([set] set)
   ([set key] (-disj set key)))
 
+(defn merge
+  "Merges multiple maps"
+  [& maps] (reduce #( conj (or %1 {}) %2 ) maps))
+
 (defn update
   "Updates a value in map, where k is the key to be updates,
   f is a function that takes the old value and extra values starting from x,

@@ -111,8 +111,9 @@
 #define TOK_IGNORE  	21
 #define TOK_VAR	    	22
 
-#define BACKQUOTE '`'
-#define DELIMITERS  "()[]{}\";\f\t\v\n\r, "
+#define BACKQUOTE 	'`'
+#define DELIMITERS  	"()[]{}\";\f\t\v\n\r, "
+#define NPOS		((size_t)-1)
 
 /*
  *  Basic memory allocation units
@@ -2010,24 +2011,24 @@ static inline nanoclj_cell_t * find(nanoclj_t * sc, nanoclj_cell_t * map, nanocl
   return NULL;
 }
 
-static inline int find_index(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t key) {
+static inline size_t find_index(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t key) {
   size_t i = 0, size = _get_size(coll);
   if (_type(coll) == T_ARRAYMAP) {
     for ( ; i < size; i++) {
       nanoclj_cell_t * entry = decode_pointer(vector_elem(coll, i));
       if (equals(sc, key, vector_elem(entry, 0))) {
-	break;
+	return i;
       }
     }
   } else {
     for ( ; i < size; i++) {
       nanoclj_val_t v = vector_elem(coll, i);
       if (equals(sc, key, v)) {
-	break;
+	return i;
       }
     }
   }
-  return i;
+  return NPOS;
 }
 
 static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t key, nanoclj_val_t * result) {
@@ -5544,9 +5545,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   case OP_CONJ:             /* -conj */
     if (!unpack_args_2(sc, &arg0, &arg1)) {
       Error_0(sc, "Error - Invalid arity");
-    } else if (!is_cell(arg0)) {
-      Error_0(sc, "Error - No protocol method ICollection.-conj defined");      
-    } else {
+    } else if (is_cell(arg0)) {
       nanoclj_cell_t * coll = decode_pointer(arg0);
       y = arg1;
       switch (_type(coll)) {
@@ -5574,21 +5573,35 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       }
 	
       case T_ARRAYMAP:{
-	/* TODO: check that y is actually a vector */
 	nanoclj_cell_t * p = decode_pointer(y);
-	nanoclj_val_t key = first(sc, p), val = second(sc, p);
-	size_t vector_len = _get_size(coll);
-	for (size_t i = 0; i < vector_len; i++) {
-	  nanoclj_cell_t * e = decode_pointer(vector_elem(coll, i));
-	  if (equals(sc, key, vector_elem(e, 0))) {
-	    nanoclj_cell_t * vec = copy_vector(sc, coll);
+	if (_type(p) == T_ARRAYMAP) {
+	  size_t other_len = _get_size(p);
+	  for (size_t i = 0; i < other_len; i++) {
+	    nanoclj_cell_t * e = decode_pointer(vector_elem(p, i));
+	    nanoclj_val_t key = vector_elem(e, 0), val = vector_elem(e, 1);
+	    size_t j = find_index(sc, coll, key);
+	    if (j != NPOS) {
+	      coll = copy_vector(sc, coll);
+	      /* Rebuild the mapentry in case the input is not mapentry */
+	      set_vector_elem(coll, j, mk_mapentry(sc, key, val));
+	    } else {
+	      coll = conjoin(sc, coll, mk_mapentry(sc, key, val));
+	    }
+	  }
+	  s_return(sc, mk_pointer(coll));
+	} else {
+	  nanoclj_val_t key = first(sc, p), val = second(sc, p);
+	  size_t i = find_index(sc, coll, key);
+	  if (i != NPOS) {
+	    coll = copy_vector(sc, coll);
 	    /* Rebuild the mapentry in case the input is not mapentry */
-	    set_vector_elem(vec, i, mk_mapentry(sc, key, val));
-	    s_return(sc, mk_pointer(vec));
+	    set_vector_elem(coll, i, mk_mapentry(sc, key, val));
+	    s_return(sc, mk_pointer(coll));
+	  } else {
+	    /* Not found */
+	    s_return(sc, mk_pointer(conjoin(sc, coll, mk_mapentry(sc, key, val))));
 	  }
 	}
-	/* Not found */
-	s_return(sc, mk_pointer(conjoin(sc, coll, y)));
       }
       
       case T_SORTED_SET:{
@@ -5609,11 +5622,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       case T_CHAR_ARRAY:
       case T_FILE:
 	s_return(sc, mk_pointer(conjoin(sc, coll, y)));
-	
-      default:
-	Error_0(sc, "Error - No protocol method ICollection.-conj defined");
       }
     }
+    Error_0(sc, "Error - No protocol method ICollection.-conj defined");
 
   case OP_DISJ:
     if (!unpack_args_2(sc, &arg0, &arg1)) {
@@ -5621,10 +5632,11 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     } else if (is_cell(arg0)) {
       nanoclj_cell_t * c = decode_pointer(arg0);
       if (_type(c) == T_SORTED_SET) {
-	size_t i = find_index(sc, c, arg1), n = _get_size(c);
-	if (i == n) {
+	size_t i = find_index(sc, c, arg1);
+	if (i == NPOS) {
 	  s_return(sc, arg0);
 	} else {
+	  size_t n = _get_size(c);
 	  nanoclj_cell_t * new_set;
 	  if (i == 0) {
 	    new_set = subvec(sc, c, 1, n - 1);
