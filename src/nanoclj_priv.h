@@ -31,16 +31,12 @@ extern "C" {
 
 #include "nanoclj_types.h"
 
-  enum nanoclj_port_kind {
+  typedef enum {
     port_free = 0,
     port_file = 1,
     port_string = 2,
-    port_callback = 8,
-    port_input = 16,
-    port_output = 32,
-    port_saw_EOF = 64,
-    port_binary = 128
-  };
+    port_callback = 3
+  } nanoclj_port_type_t;
 
   /* operator code */
   enum nanoclj_opcodes {
@@ -111,10 +107,10 @@ extern "C" {
       } _tensor;
       long long _lvalue;
       struct {
-	uint8_t kind;
+	nanoclj_port_rep_t * rep;
 	int backchar[2];
 	int nesting;
-	nanoclj_port_rep_t * rep;
+	uint8_t type, flags;
       } _port;
       nanoclj_image_t * _image;
       nanoclj_audio_t * _audio;
