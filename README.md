@@ -118,33 +118,36 @@ have been tested:
 - Multithreading, transactions and STM
 - monitor-enter, monitor-exit, and locking
 - Threading macros (->, -->, some-> and some->>)
+- Homogenous vectors (vector-of)
 - `*print-length*`, `*print-level*`, `*file*`, `*flush-on-newline*`, `*clojure-version*`
 - Missing core functions and macros
   - doseq, for, dotimes
   - bit-and-not, unsigned-bit-shift-right
   - keep
-  - sort-by, sorted-set-by, sorted-map, hash-set
-  - update, update-in, merge, get-in, disj
-  - cast
+  - sort-by, sorted-set-by, sorted-map, hash-set, hash-map
+  - update-in, merge-with
+  - cast, doto
   - parse-long, parse-double, parse-uuid
   - map-indexed, mapcat, zipmap, lazy-cat
   - partition-by
-  - merge-with
   - juxt
   - memoize
   - group-by
   - condp
-  - doto
   - when-let, if-let, letfn
   - defn-
   - reduced, reduced?
   - with-local-vars, var-set, find-var, declare, binding
   - as-url, resource
+  - sequence, seqable?
+  - make-hierarchy, ancestors, supers, bases
+  - bound?
 - clojure.string
   - upper-case
-  - clojure.string/capitalize
-  - clojure.string/split
-  - clojure.string/replace
+  - capitalize
+  - split
+  - replace
 - clojure.set
 - clojure.data.csv
+- clojure.xml
 - ...and lots more...
