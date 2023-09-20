@@ -182,7 +182,8 @@ enum nanoclj_types {
   T_IMAGE = 32,
   T_AUDIO = 33,
   T_FILE = 34,
-  T_TENSOR = 35,
+  T_DATE = 35,
+  T_TENSOR = 36,
   T_MAX_TYPE
 };
 
@@ -237,10 +238,6 @@ static int_fast16_t prim_type(nanoclj_val_t value) {
   }
 
   return T_REAL;
-}
-
-static inline bool is_real(nanoclj_val_t value) {
-  return prim_type(value) == T_REAL;
 }
 
 static inline bool is_cell(nanoclj_val_t v) {
@@ -592,15 +589,6 @@ static inline bool is_number(nanoclj_val_t p) {
     return false;
   }
 }
-static inline bool is_integer(nanoclj_val_t p) {
-  switch (type(p)) {
-  case T_INTEGER:
-  case T_LONG:
-    return true;
-  default:
-    return false;
-  }
-}
 
 static inline char * _strvalue(nanoclj_cell_t * s) {
   if (_is_small(s)) {
@@ -633,6 +621,7 @@ static inline long long to_long_w_def(nanoclj_val_t p, long long def) {
       nanoclj_cell_t * c = decode_pointer(p);
       switch (_type(c)) {
       case T_LONG:
+      case T_DATE:
 	return _lvalue_unchecked(c);
       case T_RATIO:
 	return to_long_w_def(vector_elem(c, 0), 0) / to_long_w_def(vector_elem(c, 1), 1);
@@ -666,6 +655,7 @@ static inline int32_t to_int(nanoclj_val_t p) {
       nanoclj_cell_t * c = decode_pointer(p);
       switch (_type(c)) {
       case T_LONG:
+      case T_DATE:
 	return _lvalue_unchecked(c);
       case T_RATIO:
 	return to_long(vector_elem(c, 0)) / to_long(vector_elem(c, 1));
@@ -690,7 +680,8 @@ static inline double to_double(nanoclj_val_t p) {
   case T_CELL: {
     nanoclj_cell_t * c = decode_pointer(p);
     switch (_type(c)) {
-    case T_LONG: return (double)lvalue_unchecked(p);
+    case T_LONG:
+    case T_DATE: return (double)lvalue_unchecked(p);
     case T_RATIO: return to_double(vector_elem(c, 0)) / to_double(vector_elem(c, 1));
     }
   }
@@ -1132,6 +1123,17 @@ static inline nanoclj_cell_t * mk_long(nanoclj_t * sc, long long num) {
 #endif
 
   return x;
+}
+
+static inline nanoclj_val_t mk_date(nanoclj_t * sc, long long num) {
+  nanoclj_cell_t * x = get_cell_x(sc, T_DATE, T_GC_ATOM, NULL, NULL, NULL);
+  _lvalue_unchecked(x) = num;
+
+#if RETAIN_ALLOCS
+  retain(sc, x);
+#endif
+
+  return mk_pointer(x);
 }
 
 /* get number atom (integer) */
@@ -1696,6 +1698,7 @@ static inline nanoclj_cell_t * seq(nanoclj_t * sc, nanoclj_cell_t * coll) {
   switch (_type(coll)) {
   case T_NIL:
   case T_LONG:
+  case T_DATE:
   case T_MAPENTRY:
   case T_CLOSURE:
   case T_MACRO:
@@ -1931,6 +1934,7 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
 	return sv1.size == sv2.size && strncmp(sv1.ptr, sv2.ptr, sv1.size) == 0;
       }
       case T_LONG:
+      case T_DATE:
 	return _lvalue_unchecked(a) == _lvalue_unchecked(b);
       case T_VECTOR:
       case T_SORTED_SET:
@@ -2268,7 +2272,7 @@ static inline int compare(nanoclj_val_t a, nanoclj_val_t b) {
     if (ia < ib) return -1;
     else if (ia > ib) return +1;
     return 0;
-  } else if (type_a == T_KEYWORD && type_b == T_KEYWORD) {
+  } else if (type_a == T_KEYWORD && type_b == T_KEYWORD) {  
     return strcmp((const char *)decode_pointer(a), (const char *)decode_pointer(b));
   } else if (type_a == T_SYMBOL && type_b == T_SYMBOL) {
     return strcmp(decode_symbol(a)->name, decode_symbol(b)->name);
@@ -2297,7 +2301,8 @@ static inline int compare(nanoclj_val_t a, nanoclj_val_t b) {
 	  p1 = utf8_next(p1), p2 = utf8_next(p2);
 	}
       }
-      case T_LONG:{
+      case T_LONG:
+      case T_DATE:{
 	long long la = _lvalue_unchecked(a2), lb = _lvalue_unchecked(b2);
 	if (la < lb) return -1;
 	else if (la > lb) return +1;
@@ -2401,6 +2406,7 @@ static int hasheq(nanoclj_val_t v) {
     
     switch (_type(c)) {
     case T_LONG:
+    case T_DATE:
       return murmur3_hash_long(_lvalue_unchecked(c));
 
     case T_STRING:
@@ -3697,7 +3703,16 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
       case T_LONG:
 	p = sc->strbuff;
 	plen = sprintf(sc->strbuff, "%lld", _lvalue_unchecked(c));
-	break;	
+	break;
+      case T_DATE:{
+	time_t t = _lvalue_unchecked(c) / 1000;
+	p = ctime_r(&t, sc->strbuff);
+	plen = strlen(p);
+	while (plen > 0 && isspace(p[plen - 1])) {
+	  plen--;
+	}
+      }
+	break;
       case T_STRING:
 	if (!print_flag) {
 	  p = _strvalue(c);
@@ -3800,9 +3815,6 @@ static inline size_t seq_length(nanoclj_t * sc, nanoclj_cell_t * a) {
   switch (_type(a)) {
   case T_NIL:
     return 0;
-
-  case T_LONG:
-    return 1;
         
   case T_VECTOR:
   case T_ARRAYMAP:
@@ -3912,6 +3924,7 @@ static inline nanoclj_val_t mk_format(nanoclj_t * sc, strview_t fmt0, nanoclj_ce
     switch (type(arg)) {
     case T_INTEGER:
     case T_LONG:
+    case T_DATE:
     case T_PROC:
     case T_BOOLEAN:
       switch (n_args) {
@@ -4196,6 +4209,9 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
   case T_LONG:
     /* Casts the argument to long (or int if it is sufficient) */
     return mk_integer(sc, to_long(first(sc, args)));
+
+  case T_DATE:
+    return mk_date(sc, to_long(first(sc, args)));
   
   case T_REAL:
     return mk_real(to_double(first(sc, args)));
@@ -5212,7 +5228,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       Error_0(sc, "Error - Invalid arity");
     }
     x = arg0;
-    if (is_real(x)) {
+    if (prim_type(arg0) == T_REAL) {
       if (x.as_double == 0) {
 	Error_0(sc, "Divide by zero");
       } else {
@@ -6696,8 +6712,6 @@ static struct nanoclj_interface vtbl = {
   is_number,
   to_long,
   to_double,
-  is_integer,
-  is_real,
   to_int,
   is_vector,
   size_checked,
@@ -6994,7 +7008,8 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc fr
   mk_named_type(sc, "java.io.InputStream", T_INPUT_STREAM, Object);
   mk_named_type(sc, "java.io.OutputStream", T_OUTPUT_STREAM, Object);
   mk_named_type(sc, "java.io.File", T_FILE, Object);
-    
+  mk_named_type(sc, "java.util.Date", T_DATE, Object);
+  
   /* Clojure types */
   nanoclj_cell_t * AReference = mk_named_type(sc, "clojure.lang.AReference", gentypeid(sc), Object);
   nanoclj_cell_t * Obj = mk_named_type(sc, "clojure.lang.Obj", gentypeid(sc), Object);
@@ -7132,7 +7147,9 @@ void nanoclj_load_named_file(nanoclj_t * sc, FILE * fin, const char *filename) {
   sc->envir = sc->global_env;
   sc->file_i = 0;
   sc->load_stack[0] = mk_pointer(p);
-
+  sc->retcode = 0;
+  sc->args = NULL;
+  
   nanoclj_port_rep_t * pr = _rep_unchecked(p);
   pr->stdio.file = fin;
   pr->stdio.filename = NULL;    
@@ -7142,10 +7159,7 @@ void nanoclj_load_named_file(nanoclj_t * sc, FILE * fin, const char *filename) {
   } else {
     pr->stdio.filename = NULL;
   }
-
-  sc->retcode = 0;
-
-  sc->args = mk_long(sc, sc->file_i);
+  
   Eval_Cycle(sc, OP_T0LVL);
 
   sc->load_stack[0] = mk_nil();
@@ -7161,13 +7175,13 @@ nanoclj_val_t nanoclj_eval_string(nanoclj_t * sc, const char *cmd, size_t len) {
   sc->envir = sc->global_env;
   sc->file_i = 0;
   sc->load_stack[0] = mk_pointer(p);
+  sc->retcode = 0;
+  sc->args = NULL;
 
   nanoclj_port_rep_t * pr = _rep_unchecked(p);
   pr->string.curr = buffer;
   pr->string.data.data = buffer;
   pr->string.data.size = len;
-  sc->retcode = 0;
-  sc->args = mk_long(sc, sc->file_i);
   
   Eval_Cycle(sc, OP_T0LVL);
 

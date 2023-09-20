@@ -114,6 +114,7 @@
 (load "clojure.repl.clj")
 (load "java.lang.Integer.clj")
 (load "java.lang.Long.clj")
+(load "java.util.Date.clj")
 (load "sparkline.clj")
 (load "Plot.clj")
 (load "nanoclj.core.Tensor.clj")

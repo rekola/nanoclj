@@ -123,8 +123,6 @@ extern "C" {
     bool (*is_number) (nanoclj_val_t p);
     long long (*to_long) (nanoclj_val_t p);
     double (*to_double) (nanoclj_val_t p);
-    bool (*is_integer) (nanoclj_val_t p);
-    bool (*is_real) (nanoclj_val_t p);
     int (*to_int) (nanoclj_val_t p);
     bool (*is_vector) (nanoclj_val_t p);
     size_t (*size) (nanoclj_t * sc, nanoclj_val_t vec);
