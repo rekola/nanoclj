@@ -32,7 +32,25 @@ static inline void set_basic_style(FILE * fh, int style) {
   }
 }
 
-static inline void set_term_color(FILE * fh, double r0, double g0, double b0, nanoclj_colortype_t colors) {
+static inline int convert_to_256color(int r, int g, int b) {
+  if ((r / 10) == (g / 10) && (g / 10) == (b / 10)) {
+    r /= 10;
+    if (r == 0) {
+      return 0;
+    } else if (r >= 25) {
+      return 15;
+    } else {
+      return 232 + (r - 1);
+    }
+  } else {
+    r /= 43;
+    g /= 43;
+    b /= 43;
+    return 16 + r * 6 * 6 + g * 6 + b;
+  }
+}
+
+static inline void set_term_fg_color(FILE * fh, double r0, double g0, double b0, nanoclj_colortype_t colors) {
   if (isatty(fileno(fh))) {
     int r = clamp((int)(r0 * 255), 0, 255);
     int g = clamp((int)(g0 * 255), 0, 255);
@@ -41,28 +59,30 @@ static inline void set_term_color(FILE * fh, double r0, double g0, double b0, na
     switch (colors) {
     case nanoclj_colortype_16:
       break;
-    case nanoclj_colortype_256: {
-      int color;
-      if ((r / 10) == (g / 10) && (g / 10) == (b / 10)) {
-	r /= 10;
-	if (r == 0) {
-	  color = 0;
-	} else if (r >= 25) {
-	  color = 15;
-	} else {
-	  color = 232 + (r - 1);
-	}
-      } else {
-	r /= 43;
-	g /= 43;
-	b /= 43;
-	color = 16 + r * 6 * 6 + g * 6 + b;
-      }
-      fprintf(fh, "\033[38:5:%dm", color);
-    }
+    case nanoclj_colortype_256:
+      fprintf(fh, "\033[38:5:%dm", convert_to_256color(r, g, b));    
       break;
     case nanoclj_colortype_true:
-      fprintf(fh, "\033[%d;2;%d;%d;%dm", 38, r, g, b);
+      fprintf(fh, "\033[38;2;%d;%d;%dm", r, g, b);
+      break;
+    }
+  }
+}
+
+static inline void set_term_bg_color(FILE * fh, double r0, double g0, double b0, nanoclj_colortype_t colors) {
+  if (isatty(fileno(fh))) {
+    int r = clamp((int)(r0 * 255), 0, 255);
+    int g = clamp((int)(g0 * 255), 0, 255);
+    int b = clamp((int)(b0 * 255), 0, 255);
+
+    switch (colors) {
+    case nanoclj_colortype_16:
+      break;
+    case nanoclj_colortype_256:
+      fprintf(fh, "\033[48:5:%dm", convert_to_256color(r, g, b));    
+      break;
+    case nanoclj_colortype_true:
+      fprintf(fh, "\033[48;2;%d;%d;%dm", r, g, b);
       break;
     }
   }

@@ -537,7 +537,7 @@ static inline nanoclj_cell_t * get_metadata(nanoclj_cell_t * c) {
     if (_is_small(c)) {
       return _so_vector_metadata(c);
     } else {
-      return _vec_store_unchecked(vec)->meta;
+      return _vec_store_unchecked(c)->meta;
     }
   case T_LIST:
   case T_CLOSURE:
@@ -557,6 +557,8 @@ static inline void set_metadata(nanoclj_cell_t * c, nanoclj_cell_t * meta) {
   case T_VAR:
     if (_is_small(c)) {
       _so_vector_metadata(c) = meta;
+    } else {
+      _vec_store_unchecked(c)->meta = meta;
     }
     break;
   case T_LIST:
@@ -3144,13 +3146,12 @@ static inline void set_color(nanoclj_t * sc, nanoclj_cell_t * vec, nanoclj_val_t
   switch (port_type_unchecked(out)) {
   case port_file:
 #ifndef WIN32    
-    FILE * fh = pr->stdio.file;
-    set_term_color(fh,
-		   to_double(vector_elem(vec, 0)),
-		   to_double(vector_elem(vec, 1)),
-		   to_double(vector_elem(vec, 2)),
-		   sc->term_colors
-		   );
+    set_term_fg_color(pr->stdio.file,
+		      to_double(vector_elem(vec, 0)),
+		      to_double(vector_elem(vec, 1)),
+		      to_double(vector_elem(vec, 2)),
+		      sc->term_colors
+		      );
 #endif
     break;
   case port_callback:
@@ -3174,7 +3175,19 @@ static inline void set_color(nanoclj_t * sc, nanoclj_cell_t * vec, nanoclj_val_t
 }
 
 static inline void set_bg_color(nanoclj_t * sc, nanoclj_cell_t * vec, nanoclj_val_t out) {
-
+  nanoclj_port_rep_t * pr = rep_unchecked(out);
+  switch (port_type_unchecked(out)) {
+  case port_file:
+#ifndef WIN32    
+    set_term_bg_color(pr->stdio.file,
+		      to_double(vector_elem(vec, 0)),
+		      to_double(vector_elem(vec, 1)),
+		      to_double(vector_elem(vec, 2)),
+		      sc->term_colors
+		      );
+#endif
+    break;
+  }
 }
 
 static inline void check_strbuff_size(nanoclj_t * sc, char **p) {
