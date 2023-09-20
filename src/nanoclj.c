@@ -536,6 +536,8 @@ static inline nanoclj_cell_t * get_metadata(nanoclj_cell_t * c) {
   case T_VAR:
     if (_is_small(c)) {
       return _so_vector_metadata(c);
+    } else {
+      return _vec_store_unchecked(vec)->meta;
     }
   case T_LIST:
   case T_CLOSURE:
@@ -1416,13 +1418,14 @@ static inline nanoclj_cell_t * cons(nanoclj_t * sc, nanoclj_val_t head, nanoclj_
   return get_cell(sc, T_LIST, 0, head, tail, NULL);
 }
 
-/* Creates a vector store with double the size requested */
+/* Creates a vector store */
 static inline nanoclj_vector_t * mk_vector_store(nanoclj_t * sc, size_t len, size_t reserve) {
   nanoclj_vector_t * s = (nanoclj_vector_t *)malloc(sizeof(nanoclj_vector_t));
   s->data = (nanoclj_val_t*)sc->malloc(reserve * sizeof(nanoclj_val_t));
   s->size = len;
   s->reserved = reserve;
   s->refcnt = 1;
+  s->meta = NULL;
   return s;
 }
 
@@ -3548,31 +3551,30 @@ static inline void print_image(nanoclj_t * sc, nanoclj_image_t * img, nanoclj_va
   if (port_type_unchecked(out) == port_callback) {
     if (pr->callback.image) {
       pr->callback.image(img, sc->ext_data);
+      return;
     }
-  } else {
-    if (sc->sixel_term && (port_type_unchecked(out) == port_file) && pr->stdio.file == stdout) {      
+  } else if (sc->sixel_term && (port_type_unchecked(out) == port_file) && pr->stdio.file == stdout) {      
 #if NANOCLJ_SIXEL
-      if (img->channels == 4) {
-	unsigned char * tmp = (unsigned char *)sc->malloc(3 * img->width * img->height);
-	for (unsigned int i = 0; i < img->width * img->height; i++) {
-	  tmp[3 * i + 0] = img->data[4 * i + 0];
-	  tmp[3 * i + 1] = img->data[4 * i + 1];
-	  tmp[3 * i + 2] = img->data[4 * i + 2];
-	}
-	print_image_sixel(tmp, img->width, img->height);
-	sc->free(tmp);
-	return;
-      } else if (img->channels == 3) {
-	print_image_sixel(img->data, img->width, img->height);
-	return;
+    if (img->channels == 4) {
+      unsigned char * tmp = (unsigned char *)sc->malloc(3 * img->width * img->height);
+      for (unsigned int i = 0; i < img->width * img->height; i++) {
+	tmp[3 * i + 0] = img->data[4 * i + 0];
+	tmp[3 * i + 1] = img->data[4 * i + 1];
+	tmp[3 * i + 2] = img->data[4 * i + 2];
       }
-#endif      
+      print_image_sixel(tmp, img->width, img->height);
+      sc->free(tmp);
+      return;
+    } else if (img->channels == 3) {
+      print_image_sixel(img->data, img->width, img->height);
+      return;
     }
-
-    char * p = sc->strbuff;
-    size_t len = snprintf(sc->strbuff, sc->strbuff_size, "#<Image %d %d %d>", img->width, img->height, img->channels);
-    putchars(sc, p, 3, out);
+#endif      
   }
+  
+  char * p = sc->strbuff;
+  size_t len = snprintf(sc->strbuff, sc->strbuff_size, "#<Image %d %d %d>", img->width, img->height, img->channels);
+  putchars(sc, p, 3, out);
 }
 
 static inline nanoclj_cell_t * get_type_object(nanoclj_t * sc, nanoclj_val_t v) {
