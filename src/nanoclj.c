@@ -6180,17 +6180,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     }
     Error_0(sc, "Error - value is not reverse seqable");
 
-  case OP_SEQP:
-    if (!unpack_args_1(sc, &arg0)) {
-      Error_0(sc, "Error - Invalid arity");
-    } else if (is_cell(arg0)) {
-      nanoclj_cell_t * c = decode_pointer(arg0);
-      if (c) {
-	s_retbool(_is_sequence(c) || _type(c) == T_LIST || _type(c) == T_LAZYSEQ);
-      }
-    }
-    s_retbool(false);
-
   case OP_EMPTYP:
     if (!unpack_args_1(sc, &arg0)) {
       Error_0(sc, "Error - Invalid arity");
@@ -6321,16 +6310,14 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     }
     break;
 
-  case OP_REALIZEDP:
+  case OP_GET_CELL_FLAGS:
     if (!unpack_args_1(sc, &arg0)) {
       Error_0(sc, "Error - Invalid arity");
     } else if (is_cell(arg0)) {
       nanoclj_cell_t * c = decode_pointer(arg0);
-      if (_type(c) == T_LAZYSEQ || _type(c) == T_DELAY) {
-	s_retbool(_is_realized(c));
-      }
+      if (c) s_return(sc, mk_int(c->flags));
     }
-    s_retbool(true);
+    s_return(sc, mk_nil());
 
   case OP_NAME:
     if (!unpack_args_1(sc, &arg0)) {
