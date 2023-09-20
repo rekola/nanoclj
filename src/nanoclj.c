@@ -180,10 +180,9 @@ enum nanoclj_types {
   T_RATIO = 30,
   T_DELAY = 31,
   T_IMAGE = 32,
-  T_CANVAS = 33,
-  T_AUDIO = 34,
-  T_FILE = 35,
-  T_TENSOR = 36,
+  T_AUDIO = 33,
+  T_FILE = 34,
+  T_TENSOR = 35,
   T_MAX_TYPE
 };
 
@@ -391,7 +390,6 @@ static inline bool is_nil(nanoclj_val_t v) {
 
 #define _image_unchecked(p)	  ((p)->_object._image)
 #define _audio_unchecked(p)	  ((p)->_object._audio)
-#define _canvas_unchecked(p)	  ((p)->_object._canvas.impl)
 #define _tensor_unchecked(p)	  ((p)->_object._tensor.impl)
 #define _lvalue_unchecked(p)      ((p)->_object._lvalue)
 #define _ff_unchecked(p)	  ((p)->_object._ff.ptr)
@@ -425,7 +423,6 @@ static inline bool is_nil(nanoclj_val_t v) {
 
 #define image_unchecked(p)	  (_image_unchecked(decode_pointer(p)))
 #define audio_unchecked(p)	  (_audio_unchecked(decode_pointer(p)))
-#define canvas_unchecked(p)	  (_canvas_unchecked(decode_pointer(p)))
 
 static inline int32_t decode_integer(nanoclj_val_t value) {
   return (int32_t)value.as_long & MASK_PAYLOAD_INT;
@@ -451,11 +448,6 @@ static inline bool is_image(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
   nanoclj_cell_t * c = decode_pointer(p);
   return _type(c) == T_IMAGE;
-}
-static inline bool is_canvas(nanoclj_val_t p) {
-  if (!is_cell(p)) return false;
-  nanoclj_cell_t * c = decode_pointer(p);
-  return _type(c) == T_CANVAS;  
 }
 static inline bool is_exception(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
@@ -916,7 +908,8 @@ static inline int alloc_cellseg(nanoclj_t * sc, int n) {
 
 static inline void port_close(nanoclj_t * sc, nanoclj_cell_t * p) {
   nanoclj_port_rep_t * pr = _rep_unchecked(p);
-  if (_port_type_unchecked(p) == port_file) {
+  switch (_port_type_unchecked(p)) {
+  case port_file:
     if (pr->stdio.filename) {
       sc->free(pr->stdio.filename);
       pr->stdio.filename = NULL;
@@ -926,8 +919,14 @@ static inline void port_close(nanoclj_t * sc, nanoclj_cell_t * p) {
       fclose(fh);
     }
     pr->stdio.file = NULL;
-  } else if (_port_type_unchecked(p) == port_string) {
+    break;
+  case port_string:
     sc->free(pr->string.data.data);
+#if NANOCLJ_HAS_CANVAS
+  case port_canvas:
+    finalize_canvas(sc, pr->canvas.impl);
+    break;
+#endif
   }
   _port_type_unchecked(p) = port_free;
 }
@@ -982,12 +981,6 @@ static inline void finalize_cell(nanoclj_t * sc, nanoclj_cell_t * a) {
     sc->free(audio->data);
     sc->free(audio);
   }
-    break;
-  case T_CANVAS:
-#if NANOCLJ_HAS_CANVAS
-    finalize_canvas(sc, _canvas_unchecked(a));
-    _canvas_unchecked(a) = NULL;
-#endif
     break;
   }
 }
@@ -3109,27 +3102,25 @@ static inline bool realloc_port_string(nanoclj_t * sc, nanoclj_val_t p) {
 static inline void putchars(nanoclj_t * sc, const char *s, size_t len, nanoclj_val_t out) {
   assert(s);
 
-  if (type(out) == T_WRITER) {
-    nanoclj_port_rep_t * pr = rep_unchecked(out);
-    switch (port_type_unchecked(out)) {
-    case port_file:
-      fwrite(s, 1, len, pr->stdio.file);
-      break;
-    case port_callback:
-      pr->callback.text(s, len, sc->ext_data);
-      break;
-    case port_string:
-      for (; len; len--) {
-	if (pr->string.curr != pr->string.data.data + pr->string.data.size || realloc_port_string(sc, out)) {
-	  *pr->string.curr++ = *s++;
-	}
+  nanoclj_port_rep_t * pr = rep_unchecked(out);
+  switch (port_type_unchecked(out)) {
+  case port_file:
+    fwrite(s, 1, len, pr->stdio.file);
+    break;
+  case port_callback:
+    pr->callback.text(s, len, sc->ext_data);
+    break;
+  case port_string:
+    for (; len; len--) {
+      if (pr->string.curr != pr->string.data.data + pr->string.data.size || realloc_port_string(sc, out)) {
+	*pr->string.curr++ = *s++;
       }
-      break;
     }
-  } else if (type(out) == T_CANVAS) {
+    break;
 #if NANOCLJ_HAS_CANVAS
-    void * canvas = canvas_unchecked(out);
-    canvas_show_text(sc, canvas, (strview_t){ s, len });
+  case port_canvas:  
+    canvas_show_text(sc, pr->canvas.impl, (strview_t){ s, len });
+    break;
 #endif
   }
 }
@@ -3146,34 +3137,36 @@ static inline void putcharacter(nanoclj_t * sc, int c, nanoclj_val_t out) {
 }
 
 static inline void set_color(nanoclj_t * sc, nanoclj_cell_t * vec, nanoclj_val_t out) {
-  if (type(out) == T_CANVAS) {
+  nanoclj_port_rep_t * pr = rep_unchecked(out);
+  switch (port_type_unchecked(out)) {
+  case port_file:
+#ifndef WIN32    
+    FILE * fh = pr->stdio.file;
+    set_term_color(fh,
+		   to_double(vector_elem(vec, 0)),
+		   to_double(vector_elem(vec, 1)),
+		   to_double(vector_elem(vec, 2)),
+		   sc->term_colors
+		   );
+#endif
+    break;
+  case port_callback:
+    if (pr->callback.color) {
+      pr->callback.color(to_double(vector_elem(vec, 0)),
+			 to_double(vector_elem(vec, 1)),
+			 to_double(vector_elem(vec, 2)),
+			 sc->ext_data
+			 );
+    }
+    break;
 #if NANOCLJ_HAS_CANVAS
-    canvas_set_color(canvas_unchecked(out),
+  case port_canvas:
+    canvas_set_color(pr->canvas.impl,
 		     to_double(vector_elem(vec, 0)),
 		     to_double(vector_elem(vec, 1)),
 		     to_double(vector_elem(vec, 2)));
-#endif
-  } else if (type(out) == T_WRITER) {
-    nanoclj_port_rep_t * pr = rep_unchecked(out);
-    if (port_type_unchecked(out) == port_file) {
-#ifndef WIN32    
-      FILE * fh = pr->stdio.file;
-      set_term_color(fh,
-		     to_double(vector_elem(vec, 0)),
-		     to_double(vector_elem(vec, 1)),
-		     to_double(vector_elem(vec, 2)),
-		     sc->term_colors
-		     );
-#endif
-    } else if (port_type_unchecked(out) == port_callback) {
-      if (pr->callback.color) {
-	pr->callback.color(to_double(vector_elem(vec, 0)),
-			   to_double(vector_elem(vec, 1)),
-			   to_double(vector_elem(vec, 2)),
-			   sc->ext_data
-			   );
-      }
-    }
+    break;
+#endif    
   }
 }
 
@@ -3699,12 +3692,35 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
 	  print_slashstring(sc, to_strview(l), out);
 	  return;
 	}
-      case T_WRITER:
-	if (_port_type_unchecked(c) == port_string) {
-	  nanoclj_port_rep_t * pr = rep_unchecked(l);
+      case T_WRITER:{
+	nanoclj_port_rep_t * pr = rep_unchecked(l);
+	switch (_port_type_unchecked(c)) {
+	case port_string:
 	  p = pr->string.data.data;
-	  plen = pr->string.curr - pr->string.data.data;
-	} 
+	  plen = pr->string.curr - pr->string.data.data;	
+	  break;
+#if NANOCLJ_HAS_CANVAS
+	case port_canvas:
+	  nanoclj_val_t image = canvas_create_image(sc, pr->canvas.impl);
+	  if (port_type_unchecked(out) == port_file) {
+	    FILE * fh = rep_unchecked(out)->stdio.file;
+	    int x, y;
+	    if (fh == stdout) {
+	      sc->active_element = l;
+	      sc->active_element_target = out;
+	      if (0 && get_cursor_position(stdin, fh, &x, &y)) {
+		sc->active_element_x = x;
+		sc->active_element_y = y;
+	      }
+	    } else {
+	      sc->active_element = mk_nil();
+	    }
+	  }
+	  print_image(sc, image_unchecked(image), out);
+	  return;	
+#endif
+	}
+      }
 	break;
       case T_ENVIRONMENT:{
 	nanoclj_val_t name_v;
@@ -3737,30 +3753,6 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
       case T_IMAGE:
 	print_image(sc, _image_unchecked(c), out);
 	return;
-      case T_CANVAS:{
-#if NANOCLJ_HAS_CANVAS
-	nanoclj_val_t image = canvas_create_image(sc, canvas_unchecked(l));
-	if (type(out) == T_WRITER) {
-	  if (port_type_unchecked(out) == port_file) {
-	    FILE * fh = rep_unchecked(out)->stdio.file;
-	    int x, y;
-	    if (fh == stdout) {
-	      sc->active_element = l;
-	      sc->active_element_target = out;
-	      if (0 && get_cursor_position(stdin, fh, &x, &y)) {
-		sc->active_element_x = x;
-		sc->active_element_y = y;
-	      }
-	    } else {
-	      sc->active_element = mk_nil();
-	    }
-	  }
-	}
-
-	print_image(sc, image_unchecked(image), out);
-	return;
-      }
-#endif
       }
     }
   }
@@ -4256,25 +4248,30 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
       x = first(sc, args);
       if (is_string(x)) {
 	return port_from_filename(sc, to_strview(x), T_WRITER);
+      } else {
+	args = next(sc, args);
+	if (args) {
+	  y = first(sc, args);
+#if NANOCLJ_HAS_CANVAS
+	  nanoclj_cell_t * port = get_port_object(sc, T_WRITER, port_canvas);
+	  _rep_unchecked(port)->canvas.impl = mk_canvas(sc,
+							(int)(to_double(x) * sc->window_scale_factor),
+							(int)(to_double(y) * sc->window_scale_factor));
+	  return mk_pointer(port);
+#endif
+	}	
       }
     }
     break;
-
-  case T_CANVAS:
-#if NANOCLJ_HAS_CANVAS
-    return mk_canvas(sc,
-		     (int)(to_double(first(sc, args)) * sc->window_scale_factor),
-		     (int)(to_double(second(sc, args)) * sc->window_scale_factor));
-#endif
 
   case T_IMAGE:
     if (!args) {
       return mk_image(sc, 0, 0, 0, NULL);      
     } else {
       x = first(sc, args);
-      if (is_canvas(x)) {
+      if (is_writer(x) && port_type_unchecked(x) == port_canvas) {
 #if NANOCLJ_HAS_CANVAS
-	return canvas_create_image(sc, canvas_unchecked(x));
+	return canvas_create_image(sc, rep_unchecked(x)->canvas.impl);
 #endif
       }
     }
@@ -6352,8 +6349,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     }
 #if NANOCLJ_HAS_CANVAS
     x = get_out_port(sc);
-    if (is_canvas(x)) {
-      canvas_set_font_size(canvas_unchecked(x), to_double(arg0) * sc->window_scale_factor);
+    if (is_writer(x) && port_type_unchecked(x) == port_canvas) {
+      canvas_set_font_size(rep_unchecked(x)->canvas.impl, to_double(arg0) * sc->window_scale_factor);
     }
 #endif
     s_return(sc, mk_nil());
@@ -6364,9 +6361,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     }
 #if NANOCLJ_HAS_CANVAS
     x = get_out_port(sc);
-    if (is_canvas(x)) {
+    if (is_writer(x) && port_type_unchecked(x) == port_canvas) {
       /* Do not scale line width whit DPI scale factor */
-      canvas_set_line_width(canvas_unchecked(x), to_double(arg0));
+      canvas_set_line_width(rep_unchecked(x)->canvas.impl, to_double(arg0));
     }
 #endif
     s_return(sc, mk_nil());
@@ -6377,8 +6374,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     }
 #if NANOCLJ_HAS_CANVAS
     x = get_out_port(sc);
-    if (is_canvas(x)) {
-      canvas_move_to(canvas_unchecked(x), to_double(arg0) * sc->window_scale_factor, to_double(arg1) * sc->window_scale_factor);
+    if (is_writer(x) && port_type_unchecked(x) == port_canvas) {
+      canvas_move_to(rep_unchecked(x)->canvas.impl, to_double(arg0) * sc->window_scale_factor, to_double(arg1) * sc->window_scale_factor);
     }
 #endif
     s_return(sc, mk_nil());
@@ -6389,8 +6386,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     }
 #if NANOCLJ_HAS_CANVAS
     x = get_out_port(sc);
-    if (is_canvas(x)) {
-      canvas_line_to(canvas_unchecked(x), to_double(arg0) * sc->window_scale_factor, to_double(arg1) * sc->window_scale_factor);
+    if (is_writer(x) && port_type_unchecked(x) == port_canvas) {
+      canvas_line_to(rep_unchecked(x)->canvas.impl, to_double(arg0) * sc->window_scale_factor, to_double(arg1) * sc->window_scale_factor);
     }
 #endif
     s_return(sc, mk_nil());
@@ -6401,8 +6398,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     }
 #if NANOCLJ_HAS_CANVAS
     x = get_out_port(sc);
-    if (is_canvas(x)) {
-      canvas_arc(canvas_unchecked(x), to_double(arg0) * sc->window_scale_factor, to_double(arg1) * sc->window_scale_factor,
+    if (is_writer(x) && port_type_unchecked(x) == port_canvas) {
+      canvas_arc(rep_unchecked(x)->canvas.impl, to_double(arg0) * sc->window_scale_factor, to_double(arg1) * sc->window_scale_factor,
 		 to_double(arg2) * sc->window_scale_factor, to_double(arg3), to_double(arg4));
     }
 #endif
@@ -6414,8 +6411,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     }
 #if NANOCLJ_HAS_CANVAS
     x = get_out_port(sc);
-    if (is_canvas(x)) {
-      canvas_close_path(canvas_unchecked(x));
+    if (is_writer(x) && port_type_unchecked(x) == port_canvas) {
+      canvas_close_path(rep_unchecked(x)->canvas.impl);
     }
 #endif
     s_return(sc, mk_nil());
@@ -6426,8 +6423,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     }
 #if NANOCLJ_HAS_CANVAS
     x = get_out_port(sc);
-    if (is_canvas(x)) {
-      canvas_stroke(canvas_unchecked(x));
+    if (is_writer(x) && port_type_unchecked(x) == port_canvas) {
+      canvas_stroke(rep_unchecked(x)->canvas.impl);
     }
 #endif
     s_return(sc, mk_nil());
@@ -6438,8 +6435,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     }
 #if NANOCLJ_HAS_CANVAS
     x = get_out_port(sc);
-    if (is_canvas(x)) {
-      canvas_stroke(canvas_unchecked(x));
+    if (is_writer(x) && port_type_unchecked(x) == port_canvas) {
+      canvas_stroke(rep_unchecked(x)->canvas.impl);
     }
 #endif
     s_return(sc, mk_nil());
@@ -6450,9 +6447,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     }
 #if NANOCLJ_HAS_CANVAS
     x = get_out_port(sc);
-    if (is_canvas(x)) {
+    if (is_writer(x) && port_type_unchecked(x) == port_canvas) {
       double width, height;
-      canvas_get_text_extents(sc, canvas_unchecked(x), to_strview(arg0), &width, &height);
+      canvas_get_text_extents(sc, rep_unchecked(x)->canvas.impl, to_strview(arg0), &width, &height);
       s_return(sc, mk_vector_2d(sc, width / sc->window_scale_factor, height / sc->window_scale_factor));
     }
 #endif
@@ -6463,8 +6460,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     }
 #if NANOCLJ_HAS_CANVAS
     x = get_out_port(sc);
-    if (is_canvas(x)) {
-      canvas_save(canvas_unchecked(x));
+    if (is_writer(x) && port_type_unchecked(x) == port_canvas) {
+      canvas_save(rep_unchecked(x)->canvas.impl);
     }
 #endif
     s_return(sc, mk_nil());
@@ -6474,17 +6471,22 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       Error_0(sc, "Error - Invalid arity");
     }
     x = get_out_port(sc);
-    if (is_canvas(x)) {
-#if NANOCLJ_HAS_CANVAS
-      canvas_restore(canvas_unchecked(x));
-#endif
-    } else if (is_writer(x)) {
+    if (is_writer(x)) {
       nanoclj_port_rep_t * pr = rep_unchecked(x);
-      if (port_type_unchecked(x) == port_file) {	
-	FILE * fh = pr->stdio.file;
-	reset_color(fh);
-      } else if (port_type_unchecked(x) == port_callback && pr->callback.restore) {
-	pr->callback.restore(sc->ext_data);
+      
+      switch (port_type_unchecked(x)) {
+#if NANOCLJ_HAS_CANVAS
+      case port_canvas:
+	canvas_restore(pr->canvas.impl);
+	break;
+#endif
+      case port_file:
+	reset_color(pr->stdio.file);
+	break;
+      case port_callback:
+	if (pr->callback.restore) {
+	  pr->callback.restore(sc->ext_data);
+	}
       }
     }
     s_return(sc, mk_nil());
@@ -6494,23 +6496,28 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       Error_0(sc, "Error - Invalid arity");      
     }
     x = get_out_port(sc);
-    if (is_canvas(x)) {
-      nanoclj_val_t tmp = mk_canvas(sc, to_int(arg0), to_int(arg1));
-      canvas_unchecked(x) = canvas_unchecked(tmp);
-      canvas_unchecked(tmp) = NULL;      
+#if NANOCLJ_HAS_CANVAS
+    if (is_writer(x) && port_type_unchecked(x) == port_canvas) {
+      rep_unchecked(x)->canvas.impl = mk_canvas(sc, to_int(arg0), to_int(arg1));
     }
+#endif
     s_return(sc, mk_nil());
 
   case OP_FLUSH:
     x = get_out_port(sc);
-    if (is_canvas(x)) {
-      canvas_flush(canvas_unchecked(x));
-      if (x.as_long == sc->active_element.as_long) {
-	print_primitive(sc, x, false, sc->active_element_target);
-      }
-    } else if (is_writer(x) && port_type_unchecked(x) == port_file) {
+    if (is_writer(x)) {
       nanoclj_port_rep_t * pr = rep_unchecked(x);
-      fflush(pr->stdio.file);
+      switch (port_type_unchecked(x)) {
+      case port_canvas:
+	canvas_flush(pr->canvas.impl);	
+	if (x.as_long == sc->active_element.as_long) {
+	  print_primitive(sc, x, false, sc->active_element_target);
+	}
+	break;
+      case port_file:
+	fflush(pr->stdio.file);
+	break;
+      }
     }
     s_return(sc, mk_nil());
 
@@ -7002,7 +7009,6 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc fr
 
   mk_named_type(sc, "nanoclj.core.CharArray", T_CHAR_ARRAY, Object);
   mk_named_type(sc, "nanoclj.core.Image", T_IMAGE, Object);
-  mk_named_type(sc, "nanoclj.core.Canvas", T_CANVAS, Object);
   mk_named_type(sc, "nanoclj.core.Audio", T_AUDIO, Object);
   mk_named_type(sc, "nanoclj.core.Tensor", T_TENSOR, Object);
   mk_named_type(sc, "nanoclj.core.EmptyList", T_NIL, Object);

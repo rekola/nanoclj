@@ -69,7 +69,7 @@
                                (do
                                  (line-to (fit-x (first x)) (fit-y (first y)))
                                  (recur (rest x) (rest y)))))
-         cx (canvas width height)
+         cx (clojure.java.io/writer width height)
          draw (fn []
                 (set-font-size 10)
                 (set-color box-color)

@@ -9,14 +9,11 @@ static void finalize_canvas(nanoclj_t * sc, void * canvas) {
   if (canvas) cairo_destroy((cairo_t *)canvas);
 }
 
-static inline nanoclj_val_t mk_canvas(nanoclj_t * sc, int width, int height) {
+static inline void * mk_canvas(nanoclj_t * sc, int width, int height) {
   cairo_surface_t * surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, width, height);
   cairo_t * cr = cairo_create(surface);
   cairo_surface_destroy(surface);
   
-  nanoclj_cell_t * x = get_cell_x(sc, T_CANVAS, T_GC_ATOM, NULL, NULL, NULL);
-  _canvas_unchecked(x) = cr;
-
   cairo_set_source_rgba(cr, 1, 1, 1, 1);
   cairo_rectangle(cr, 0, 0, width, height);
   cairo_fill(cr);
@@ -35,7 +32,7 @@ static inline nanoclj_val_t mk_canvas(nanoclj_t * sc, int width, int height) {
   cairo_set_font_options(cr, options);
   cairo_font_options_destroy(options);
 
-  return mk_pointer(x);  
+  return cr;
 }
 
 static inline nanoclj_val_t canvas_create_image(nanoclj_t * sc, void * canvas) {

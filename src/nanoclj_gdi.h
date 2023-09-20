@@ -15,17 +15,12 @@ static void finalize_canvas(nanoclj_t * sc, void * canvas) {
   }
 }
 
-static inline nanoclj_val_t mk_canvas(nanoclj_t * sc, int width, int height) {
+static inline void * mk_canvas(nanoclj_t * sc, int width, int height) {
   HDC hdc = CreateCompatibleDC(NULL);
   HBITMAP bitmap = CreateBitmap(width, height, 3, 24, NULL);
   SelectObject(hdc, bitmap);
-  
-  nanoclj_cell_t * x = get_cell_x(sc, sc->EMPTY, sc->EMPTY);
-  _typeflag(x) = T_CANVAS | T_GC_ATOM;
-  _canvas_unchecked(x) = (void*)hdc;
-  _metadata_unchecked(x) = mk_nil();
-  
-  return mk_pointer(x);  
+    
+  return (void *)hdc;
 }
 
 static inline nanoclj_val_t canvas_create_image(nanoclj_t * sc, void * canvas) {

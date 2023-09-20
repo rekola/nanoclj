@@ -35,7 +35,8 @@ extern "C" {
     port_free = 0,
     port_file = 1,
     port_string = 2,
-    port_callback = 3
+    port_callback = 3,
+    port_canvas = 4
   } nanoclj_port_type_t;
 
   /* operator code */
@@ -77,6 +78,9 @@ extern "C" {
       void (*restore) (void*);
       void (*image) (nanoclj_image_t*, void*);
     } callback;
+    struct {
+      void * impl;
+    } canvas;
   } nanoclj_port_rep_t;
 
 /* cell structure */
@@ -99,9 +103,6 @@ extern "C" {
         nanoclj_val_t data[NANOCLJ_SMALL_VEC_SIZE];
 	struct nanoclj_cell_t * meta;
       } _small_collection;
-      struct {
-	void * impl;
-      } _canvas;
       struct {
 	void * impl;
       } _tensor;
