@@ -395,7 +395,7 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define _min_arity_unchecked(p)	  ((p)->_object._ff.min_arity)
 #define _max_arity_unchecked(p)	  ((p)->_object._ff.max_arity)
 
-#define _smallstrvalue_unchecked(p)      (&((p)->_object._small_string.data[0]))
+#define _smallstrvalue_unchecked(p)      (&((p)->_object._small_byte_array.data[0]))
 #define _sosize_unchecked(p)      ((p)->so_size)
 
 /* macros for cell operations */
@@ -1379,6 +1379,26 @@ static inline int utf8_inchar(nanoclj_cell_t * p) {
   return utf8_decode(buf);
 }
 
+static inline void update_cursor(int c, nanoclj_cell_t * p) {
+  if (_port_type_unchecked(p) == port_file) {
+    nanoclj_port_rep_t * pr = _rep_unchecked(p);
+    switch (c) {
+    case 8:
+      pr->stdio.column--;
+      break;
+    case 10:
+      pr->stdio.column = 0;
+      pr->stdio.line++;
+      break;
+    case 13:
+      pr->stdio.column = 0;
+      break;
+    default:
+      pr->stdio.column += mk_wcwidth(c);
+    }
+  }
+}
+
 /* get new character from input file */
 static inline int inchar(nanoclj_val_t p0) {
   nanoclj_cell_t * p = decode_pointer(p0);
@@ -1403,8 +1423,8 @@ static inline int inchar(nanoclj_val_t p0) {
   if (c == EOF) {
     /* Instead, set port_saw_EOF */
     _port_flags_unchecked(p) |= PORT_SAW_EOF;
-  } else if (c == '\n' && _port_type_unchecked(p) == port_file) {
-    _rep_unchecked(p)->stdio.curr_line++;
+  } else {
+    update_cursor(c, p);
   }
   return c;
 }
@@ -2956,7 +2976,8 @@ static inline bool file_push(nanoclj_t * sc, strview_t sv) {
   nanoclj_cell_t * p = get_port_object(sc, T_READER, port_file);
   nanoclj_port_rep_t * pr = _rep_unchecked(p);
   pr->stdio.file = fh;
-  pr->stdio.curr_line = 0;
+  pr->stdio.line = pr->stdio.column = 0;
+  pr->stdio.num_states = 0;
   pr->stdio.filename = filename;
   
   sc->load_stack[sc->file_i] = mk_pointer(p);
@@ -3046,7 +3067,8 @@ static inline nanoclj_val_t port_from_filename(nanoclj_t * sc, strview_t sv, uin
   nanoclj_cell_t * p = port_rep_from_file(sc, f, type);
   nanoclj_port_rep_t * pr = _rep_unchecked(p);
   pr->stdio.filename = filename;
-  pr->stdio.curr_line = 0;
+  pr->stdio.line = pr->stdio.column = 0;
+  pr->stdio.num_states = 0;
   return mk_pointer(p);    
 }
 
@@ -3101,8 +3123,8 @@ static inline nanoclj_val_t port_from_scratch(nanoclj_t * sc) {
   return mk_pointer(p);
 }
 
-static inline bool realloc_port_string(nanoclj_t * sc, nanoclj_val_t p) {
-  nanoclj_port_rep_t * pr = rep_unchecked(p);
+static inline bool realloc_port_string(nanoclj_t * sc, nanoclj_cell_t * p) {
+  nanoclj_port_rep_t * pr = _rep_unchecked(p);
   char *start = pr->string.data.data;
   size_t new_size = 2 * pr->string.data.size;
   char *str = sc->malloc(new_size);
@@ -3118,13 +3140,19 @@ static inline bool realloc_port_string(nanoclj_t * sc, nanoclj_val_t p) {
   }
 }
 
-static inline void putchars(nanoclj_t * sc, const char *s, size_t len, nanoclj_val_t out) {
+static inline void putchars(nanoclj_t * sc, const char *s, size_t len, nanoclj_val_t out0) {
   assert(s);
-
-  nanoclj_port_rep_t * pr = rep_unchecked(out);
-  switch (port_type_unchecked(out)) {
-  case port_file:
+  nanoclj_cell_t * out = decode_pointer(out0);
+  nanoclj_port_rep_t * pr = _rep_unchecked(out);
+  switch (_port_type_unchecked(out)) {
+  case port_file:{
     fwrite(s, 1, len, pr->stdio.file);
+    const char * end = s + len;
+    while (s < end) {
+      update_cursor(utf8_decode(s), out);
+      s = utf8_next(s);
+    }
+  }
     break;
   case port_callback:
     pr->callback.text(s, len, sc->ext_data);
@@ -3186,6 +3214,19 @@ static inline void set_color(nanoclj_t * sc, nanoclj_cell_t * vec, nanoclj_val_t
     break;
 #endif    
   }
+}
+
+static inline void set_linear_gradient(nanoclj_t * sc, nanoclj_cell_t * p0, nanoclj_cell_t * p1, nanoclj_cell_t * colormap, nanoclj_val_t out) {
+  nanoclj_port_rep_t * pr = rep_unchecked(out);
+  switch (port_type_unchecked(out)) {
+  case port_file:
+    break;
+#if NANOCLJ_HAS_CANVAS
+  case port_canvas:
+    canvas_set_linear_gradient(pr->canvas.impl, p0, p1, colormap);
+    break;
+#endif    
+  }  
 }
 
 static inline void set_bg_color(nanoclj_t * sc, nanoclj_cell_t * vec, nanoclj_val_t out) {
@@ -4033,7 +4074,7 @@ static inline bool _Error_1(nanoclj_t * sc, const char *s, size_t len) {
   nanoclj_port_rep_t * pr = _rep_unchecked(p);
   if (_port_type_unchecked(p) == port_file && pr->stdio.file != stdin) {      
     /* we started from line 0 */
-    int ln = pr->stdio.curr_line + 1;
+    int ln = pr->stdio.line + 1;
     const char *fname = pr->stdio.filename;
 
     /* should never happen */
@@ -4965,7 +5006,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     nanoclj_cell_t * p = decode_pointer(sc->load_stack[sc->file_i]);
     if (_port_type_unchecked(p) == port_file) {
       nanoclj_port_rep_t * pr = _rep_unchecked(p);
-      meta = conjoin(sc, meta, mk_mapentry(sc, sc->LINE, mk_int(pr->stdio.curr_line + 1)));
+      meta = conjoin(sc, meta, mk_mapentry(sc, sc->LINE, mk_int(pr->stdio.line + 1)));
+      meta = conjoin(sc, meta, mk_mapentry(sc, sc->COLUMN, mk_int(pr->stdio.column + 1)));
       meta = conjoin(sc, meta, mk_mapentry(sc, sc->FILE, mk_string(sc, pr->stdio.filename)));
     }
     
@@ -6420,6 +6462,15 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     }
     s_return(sc, mk_nil());
 
+  case OP_SET_LINEAR_GRADIENT:
+    if (!unpack_args_3(sc, &arg0, &arg1, &arg2)) {
+      Error_0(sc, "Error - Invalid arity");      
+    } else if (is_cell(arg0) && is_cell(arg1) && is_cell(arg2)) {
+      set_linear_gradient(sc, decode_pointer(arg0), decode_pointer(arg1), decode_pointer(arg2), get_out_port(sc));
+      s_return(sc, mk_nil());
+    }
+    Error_0(sc, "Error - Invalid arguments");
+    
   case OP_SET_BG_COLOR:
     if (!unpack_args_1(sc, &arg0)) {
       Error_0(sc, "Error - Invalid arity");
@@ -7030,6 +7081,7 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc fr
   sc->NAME = def_keyword(sc, "name");
   sc->TYPE = def_keyword(sc, "type");
   sc->LINE = def_keyword(sc, "line");
+  sc->COLUMN = def_keyword(sc, "column");
   sc->FILE = def_keyword(sc, "file");
   
   sc->SORTED_SET = def_symbol(sc, "sorted-set");
@@ -7208,7 +7260,8 @@ void nanoclj_load_named_file(nanoclj_t * sc, FILE * fin, const char *filename) {
   nanoclj_port_rep_t * pr = _rep_unchecked(p);
   pr->stdio.file = fin;
   pr->stdio.filename = NULL;    
-  pr->stdio.curr_line = 0;
+  pr->stdio.line = pr->stdio.column = 0;
+  pr->stdio.num_states = 0;
   if (filename) {
     pr->stdio.filename = store_string(sc, strlen(filename), filename);
   } else {

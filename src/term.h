@@ -32,57 +32,52 @@ static inline void set_basic_style(FILE * fh, int style) {
   }
 }
 
-static inline int convert_to_256color(int r, int g, int b) {
-  if ((r / 10) == (g / 10) && (g / 10) == (b / 10)) {
-    r /= 10;
-    if (r == 0) {
+static inline int convert_to_256color(nanoclj_color_t color) {
+  if ((color.red / 10) == (color.green / 10) && (color.green / 10) == (color.blue / 10)) {
+    int grey = color.red /= 10;
+    if (grey == 0) {
       return 0;
-    } else if (r >= 25) {
+    } else if (grey >= 25) {
       return 15;
     } else {
-      return 232 + (r - 1);
+      return 232 + (grey - 1);
     }
   } else {
-    r /= 43;
-    g /= 43;
-    b /= 43;
+    int r = color.red / 43;
+    int g = color.green / 43;
+    int b = color.blue / 43;
     return 16 + r * 6 * 6 + g * 6 + b;
   }
 }
 
-static inline void set_term_fg_color(FILE * fh, double r0, double g0, double b0, nanoclj_colortype_t colors) {
+static inline void set_term_fg_color(FILE * fh, double red, double green, double blue, nanoclj_colortype_t colors) {
   if (isatty(fileno(fh))) {
-    int r = clamp((int)(r0 * 255), 0, 255);
-    int g = clamp((int)(g0 * 255), 0, 255);
-    int b = clamp((int)(b0 * 255), 0, 255);
-
+    nanoclj_color_t color = mk_color(red, green, blue, 1.0);
     switch (colors) {
     case nanoclj_colortype_16:
       break;
     case nanoclj_colortype_256:
-      fprintf(fh, "\033[38:5:%dm", convert_to_256color(r, g, b));    
+      fprintf(fh, "\033[38:5:%dm", convert_to_256color(color));    
       break;
     case nanoclj_colortype_true:
-      fprintf(fh, "\033[38;2;%d;%d;%dm", r, g, b);
+      fprintf(fh, "\033[38;2;%d;%d;%dm", color.red, color.green, color.blue);
       break;
     }
   }
 }
 
-static inline void set_term_bg_color(FILE * fh, double r0, double g0, double b0, nanoclj_colortype_t colors) {
+static inline void set_term_bg_color(FILE * fh, double red, double green, double blue, nanoclj_colortype_t colors) {
   if (isatty(fileno(fh))) {
-    int r = clamp((int)(r0 * 255), 0, 255);
-    int g = clamp((int)(g0 * 255), 0, 255);
-    int b = clamp((int)(b0 * 255), 0, 255);
+    nanoclj_color_t color = mk_color(red, green, blue, 1.0);
 
     switch (colors) {
     case nanoclj_colortype_16:
       break;
     case nanoclj_colortype_256:
-      fprintf(fh, "\033[48:5:%dm", convert_to_256color(r, g, b));    
+      fprintf(fh, "\033[48:5:%dm", convert_to_256color(color));    
       break;
     case nanoclj_colortype_true:
-      fprintf(fh, "\033[48;2;%d;%d;%dm", r, g, b);
+      fprintf(fh, "\033[48;2;%d;%d;%dm", color.red, color.green, color.blue);
       break;
     }
   }

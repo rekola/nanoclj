@@ -11,6 +11,10 @@ typedef struct {
   float * data;
 } nanoclj_audio_t;
 
+typedef struct {
+  uint8_t red, green, blue, alpha;
+} nanoclj_color_t;
+
 typedef enum {
   nanoclj_colortype_16 = 0,
   nanoclj_colortype_256,

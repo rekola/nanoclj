@@ -56,6 +56,24 @@ static inline void canvas_set_color(void * canvas, double r, double g, double b)
   cairo_set_source_rgb((cairo_t *)canvas, r, g, b);
 }
 
+static inline void canvas_set_linear_gradient(void * canvas, nanoclj_cell_t * p0, nanoclj_cell_t * p1, nanoclj_cell_t * colormap) {
+  cairo_pattern_t * pat = cairo_pattern_create_linear(to_double(vector_elem(p0, 0)), to_double(vector_elem(p0, 1)),
+						      to_double(vector_elem(p1, 0)), to_double(vector_elem(p1, 1)));
+  size_t n = _get_size(colormap);
+  for (size_t i = 0; i < n; i++) {
+    nanoclj_cell_t * e = decode_pointer(vector_elem(colormap, i));
+    double pos = to_double(vector_elem(e, 0));
+    nanoclj_cell_t * color = decode_pointer(vector_elem(e, 1));
+    cairo_pattern_add_color_stop_rgb(pat, pos,
+				     to_double(vector_elem(color, 0)),
+				     to_double(vector_elem(color, 1)),
+				     to_double(vector_elem(color, 2)));
+  }
+
+  cairo_set_source((cairo_t *)canvas, pat);
+  cairo_pattern_destroy(pat);
+}
+
 static inline void canvas_set_font_size(void * canvas, double size) {
   cairo_set_font_size((cairo_t *)canvas, size);
 }

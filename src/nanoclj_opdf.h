@@ -122,6 +122,7 @@ _OP_DEF("tensor-set!", OP_TENSOR_SET)
 
 /* Canvas ops */
 _OP_DEF("set-color", OP_SET_COLOR)
+_OP_DEF("set-linear-gradient", OP_SET_LINEAR_GRADIENT)
 _OP_DEF("set-bg-color", OP_SET_BG_COLOR)
 _OP_DEF("set-font-size", OP_SET_FONT_SIZE)
 _OP_DEF("set-line-width", OP_SET_LINE_WIDTH)

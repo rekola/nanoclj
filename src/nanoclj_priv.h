@@ -62,11 +62,20 @@ extern "C" {
     size_t size, reserved, refcnt;
   } nanoclj_float_array_t;
   
+  typedef struct {
+    nanoclj_color_t fg;
+    nanoclj_color_t bg;
+  } nanoclj_term_state_t;
+  
   typedef union {
     struct {
       FILE *file;
-      int curr_line;
       char *filename;
+      int32_t line, column;
+      nanoclj_color_t fg;
+      nanoclj_color_t bg;
+      int32_t num_states;
+      nanoclj_term_state_t states[256];
     } stdio;
     struct {
       char *curr;
@@ -91,7 +100,7 @@ extern "C" {
     union {
       struct {
 	char data[NANOCLJ_SMALL_STR_SIZE];
-      } _small_string;
+      } _small_byte_array;      
       struct {
 	size_t offset, size;
 	union {
@@ -210,6 +219,7 @@ extern "C" {
     nanoclj_val_t NAME;		  /* :name */
     nanoclj_val_t TYPE;		  /* :type */
     nanoclj_val_t LINE;		  /* :line */
+    nanoclj_val_t COLUMN;	  /* :column */
     nanoclj_val_t FILE;		  /* :file */
     
     nanoclj_val_t SORTED_SET;	  /* sorted-set */
