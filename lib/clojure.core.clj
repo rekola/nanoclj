@@ -8,6 +8,8 @@
 (defn set? [x] (instance? clojure.lang.PersistentTreeSet x))
 (defn map? [x] (instance? clojure.lang.PersistentArrayMap x))
 (defn image? [x] (instance? nanoclj.core.Image x))
+(defn inst? [x] (instance? java.util.Date x))
+(defn uuid? [x] (instance? java.util.UUID x))
 (defn coll? [x] (is-any-of? (type x)
                             clojure.lang.PersistentTreeSet
                             clojure.lang.PersistentArrayMap
@@ -40,6 +42,10 @@
 
 ; Casts argument to long (or int if sufficient)
 (def long java.lang.Long)
+
+(defn inst-ms
+  "Returns millisecond time of java.util.Date"
+  [x] (long x))
 
 (defn num
   "Casts argument to number"
