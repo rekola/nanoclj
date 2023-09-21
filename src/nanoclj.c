@@ -183,7 +183,8 @@ enum nanoclj_types {
   T_AUDIO = 33,
   T_FILE = 34,
   T_DATE = 35,
-  T_TENSOR = 36,
+  T_UUID = 36,
+  T_TENSOR = 37,
   T_MAX_TYPE
 };
 
@@ -601,7 +602,7 @@ static inline char * _strvalue(nanoclj_cell_t * s) {
 static inline const char * strvalue(nanoclj_val_t p) {
   if (is_cell(p)) {
     nanoclj_cell_t * c = decode_pointer(p);
-    if (c && (_type(c) == T_STRING || _type(c) == T_CHAR_ARRAY || _type(c) == T_FILE)) {
+    if (c && (_type(c) == T_STRING || _type(c) == T_CHAR_ARRAY || _type(c) == T_FILE || _type(c) == T_UUID)) {
       return _strvalue(c);
     }
   }
@@ -792,6 +793,7 @@ static inline strview_t _to_strview(nanoclj_cell_t * c) {
   case T_STRING:
   case T_CHAR_ARRAY:
   case T_FILE:
+  case T_UUID:
     if (_is_small(c)) {
       return (strview_t){ _smallstrvalue_unchecked(c), _sosize_unchecked(c) };
     } else {
@@ -933,7 +935,8 @@ static inline void finalize_cell(nanoclj_t * sc, nanoclj_cell_t * a) {
   switch (_type(a)) {
   case T_STRING:
   case T_CHAR_ARRAY:
-  case T_FILE:{
+  case T_FILE:
+  case T_UUID:{
     nanoclj_byte_array_t * s = _str_store_unchecked(a);
     if (s) {
       s->refcnt--;
@@ -1637,7 +1640,7 @@ static inline nanoclj_cell_t * subvec(nanoclj_t * sc, nanoclj_cell_t * vec, size
 /* Creates a reverse sequence of a vector or string */
 static inline nanoclj_cell_t * rseq(nanoclj_t * sc, nanoclj_cell_t * coll) {
   size_t size = _get_size(coll);
-  bool is_string = _type(coll) == T_STRING || _type(coll) == T_CHAR_ARRAY || _type(coll) == T_FILE;
+  bool is_string = _type(coll) == T_STRING || _type(coll) == T_CHAR_ARRAY || _type(coll) == T_FILE || _type(coll) == T_UUID;
   if (!size) {
     return NULL;
   } else if (is_string) {
@@ -1706,6 +1709,7 @@ static inline nanoclj_cell_t * seq(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_STRING:
   case T_CHAR_ARRAY:
   case T_FILE:
+  case T_UUID:
     if (_get_size(coll) == 0) {
       return NULL;
     } else {
@@ -1752,6 +1756,7 @@ static inline bool is_empty(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_STRING:
   case T_CHAR_ARRAY:
   case T_FILE:
+  case T_UUID:
   case T_VECTOR:
   case T_ARRAYMAP:
   case T_SORTED_SET:
@@ -1929,7 +1934,8 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
       switch (t_a) {
       case T_STRING:
       case T_CHAR_ARRAY:
-      case T_FILE:{
+      case T_FILE:
+      case T_UUID:{
 	strview_t sv1 = _to_strview(a), sv2 = _to_strview(b);
 	return sv1.size == sv2.size && strncmp(sv1.ptr, sv2.ptr, sv1.size) == 0;
       }
@@ -2288,7 +2294,8 @@ static inline int compare(nanoclj_val_t a, nanoclj_val_t b) {
       switch (type_a) {
       case T_STRING:
       case T_CHAR_ARRAY:
-      case T_FILE:{
+      case T_FILE:
+      case T_UUID:{
 	strview_t sv1 = _to_strview(a2), sv2 = _to_strview(b2);
 	const char * p1 = sv1.ptr, * p2 = sv2.ptr;
 	const char * end1 = sv1.ptr + sv1.size, * end2 = sv2.ptr + sv2.size;
@@ -2411,7 +2418,8 @@ static int hasheq(nanoclj_val_t v) {
 
     case T_STRING:
     case T_CHAR_ARRAY:
-    case T_FILE:{
+    case T_FILE:
+    case T_UUID:{
       strview_t sv = _to_strview(c);
       int hashcode = 0, m = 1;
       for (int i = (int)sv.size - 1; i >= 0; i--) {
@@ -3706,14 +3714,17 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
 	break;
       case T_DATE:{
 	time_t t = _lvalue_unchecked(c) / 1000;
-	p = ctime_r(&t, sc->strbuff);
-	plen = strlen(p);
-	while (plen > 0 && isspace(p[plen - 1])) {
-	  plen--;
-	}
+	int msec = _lvalue_unchecked(c) % 1000;
+	struct tm tm;
+	gmtime_r(&t, &tm);
+	plen = sprintf(sc->strbuff, "#inst %04d-%02d-%02dT%02d:%02d:%02d.%03dZ",
+		       1900 + tm.tm_year, 1 + tm.tm_mon, tm.tm_mday,
+		       tm.tm_hour, tm.tm_min, tm.tm_sec, msec);
+	p = sc->strbuff;
       }
 	break;
       case T_STRING:
+      case T_UUID:
 	if (!print_flag) {
 	  p = _strvalue(c);
 	  plen = _get_size(c);
@@ -3950,6 +3961,7 @@ static inline nanoclj_val_t mk_format(nanoclj_t * sc, strview_t fmt0, nanoclj_ce
     case T_STRING:
     case T_CHAR_ARRAY:
     case T_FILE:
+    case T_UUID:
     case T_SYMBOL:
     case T_KEYWORD:
       switch (n_args) {
@@ -4184,7 +4196,8 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
 
   case T_STRING:
   case T_CHAR_ARRAY:
-  case T_FILE:{
+  case T_FILE:
+  case T_UUID:{
     strview_t sv = to_strview(first(sc, args));
     return mk_pointer(get_string_object(sc, type_id, sv.ptr, sv.size, 0));
   }
@@ -4211,7 +4224,35 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
     return mk_integer(sc, to_long(first(sc, args)));
 
   case T_DATE:
-    return mk_date(sc, to_long(first(sc, args)));
+    if (!args) {
+      return mk_date(sc, system_time() / 1000);
+    } else {
+      x = first(sc, args);
+      if (is_string(x)) {
+	strview_t sv = to_strview(x);
+	struct tm tm;
+	bool is_valid = false;
+	if (sv.size >= 10 && sscanf(sv.ptr, "%04d-%02d-%02d", &tm.tm_year, &tm.tm_mon, &tm.tm_mday) == 3) {
+	  if (sv.size >= 19 && sv.ptr[10] == 'T' && sscanf(sv.ptr + 11, "%02d:%02d:%02d", &tm.tm_hour, &tm.tm_min, &tm.tm_sec) == 3) {
+	    if (sv.size == 19 || (sv.size == 20 && sv.ptr[19] == 'Z')) {
+	      is_valid = true;
+	    }
+	  } else if (sv.size == 10 || (sv.size == 11 && sv.ptr[10] == 'Z')) {
+	    tm.tm_sec = tm.tm_min = tm.tm_hour = 0;
+	    is_valid = true;
+	  }
+	}
+	if (is_valid) {
+	  tm.tm_mon--;
+	  tm.tm_year -= 1900;
+	  tm.tm_isdst = -1;
+	  return mk_date(sc, (long long)timegm(&tm) * 1000);
+	}
+	return mk_nil();
+      } else {
+	return mk_date(sc, to_long(x));
+      }
+    }
   
   case T_REAL:
     return mk_real(to_double(first(sc, args)));
@@ -6013,17 +6054,30 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	}
 	
       case TOK_TAG:{
-	const char * tag = readstr_upto(sc, DELIMITERS, inport);
-	nanoclj_cell_t * f = find_slot_in_env(sc, sc->envir, sc->TAG_HOOK, true);
-	if (f) {
-	  nanoclj_val_t hook = slot_value_in_env(f);
-	  if (!is_nil(hook)) {
-	    sc->code = mk_pointer(cons(sc, hook, cons(sc, mk_string(sc, tag), NULL)));
-	    s_goto(sc, OP_EVAL);
-	  }
+	nanoclj_val_t tag = mk_string(sc, readstr_upto(sc, DELIMITERS, inport));
+	if (skipspace(sc, inport) != '"') {
+	  Error_0(sc, "Invalid literal");	 
 	}
-	sprintf(sc->errbuff, "No reader function for tag %s", tag);
-	Error_0(sc, sc->errbuff);
+	nanoclj_val_t value = readstrexp(sc, inport);
+	strview_t tag_sv = to_strview(tag);
+	
+	if (tag_sv.size == 4 && memcmp(tag_sv.ptr, "inst", 4) == 0) {
+	  s_return(sc, construct_by_type(sc, T_DATE, cons(sc, value, NULL)));	
+	} else if (tag_sv.size == 4 && memcmp(tag_sv.ptr, "uuid", 4) == 0) {
+	  s_return(sc, construct_by_type(sc, T_UUID, cons(sc, value, NULL)));	
+	} else {
+	  nanoclj_cell_t * f = find_slot_in_env(sc, sc->envir, sc->TAG_HOOK, true);
+	  if (f) {
+	    nanoclj_val_t hook = slot_value_in_env(f);
+	    if (!is_nil(hook)) {
+	      sc->code = mk_pointer(cons(sc, hook, cons(sc, tag, cons(sc, value, NULL))));
+	      s_goto(sc, OP_EVAL);
+	    }
+	  }
+	  
+	  sprintf(sc->errbuff, "No reader function for tag %.*s", (int)tag_sv.size, tag_sv.ptr);
+	  Error_0(sc, sc->errbuff);
+	}
       }
 	
       case TOK_IGNORE:
@@ -6617,7 +6671,7 @@ static inline nanoclj_val_t cons_checked(nanoclj_t * sc, nanoclj_val_t head, nan
 
 static const char * checked_strvalue(nanoclj_val_t p) {
   int t = type(p);
-  if (t == T_STRING || t == T_CHAR_ARRAY || t == T_FILE) {
+  if (t == T_STRING || t == T_CHAR_ARRAY || t == T_FILE || t == T_UUID) {
     return strvalue(p);
   } else {
     return "";
@@ -7009,6 +7063,7 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc fr
   mk_named_type(sc, "java.io.OutputStream", T_OUTPUT_STREAM, Object);
   mk_named_type(sc, "java.io.File", T_FILE, Object);
   mk_named_type(sc, "java.util.Date", T_DATE, Object);
+  mk_named_type(sc, "java.util.UUID", T_UUID, Object);
   
   /* Clojure types */
   nanoclj_cell_t * AReference = mk_named_type(sc, "clojure.lang.AReference", gentypeid(sc), Object);
