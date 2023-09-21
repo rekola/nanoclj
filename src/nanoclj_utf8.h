@@ -54,9 +54,8 @@ static inline int utf8_num_cells(const char *p, size_t len) {
   const char * end = p + len;
   int nc = 0;
   while (p < end) {
-    int c = utf8_decode(p);
+    nc += mk_wcwidth(utf8_decode(p));
     p = utf8_next(p);
-    nc += mk_wcwidth(c);
   }
   return nc;
 }
