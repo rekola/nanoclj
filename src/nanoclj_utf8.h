@@ -48,7 +48,7 @@ static inline int utf8_get_codepoint_pos(const char * p, int ci) {
   return i;
 }
 
-int mk_wcwidth(wchar_t ucs);
+int mk_wcwidth(int32_t ucs);
 
 static inline int utf8_num_cells(const char *p, size_t len) {
   const char * end = p + len;
