@@ -2960,47 +2960,6 @@ static inline nanoclj_cell_t * get_port_object(nanoclj_t * sc, uint32_t type, na
   return x;
 }
 
-static inline bool file_push(nanoclj_t * sc, strview_t sv) {
-  if (sc->file_i == MAXFIL - 1) {
-    return 0;
-  }
-  char * filename = alloc_c_str(sc, sv);
-  FILE * fh = fopen(filename, "r");
-  if (!fh) {
-    sc->free(filename);
-    return false;
-  }
-  
-  sc->file_i++;
-  
-  nanoclj_cell_t * p = get_port_object(sc, T_READER, port_file);
-  nanoclj_port_rep_t * pr = _rep_unchecked(p);
-  pr->stdio.file = fh;
-  pr->stdio.line = pr->stdio.column = 0;
-  pr->stdio.num_states = 0;
-  pr->stdio.filename = filename;
-  
-  sc->load_stack[sc->file_i] = mk_pointer(p);
-  
-  return true;
-}
-
-static inline void file_pop(nanoclj_t * sc) {
-  if (sc->file_i != 0) {
-    port_close(sc, decode_pointer(sc->load_stack[sc->file_i]));
-    sc->file_i--;
-  }
-}
-
-static inline nanoclj_cell_t * port_rep_from_file(nanoclj_t * sc, FILE * f, uint8_t type) {
-  nanoclj_cell_t * p = get_port_object(sc, type, port_file);
-  if (!p) return NULL;
-  nanoclj_port_rep_t * pr = _rep_unchecked(p);
-  pr->stdio.file = f;
-  pr->stdio.filename = NULL;
-  return p;
-}
-
 static inline int http_open_thread(nanoclj_t * sc, strview_t sv) {
   int pipefd[2];
   if (pipe(pipefd) == -1) {
@@ -3041,8 +3000,16 @@ static inline int http_open_thread(nanoclj_t * sc, strview_t sv) {
   return pipefd[0];
 }
 
+static inline nanoclj_cell_t * port_rep_from_file(nanoclj_t * sc, FILE * f, uint8_t type) {
+  nanoclj_cell_t * p = get_port_object(sc, type, port_file);
+  if (!p) return NULL;
+  nanoclj_port_rep_t * pr = _rep_unchecked(p);
+  pr->stdio.file = f;
+  pr->stdio.filename = NULL;
+  return p;
+}
+
 static inline nanoclj_val_t port_from_filename(nanoclj_t * sc, strview_t sv, uint32_t type) {
-  FILE * f = NULL;
   const char * mode;
   if (type == T_WRITER || type == T_OUTPUT_STREAM) {
     mode = "w";
@@ -3050,9 +3017,12 @@ static inline nanoclj_val_t port_from_filename(nanoclj_t * sc, strview_t sv, uin
     mode = "r";
   }
 
+  FILE * f = NULL;
   char * filename = NULL;
-  if ((sv.size >= 7 && strncmp(sv.ptr, "http://", 7) == 0) ||
-      (sv.size >= 8 && strncmp(sv.ptr, "https://", 8) == 0)) {
+  if (sv.size == 1 && sv.ptr[0] == '-') {
+    f = stdin;
+  } else if ((sv.size >= 7 && strncmp(sv.ptr, "http://", 7) == 0) ||
+	     (sv.size >= 8 && strncmp(sv.ptr, "https://", 8) == 0)) {
     int fd = http_open_thread(sc, sv);
     f = fdopen(fd, mode);
   } else {
@@ -3072,8 +3042,21 @@ static inline nanoclj_val_t port_from_filename(nanoclj_t * sc, strview_t sv, uin
   return mk_pointer(p);    
 }
 
-static inline nanoclj_val_t port_from_file(nanoclj_t * sc, FILE * f, uint32_t type) {
-  return mk_pointer(port_rep_from_file(sc, f, type));
+static inline bool file_push(nanoclj_t * sc, strview_t sv) {
+  if (sc->file_i == MAXFIL - 1) {
+    return false;
+  }
+  sc->file_i++;  
+  sc->load_stack[sc->file_i] = port_from_filename(sc, sv, T_READER);
+  
+  return true;
+}
+
+static inline void file_pop(nanoclj_t * sc) {
+  if (sc->file_i != 0) {
+    port_close(sc, decode_pointer(sc->load_stack[sc->file_i]));
+    sc->file_i--;
+  }
 }
 
 static inline nanoclj_val_t mk_writer_from_callback(nanoclj_t * sc,
@@ -6841,7 +6824,6 @@ static struct nanoclj_interface vtbl = {
   is_mapentry,  
   is_environment,
   
-  nanoclj_load_file,
   nanoclj_eval_string,
   def_symbol
 };
@@ -7168,14 +7150,13 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc fr
 }
 
 void nanoclj_set_input_port_file(nanoclj_t * sc, FILE * fin) {
-  nanoclj_val_t inport = port_from_file(sc, fin, T_READER);
+  nanoclj_val_t inport = mk_pointer(port_rep_from_file(sc, fin, T_READER));
   intern(sc, sc->global_env, sc->IN, inport);
 }
 
 void nanoclj_set_output_port_file(nanoclj_t * sc, FILE * fout) {
-  nanoclj_val_t p = port_from_file(sc, fout, T_WRITER);
+  nanoclj_val_t p = mk_pointer(port_rep_from_file(sc, fout, T_WRITER));
   intern(sc, sc->root_env, sc->OUT, p);
-
   update_window_info(sc, p);
 }
 
@@ -7196,7 +7177,7 @@ void nanoclj_set_error_port_callback(nanoclj_t * sc, void (*text) (const char *,
 }
 
 void nanoclj_set_error_port_file(nanoclj_t * sc, FILE * fout) {
-  nanoclj_val_t p = port_from_file(sc, fout, T_WRITER);
+  nanoclj_val_t p = mk_pointer(port_rep_from_file(sc, fout, T_WRITER));
   intern(sc, sc->global_env, sc->ERR, p);
 }
 
@@ -7239,35 +7220,17 @@ void nanoclj_deinit(nanoclj_t * sc) {
   sc->free(sc->alloc_seg);
 }
 
-void nanoclj_load_file(nanoclj_t * sc, FILE * fin) {
-  nanoclj_load_named_file(sc, fin, 0);
-}
-
-void nanoclj_load_named_file(nanoclj_t * sc, FILE * fin, const char *filename) {
-  if (fin == NULL) {
-    fprintf(stderr, "File can not be NULL when loading a file\n");
-    return;
-  }
+void nanoclj_load_named_file(nanoclj_t * sc, const char *filename) {
   dump_stack_reset(sc);
 
-  nanoclj_cell_t * p = get_port_object(sc, T_READER, port_file);
+  nanoclj_val_t p = port_from_filename(sc, (strview_t){ filename, strlen(filename) }, T_READER);
+
   sc->envir = sc->global_env;
   sc->file_i = 0;
-  sc->load_stack[0] = mk_pointer(p);
+  sc->load_stack[0] = p;
   sc->retcode = 0;
   sc->args = NULL;
-  
-  nanoclj_port_rep_t * pr = _rep_unchecked(p);
-  pr->stdio.file = fin;
-  pr->stdio.filename = NULL;    
-  pr->stdio.line = pr->stdio.column = 0;
-  pr->stdio.num_states = 0;
-  if (filename) {
-    pr->stdio.filename = store_string(sc, strlen(filename), filename);
-  } else {
-    pr->stdio.filename = NULL;
-  }
-  
+    
   Eval_Cycle(sc, OP_T0LVL);
 
   sc->load_stack[0] = mk_nil();
@@ -7335,13 +7298,6 @@ nanoclj_val_t nanoclj_eval(nanoclj_t * sc, nanoclj_val_t obj) {
 
 #if NANOCLJ_STANDALONE
 
-static inline FILE *open_file(const char *fname) {
-  if (str_eq(fname, "-") || str_eq(fname, "--")) {
-    return stdin;
-  }
-  return fopen(fname, "r");
-}
-
 int main(int argc, const char **argv) {
   if (argc == 1) {
     printf("nanoclj %s\n", get_version());
@@ -7378,16 +7334,14 @@ int main(int argc, const char **argv) {
   }
   intern(&sc, sc.global_env, def_symbol(&sc, "*command-line-args*"), mk_pointer(args));
   
-  FILE * fh = open_file(InitFile);
-  nanoclj_load_named_file(&sc, fh, InitFile);
+  nanoclj_load_named_file(&sc, InitFile);
   if (sc.retcode != 0) {
     fprintf(stderr, "Errors encountered reading %s\n", InitFile);
     exit(1);
   }
   
   if (argc >= 2) {
-    fh = open_file(argv[1]);
-    nanoclj_load_named_file(&sc, fh, argv[1]);
+    nanoclj_load_named_file(&sc, argv[1]);
     if (sc.retcode != 0) {
       fprintf(stderr, "Errors encountered reading %s\n", argv[1]);
       exit(1);

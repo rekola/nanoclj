@@ -77,8 +77,7 @@ extern "C" {
 						       void (*restore) (void*),
 						       void (*image) (nanoclj_image_t*, void*));
   NANOCLJ_EXPORT void nanoclj_set_error_port_callback(nanoclj_t * sc, void (*text) (const char *, size_t, void *));
-  NANOCLJ_EXPORT void nanoclj_load_file(nanoclj_t * sc, FILE * fin);
-  NANOCLJ_EXPORT void nanoclj_load_named_file(nanoclj_t * sc, FILE * fin, const char *filename);
+  NANOCLJ_EXPORT void nanoclj_load_named_file(nanoclj_t * sc, const char *filename);
   NANOCLJ_EXPORT nanoclj_val_t nanoclj_eval_string(nanoclj_t * sc, const char *cmd, size_t len);
   NANOCLJ_EXPORT void nanoclj_load_string(nanoclj_t * sc, const char *cmd);
   NANOCLJ_EXPORT nanoclj_val_t nanoclj_apply0(nanoclj_t * sc, const char *procname);
@@ -147,7 +146,6 @@ extern "C" {
     bool (*is_macro) (nanoclj_val_t p);
     bool (*is_mapentry) (nanoclj_val_t p);
     bool (*is_environment) (nanoclj_val_t p);
-    void (*load_file) (nanoclj_t * sc, FILE * fin);
     nanoclj_val_t (*eval_string) (nanoclj_t * sc, const char *input, size_t len);
     nanoclj_val_t (*def_symbol) (nanoclj_t * sc, const char *name);
   };
