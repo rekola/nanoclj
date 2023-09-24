@@ -14,6 +14,8 @@
 (def cddr (fn [x] (rest (rest x))))
 (def caadr (fn [x] (first (second x))))
 (def cdadr (fn [x] (rest (second x))))
+(def caddr (fn [x] (car (cdr (cdr x)))))
+(def cadddr (fn [x] (car (cdr (cdr (cdr x))))))
 
 ; (macro (my-intern- form) (cons 'def (cons (caddr form) (cons (cadddr form) '()))))
 ; (def my-intern (fn [ns name val] (let [s name] (my-intern- ns s val))))
@@ -24,7 +26,6 @@
 (def boolean java.lang.Boolean)
 (def char-array nanoclj.core.CharArray)
 (def map-entry clojure.lang.MapEntry)
-(def canvas nanoclj.core.Canvas)
 (def image nanoclj.core.Image)
 
 (def nil?
@@ -38,9 +39,10 @@
 (def list? (fn [x] (instance? clojure.lang.Cons x)))
 (def zero? (fn [n] (equiv? n 0)))
 
-(def is-any-of? (fn [x & args] (cond (empty? args) false
-                                     (equals? x (first args)) true
-                                     :else (apply* is-any-of? (cons x (rest args))))))
+(def :private is-any-of? (fn [x & args]
+                           (cond (empty? args) false
+                                 (equals? x (first args)) true
+                                 :else (apply* is-any-of? (cons x (rest args))))))
 
 (def int?
   "Returns true if the argument is fixed-precision integer"
@@ -69,6 +71,10 @@
 (def char?
   "Returns true if argument is a character"
   (fn [x] (instance? java.lang.Character x)))
+
+(def file?
+  "Returns true if argument is a File"
+  (fn [x] (instance? java.io.File x)))
 
 (def procedure?
   "Returns true if the argument is a function"
@@ -125,8 +131,7 @@
 ;;
 ;; Subsequently modified to handle vectors: D. Souflis
 
-(macro
- quasiquote
+(macro quasiquote
  (fn [l]
    (let [mcons (fn [f l r]
                  (if (and (list? r)
@@ -179,12 +184,12 @@
      (foo 0 (car (cdr l))))))
 
 ; DEFINE-MACRO Contributed by Andy Gaynor
-(macro (def-macro dform)
-  (if (symbol? (cadr dform))
-    `(macro ,@(cdr dform))
-    (let [form (gensym)]
-      `(macro (,(caadr dform) ,form)
-         (apply (fn ,(cdadr dform) ,@(cddr dform)) (cdr ,form))))))
+(macro def-macro (fn [dform]
+                   (if (symbol? (cadr dform))
+                     `(macro ,@(cdr dform))
+                     (let [form (gensym)]
+                       `(macro (,(caadr dform) ,form)
+                               (apply (fn ,(cdadr dform) ,@(cddr dform)) (cdr ,form)))))))
 
 ;;;; Utility to ease macro creation
 (def macroexpand (fn [form] ((eval (source (eval (car form)))) form)))
@@ -205,11 +210,14 @@
 (def-macro (defn name . args) (if (string? (car args))
                                 `(def ,name ,(car args) (fn ,(cadr args) ,@(cddr args)))
                                 `(def ,name (fn ,(car args) ,@(cdr args)))))
+(def-macro (defn- name . args) (if (string? (car args))
+                                 `(def :private ,name ,(car args) (fn ,(cadr args) ,@(cddr args)))
+                                 `(def :private ,name (fn ,(car args) ,@(cdr args)))))
 ; (def-macro (my-cond . form) (if (empty? form) '() `(if ,(car form) ,(cadr form) nil)))
 ; (macro (my-cond form) (if (empty? (cdr form)) '() (cons 'if (cons (cadr form) (cons (caddr form) (my-cond (cdddr form)))))))
 
 
-(def-macro (set! symbol value) `(set- ',symbol ,value))
+(def-macro (set! symbol value) `(-set ',symbol ,value))
              
 (defn create-ns [sym] (eval (if (defined? sym) sym (intern *ns* sym (clojure.lang.Namespace *ns* (str sym))))))
 (def-macro (ns name) `((create-ns ',name)))
@@ -219,35 +227,6 @@
     x
     (foldr f (f x (car lst)) (cdr lst))))
 
-; variable arity (some subtle scope bug?)
-(def-macro (or- . args)
-  (if (empty? args)  ; zero arg or?
-    nil
-    (if (empty? (rest args)) ; one arg or?
-      (first args)          
-      `(let ((temp ,(car args)))
-         (if temp
-           temp
-           (or- ,@(cdr args)))))))
-
-;; (def-macro (cond- . args)
-;;   (if (empty? args)  ; zero arg or?
-;;     nil
-;;     (if (empty? (rest args)) ; one arg or?
-;;       nil
-;;       `(if ,(car args)
-;;          ,(cadr args)
-;;          (cond- ,@(cddr args))))))
-
-(def-macro (cond-- args)
-  (if (empty? args)
-    nil
-    (if (empty? (rest args))
-      nil
-      (cons 'if (cons (car args) (cons (cadr args) (cons (cond-- (cddr args)) '())))))))
-
-(def cond- (fn [& args] (cond-- args)))
-
 (def-macro (case e . clauses)
   (if (empty? clauses) `(throw (str "No matching clause: " ,e))
       (if (empty? (rest clauses))
@@ -255,7 +234,7 @@
         `(if (equals? ,e ,(car clauses))
            ,(cadr clauses)
            (case ,e ,@(cddr clauses))))))
-
+  
 ; Add multiarity versions of basic operators
 
 (def reduce
@@ -308,18 +287,18 @@
 
 (defn bit-or
   "Returns a bitwise or"
-  ([x y] (bit-or- x y))
-  ([x y & more] (reduce bit-or- (bit-or- x y) more)))
+  ([x y] (-bit-or x y))
+  ([x y & more] (reduce -bit-or (-bit-or x y) more)))
 
 (defn bit-and
   "Returns a bitwise and"
-  ([x y] (bit-and- x y))
-  ([x y & more] (reduce bit-and- (bit-and- x y) more)))
+  ([x y] (-bit-and x y))
+  ([x y & more] (reduce -bit-and (-bit-and x y) more)))
 
 (defn bit-xor
   "Returns a bitwise xor"
-  ([x y] (bot-xor- x y))
-  ([x y & more] (reduce bit-xor- (bit-xor- x y) args)))
+  ([x y] (-bot-xor x y))
+  ([x y & more] (reduce -bit-xor (-bit-xor x y) args)))
 
 (defn bit-not 
   "Returns a bitwise not"
@@ -436,10 +415,13 @@
   "Returns true if argument is a closure. Note, a macro object is also a closure."
   [x] (instance? nanoclj.core.Closure x))
 
-(macro (unless form)
-     `(if (not ,(cadr form)) (do ,@(cddr form))))
+(macro when (fn [form]
+              `(if ,(cadr form) (do ,@(cddr form)))))
 
-(macro (when form)
-       `(if ,(cadr form) (do ,@(cddr form))))
+(macro when-not (fn [form]
+                  `(if (not ,(cadr form)) (do ,@(cddr form)))))
 
-(macro (delay form) `(clojure.lang.Delay ',(cdr form)))
+(macro if-not (fn [form]
+                `(if ,(cadr form) ,(cadddr form) ,(caddr form))))
+
+(macro delay (fn [form] `(clojure.lang.Delay ',(cdr form))))
