@@ -769,6 +769,7 @@ static inline bool is_true(nanoclj_val_t p) {
 #define clrmark(p)       cell_flags(p) &= UNMARK
 
 #define _cadr(p)          car(_cdr(p))
+#define _caddr(p)         car(cdr(_cdr(p)))
 
 #define caar(p)          car(car(p))
 #define caadr(p)         car(car(cdr(p)))
@@ -4972,18 +4973,27 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     }
     
   case OP_DEF0:{                /* define */    
-    x = car(sc->code);
+    nanoclj_cell_t * code = decode_pointer(sc->code);
+    nanoclj_val_t metaval = mk_nil();
+    if (prim_type(_car(code)) == T_KEYWORD) {
+      metaval = _car(code);
+      code = next(sc, code);
+    }
+    x = _car(code);
     if (!is_symbol(x)) {
       Error_0(sc, "Error - variable is not a symbol");
     }
     nanoclj_cell_t * meta = mk_arraymap(sc, 1);
     set_vector_elem(meta, 0, mk_mapentry(sc, sc->NAME, mk_string_from_sv(sc, to_strview(x))));
+    if (!is_nil(metaval)) {
+      meta = conjoin(sc, meta, mk_mapentry(sc, metaval, mk_boolean(true)));
+    }
       
-    if (caddr(sc->code).as_long != sc->EMPTY.as_long) {
-      meta = conjoin(sc, meta, mk_mapentry(sc, sc->DOC, cadr(sc->code)));
-      sc->code = caddr(sc->code);
+    if (_caddr(code).as_long != sc->EMPTY.as_long) {
+      meta = conjoin(sc, meta, mk_mapentry(sc, sc->DOC, _cadr(code)));
+      sc->code = _caddr(code);
     } else {
-      sc->code = cadr(sc->code);
+      sc->code = _cadr(code);
     }
 
     nanoclj_cell_t * p = decode_pointer(sc->load_stack[sc->file_i]);
