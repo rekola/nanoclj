@@ -31,6 +31,8 @@ extern "C" {
 
 #include "nanoclj_types.h"
 
+  struct pcre2_real_code_8;
+	
   typedef enum {
     port_free = 0,
     port_file = 1,
@@ -116,6 +118,7 @@ extern "C" {
 	void * impl;
       } _tensor;
       long long _lvalue;
+      struct pcre2_real_code_8 * _re;
       struct {
 	nanoclj_port_rep_t * rep;
 	int backchar[2];
@@ -225,7 +228,6 @@ extern "C" {
     
     nanoclj_val_t SORTED_SET;	  /* sorted-set */
     nanoclj_val_t ARRAY_MAP;	  /* array-map */
-    nanoclj_val_t REGEX;		  /* regex */
     nanoclj_cell_t * EMPTYVEC;
     
     nanoclj_cell_t * free_cell;      /* pointer to top of free cells */

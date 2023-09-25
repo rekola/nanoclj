@@ -39,6 +39,9 @@
 #include <sys/utsname.h>
 #include <pwd.h>
 
+#define PCRE2_CODE_UNIT_WIDTH 8
+#include <pcre2.h>
+
 #include <utf8proc.h>
 #include <sixel/sixel.h>
 
@@ -184,7 +187,8 @@ enum nanoclj_types {
   T_FILE = 34,
   T_DATE = 35,
   T_UUID = 36,
-  T_TENSOR = 37,
+  T_REGEX = 37,
+  T_TENSOR = 38,
   T_MAX_TYPE
 };
 
@@ -390,6 +394,7 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define _audio_unchecked(p)	  ((p)->_object._audio)
 #define _tensor_unchecked(p)	  ((p)->_object._tensor.impl)
 #define _lvalue_unchecked(p)      ((p)->_object._lvalue)
+#define _re_unchecked(p)	  ((p)->_object._re)
 #define _ff_unchecked(p)	  ((p)->_object._ff.ptr)
 #define _fo_unchecked(p)	  ((p)->_object._fo.ptr)
 #define _min_arity_unchecked(p)	  ((p)->_object._ff.min_arity)
@@ -1558,6 +1563,32 @@ static inline nanoclj_val_t mk_ratio_from_double(nanoclj_t * sc, nanoclj_val_t a
   } else {
     return mk_integer(sc, numerator << exponent);
   }
+}
+
+static inline nanoclj_val_t mk_regex(nanoclj_t * sc, nanoclj_val_t pattern) {
+  nanoclj_cell_t * x = get_cell_x(sc, T_REGEX, T_GC_ATOM, NULL, NULL, NULL);
+  if (sc->no_memory) {
+    return mk_nil();
+  }
+    
+#if RETAIN_ALLOCS
+  retain(sc, main_cell);
+#endif
+
+  int errornumber;
+  PCRE2_SIZE erroroffset;
+  strview_t sv = to_strview(pattern);
+  pcre2_code * re = pcre2_compile((PCRE2_SPTR8)sv.ptr,
+				  sv.size,
+				  PCRE2_UTF,
+				  &errornumber,
+				  &erroroffset,
+				  NULL);
+  if (!re) {
+    return mk_nil();
+  }
+  _re_unchecked(x) = re;
+  return mk_pointer(x);
 }
 
 static inline dump_stack_frame_t * s_add_frame(nanoclj_t * sc) {
@@ -3271,14 +3302,13 @@ static inline char *readstr_upto(nanoclj_t * sc, char *delim, nanoclj_val_t inpo
 }
 
 /* read string expression "xxx...xxx" */
-static inline nanoclj_val_t readstrexp(nanoclj_t * sc, nanoclj_val_t inport) {
+static inline nanoclj_val_t readstrexp(nanoclj_t * sc, nanoclj_val_t inport, bool regex_mode) {
   char *p = sc->strbuff;
-  int c;
   int c1 = 0;
   enum { st_ok, st_bsl, st_x1, st_x2, st_oct1, st_oct2 } state = st_ok;
 
   for (;;) {
-    c = inchar(inport);
+    int c = inchar(inport);
     if (c == EOF) {
       return (nanoclj_val_t)kFALSE;
     }
@@ -3298,43 +3328,51 @@ static inline nanoclj_val_t readstrexp(nanoclj_t * sc, nanoclj_val_t inport) {
       }
       break;
     case st_bsl:
-      switch (c) {
-      case '0':
-      case '1':
-      case '2':
-      case '3':
-      case '4':
-      case '5':
-      case '6':
-      case '7':
-        state = st_oct1;
-        c1 = c - '0';
-        break;
-      case 'x':
-      case 'X':
-        state = st_x1;
-        c1 = 0;
-        break;
-      case 'n':
-        *p++ = '\n';
-        state = st_ok;
-        break;
-      case 't':
-        *p++ = '\t';
-        state = st_ok;
-        break;
-      case 'r':
-        *p++ = '\r';
-        state = st_ok;
-        break;
-      case '"':
-        *p++ = '"';
-        state = st_ok;
-        break;
-      default:
-        *p++ = c;
-        state = st_ok;
-        break;
+      if (!regex_mode) {
+	switch (c) {
+	case '0':
+	case '1':
+	case '2':
+	case '3':
+	case '4':
+	case '5':
+	case '6':
+	case '7':
+	  state = st_oct1;
+	  c1 = c - '0';
+	  break;
+	case 'x':
+	case 'X':
+	  state = st_x1;
+	  c1 = 0;
+	  break;
+	case 'n':
+	  *p++ = '\n';
+	  state = st_ok;
+	  break;
+	case 't':
+	  *p++ = '\t';
+	  state = st_ok;
+	  break;
+	case 'r':
+	  *p++ = '\r';
+	  state = st_ok;
+	  break;
+	case '"':
+	  *p++ = '"';
+	  state = st_ok;
+	  break;
+	default:
+	  *p++ = c;
+	  state = st_ok;
+	  break;
+	}
+      } else {
+	if (c != '"' && c != '\\') {
+	  *p++ = '\\';
+	}
+	*p++ = c;
+	state = st_ok;
       }
       break;
     case st_x1:
@@ -3376,7 +3414,6 @@ static inline nanoclj_val_t readstrexp(nanoclj_t * sc, nanoclj_val_t inport) {
         }
       }
       break;
-
     }
   }
 }
@@ -6057,18 +6094,22 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	  s_return(sc, x);
 	}
       case TOK_DQUOTE:
-	x = readstrexp(sc, inport);
+	x = readstrexp(sc, inport, false);
 	if (is_false(x)) {
 	  Error_0(sc, "Error - reading string");
 	}
 	s_return(sc, x);
 	
       case TOK_REGEX:
-	x = readstrexp(sc, inport);
+	x = readstrexp(sc, inport, true);
 	if (is_false(x)) {
 	  Error_0(sc, "Error - reading regex");
 	}
-	s_return(sc, mk_pointer(cons(sc, sc->REGEX, cons(sc, x, NULL))));
+	x = mk_regex(sc, x);
+	if (is_nil(x)) {
+	  Error_0(sc, "Invalid regular expression");
+	}
+	s_return(sc, x);
 	
       case TOK_CHAR_CONST:
 	if ((x = mk_char_const(sc, readstr_upto(sc, DELIMITERS, inport))).as_long == sc->EMPTY.as_long) {
@@ -6082,7 +6123,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	if (skipspace(sc, inport) != '"') {
 	  Error_0(sc, "Invalid literal");	 
 	}
-	nanoclj_val_t value = readstrexp(sc, inport);
+	nanoclj_val_t value = readstrexp(sc, inport, false);
 	strview_t tag_sv = to_strview(tag);
 	
 	if (tag_sv.size == 4 && memcmp(tag_sv.ptr, "inst", 4) == 0) {
@@ -6378,22 +6419,41 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   case OP_RE_PATTERN:
     if (!unpack_args_1(sc, &arg0)) {
       Error_0(sc, "Error - Invalid arity");
+    } else {
+      x = mk_regex(sc, arg0);
+      if (is_nil(x)) {
+	Error_0(sc, "Invalid regular expression");
+      } else {
+	s_return(sc, x);
+      }
     }
-    x = arg0;
-    /* TODO: construct a regex */
-    s_return(sc, x);
+
+  case OP_RE_FIND:
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
+      Error_0(sc, "Error - Invalid arity");
+    } else if (is_cell(arg0)) {
+      nanoclj_cell_t * re = decode_pointer(arg0);
+      if (_type(re) == T_REGEX) {
+	strview_t sv = to_strview(arg1);
+	pcre2_match_data * md = pcre2_match_data_create(128, NULL);
+	int rc = pcre2_match(_re_unchecked(re), (PCRE2_SPTR8)sv.ptr, sv.size, 0, 0, md, NULL);
+	if (rc <= 0) {
+	  s_return(sc, mk_nil());
+	} else {
+	  PCRE2_SIZE * ovec = pcre2_get_ovector_pointer(md);
+	  strview_t rsv = (strview_t){ sv.ptr + ovec[0], ovec[1] - ovec[0] };
+	  s_return(sc, mk_string_from_sv(sc, rsv));
+	}
+      }
+    }
+    Error_0(sc, "Error - Invalid arguments");
 
   case OP_ADD_WATCH:
     if (!unpack_args_3(sc, &arg0, &arg1, &arg2)) {
       Error_0(sc, "Error - Invalid arity");
-    }
-    if (!is_cell(arg0)) {
-      Error_0(sc, "Error - Cannot add watch to a primitive");
-    } else {
+    } else if (is_cell(arg0)) {
       nanoclj_cell_t * c = decode_pointer(arg0);
-      if (_type(c) != T_VAR) {
-	Error_0(sc, "Error - Watches can only be added to Vars");
-      } else {
+      if (_type(c) == T_VAR) {
 	nanoclj_cell_t * md = _so_vector_metadata(c);
 	if (!md) md = mk_arraymap(sc, 0);
 	nanoclj_val_t w;
@@ -6404,9 +6464,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	}
 	_so_vector_metadata(c) = md;
 	s_return(sc, arg0);
-      }      
+      }
     }
-    break;
+    Error_0(sc, "Error - Watches can only be added to Vars");
 
   case OP_GET_CELL_FLAGS:
     if (!unpack_args_1(sc, &arg0)) {
@@ -7073,7 +7133,6 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc fr
   
   sc->SORTED_SET = def_symbol(sc, "sorted-set");
   sc->ARRAY_MAP = def_symbol(sc, "array-map");
-  sc->REGEX = def_symbol(sc, "regex");
   sc->EMPTYVEC = get_vector_object(sc, T_VECTOR, 0);
 
   sc->types = mk_vector_store(sc, 0, 1024);
@@ -7103,7 +7162,8 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc fr
   mk_named_type(sc, "java.io.File", T_FILE, Object);
   mk_named_type(sc, "java.util.Date", T_DATE, Object);
   mk_named_type(sc, "java.util.UUID", T_UUID, Object);
-  
+  mk_named_type(sc, "java.util.regex.Pattern", T_REGEX, Object);
+		
   /* Clojure types */
   nanoclj_cell_t * AReference = mk_named_type(sc, "clojure.lang.AReference", gentypeid(sc), Object);
   nanoclj_cell_t * Obj = mk_named_type(sc, "clojure.lang.Obj", gentypeid(sc), Object);
