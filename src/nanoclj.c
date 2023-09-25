@@ -977,8 +977,11 @@ static inline void finalize_cell(nanoclj_t * sc, nanoclj_cell_t * a) {
     nanoclj_audio_t * audio = _audio_unchecked(a);
     sc->free(audio->data);
     sc->free(audio);
-  }
+  }    
     break;
+  case T_REGEX:
+    pcre2_code_free(_re_unchecked(a));
+    break;  
   }
 }
 
