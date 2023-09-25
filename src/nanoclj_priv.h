@@ -202,7 +202,7 @@ extern "C" {
     nanoclj_val_t IN;		  /* *in* */
     nanoclj_val_t OUT;		  /* *out* */
     nanoclj_val_t ERR;		  /* *err* */
-    nanoclj_val_t NS;		  /* *ns* */
+    nanoclj_val_t NS_SYM;	  /* *ns* */
     nanoclj_val_t ENV;	  	  /* *env* */
     nanoclj_val_t WINDOW_SIZE;    /* *window-size* */
     nanoclj_val_t WINDOW_SCALE_F;   /* *window-scale-factor* */
@@ -221,6 +221,7 @@ extern "C" {
     nanoclj_val_t LINE;		  /* :line */
     nanoclj_val_t COLUMN;	  /* :column */
     nanoclj_val_t FILE;		  /* :file */
+    nanoclj_val_t NS_KEYWORD;	  /* :ns */
     
     nanoclj_val_t SORTED_SET;	  /* sorted-set */
     nanoclj_val_t ARRAY_MAP;	  /* array-map */
@@ -258,6 +259,7 @@ extern "C" {
         
     bool sixel_term;
     nanoclj_colortype_t term_colors;
+    int window_lines, window_columns;
     double window_scale_factor;
     
     /* Dynamic printing */

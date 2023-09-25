@@ -115,13 +115,13 @@ static inline void canvas_restore(void * canvas) {
 }
 
 static inline void canvas_show_text(nanoclj_t * sc, void * canvas, strview_t text) {
-  char * tmp = alloc_cstr(sc, text);
+  char * tmp = alloc_c_str(sc, text);
   cairo_show_text((cairo_t *)canvas, tmp);
   sc->free(tmp);
 }
 
 static inline void canvas_get_text_extents(nanoclj_t * sc, void * canvas, strview_t text, double * width, double * height) {
-  char * tmp = alloc_cstr(sc, text);
+  char * tmp = alloc_c_str(sc, text);
   cairo_text_extents_t extents;
   cairo_text_extents((cairo_t *)canvas, tmp, &extents);
   *width = extents.width;

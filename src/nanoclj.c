@@ -843,13 +843,6 @@ static inline strview_t to_strview(nanoclj_val_t x) {
   return (strview_t){ "", 0 };
 }
 
-static inline char * alloc_cstr(nanoclj_t * sc, strview_t sv) {
-  char * s = (char *)sc->malloc(sv.size + 1);
-  memcpy(s, sv.ptr, sv.size);
-  s[sv.size] = 0;
-  return s;
-}
-
 static inline int_fast16_t syntaxnum(nanoclj_val_t p) {
   if (is_symbol(p)) {
     symbol_t * s = decode_symbol(p);
@@ -1270,21 +1263,12 @@ static inline long long get_ratio(nanoclj_val_t n, long long * den) {
   return 0;
 }
 
-/* allocate name to string area */
-static inline char *store_string(nanoclj_t * sc, size_t len, const char *str) {
-  if (!len || !str) return NULL;
-  char * q = (char *)sc->malloc(len + 1);
-  if (q == 0) {
-    sc->no_memory = 1;
-    return sc->strbuff;
-  }
-  memcpy(q, str, len);
-  q[len] = 0;
-  return q;
-}
-
 static inline char * alloc_c_str(nanoclj_t * sc, strview_t sv) {
   char * buffer = (char*)sc->malloc(sv.size + 1);
+  if (!buffer) {
+    sc->no_memory = 1;
+    return NULL;
+  }
   memcpy(buffer, sv.ptr, sv.size);
   buffer[sv.size] = 0;
   return buffer;
@@ -1347,7 +1331,7 @@ static inline nanoclj_val_t mk_exception(nanoclj_t * sc, const char * text) {
   return mk_pointer(get_cell(sc, T_EXCEPTION, 0, mk_string(sc, text), NULL, NULL));
 }
 
-static inline int basic_inchar(nanoclj_cell_t * p) {
+static inline int32_t basic_inchar(nanoclj_cell_t * p) {
   nanoclj_port_rep_t * pr = _rep_unchecked(p);
   switch (_port_type_unchecked(p)) {
   case port_file:
@@ -1362,8 +1346,8 @@ static inline int basic_inchar(nanoclj_cell_t * p) {
   return EOF;
 }
 
-static inline int utf8_inchar(nanoclj_cell_t * p) {
-  int c = basic_inchar(p);
+static inline int32_t utf8_inchar(nanoclj_cell_t * p) {
+  int32_t c = basic_inchar(p);
   if (c == EOF || c < 0x80) {
     return c;
   }
@@ -1380,12 +1364,14 @@ static inline int utf8_inchar(nanoclj_cell_t * p) {
   return utf8_decode(buf);
 }
 
-static inline void update_cursor(int c, nanoclj_cell_t * p) {
+static inline void update_cursor(int32_t c, nanoclj_cell_t * p, int line_len) {
   if (_port_type_unchecked(p) == port_file) {
     nanoclj_port_rep_t * pr = _rep_unchecked(p);
     switch (c) {
     case 8:
-      pr->stdio.column--;
+      if (pr->stdio.column > 0) {
+	pr->stdio.column--;
+      }
       break;
     case 10:
       pr->stdio.column = 0;
@@ -1396,26 +1382,32 @@ static inline void update_cursor(int c, nanoclj_cell_t * p) {
       break;
     default:
       pr->stdio.column += mk_wcwidth(c);
+      if (line_len > 0 && pr->stdio.file == stdout) {
+	while (pr->stdio.column >= line_len) {
+	  pr->stdio.column -= line_len;
+	  pr->stdio.line++;
+	}	
+      }
     }
   }
 }
 
 /* get new character from input file */
-static inline int inchar(nanoclj_val_t p0) {
+static inline int32_t inchar(nanoclj_val_t p0) {
   nanoclj_cell_t * p = decode_pointer(p0);
   if (_backchar_unchecked(p)[1] >= 0) {
-    int c = _backchar_unchecked(p)[1];
+    int32_t c = _backchar_unchecked(p)[1];
     _backchar_unchecked(p)[1] = -1;
     return c;
   } else if (_backchar_unchecked(p)[0] >= 0) {
-    int c = _backchar_unchecked(p)[0];
+    int32_t c = _backchar_unchecked(p)[0];
     _backchar_unchecked(p)[0] = -1;
     return c;
   }
   if (_port_flags_unchecked(p) & PORT_SAW_EOF) {
     return EOF;
   }
-  int c;
+  int32_t c;
   if (_type(p) == T_INPUT_STREAM) { /* Binary */
     c = basic_inchar(p);
   } else {
@@ -1425,7 +1417,7 @@ static inline int inchar(nanoclj_val_t p0) {
     /* Instead, set port_saw_EOF */
     _port_flags_unchecked(p) |= PORT_SAW_EOF;
   } else {
-    update_cursor(c, p);
+    update_cursor(c, p, 0);
   }
   return c;
 }
@@ -2694,11 +2686,15 @@ static inline nanoclj_val_t def_symbol(nanoclj_t * sc, const char *name) {
   return def_symbol_from_sv(sc, (strview_t){ name, strlen(name) });
 }
 
-static inline nanoclj_val_t intern(nanoclj_t * sc, nanoclj_cell_t * envir, nanoclj_val_t symbol, nanoclj_val_t value) {
+static inline nanoclj_val_t intern_with_meta(nanoclj_t * sc, nanoclj_cell_t * envir, nanoclj_val_t symbol, nanoclj_val_t value, nanoclj_cell_t * meta) {
   nanoclj_cell_t * var = find_slot_in_env(sc, envir, symbol, false);
-  if (var) set_slot_in_env(sc, var, value, NULL);
-  else var = new_slot_spec_in_env(sc, envir, symbol, value, NULL);
+  if (var) set_slot_in_env(sc, var, value, meta);
+  else var = new_slot_spec_in_env(sc, envir, symbol, value, meta);
   return mk_pointer(var);
+}
+
+static inline nanoclj_val_t intern(nanoclj_t * sc, nanoclj_cell_t * envir, nanoclj_val_t symbol, nanoclj_val_t value) {
+  return intern_with_meta(sc, envir, symbol, value, NULL);  
 }
 
 static inline nanoclj_val_t intern_symbol(nanoclj_t * sc, nanoclj_cell_t * envir, nanoclj_val_t symbol) {
@@ -2742,8 +2738,8 @@ static inline nanoclj_cell_t * def_namespace_with_sym(nanoclj_t *sc, nanoclj_val
   nanoclj_cell_t * vec = get_vector_object(sc, T_VECTOR, OBJ_LIST_SIZE);
   fill_vector(vec, mk_nil());
 
-  nanoclj_cell_t * ns = get_cell(sc, T_ENVIRONMENT, 0, mk_pointer(vec), sc->root_env, md);
-  intern(sc, sc->global_env, sym, mk_pointer(ns));
+  nanoclj_cell_t * ns = get_cell(sc, T_ENVIRONMENT, 0, mk_pointer(vec), sc->root_env, NULL);
+  intern_with_meta(sc, sc->global_env, sym, mk_pointer(ns), md);
   return ns;
 }
 
@@ -2968,7 +2964,7 @@ static inline int http_open_thread(nanoclj_t * sc, strview_t sv) {
   }
 
   http_load_t * d = malloc(sizeof(http_load_t));
-  d->url = alloc_cstr(sc, sv);
+  d->url = alloc_c_str(sc, sv);
   d->useragent = NULL;
   d->http_keepalive = true;
   d->http_max_connections = 0;
@@ -2980,7 +2976,7 @@ static inline int http_open_thread(nanoclj_t * sc, strview_t sv) {
 
   nanoclj_val_t v;
   if (get_elem(sc, sc->properties, mk_string(sc, "http.agent"), &v)) {
-    d->useragent = alloc_cstr(sc, to_strview(v));
+    d->useragent = alloc_c_str(sc, to_strview(v));
   }
   if (get_elem(sc, sc->properties, mk_string(sc, "http.keepalive"), &v)) {
     d->http_keepalive = to_int(v);
@@ -3001,13 +2997,15 @@ static inline int http_open_thread(nanoclj_t * sc, strview_t sv) {
   return pipefd[0];
 }
 
-static inline nanoclj_cell_t * port_rep_from_file(nanoclj_t * sc, FILE * f, uint8_t type) {
+static inline nanoclj_val_t port_rep_from_file(nanoclj_t * sc, uint8_t type, FILE * f, char * filename) {
   nanoclj_cell_t * p = get_port_object(sc, type, port_file);
-  if (!p) return NULL;
+  if (!p) return mk_nil();
   nanoclj_port_rep_t * pr = _rep_unchecked(p);
   pr->stdio.file = f;
-  pr->stdio.filename = NULL;
-  return p;
+  pr->stdio.filename = filename;
+  pr->stdio.line = pr->stdio.column = 0;
+  pr->stdio.num_states = 0;
+  return mk_pointer(p);
 }
 
 static inline nanoclj_val_t port_from_filename(nanoclj_t * sc, strview_t sv, uint32_t type) {
@@ -3019,15 +3017,14 @@ static inline nanoclj_val_t port_from_filename(nanoclj_t * sc, strview_t sv, uin
   }
 
   FILE * f = NULL;
-  char * filename = NULL;
-  if (sv.size == 1 && sv.ptr[0] == '-') {
+  char * filename = alloc_c_str(sc, sv);
+  if (strcmp(filename, "-") == 0) {
     f = stdin;
-  } else if ((sv.size >= 7 && strncmp(sv.ptr, "http://", 7) == 0) ||
-	     (sv.size >= 8 && strncmp(sv.ptr, "https://", 8) == 0)) {
+  } else if (strncmp(filename, "http://", 7) == 0 ||
+	     strncmp(filename, "https://", 8) == 0) {
     int fd = http_open_thread(sc, sv);
     f = fdopen(fd, mode);
   } else {
-    filename = store_string(sc, sv.size, sv.ptr);
     f = fopen(filename, mode);    
   }
   if (!f) {
@@ -3035,12 +3032,7 @@ static inline nanoclj_val_t port_from_filename(nanoclj_t * sc, strview_t sv, uin
     return mk_nil();
   }
   
-  nanoclj_cell_t * p = port_rep_from_file(sc, f, type);
-  nanoclj_port_rep_t * pr = _rep_unchecked(p);
-  pr->stdio.filename = filename;
-  pr->stdio.line = pr->stdio.column = 0;
-  pr->stdio.num_states = 0;
-  return mk_pointer(p);    
+  return port_rep_from_file(sc, type, f, filename);
 }
 
 static inline bool file_push(nanoclj_t * sc, strview_t sv) {
@@ -3133,7 +3125,7 @@ static inline void putchars(nanoclj_t * sc, const char *s, size_t len, nanoclj_v
     fwrite(s, 1, len, pr->stdio.file);
     const char * end = s + len;
     while (s < end) {
-      update_cursor(utf8_decode(s), out);
+      update_cursor(utf8_decode(s), out, sc->window_columns);
       s = utf8_next(s);
     }
   }
@@ -3403,55 +3395,46 @@ static inline int skipspace(nanoclj_t * sc, nanoclj_val_t inport) {
 static inline int token(nanoclj_t * sc, nanoclj_val_t inport) {
   int c;
   switch (c = skipspace(sc, inport)) {
-  case EOF:
-    return (TOK_EOF);
-  case '(':
-    return (TOK_LPAREN);
-  case ')':
-    return (TOK_RPAREN);
-  case ']':
-    return (TOK_RSQUARE);
-  case '}':
-    return (TOK_RCURLY);
+  case EOF: return TOK_EOF;
+  case '(': return TOK_LPAREN;
+  case ')': return TOK_RPAREN;
+  case ']': return TOK_RSQUARE;
+  case '}': return TOK_RCURLY;
+  case '"': return TOK_DQUOTE;
+  case '[': return TOK_VEC;
+  case '{': return TOK_MAP;
+  case '\'': return TOK_QUOTE;
+  case '@': return TOK_DEREF;
+  case BACKQUOTE: return TOK_BQUOTE;
+  
   case '.':
     c = inchar(inport);
     if (is_one_of(" \n\t", c)) {
-      return (TOK_DOT);
+      return TOK_DOT;
     } else {
       backchar(c, inport);
       backchar('.', inport);
       return TOK_PRIMITIVE;
     }
-  case '\'':
-    return (TOK_QUOTE);
-  case '@':
-    return (TOK_DEREF);
+
   case ';':
     while ((c = inchar(inport)) != '\n' && c != EOF) { }
     if (c == EOF) {
-      return (TOK_EOF);
+      return TOK_EOF;
     } else {
-      return (token(sc, inport));
+      return token(sc, inport);
     }
-  case '"':
-    return (TOK_DQUOTE);
-  case BACKQUOTE:
-    return (TOK_BQUOTE);
+
   case ',':
     if ((c = inchar(inport)) == '@') {
-      return (TOK_ATMARK);
+      return TOK_ATMARK;
     } else if (is_one_of("\n\r ", c)) {
       backchar(c, inport);
       return (token(sc, inport));
     } else {
       backchar(c, inport);
-      return (TOK_COMMA);
+      return TOK_COMMA;
     }
-  case '[':
-    return (TOK_VEC);
-
-  case '{':
-    return (TOK_MAP);
 
   case '\\':
     backchar('\\', inport);
@@ -3464,17 +3447,17 @@ static inline int token(nanoclj_t * sc, nanoclj_val_t inport) {
   case '#':
     c = inchar(inport);
     if (c == '(') {
-      return (TOK_FN);
+      return TOK_FN;
     } else if (c == '{') {
-      return (TOK_SET);
+      return TOK_SET;
     } else if (c == '"') {
-      return (TOK_REGEX);
+      return TOK_REGEX;
     } else if (c == '_') {
-      return (TOK_IGNORE);
+      return TOK_IGNORE;
     } else if (c == '\'') {
-      return (TOK_VAR);
+      return TOK_VAR;
     } else if (c == '#') {
-      return (TOK_SHARP_CONST);
+      return TOK_SHARP_CONST;
     } else if (c == '!') {
       /* This is a shebang line, so skip it */
       while ((c = inchar(inport)) != '\n' && c != EOF) { }
@@ -3486,7 +3469,7 @@ static inline int token(nanoclj_t * sc, nanoclj_val_t inport) {
       }
     } else {
       backchar(c, inport);
-      return (TOK_TAG);
+      return TOK_TAG;
     }
   default:
     backchar(c, inport);
@@ -4632,7 +4615,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 #endif
     switch (prim_type(sc->code)) {
     case T_SYMBOL:
-      if (sc->code.as_long == sc->NS.as_long) { /* special symbols */
+      if (sc->code.as_long == sc->NS_SYM.as_long) { /* special symbols */
 	s_return(sc, mk_pointer(sc->global_env));
       } else if (sc->code.as_long == sc->ENV.as_long) {
 	s_return(sc, mk_pointer(sc->envir));
@@ -4983,8 +4966,10 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     if (!is_symbol(x)) {
       Error_0(sc, "Error - variable is not a symbol");
     }
-    nanoclj_cell_t * meta = mk_arraymap(sc, 1);
-    set_vector_elem(meta, 0, mk_mapentry(sc, sc->NAME, mk_string_from_sv(sc, to_strview(x))));
+    nanoclj_cell_t * meta = mk_arraymap(sc, 2);
+    set_vector_elem(meta, 0, mk_mapentry(sc, sc->NAME, x));
+    set_vector_elem(meta, 1, mk_mapentry(sc, sc->NS_KEYWORD, mk_pointer(sc->global_env)));
+    
     if (!is_nil(metaval)) {
       meta = conjoin(sc, meta, mk_mapentry(sc, metaval, mk_boolean(true)));
     }
@@ -6688,13 +6673,18 @@ static inline void assign_proc(nanoclj_t * sc, enum nanoclj_opcodes op, const ch
 
 static inline void update_window_info(nanoclj_t * sc, nanoclj_val_t out) {
   nanoclj_val_t size = mk_nil();
+
+  sc->window_lines = 0;
+  sc->window_columns = 0;
   
   if (type(out) == T_WRITER && port_type_unchecked(out) == port_file) {
     nanoclj_port_rep_t * pr = rep_unchecked(out);
     FILE * fh = pr->stdio.file;
-    int cols, rows, width, height;
-    if (get_window_size(stdin, fh, &cols, &rows, &width, &height)) {
-      sc->window_scale_factor = width / cols > 15 ? 2.0 : 1.0;
+    int lines, cols, width, height;
+    if (get_window_size(stdin, fh, &cols, &lines, &width, &height)) {
+      sc->window_columns = cols;
+      sc->window_lines = lines;
+      sc->window_scale_factor = width / sc->window_columns > 15 ? 2.0 : 1.0;
       size = mk_vector_2d(sc, width / sc->window_scale_factor, height / sc->window_scale_factor);      
     }
   }
@@ -7056,7 +7046,7 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc fr
   sc->IN = def_symbol(sc, "*in*");
   sc->OUT = def_symbol(sc, "*out*");
   sc->ERR = def_symbol(sc, "*err*");
-  sc->NS = def_symbol(sc, "*ns*");
+  sc->NS_SYM = def_symbol(sc, "*ns*");
   sc->ENV = def_symbol(sc, "*env*");
   sc->WINDOW_SIZE = def_symbol(sc, "*window-size*");
   sc->WINDOW_SCALE_F = def_symbol(sc, "*window-scale-factor*");
@@ -7075,6 +7065,7 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc fr
   sc->LINE = def_keyword(sc, "line");
   sc->COLUMN = def_keyword(sc, "column");
   sc->FILE = def_keyword(sc, "file");
+  sc->NS_KEYWORD = def_keyword(sc, "ns");
   
   sc->SORTED_SET = def_symbol(sc, "sorted-set");
   sc->ARRAY_MAP = def_symbol(sc, "array-map");
@@ -7150,7 +7141,8 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc fr
 
   sc->sixel_term = has_sixels();
   sc->window_scale_factor = 1.0;
-
+  sc->window_lines = sc->window_columns = 0;
+  
   sc->term_colors = get_term_colortype();
 
   sc->properties = mk_properties(sc);
@@ -7160,12 +7152,11 @@ int nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc fr
 }
 
 void nanoclj_set_input_port_file(nanoclj_t * sc, FILE * fin) {
-  nanoclj_val_t inport = mk_pointer(port_rep_from_file(sc, fin, T_READER));
-  intern(sc, sc->global_env, sc->IN, inport);
+  intern(sc, sc->global_env, sc->IN, port_rep_from_file(sc, T_READER, fin, NULL));
 }
 
 void nanoclj_set_output_port_file(nanoclj_t * sc, FILE * fout) {
-  nanoclj_val_t p = mk_pointer(port_rep_from_file(sc, fout, T_WRITER));
+  nanoclj_val_t p = port_rep_from_file(sc, T_WRITER, fout, NULL);
   intern(sc, sc->root_env, sc->OUT, p);
   update_window_info(sc, p);
 }
@@ -7187,8 +7178,7 @@ void nanoclj_set_error_port_callback(nanoclj_t * sc, void (*text) (const char *,
 }
 
 void nanoclj_set_error_port_file(nanoclj_t * sc, FILE * fout) {
-  nanoclj_val_t p = mk_pointer(port_rep_from_file(sc, fout, T_WRITER));
-  intern(sc, sc->global_env, sc->ERR, p);
+  intern(sc, sc->global_env, sc->ERR, port_rep_from_file(sc, T_WRITER, fout, NULL));
 }
 
 void nanoclj_set_external_data(nanoclj_t * sc, void *p) {

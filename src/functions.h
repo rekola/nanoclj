@@ -62,7 +62,7 @@ static nanoclj_val_t System_gc(nanoclj_t * sc, nanoclj_val_t args) {
 static nanoclj_val_t System_getenv(nanoclj_t * sc, nanoclj_val_t args0) {
   nanoclj_cell_t * args = decode_pointer(args0);
   if (args) {
-    char * name = alloc_cstr(sc, to_strview(first(sc, args)));
+    char * name = alloc_c_str(sc, to_strview(first(sc, args)));
     const char * v = getenv(name);
     sc->free(name);
     return v ? mk_string(sc, v) : mk_nil();
@@ -113,7 +113,7 @@ static nanoclj_val_t System_setProperty(nanoclj_t * sc, nanoclj_val_t args0) {
 
 static inline nanoclj_val_t System_glob(nanoclj_t * sc, nanoclj_val_t args0) {
   nanoclj_cell_t * args = decode_pointer(args0);
-  char * tmp = alloc_cstr(sc, to_strview(first(sc, args)));
+  char * tmp = alloc_c_str(sc, to_strview(first(sc, args)));
 
   glob_t gstruct;
   int r = glob(tmp, GLOB_ERR, NULL, &gstruct);
@@ -291,14 +291,14 @@ static nanoclj_val_t numeric_tower_expt(nanoclj_t * sc, nanoclj_val_t args) {
 
 static inline nanoclj_val_t browse_url(nanoclj_t * sc, nanoclj_val_t args) {  
 #ifdef WIN32
-  char * url = alloc_cstr(sc, to_strview(car(args)));
+  char * url = alloc_c_str(sc, to_strview(car(args)));
   ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
   sc->free(url);
   return (nanoclj_val_t)kTRUE;
 #else
   pid_t r = fork();
   if (r == 0) {
-    char * url = alloc_cstr(sc, to_strview(car(args)));
+    char * url = alloc_c_str(sc, to_strview(car(args)));
     const char * cmd = "xdg-open";
     execlp(cmd, cmd, url, NULL);
     exit(1);
@@ -318,12 +318,12 @@ static inline nanoclj_val_t shell_sh(nanoclj_t * sc, nanoclj_val_t args0) {
 #else
     pid_t r = fork();
     if (r == 0) {
-      char * cmd = (char *)alloc_cstr(sc, to_strview(first(sc, args)));
+      char * cmd = (char *)alloc_c_str(sc, to_strview(first(sc, args)));
       args = rest(sc, args);
       n--;
       char ** output_args = (char **)sc->malloc(n * sizeof(char*));
       for (size_t i = 0; i < n; i++, args = rest(sc, args)) {
-	output_args[i] = alloc_cstr(sc, to_strview(first(sc, args)));
+	output_args[i] = alloc_c_str(sc, to_strview(first(sc, args)));
       }
       execvp(cmd, output_args);
       exit(1);
@@ -337,7 +337,7 @@ static inline nanoclj_val_t shell_sh(nanoclj_t * sc, nanoclj_val_t args0) {
 }
 
 static inline nanoclj_val_t Image_load(nanoclj_t * sc, nanoclj_val_t args) {
-  char * filename = alloc_cstr(sc, to_strview(car(args)));
+  char * filename = alloc_c_str(sc, to_strview(car(args)));
 	    
   int w, h, channels;
   unsigned char * data = stbi_load(filename, &w, &h, &channels, 0);
@@ -420,7 +420,7 @@ static inline nanoclj_val_t Image_save(nanoclj_t * sc, nanoclj_val_t args) {
   nanoclj_cell_t * image0 = decode_pointer(image00);
   nanoclj_image_t * image = _image_unchecked(image0);
 
-  char * filename = alloc_cstr(sc, to_strview(filename0));
+  char * filename = alloc_c_str(sc, to_strview(filename0));
 
   int w = image->width, h = image->height, channels = image->channels;
   unsigned char * data = image->data;
@@ -608,7 +608,7 @@ nanoclj_val_t Image_gaussian_blur(nanoclj_t * sc, nanoclj_val_t args) {
 }
 
 static inline nanoclj_val_t Audio_load(nanoclj_t * sc, nanoclj_val_t args) {
-  char * filename = alloc_cstr(sc, to_strview(car(args)));
+  char * filename = alloc_c_str(sc, to_strview(car(args)));
   drwav wav;
   if (!drwav_init_file(&wav, filename, NULL)) {
     return mk_exception(sc, "Failed to load Audio");
