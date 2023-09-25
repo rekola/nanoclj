@@ -2719,9 +2719,9 @@ static inline nanoclj_cell_t * mk_type(nanoclj_t * sc, int type_id, nanoclj_cell
 
 static inline nanoclj_cell_t * mk_named_type(nanoclj_t * sc, const char * name, int type_id, nanoclj_cell_t * parent_type) {
   nanoclj_cell_t * md = mk_arraymap(sc, 1);
-  set_vector_elem(md, 0, mk_mapentry(sc, sc->NAME, mk_string(sc, name)));
+  set_vector_elem(md, 0, mk_mapentry(sc, sc->NAME, def_symbol(sc, name)));
   nanoclj_cell_t * t = mk_type(sc, type_id, parent_type, md);
-  intern(sc, sc->global_env, def_symbol(sc, name), mk_pointer(t));
+  intern_with_meta(sc, sc->global_env, def_symbol(sc, name), mk_pointer(t), md);
   return t;
 }
 
@@ -2734,11 +2734,11 @@ static inline nanoclj_val_t def_symbol_or_keyword(nanoclj_t * sc, const char *na
 
 static inline nanoclj_cell_t * def_namespace_with_sym(nanoclj_t *sc, nanoclj_val_t sym) {
   nanoclj_cell_t * md = mk_arraymap(sc, 1);
-  set_vector_elem(md, 0, mk_mapentry(sc, sc->NAME, mk_string_from_sv(sc, to_strview(sym))));
+  set_vector_elem(md, 0, mk_mapentry(sc, sc->NAME, sym));
   nanoclj_cell_t * vec = get_vector_object(sc, T_VECTOR, OBJ_LIST_SIZE);
   fill_vector(vec, mk_nil());
 
-  nanoclj_cell_t * ns = get_cell(sc, T_ENVIRONMENT, 0, mk_pointer(vec), sc->root_env, NULL);
+  nanoclj_cell_t * ns = get_cell(sc, T_ENVIRONMENT, 0, mk_pointer(vec), sc->root_env, md);
   intern_with_meta(sc, sc->global_env, sym, mk_pointer(ns), md);
   return ns;
 }
@@ -4966,10 +4966,14 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     if (!is_symbol(x)) {
       Error_0(sc, "Error - variable is not a symbol");
     }
-    nanoclj_cell_t * meta = mk_arraymap(sc, 2);
+    nanoclj_cell_t * meta = mk_arraymap(sc, 1);
     set_vector_elem(meta, 0, mk_mapentry(sc, sc->NAME, x));
-    set_vector_elem(meta, 1, mk_mapentry(sc, sc->NS_KEYWORD, mk_pointer(sc->global_env)));
-    
+
+    nanoclj_val_t ns_name;
+    if (get_elem(sc, _cons_metadata(sc->global_env), sc->NAME, &ns_name)) {
+      meta = conjoin(sc, meta, mk_mapentry(sc, sc->NS_KEYWORD, ns_name));
+    }
+
     if (!is_nil(metaval)) {
       meta = conjoin(sc, meta, mk_mapentry(sc, metaval, mk_boolean(true)));
     }
