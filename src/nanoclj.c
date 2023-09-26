@@ -2442,11 +2442,11 @@ static inline void sort_vector_in_place(nanoclj_cell_t * vec) {
   }
 }
 
-static int hasheq(nanoclj_val_t v) { 
+static int hasheq(nanoclj_t * sc, nanoclj_val_t v) { 
   switch (prim_type(v)) {
   case T_CHARACTER:
   case T_PROC:
-    return murmur3_hash_int(decode_integer(v));
+    return decode_integer(v);
 
   case T_BOOLEAN:
     return v.as_long == kFALSE ? 1237 : 1231;
@@ -2454,6 +2454,10 @@ static int hasheq(nanoclj_val_t v) {
   case T_INTEGER:
     /* Use long hash for integers so that (hash 1) matches Clojure */
     return murmur3_hash_long(decode_integer(v));
+
+  case T_REAL:
+    if (v.as_double == 0.0) return 0;
+    else return (int)v.as_long ^ (int)(v.as_long >> 32);
 
   case T_SYMBOL:
     return decode_symbol(v)->hash;
@@ -2469,8 +2473,10 @@ static int hasheq(nanoclj_val_t v) {
     
     switch (_type(c)) {
     case T_LONG:
-    case T_DATE:
       return murmur3_hash_long(_lvalue_unchecked(c));
+
+    case T_DATE:
+      return (int)_lvalue_unchecked(c) ^ (int)(_lvalue_unchecked(c) >> 32);
 
     case T_STRING:
     case T_CHAR_ARRAY:
@@ -2479,38 +2485,44 @@ static int hasheq(nanoclj_val_t v) {
       strview_t sv = _to_strview(c);
       return murmur3_hash_string(sv.ptr, sv.size);      
     }
-
+      
     case T_RATIO: /* Is this correct? */
     case T_MAPENTRY:
     case T_VECTOR:
-    case T_SORTED_SET:
     case T_VAR:{
       uint32_t hash = 1;
       size_t n = _get_size(c);
       for (size_t i = 0; i < n; i++) {
-	hash = 31 * hash + (uint32_t)hasheq(vector_elem(c, i));	
+	hash = 31 * hash + (uint32_t)hasheq(sc, vector_elem(c, i));
       }
       return murmur3_hash_coll(hash, n);
     }
 
+    case T_SORTED_SET:
     case T_ARRAYMAP:{
       uint32_t hash = 0;
       size_t n = _get_size(c);
       for (size_t i = 0; i < n; i++) {
-	hash += (uint32_t)hasheq(vector_elem(c, i));
+	hash += (uint32_t)hasheq(sc, vector_elem(c, i));
       }
       return murmur3_hash_coll(hash, n);
     }
 
-    case T_LIST:{
-      uint32_t hash = 31 + hasheq(_car(c));
-      size_t n = 1;
-      for ( nanoclj_val_t x = _cdr(c) ; is_list(x); x = cdr(x), n++) {
-	hash = 31 * hash + (uint32_t)hasheq(car(x));
+    case T_TYPE:
+      return c->type;
+
+    case T_NIL:
+      c = NULL;
+    case T_LIST:
+    case T_LAZYSEQ:{
+      uint32_t hash = 1;
+      size_t n = 0;
+      for ( ; c; c = next(sc, c), n++) {
+	hash = 31 * hash + (uint32_t)hasheq(sc, first(sc, c));
       }
       return murmur3_hash_coll(hash, n);
     }
-}
+    }
   }
   }
   return 0;
@@ -6328,7 +6340,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     if (!unpack_args_1(sc, &arg0)) {
       Error_0(sc, "Error - Invalid arity");
     }
-    s_return(sc, mk_int(hasheq(arg0)));
+    s_return(sc, mk_int(hasheq(sc, arg0)));
 
   case OP_COMPARE:
     if (!unpack_args_2(sc, &arg0, &arg1)) {
