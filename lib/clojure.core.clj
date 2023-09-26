@@ -23,13 +23,17 @@
   "Returns true if coll is sequential (ordered)"
   [coll] (is-any-of? (type x) clojure.lang.PersistentVector clojure.lang.Cons))
 
+(defn counted?
+  "Returns true if coll implements count in constant time"
+  [x] (is-any-of? (type x) clojure.lang.PersistentTreeSet clojure.lang.PersistentArrayMap clojure.lang.PersistentVector))
+
 (defn seq?
   "Returns true if x is a Sequence"
-  [x] (or (instance? clojure.lang.Cons x) (instance? clojure.lang.LazySeq x) (equals? (-bit-and (-get-cell-flags x) 1024) 1024)))
+  [x] (or (instance? clojure.lang.Cons x) (instance? clojure.lang.LazySeq x) (equals? (-bit-and (-get-cell-flags x) 4) 4)))
 
 (defn realized?
   "Returns true if Delay or LazySeq has been realized"
-  [x] (equals? (-bit-and (-get-cell-flags x) 2048) 2048))
+  [x] (equals? (-bit-and (-get-cell-flags x) 8) 8))
 
 (def keyword clojure.lang.Keyword)
 (def char java.lang.Character)
