@@ -50,6 +50,11 @@ if(SIXEL_LIBRARY)
   target_link_libraries(nanoclj sixel)
 endif()
 
+find_library(PCRE2_LIBRARY pcre2-8)
+if(PCRE2_LIBRARY)
+  target_link_libraries(nanoclj pcre2-8)
+endif()
+
 FIND_PACKAGE(CURL)
 if(CURL_FOUND)
   include_directories(${CURL_INCLUDE_DIR})
