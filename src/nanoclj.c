@@ -320,18 +320,6 @@ static inline nanoclj_val_t mk_nil() {
   return v;
 }
 
-static inline uint32_t hash_fn(const char *key, size_t key_len) {
-  uint32_t hashed = 0;
-  uint32_t bits_per_int = sizeof(unsigned int) * 8;
-
-  for (size_t i = 0; i < key_len; i++) {    
-    /* letters have about 5 bits in them */
-    hashed = (hashed << 5) | (hashed >> (bits_per_int - 5));
-    hashed ^= key[i];
-  }
-  return hashed;
-}
-
 static inline nanoclj_val_t mk_symbol(nanoclj_t * sc, strview_t sv, int_fast16_t syntax) {
   /* mk_symbol allocations are leaked intentionally for now */
   char * str = (char*)sc->malloc(sv.size + 1);
@@ -342,7 +330,7 @@ static inline nanoclj_val_t mk_symbol(nanoclj_t * sc, strview_t sv, int_fast16_t
   s->name = str;
   s->name_size = sv.size;
   s->syntax = syntax;
-  s->hash = hash_fn(sv.ptr, sv.size);
+  s->hash = murmur3_hash_string(sv.ptr, sv.size);
   
   nanoclj_val_t v;
   v.as_long = SIGNATURE_SYMBOL | (uint64_t)s;
@@ -478,6 +466,7 @@ static inline bool is_seqable_type(int_fast16_t type_id) {
 
 static inline bool is_coll_type(int_fast16_t type_id) {
   switch (type_id) {
+  case T_NIL: /* Empty list */
   case T_LIST:
   case T_VECTOR:
   case T_MAPENTRY:
@@ -788,6 +777,12 @@ static inline bool is_true(nanoclj_val_t p) {
 #define cadddr(p)        car(cdr(cdr(cdr(p))))
 #define cddddr(p)        cdr(cdr(cdr(cdr(p))))
 
+static char * dispatch_table[] = {
+#define _OP_DEF(A,OP) A,
+#include "nanoclj_opdf.h"
+  0
+};
+
 static void Eval_Cycle(nanoclj_t * sc, enum nanoclj_opcodes op);
 
 static inline const char* get_version() {
@@ -841,6 +836,10 @@ static inline strview_t to_strview(nanoclj_val_t x) {
   case T_KEYWORD:{
     const char * s = (const char *)decode_pointer(x);
     return (strview_t){ s, strlen(s) };
+  }
+  case T_PROC:{
+    const char *name = dispatch_table[decode_integer(x)];
+    return name ? (strview_t){ name, strlen(name) } : (strview_t){ "", 0 };
   }
   case T_CELL:
     return _to_strview(decode_pointer(x));
@@ -1583,7 +1582,7 @@ static inline nanoclj_val_t mk_regex(nanoclj_t * sc, nanoclj_val_t pattern) {
   strview_t sv = to_strview(pattern);
   pcre2_code * re = pcre2_compile((PCRE2_SPTR8)sv.ptr,
 				  sv.size,
-				  PCRE2_UTF,
+				  PCRE2_UTF | PCRE2_NEVER_BACKSLASH_C,
 				  &errornumber,
 				  &erroroffset,
 				  NULL);
@@ -2445,15 +2444,25 @@ static inline void sort_vector_in_place(nanoclj_cell_t * vec) {
 
 static int hasheq(nanoclj_val_t v) { 
   switch (prim_type(v)) {
-  case T_BOOLEAN:
   case T_CHARACTER:
   case T_PROC:
     return murmur3_hash_int(decode_integer(v));
+
+  case T_BOOLEAN:
+    return v.as_long == kFALSE ? 1237 : 1231;
     
   case T_INTEGER:
     /* Use long hash for integers so that (hash 1) matches Clojure */
     return murmur3_hash_long(decode_integer(v));
-    
+
+  case T_SYMBOL:
+    return decode_symbol(v)->hash;
+
+  case T_KEYWORD:{
+    strview_t sv = to_strview(v);
+    return murmur3_hash_string(sv.ptr, sv.size);      
+  }
+
   case T_CELL:{
     nanoclj_cell_t * c = decode_pointer(v);
     if (!c) return 0;
@@ -2468,12 +2477,7 @@ static int hasheq(nanoclj_val_t v) {
     case T_FILE:
     case T_UUID:{
       strview_t sv = _to_strview(c);
-      int hashcode = 0, m = 1;
-      for (int i = (int)sv.size - 1; i >= 0; i--) {
-	hashcode += sv.ptr[i] * m;
-	m *= 31;
-      }
-      return murmur3_hash_int(hashcode);
+      return murmur3_hash_string(sv.ptr, sv.size);      
     }
 
     case T_RATIO: /* Is this correct? */
@@ -2525,13 +2529,13 @@ static inline nanoclj_cell_t * oblist_initial_value(nanoclj_t * sc) {
 }
 
 static inline nanoclj_val_t oblist_add_item(nanoclj_t * sc, strview_t sv, nanoclj_val_t v) {
-  int location = hash_fn(sv.ptr, sv.size) % _size_unchecked(sc->oblist);
+  int location = murmur3_hash_string(sv.ptr, sv.size) % _size_unchecked(sc->oblist);
   set_vector_elem(sc->oblist, location, mk_pointer(cons(sc, v, decode_pointer(vector_elem(sc->oblist, location)))));
   return v;
 }
 
 static inline nanoclj_val_t oblist_find_item(nanoclj_t * sc, uint32_t type, const char *name, size_t len) {
-  int location = hash_fn(name, len) % _size_unchecked(sc->oblist);
+  int location = murmur3_hash_string(name, len) % _size_unchecked(sc->oblist);
   nanoclj_val_t x = vector_elem(sc->oblist, location);
   if (!is_nil(x)) {
     for (; x.as_long != sc->EMPTY.as_long; x = cdr(x)) {
@@ -4407,12 +4411,6 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
   return mk_nil();
 }
 
-static char * dispatch_table[] = {
-#define _OP_DEF(A,OP) A,
-#include "nanoclj_opdf.h"
-  0
-};
-
 static inline bool unpack_args_0(nanoclj_t * sc) {
   return is_empty(sc, sc->args);
 }
@@ -4531,14 +4529,6 @@ static inline int get_literal_fn_arity(nanoclj_t * sc, nanoclj_val_t body, bool 
   }
 }
 
-static inline const char *procname(enum nanoclj_opcodes op) {
-  const char *name = dispatch_table[(int)op];
-  if (name == 0) {
-    name = "ILLEGAL!";
-  }
-  return name;
-}
-
 /* Executes and opcode, and returns true if execution should continue */
 static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   nanoclj_val_t x, y;  
@@ -4550,7 +4540,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   nanoclj_cell_t * arg_next;
   
 #if 0
-  fprintf(stderr, "opexe %d %s\n", (int)sc->op, procname(sc->op));
+  strview_t op_sv = to_strview(mk_proc(sc->op));
+  fprintf(stderr, "opexe %d %.*s\n", (int)sc->op, (int)op_sv.size, op_sv.ptr);
 #endif
 
   switch (op) {

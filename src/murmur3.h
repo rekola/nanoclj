@@ -60,4 +60,13 @@ static inline uint32_t murmur3_hash_long(uint64_t input) {
   return murmur3_finalize(h1, 8);
 }
 
+static inline uint32_t murmur3_hash_string(const char * str, size_t size) {
+  int hashcode = 0, m = 1;
+  for (int i = (int)size - 1; i >= 0; i--) {
+    hashcode += str[i] * m;
+    m *= 31;
+  }
+  return murmur3_hash_int(hashcode);
+}
+
 #endif
