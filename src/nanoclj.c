@@ -2461,7 +2461,7 @@ static inline void sort_vector_in_place(nanoclj_cell_t * vec) {
   }
 }
 
-static int hasheq(nanoclj_t * sc, nanoclj_val_t v) { 
+static int32_t hasheq(nanoclj_t * sc, nanoclj_val_t v) { 
   switch (prim_type(v)) {
   case T_CHARACTER:
   case T_PROC:
@@ -5884,6 +5884,12 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       Error_0(sc, "Error - Invalid arity");
     }
     s_return(sc, mk_integer(sc, to_long(arg0) >> to_long(arg1)));
+
+  case OP_UNSIGNED_BIT_SHIFT_RIGHT:
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
+      Error_0(sc, "Error - Invalid arity");
+    }
+    s_return(sc, mk_integer(sc, (unsigned long long)to_long(arg0) >> to_long(arg1)));
     
   case OP_TYPE:                /* type */
   case OP_CLASS:
@@ -6355,8 +6361,20 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   case OP_HASH:
     if (!unpack_args_1(sc, &arg0)) {
       Error_0(sc, "Error - Invalid arity");
+    } else if (is_primitive(arg0)) {    
+      s_return(sc, mk_int(hasheq(sc, arg0)));
+    } else {
+      nanoclj_cell_t * c = decode_pointer(arg0);
+      if (!c) {
+	s_return(sc, mk_nil());
+      } else {
+	if (!(c->flags & T_HASHED)) {
+	  c->hasheq = hasheq(sc, arg0);
+	  c->flags &= T_HASHED;
+	}
+	s_return(sc, mk_int(c->hasheq));
+      }
     }
-    s_return(sc, mk_int(hasheq(sc, arg0)));
 
   case OP_COMPARE:
     if (!unpack_args_2(sc, &arg0, &arg1)) {

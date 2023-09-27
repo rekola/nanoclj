@@ -96,7 +96,7 @@ extern "C" {
 
 /* cell structure */
   typedef struct nanoclj_cell_t {
-    uint32_t hasheq;
+    int32_t hasheq;
     uint16_t type;
     uint8_t flags;
     uint8_t so_size;    
