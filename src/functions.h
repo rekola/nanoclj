@@ -343,7 +343,7 @@ static inline nanoclj_val_t Image_load(nanoclj_t * sc, nanoclj_val_t args) {
   unsigned char * data = stbi_load(filename, &w, &h, &channels, 0);
   sc->free(filename);
   if (!data) {
-    return mk_exception(sc, "Failed to load Image");
+    return nanoclj_throw(sc, mk_runtime_exception(sc, "Failed to load Image"));
   }
   
   nanoclj_val_t image = mk_image(sc, w, h, channels, data);
@@ -357,7 +357,7 @@ static inline nanoclj_val_t Image_resize(nanoclj_t * sc, nanoclj_val_t args) {
   nanoclj_val_t image00 = car(args);
   nanoclj_val_t target_width0 = cadr(args), target_height0 = caddr(args);
   if (!is_image(image00) || !is_number(target_width0) || !is_number(target_height0)) {
-    return mk_exception(sc, "Invalid type");
+    return nanoclj_throw(sc, mk_runtime_exception(sc, "Invalid type"));
   }
   
   int target_width = to_int(target_width0), target_height = to_int(target_height0);  
@@ -380,7 +380,7 @@ static inline nanoclj_val_t Image_resize(nanoclj_t * sc, nanoclj_val_t args) {
 static inline nanoclj_val_t Image_transpose(nanoclj_t * sc, nanoclj_val_t args) {
   nanoclj_val_t image00 = car(args);
   if (!is_image(image00)) {
-    return mk_exception(sc, "Not an Image");
+    return nanoclj_throw(sc, mk_runtime_exception(sc, "Not an Image"));
   }
   nanoclj_cell_t * image0 = decode_pointer(image00);
   nanoclj_image_t * image = _image_unchecked(image0);
@@ -399,7 +399,7 @@ static inline nanoclj_val_t Image_transpose(nanoclj_t * sc, nanoclj_val_t args) 
     }
   } else {
     sc->free(tmp);
-    return mk_exception(sc, "Unsupported number of channels");
+    return nanoclj_throw(sc, mk_runtime_exception(sc, "Unsupported number of channels"));
   }
   
   nanoclj_val_t new_image = mk_image(sc, h, w, channels, tmp);
@@ -412,10 +412,10 @@ static inline nanoclj_val_t Image_transpose(nanoclj_t * sc, nanoclj_val_t args) 
 static inline nanoclj_val_t Image_save(nanoclj_t * sc, nanoclj_val_t args) {
   nanoclj_val_t image00 = car(args), filename0 = cadr(args);
   if (!is_image(image00)) {
-    return mk_exception(sc, "Not an Image");
+    return nanoclj_throw(sc, mk_runtime_exception(sc, "Not an Image"));
   }
   if (!is_string(filename0)) {
-    return mk_exception(sc, "Not a string");
+    return nanoclj_throw(sc, mk_runtime_exception(sc, "Not a string"));
   }
   nanoclj_cell_t * image0 = decode_pointer(image00);
   nanoclj_image_t * image = _image_unchecked(image0);
@@ -428,7 +428,7 @@ static inline nanoclj_val_t Image_save(nanoclj_t * sc, nanoclj_val_t args) {
   char * ext = strrchr(filename, '.');
   if (!ext) {
     sc->free(filename);
-    return mk_exception(sc, "Could not determine file format");
+    return nanoclj_throw(sc, mk_runtime_exception(sc, "Could not determine file format"));
   } else {
     int success = 0;
     if (strcmp(ext, ".png") == 0) {
@@ -442,13 +442,13 @@ static inline nanoclj_val_t Image_save(nanoclj_t * sc, nanoclj_val_t args) {
     } else if (strcmp(ext, ".jpg") == 0) {
       success = stbi_write_jpg(filename, w, h, channels, data, 95);
     } else {
-      return mk_exception(sc, "Unsupported file format");
+      return nanoclj_throw(sc, mk_runtime_exception(sc, "Unsupported file format"));
     }
 
     sc->free(filename);
 
     if (!success) {
-      return mk_exception(sc, "Error writing file");
+      return nanoclj_throw(sc, mk_runtime_exception(sc, "Error writing file"));
     }
   }
 
@@ -486,13 +486,13 @@ static inline int * mk_kernel(nanoclj_t * sc, float radius, int * size) {
 nanoclj_val_t Image_gaussian_blur(nanoclj_t * sc, nanoclj_val_t args) {
   nanoclj_val_t image00 = car(args), h_radius = cadr(args), v_radius = caddr(args);
   if (!is_image(image00)) {
-    return mk_exception(sc, "Not an Image");
+    return nanoclj_throw(sc, mk_runtime_exception(sc, "Not an Image"));
   }
   if (!is_number(h_radius)) {
-    return mk_exception(sc, "Not a number");
+    return nanoclj_throw(sc, mk_runtime_exception(sc, "Not a number"));
   }
   if (!is_nil(v_radius) && v_radius.as_long != sc->EMPTY.as_long && !is_number(v_radius)) {
-    return mk_exception(sc, "Not a number or nil");
+    return nanoclj_throw(sc, mk_runtime_exception(sc, "Not a number or nil"));
   }
 
   nanoclj_cell_t * image0 = decode_pointer(image00);
@@ -611,7 +611,7 @@ static inline nanoclj_val_t Audio_load(nanoclj_t * sc, nanoclj_val_t args) {
   char * filename = alloc_c_str(sc, to_strview(car(args)));
   drwav wav;
   if (!drwav_init_file(&wav, filename, NULL)) {
-    return mk_exception(sc, "Failed to load Audio");
+    return nanoclj_throw(sc, mk_runtime_exception(sc, "Failed to load Audio"));
   }
   sc->free(filename);
 

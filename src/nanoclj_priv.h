@@ -177,6 +177,10 @@ extern "C" {
     nanoclj_val_t recur;		  /* recursion point */
 #endif
     
+    nanoclj_val_t pending_exception;		/* pending exception */
+    nanoclj_val_t OutOfMemoryError;
+    nanoclj_cell_t * Throwable;
+    
     nanoclj_cell_t _sink;
     nanoclj_val_t sink;               /* when mem. alloc. fails */
     nanoclj_cell_t _EMPTY;
@@ -229,8 +233,10 @@ extern "C" {
     
     nanoclj_val_t SORTED_SET;	  /* sorted-set */
     nanoclj_val_t ARRAY_MAP;	  /* array-map */
+    nanoclj_val_t CATCH;
+    nanoclj_val_t FINALLY;
     nanoclj_cell_t * EMPTYVEC;
-    
+
     nanoclj_cell_t * free_cell;      /* pointer to top of free cells */
     long fcells;                  /* # of free cells */
     
@@ -239,8 +245,6 @@ extern "C" {
     nanoclj_val_t load_stack[MAXFIL];    /* Stack of open files for port -1 (LOADing) */
     int file_i;
     
-    bool no_memory;             /* Whether mem. alloc. has failed */
-
     char *strbuff;
     size_t strbuff_size;
 

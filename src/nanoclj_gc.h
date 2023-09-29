@@ -21,7 +21,6 @@ E2:_setmark(p);
   case T_CLOSURE:
   case T_MACRO:
   case T_LAZYSEQ:
-  case T_EXCEPTION:
   case T_DELAY:{
     nanoclj_cell_t * meta = _cons_metadata(p);
     if (meta) mark(meta);
@@ -135,6 +134,10 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_c
     mark_value(sc->load_stack[i]);
   }
 
+  /* Exceptions */
+  mark_value(sc->pending_exception);
+  mark_value(sc->OutOfMemoryError);
+  
   mark_value(sc->active_element);
   mark_value(sc->active_element_target);
   mark(sc->EMPTYVEC);
