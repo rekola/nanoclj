@@ -131,6 +131,7 @@ extern "C" {
       struct {
 	int min_arity, max_arity;
 	foreign_func ptr;
+	struct nanoclj_cell_t * meta;
       } _ff;
       struct {
 	int min_arity, max_arity;
@@ -160,9 +161,7 @@ extern "C" {
     func_dealloc free;
     func_realloc realloc;
 
-/* return code */
-    int retcode;
-    int tracing;
+    bool tracing;
 
     char **alloc_seg;
     nanoclj_val_t *cell_seg;
@@ -177,8 +176,8 @@ extern "C" {
     nanoclj_val_t recur;		  /* recursion point */
 #endif
     
-    nanoclj_val_t pending_exception;		/* pending exception */
-    nanoclj_val_t OutOfMemoryError;
+    nanoclj_cell_t * pending_exception;		/* pending exception */
+    nanoclj_cell_t * OutOfMemoryError;
     nanoclj_cell_t * Throwable;
     
     nanoclj_cell_t _sink;

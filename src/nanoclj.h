@@ -77,7 +77,7 @@ extern "C" {
 						       void (*restore) (void*),
 						       void (*image) (nanoclj_image_t*, void*));
   NANOCLJ_EXPORT void nanoclj_set_error_port_callback(nanoclj_t * sc, void (*text) (const char *, size_t, void *));
-  NANOCLJ_EXPORT void nanoclj_load_named_file(nanoclj_t * sc, const char *filename);
+  NANOCLJ_EXPORT bool nanoclj_load_named_file(nanoclj_t * sc, const char *filename);
   NANOCLJ_EXPORT nanoclj_val_t nanoclj_eval_string(nanoclj_t * sc, const char *cmd, size_t len);
   NANOCLJ_EXPORT void nanoclj_load_string(nanoclj_t * sc, const char *cmd);
   NANOCLJ_EXPORT nanoclj_val_t nanoclj_apply0(nanoclj_t * sc, const char *procname);

@@ -793,55 +793,55 @@ static inline void register_functions(nanoclj_t * sc) {
   nanoclj_cell_t * Image = def_namespace(sc, "Image");
   nanoclj_cell_t * Audio = def_namespace(sc, "Audio");
   
-  intern(sc, Thread, def_symbol(sc, "sleep"), mk_foreign_func_with_arity(sc, Thread_sleep, 1, 1));
+  intern_foreign_func(sc, Thread, "sleep", Thread_sleep, 1, 1);
   
-  intern(sc, System, def_symbol(sc, "exit"), mk_foreign_func_with_arity(sc, System_exit, 1, 1));
-  intern(sc, System, def_symbol(sc, "currentTimeMillis"), mk_foreign_func_with_arity(sc, System_currentTimeMillis, 0, 0));
-  intern(sc, System, def_symbol(sc, "nanoTime"), mk_foreign_func_with_arity(sc, System_nanoTime, 0, 0));
-  intern(sc, System, def_symbol(sc, "gc"), mk_foreign_func_with_arity(sc, System_gc, 0, 0));
-  intern(sc, System, def_symbol(sc, "getenv"), mk_foreign_func_with_arity(sc, System_getenv, 0, 1));
-  intern(sc, System, def_symbol(sc, "getProperty"), mk_foreign_func_with_arity(sc, System_getProperty, 0, 1));
-  intern(sc, System, def_symbol(sc, "setProperty"), mk_foreign_func_with_arity(sc, System_setProperty, 0, 1));
-  intern(sc, System, def_symbol(sc, "glob"), mk_foreign_func_with_arity(sc, System_glob, 1, 1));
+  intern_foreign_func(sc, System, "exit", System_exit, 1, 1);
+  intern_foreign_func(sc, System, "currentTimeMillis", System_currentTimeMillis, 0, 0);
+  intern_foreign_func(sc, System, "nanoTime", System_nanoTime, 0, 0);
+  intern_foreign_func(sc, System, "gc", System_gc, 0, 0);
+  intern_foreign_func(sc, System, "getenv", System_getenv, 0, 1);
+  intern_foreign_func(sc, System, "getProperty", System_getProperty, 0, 1);
+  intern_foreign_func(sc, System, "setProperty", System_setProperty, 0, 1);
+  intern_foreign_func(sc, System, "glob", System_glob, 1, 1);
   
-  intern(sc, Math, def_symbol(sc, "sin"), mk_foreign_func_with_arity(sc, Math_sin, 1, 1));
-  intern(sc, Math, def_symbol(sc, "cos"), mk_foreign_func_with_arity(sc, Math_cos, 1, 1));
-  intern(sc, Math, def_symbol(sc, "exp"), mk_foreign_func_with_arity(sc, Math_exp, 1, 1));
-  intern(sc, Math, def_symbol(sc, "log"), mk_foreign_func_with_arity(sc, Math_log, 1, 1));
-  intern(sc, Math, def_symbol(sc, "log10"), mk_foreign_func_with_arity(sc, Math_log10, 1, 1));
-  intern(sc, Math, def_symbol(sc, "tan"), mk_foreign_func_with_arity(sc, Math_tan, 1, 1));
-  intern(sc, Math, def_symbol(sc, "asin"), mk_foreign_func_with_arity(sc, Math_asin, 1, 1));
-  intern(sc, Math, def_symbol(sc, "acos"), mk_foreign_func_with_arity(sc, Math_acos, 1, 1));
-  intern(sc, Math, def_symbol(sc, "atan"), mk_foreign_func_with_arity(sc, Math_atan, 1, 2));
-  intern(sc, Math, def_symbol(sc, "sqrt"), mk_foreign_func_with_arity(sc, Math_sqrt, 1, 1));
-  intern(sc, Math, def_symbol(sc, "cbrt"), mk_foreign_func_with_arity(sc, Math_cbrt, 1, 1));
-  intern(sc, Math, def_symbol(sc, "pow"), mk_foreign_func_with_arity(sc, Math_pow, 2, 2));
-  intern(sc, Math, def_symbol(sc, "floor"), mk_foreign_func_with_arity(sc, Math_floor, 1, 1));
-  intern(sc, Math, def_symbol(sc, "ceil"), mk_foreign_func_with_arity(sc, Math_ceil, 1, 1));
-  intern(sc, Math, def_symbol(sc, "round"), mk_foreign_func_with_arity(sc, Math_round, 1, 1));
+  intern_foreign_func(sc, Math, "sin", Math_sin, 1, 1);
+  intern_foreign_func(sc, Math, "cos", Math_cos, 1, 1);
+  intern_foreign_func(sc, Math, "exp", Math_exp, 1, 1);
+  intern_foreign_func(sc, Math, "log", Math_log, 1, 1);
+  intern_foreign_func(sc, Math, "log10", Math_log10, 1, 1);
+  intern_foreign_func(sc, Math, "tan", Math_tan, 1, 1);
+  intern_foreign_func(sc, Math, "asin", Math_asin, 1, 1);
+  intern_foreign_func(sc, Math, "acos", Math_acos, 1, 1);
+  intern_foreign_func(sc, Math, "atan", Math_atan, 1, 2);
+  intern_foreign_func(sc, Math, "sqrt", Math_sqrt, 1, 1);
+  intern_foreign_func(sc, Math, "cbrt", Math_cbrt, 1, 1);
+  intern_foreign_func(sc, Math, "pow", Math_pow, 2, 2);
+  intern_foreign_func(sc, Math, "floor", Math_floor, 1, 1);
+  intern_foreign_func(sc, Math, "ceil", Math_ceil, 1, 1);
+  intern_foreign_func(sc, Math, "round", Math_round, 1, 1);
 
   intern(sc, Math, def_symbol(sc, "E"), mk_real(M_E));
   intern(sc, Math, def_symbol(sc, "PI"), mk_real(M_PI));
   intern(sc, Math, def_symbol(sc, "SQRT2"), mk_real(M_SQRT2));
 
-  intern(sc, numeric_tower, def_symbol(sc, "expt"), mk_foreign_func_with_arity(sc, numeric_tower_expt, 2, 2));
+  intern_foreign_func(sc, numeric_tower, "expt", numeric_tower_expt, 2, 2);
 
-  intern(sc, clojure_java_browse, def_symbol(sc, "browse-url"), mk_foreign_func_with_arity(sc, browse_url, 1, 1));
+  intern_foreign_func(sc, clojure_java_browse, "browse-url", browse_url, 1, 1);
 
-  intern(sc, clojure_java_shell, def_symbol(sc, "sh"), mk_foreign_func(sc, shell_sh));
+  intern_foreign_func(sc, clojure_java_shell, "sh", shell_sh, 1, 0x7fffffff);
 
-  intern(sc, Image, def_symbol(sc, "load"), mk_foreign_func_with_arity(sc, Image_load, 1, 1));
-  intern(sc, Image, def_symbol(sc, "resize"), mk_foreign_func_with_arity(sc, Image_resize, 3, 3));
-  intern(sc, Image, def_symbol(sc, "transpose"), mk_foreign_func_with_arity(sc, Image_transpose, 1, 1));
-  intern(sc, Image, def_symbol(sc, "save"), mk_foreign_func_with_arity(sc, Image_save, 2, 2));
-  intern(sc, Image, def_symbol(sc, "blur"), mk_foreign_func_with_arity(sc, Image_gaussian_blur, 2, 2));
-  intern(sc, Image, def_symbol(sc, "gaussian-blur"), mk_foreign_func_with_arity(sc, Image_gaussian_blur, 2, 2));
+  intern_foreign_func(sc, Image, "load", Image_load, 1, 1);
+  intern_foreign_func(sc, Image, "resize", Image_resize, 3, 3);
+  intern_foreign_func(sc, Image, "transpose", Image_transpose, 1, 1);
+  intern_foreign_func(sc, Image, "save", Image_save, 2, 2);
+  intern_foreign_func(sc, Image, "blur", Image_gaussian_blur, 2, 2);
+  intern_foreign_func(sc, Image, "gaussian-blur", Image_gaussian_blur, 2, 2);
 
-  intern(sc, Audio, def_symbol(sc, "load"), mk_foreign_func_with_arity(sc, Audio_load, 1, 1));
+  intern_foreign_func(sc, Audio, "load", Audio_load, 1, 1);
   
 #if NANOCLJ_USE_LINENOISE
   nanoclj_cell_t * linenoise = def_namespace(sc, "linenoise");
-  intern(sc, linenoise, def_symbol(sc, "read-line"), mk_foreign_func_with_arity(sc, linenoise_readline, 1, 1));
+  intern_foreign_func(sc, linenoise, "read-line", linenoise_readline, 1, 1);
 #endif  
 }
 

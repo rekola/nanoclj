@@ -12,7 +12,7 @@ static inline void mark(nanoclj_cell_t * p) {
   nanoclj_cell_t * t = NULL;
   nanoclj_cell_t * q;
   nanoclj_val_t q0;
-  
+
 E2:_setmark(p);
   switch (_type(p)) {
   case T_CLASS:
@@ -24,6 +24,11 @@ E2:_setmark(p);
   case T_DELAY:{
     nanoclj_cell_t * meta = _cons_metadata(p);
     if (meta) mark(meta);
+    break;
+  }
+  case T_FOREIGN_FUNCTION:{
+    nanoclj_cell_t * meta = _ff_metadata(p);
+    if (meta)  mark(meta);
     break;
   }
   case T_VECTOR:
@@ -112,12 +117,12 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_c
 #if GC_VERBOSE
   putstr(sc, "gc...", get_err_port(sc));
 #endif
-
+  
   /* mark system globals */
   if (sc->oblist) mark(sc->oblist);
   if (sc->root_env) mark(sc->root_env);
   if (sc->global_env) mark(sc->global_env);
- 
+  
   /* mark current registers */
   if (sc->args) mark(sc->args);
   if (sc->envir) mark(sc->envir);
@@ -126,22 +131,22 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_c
   mark_value(sc->recur);
 #endif
   dump_stack_mark(sc);
-
+  
   mark_value(sc->value);
   mark_value(sc->save_inport);
 
   for (int i = 0; i <= sc->file_i; i++) {
     mark_value(sc->load_stack[i]);
   }
-
+  
   /* Exceptions */
-  mark_value(sc->pending_exception);
-  mark_value(sc->OutOfMemoryError);
+  if (sc->pending_exception) mark(sc->pending_exception);
+  mark(sc->OutOfMemoryError);
   
   mark_value(sc->active_element);
   mark_value(sc->active_element_target);
   mark(sc->EMPTYVEC);
-    
+  
   /* Mark recent objects the interpreter doesn't know about yet. */
   mark_value(car(sc->sink));
 
@@ -149,7 +154,7 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_c
   for (size_t i = 0; i < sc->types->size; i++) {
     mark_value(sc->types->data[i]);
   }
-
+  
   /* mark variables a, b, c */
   if (a) mark(a);
   if (b) mark(b);
