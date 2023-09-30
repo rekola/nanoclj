@@ -87,10 +87,11 @@ have been tested:
 
 ## Dependencies
 
-- ggml (included)
 - linenoise (included, utf8 support added)
 - stb_image, stb_image_resize, stb_image_write (included)
 - dr_wav (included)
+- ggml (included, experimental)
+- pcre2
 - cairo
 - libsixel
 - utf8proc
@@ -99,15 +100,12 @@ have been tested:
 
 - Custom types
 - Transducers
-- Exception handling
-- Regular expressions
 - Refs, Agents, Atoms, Validators
 - Queues
 - Arrays
-- Tagged Literals (e.g. #uuid and #inst)
 - Reader Conditionals
 - Namespace qualifiers for keywords
-- BigInts, BigDecimals and Exotic numeric literals (e.g. 2r0, 3N, 0.1M)
+- BigInts, BigDecimals and Exotic numeric literals (e.g. 2r0, 3N, 0.1M, hexadecimal floats)
 - Persistent data structures
 - Transient data structures
 - Unchecked operations
@@ -119,11 +117,11 @@ have been tested:
 - monitor-enter, monitor-exit, and locking
 - Threading macros (->, -->, some-> and some->>)
 - Homogenous vectors (vector-of)
-- `*print-length*`, `*print-level*`, `*file*`, `*flush-on-newline*`, `*clojure-version*`
+- Pre and post conditions for functions
+- `*print-length*`, `*print-level*`, `*file*`, `*flush-on-newline*`, `*clojure-version*`, `*load-tests*`
 - Missing core functions and macros
   - doseq, for, dotimes
-  - bit-and-not, unsigned-bit-shift-right
-  - keep
+  - bit-and-not
   - sort-by, sorted-set-by, sorted-map, hash-set, hash-map
   - update-in, merge-with
   - cast, doto
@@ -134,19 +132,24 @@ have been tested:
   - memoize
   - group-by
   - condp
-  - when-let, if-let, letfn
-  - defn-
+  - when-let, if-let, letfn, if-some
   - reduced, reduced?
   - with-local-vars, var-set, find-var, declare, binding
   - as-url, resource
   - sequence, seqable?
   - make-hierarchy, ancestors, supers, bases
   - bound?
+  - random-uuid
+  - bounded-count
+  - deftest, set-test, with-test
+  - re-groups, re-matcher, re-seq, re-matches
+  - hash-ordered-coll, hash-unordered-coll
+  - assert-args
 - clojure.string
   - upper-case
   - capitalize
   - split
-  - replace
+  - replace, replace-first
 - clojure.set
 - clojure.data.csv
 - clojure.xml
