@@ -59,7 +59,7 @@ static inline void canvas_set_color(void * canvas, double r, double g, double b)
 static inline void canvas_set_linear_gradient(void * canvas, nanoclj_cell_t * p0, nanoclj_cell_t * p1, nanoclj_cell_t * colormap) {
   cairo_pattern_t * pat = cairo_pattern_create_linear(to_double(vector_elem(p0, 0)), to_double(vector_elem(p0, 1)),
 						      to_double(vector_elem(p1, 0)), to_double(vector_elem(p1, 1)));
-  size_t n = _get_size(colormap);
+  size_t n = get_size(colormap);
   for (size_t i = 0; i < n; i++) {
     nanoclj_cell_t * e = decode_pointer(vector_elem(colormap, i));
     double pos = to_double(vector_elem(e, 0));
