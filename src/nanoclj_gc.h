@@ -142,6 +142,7 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_c
   /* Exceptions */
   if (sc->pending_exception) mark(sc->pending_exception);
   mark(sc->OutOfMemoryError);
+  mark(sc->NullPointerException);
   
   mark_value(sc->active_element);
   mark_value(sc->active_element_target);

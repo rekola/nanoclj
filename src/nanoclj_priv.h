@@ -178,6 +178,7 @@ extern "C" {
     
     nanoclj_cell_t * pending_exception;		/* pending exception */
     nanoclj_cell_t * OutOfMemoryError;
+    nanoclj_cell_t * NullPointerException;
     nanoclj_cell_t * Throwable;
     
     nanoclj_cell_t _sink;
