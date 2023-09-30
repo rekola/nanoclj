@@ -740,7 +740,7 @@ static inline void on_mouse_motion(int x, int y) {
 }
 
 static inline void on_window_size() {
-  update_window_info(linenoise_sc, get_out_port(linenoise_sc));
+  update_window_info(linenoise_sc, decode_pointer(get_out_port(linenoise_sc)));
 }
 
 static inline nanoclj_val_t linenoise_readline(nanoclj_t * sc, nanoclj_val_t args) {

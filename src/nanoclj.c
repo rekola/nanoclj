@@ -5471,8 +5471,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   case OP_RATIONALIZE:
     if (!unpack_args_1(sc, &arg0)) {
       return false;
-    }
-    if (prim_type(arg0) == T_REAL) {
+    } else if (prim_type(arg0) == T_REAL) {
       if (arg0.as_double == 0) {
 	nanoclj_throw(sc, mk_arithmetic_exception(sc, "Divide by zero"));
 	return false;
@@ -5803,7 +5802,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       return false;
     } else if (is_cell(arg0)) {
       nanoclj_cell_t * c = decode_pointer(arg0);
-      if (is_seqable_type(_type(c))) {
+      if (!c || is_seqable_type(_type(c))) {
 	if (op == OP_NEXT) {
 	  s_return(sc, mk_pointer(next(sc, c)));
 	} else {
@@ -5845,14 +5844,14 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       return false;
     } else if (is_cell(arg0)) {
       nanoclj_cell_t * coll = decode_pointer(arg0);
-      y = arg1;
+      if (!coll) coll = &(sc->_EMPTY);
       switch (_type(coll)) {
       case T_VECTOR:{
 	size_t vector_len = get_size(coll);
 
 	/* If MapEntry is added to vector, it is an index value pair */
-	if (type(y) == T_MAPENTRY) {
-	  nanoclj_cell_t * y2 = decode_pointer(y);
+	if (type(arg1) == T_MAPENTRY) {
+	  nanoclj_cell_t * y2 = decode_pointer(arg1);
 	  long long index = to_long_w_def(first(sc, y2), -1);
 	  nanoclj_val_t value = second(sc, y2);
 	  if (index < 0 || index >= vector_len) {
@@ -5863,12 +5862,12 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	    s_return(sc, mk_pointer(vec));
 	  }
 	} else {
-	  s_return(sc, mk_pointer(conjoin(sc, coll, y)));
+	  s_return(sc, mk_pointer(conjoin(sc, coll, arg1)));
 	}
       }
 	
       case T_ARRAYMAP:{
-	nanoclj_cell_t * p = decode_pointer(y);
+	nanoclj_cell_t * p = decode_pointer(arg1);
 	if (_type(p) == T_ARRAYMAP) {
 	  size_t other_len = get_size(p);
 	  for (size_t i = 0; i < other_len; i++) {
@@ -5900,7 +5899,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       }
       
       case T_SORTED_SET:{
-	if (!get_elem(sc, coll, y, NULL)) {
+	if (!get_elem(sc, coll, arg1, NULL)) {
 	  nanoclj_cell_t * vec = conjoin(sc, coll, y);
 	  vec = copy_vector(sc, vec);
 	  sort_vector_in_place(vec);
@@ -5916,7 +5915,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       case T_STRING:
       case T_CHAR_ARRAY:
       case T_FILE:
-	s_return(sc, mk_pointer(conjoin(sc, coll, y)));
+	s_return(sc, mk_pointer(conjoin(sc, coll, arg1)));
       }
     }
     Error_0(sc, "Error - No protocol method ICollection.-conj defined");
@@ -5926,7 +5925,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       return false;
     } else if (is_cell(arg0)) {
       nanoclj_cell_t * c = decode_pointer(arg0);
-      if (_type(c) == T_SORTED_SET) {
+      if (!c) {
+	s_return(sc, mk_nil());
+      } else if (_type(c) == T_SORTED_SET) {
 	size_t i = find_index(sc, c, arg1);
 	if (i == NPOS) {
 	  s_return(sc, arg0);
@@ -6070,7 +6071,10 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       return false;
     } else if (is_cell(arg0)) { /* arg0: type, arg1: object */
       nanoclj_cell_t * t = decode_pointer(arg0);
-      if (_type(t) == T_CLASS) {
+      if (!t) {
+	nanoclj_throw(sc, sc->NullPointerException);
+	return false;
+      } else if (_type(t) == T_CLASS) {
 	s_retbool(isa(sc, t, arg1));
       }
     }
@@ -6158,13 +6162,17 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   case OP_CLOSE:        /* close */
     if (!unpack_args_1(sc, &arg0)) {
       return false;
+    } else if (is_nil(arg0)) {
+      nanoclj_throw(sc, sc->NullPointerException);
+      return false;
+    } else {
+      switch (type(arg0)) {
+      case T_READER:
+      case T_WRITER:
+	port_close(sc, decode_pointer(arg0));
+      }
+      s_return(sc, mk_nil());
     }
-    switch (type(arg0)) {
-    case T_READER:
-    case T_WRITER:
-      port_close(sc, decode_pointer(arg0));
-    }
-    s_return(sc, mk_nil());
 
     /* ========== reading part ========== */
     
@@ -6473,6 +6481,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       return false;
     } else if (is_cell(arg0)) {
       nanoclj_cell_t * c = decode_pointer(arg0);
+      if (!c) s_return(sc, mk_nil());
       if (is_seqable_type(_type(c))) {
 	s_return(sc, mk_pointer(seq(sc, c)));
       }
@@ -6484,10 +6493,12 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       return false;
     } else if (is_cell(arg0)) {
       nanoclj_cell_t * c = decode_pointer(arg0);
-      int t = _type(c);
-      if (t == T_VECTOR || t == T_ARRAYMAP || t == T_SORTED_SET || t == T_STRING ||
-	  t == T_CHAR_ARRAY || t == T_FILE) {
-	s_return(sc, mk_pointer(rseq(sc, c)));	
+      if (c) {
+	int t = _type(c);
+	if (t == T_VECTOR || t == T_ARRAYMAP || t == T_SORTED_SET || t == T_STRING ||
+	    t == T_CHAR_ARRAY || t == T_FILE) {
+	  s_return(sc, mk_pointer(rseq(sc, c)));	
+	}
       }
     }
     Error_0(sc, "Error - value is not reverse seqable");
@@ -6620,7 +6631,10 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       return false;
     } else if (is_cell(arg0)) {
       nanoclj_cell_t * re = decode_pointer(arg0);
-      if (_type(re) == T_REGEX) {
+      if (!re) {
+	nanoclj_throw(sc, sc->NullPointerException);
+	return false;
+      } else if (_type(re) == T_REGEX) {
 	strview_t sv = to_strview(arg1);
 	pcre2_match_data * md = pcre2_match_data_create(128, NULL);
 	int rc = pcre2_match(_re_unchecked(re), (PCRE2_SPTR8)sv.ptr, sv.size, 0, 0, md, NULL);
@@ -6641,7 +6655,10 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       return false;
     } else if (is_cell(arg0)) {
       nanoclj_cell_t * c = decode_pointer(arg0);
-      if (_type(c) == T_VAR) {
+      if (!c) {
+	nanoclj_throw(sc, sc->NullPointerException);
+	return false;
+      } else if (_type(c) == T_VAR) {
 	nanoclj_cell_t * md = _so_vector_metadata(c);
 	if (!md) md = mk_arraymap(sc, 0);
 	nanoclj_val_t w;
@@ -6677,7 +6694,10 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       return false;
     } else if (is_cell(arg0)) {
       nanoclj_cell_t * t = decode_pointer(arg0);
-      if (_type(t) == T_TENSOR) {
+      if (!t) {
+	nanoclj_throw(sc, sc->NullPointerException);
+	return false;
+      } else if (_type(t) == T_TENSOR) {
 	tensor_set1f(_tensor_unchecked(t), to_long(arg1), to_double(arg2));
 	s_return(sc, mk_nil());
       }
@@ -6926,14 +6946,14 @@ static inline void assign_proc(nanoclj_t * sc, enum nanoclj_opcodes op, const ch
   new_slot_in_env(sc, x, y);
 }
 
-static inline void update_window_info(nanoclj_t * sc, nanoclj_val_t out) {
+static inline void update_window_info(nanoclj_t * sc, nanoclj_cell_t * out) {
   nanoclj_val_t size = mk_nil();
 
   sc->window_lines = 0;
   sc->window_columns = 0;
   
-  if (type(out) == T_WRITER && port_type_unchecked(out) == port_file) {
-    nanoclj_port_rep_t * pr = rep_unchecked(out);
+  if (out && _type(out) == T_WRITER && _port_type_unchecked(out) == port_file) {
+    nanoclj_port_rep_t * pr = _rep_unchecked(out);
     FILE * fh = pr->stdio.file;
     int lines, cols, width, height;
     if (get_window_size(stdin, fh, &cols, &lines, &width, &height)) {
@@ -7422,7 +7442,7 @@ void nanoclj_set_input_port_file(nanoclj_t * sc, FILE * fin) {
 void nanoclj_set_output_port_file(nanoclj_t * sc, FILE * fout) {
   nanoclj_val_t p = port_rep_from_file(sc, T_WRITER, fout, NULL);
   intern(sc, sc->root_env, sc->OUT, p);
-  update_window_info(sc, p);
+  update_window_info(sc, decode_pointer(p));
 }
 
 void nanoclj_set_output_port_callback(nanoclj_t * sc,
