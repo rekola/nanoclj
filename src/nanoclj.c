@@ -191,7 +191,8 @@ enum nanoclj_types {
   T_ARITY_EXCEPTION = 38,
   T_ILLEGAL_ARG_EXCEPTION = 39,
   T_ARITHMETIC_EXCEPTION = 40,
-  T_TENSOR = 41,
+  T_CLASS_CAST_EXCEPTION = 41,
+  T_TENSOR = 42,
   T_MAX_TYPE
 };
 
@@ -1326,6 +1327,10 @@ static inline nanoclj_cell_t * mk_runtime_exception(nanoclj_t * sc, const char *
 
 static inline nanoclj_cell_t * mk_arithmetic_exception(nanoclj_t * sc, const char * msg) {
   return get_cell(sc, T_ARITHMETIC_EXCEPTION, 0, mk_string(sc, msg), NULL, NULL);
+}
+
+static inline nanoclj_cell_t * mk_class_cast_exception(nanoclj_t * sc, const char * msg) {
+  return get_cell(sc, T_CLASS_CAST_EXCEPTION, 0, mk_string(sc, msg), NULL, NULL);
 }
 
 static inline nanoclj_cell_t * mk_arity_exception(nanoclj_t * sc, int n_args, nanoclj_val_t ns, nanoclj_val_t fn) {
@@ -5971,6 +5976,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     } else if (is_nil(arg0) || is_nil(arg1)) {
       nanoclj_throw(sc, sc->NullPointerException);
       return false;
+    } else if (!is_number(arg0) || !is_number(arg1)) {
+      nanoclj_throw(sc, mk_class_cast_exception(sc, "Argument cannot be cast to java.lang.Number"));
+      return false;
     } else {
       s_retbool(equiv(arg0, arg1));
     }
@@ -7333,6 +7341,7 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   nanoclj_cell_t * IllegalArgumentException = mk_named_type(sc, "java.lang.IllegalArgumentException", T_ILLEGAL_ARG_EXCEPTION, RuntimeException);
   nanoclj_cell_t * OutOfMemoryError = mk_named_type(sc, "java.lang.OutOfMemoryError", gentypeid(sc), sc->Throwable);    
   nanoclj_cell_t * NullPointerException = mk_named_type(sc, "java.lang.NullPointerException", gentypeid(sc), RuntimeException);
+  nanoclj_cell_t * ClassCastException = mk_named_type(sc, "java.lang.ClassCastException", T_CLASS_CAST_EXCEPTION, RuntimeException);  
   nanoclj_cell_t * AFn = mk_named_type(sc, "clojure.lang.AFn", gentypeid(sc), Object);  
     
   mk_named_type(sc, "java.lang.Class", T_CLASS, AFn); /* non-standard parent */
