@@ -2890,7 +2890,7 @@ static inline nanoclj_val_t mk_primitive(nanoclj_t * sc, char *q) {
   char *div = 0;
   char *p;
   int sign = 1;
-  
+
   /* Parse namespace qualifier such as Math/sin */
   if (!isdigit(q[0]) && q[0] != '-' && (p = strchr(q, '/')) != 0 && p != q) {
     *p = 0;
@@ -2901,7 +2901,7 @@ static inline nanoclj_val_t mk_primitive(nanoclj_t * sc, char *q) {
 						cons(sc, mk_primitive(sc, p + 1), NULL))),
 				cons(sc, def_symbol(sc, q), NULL))));
   }
-
+  
   p = q;
   char c = *p++;
   if ((c == '+') || (c == '-')) {
@@ -7642,7 +7642,13 @@ int main(int argc, const char **argv) {
 
   int rv = 0;
   if (sc.pending_exception) {
-    fprintf(stderr, "Uncaught exception\n");
+    nanoclj_val_t name_v;
+    if (get_elem(&sc, _cons_metadata(get_type_object(&sc, mk_pointer(sc.pending_exception))), sc.NAME, &name_v)) {
+      strview_t sv = to_strview(name_v), sv2 = to_strview(_car(sc.pending_exception));
+      fprintf(stderr, "%.*s: %.*s\n", (int)sv.size, sv.ptr, (int)sv2.size, sv2.ptr);
+    } else {
+      fprintf(stderr, "Uncaught exception\n");
+    }
     rv = 1;
   }
 
