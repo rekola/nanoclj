@@ -101,10 +101,8 @@ have been tested:
 - Custom types
 - Transducers
 - Refs, Agents, Atoms, Validators
-- Queues
-- Arrays
+- Queues, Arrays
 - Reader Conditionals
-- Namespace qualifiers for keywords
 - BigInts, BigDecimals and Exotic numeric literals (e.g. 2r0, 3N, 0.1M, hexadecimal floats)
 - Persistent data structures
 - Transient data structures
@@ -134,7 +132,7 @@ have been tested:
   - condp
   - when-let, if-let, letfn, if-some
   - reduced, reduced?
-  - with-local-vars, var-set, find-var, declare, binding
+  - with-local-vars, var-set, find-var, alter-var-root, declare, binding
   - as-url, resource
   - sequence, seqable?
   - make-hierarchy, ancestors, supers, bases
