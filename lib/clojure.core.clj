@@ -40,7 +40,9 @@
 (def short java.lang.Integer)
 (def double java.lang.Double)
 (def float java.lang.Double)
-  
+
+(def resolve ns-resolve)
+
 ; Casts argument to int
 (def int java.lang.Integer)
 

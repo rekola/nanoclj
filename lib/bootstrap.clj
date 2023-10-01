@@ -92,7 +92,7 @@
   "Returns true if coll is invokeable"
   (fn [x] (instance? clojure.lang.AFn x)))
 
-(def defined? (fn [sym] (boolean (resolve sym))))
+(def defined? (fn [sym] (boolean (ns-resolve sym))))
                         
 (def list
   "Creates a list from the given args"
