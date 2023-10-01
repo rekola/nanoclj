@@ -204,7 +204,6 @@ extern "C" {
     nanoclj_val_t QQUOTE;             /* pointer to symbol quasiquote */
     nanoclj_val_t UNQUOTE;            /* pointer to symbol unquote */
     nanoclj_val_t UNQUOTESP;          /* pointer to symbol unquote-splicing */
-    nanoclj_val_t SLASH_HOOK;         /* *slash-hook* */
     nanoclj_val_t TAG_HOOK;           /* *default-data-reader-fn* */
     nanoclj_val_t COMPILE_HOOK;       /* *compile-hook* */
     nanoclj_val_t IN;		  /* *in* */

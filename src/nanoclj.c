@@ -201,12 +201,21 @@ typedef struct {
   size_t size;
 } strview_t;
 
-typedef struct {
+typedef struct symbol_t {
   int_fast16_t syntax;
-  const char * name;
-  size_t name_size;
+  strview_t ns, name, full_name;
   uint32_t hash;
+  nanoclj_val_t ns_sym, name_sym;
 } symbol_t;
+
+typedef struct keyword_t {
+  strview_t ns, name, full_name;
+  uint32_t hash;  
+} keyword_t;
+
+static inline bool strview_eq(strview_t a, strview_t b) {
+  return a.size == b.size && memcmp(a.ptr, b.ptr, a.size) == 0;
+}
 
 typedef struct {
   char * url;
@@ -279,6 +288,10 @@ static inline symbol_t * decode_symbol(nanoclj_val_t value) {
   return (symbol_t *)(value.as_long & MASK_PAYLOAD_PTR);
 }
 
+static inline keyword_t * decode_keyword(nanoclj_val_t value) {
+  return (keyword_t *)(value.as_long & MASK_PAYLOAD_PTR);
+}
+
 static inline int_fast16_t expand_type(nanoclj_val_t value, int_fast16_t primitive_type) {
   if (primitive_type == T_CELL) return _type(decode_pointer(value));
   return primitive_type;
@@ -304,30 +317,72 @@ static inline nanoclj_val_t mk_pointer(nanoclj_cell_t * ptr) {
   return (nanoclj_val_t)(SIGNATURE_POINTER | (uint64_t)ptr);
 }
 
-static inline nanoclj_val_t mk_keyword(nanoclj_t * sc, const char * name, size_t size) {
-  /* This is leaked intentionally for now */
-  char * str = (char*)sc->malloc(size + 1);
-  memcpy(str, name, size);
-  str[size] = 0;
-
-  return (nanoclj_val_t)(SIGNATURE_KEYWORD | (uint64_t)str);
-}
-
 static inline nanoclj_val_t mk_nil() {
   return (nanoclj_val_t)kNIL;
 }
 
-static inline nanoclj_val_t mk_symbol(nanoclj_t * sc, strview_t sv, int_fast16_t syntax) {
+static inline nanoclj_val_t mk_keyword(nanoclj_t * sc, strview_t ns, strview_t name) {
+  /* This is leaked intentionally for now */
+  char * ns_str = (char*)sc->malloc(ns.size + 1);
+  memcpy(ns_str, ns.ptr, ns.size);
+  ns_str[ns.size] = 0;
+
+  char * name_str = (char*)sc->malloc(name.size + 1);
+  memcpy(name_str, name.ptr, name.size);
+  name_str[name.size] = 0;
+  
+  char * full_name_str = (char*)sc->malloc(ns.size + name.size + 2);
+  size_t full_name_size;
+  if (ns.size) {
+    memcpy(full_name_str, ns.ptr, ns.size);
+    full_name_str[ns.size] = '/';
+    memcpy(full_name_str + ns.size + 1, name.ptr, name.size);
+    full_name_size = ns.size + 1 + name.size;
+    full_name_str[full_name_size] = 0;
+  } else {
+    full_name_str = name_str;
+    full_name_size = name.size;
+  }
+
+  keyword_t * k = sc->malloc(sizeof(keyword_t));
+  k->ns = (strview_t){ ns_str, ns.size };
+  k->name = (strview_t){ name_str, name.size };
+  k->full_name = (strview_t){ full_name_str, full_name_size };
+  k->hash = murmur3_hash_string(name.ptr, name.size);
+  
+  return (nanoclj_val_t)(SIGNATURE_KEYWORD | (uint64_t)k);
+}
+
+static inline nanoclj_val_t mk_symbol(nanoclj_t * sc, strview_t ns, strview_t name, int_fast16_t syntax) {
   /* mk_symbol allocations are leaked intentionally for now */
-  char * str = (char*)sc->malloc(sv.size + 1);
-  memcpy(str, sv.ptr, sv.size);
-  str[sv.size] = 0;
+  char * ns_str = (char*)sc->malloc(ns.size + 1);
+  memcpy(ns_str, ns.ptr, ns.size);
+  ns_str[ns.size] = 0;
+
+  char * name_str = (char*)sc->malloc(name.size + 1);
+  memcpy(name_str, name.ptr, name.size);
+  name_str[name.size] = 0;
+
+  char * full_name_str = (char*)sc->malloc(ns.size + name.size + 2);
+  size_t full_name_size;
+  if (ns.size) {
+    memcpy(full_name_str, ns.ptr, ns.size);
+    full_name_str[ns.size] = '/';
+    memcpy(full_name_str + ns.size + 1, name.ptr, name.size);
+    full_name_size = ns.size + 1 + name.size;
+    full_name_str[full_name_size] = 0;
+  } else {
+    full_name_str = name_str;
+    full_name_size = name.size;
+  }
 
   symbol_t * s = sc->malloc(sizeof(symbol_t));
-  s->name = str;
-  s->name_size = sv.size;
+  s->ns = (strview_t){ ns_str, ns.size };
+  s->name = (strview_t){ name_str, name.size };
+  s->full_name = (strview_t){ full_name_str, full_name_size };
   s->syntax = syntax;
-  s->hash = murmur3_hash_string(sv.ptr, sv.size);
+  s->hash = murmur3_hash_string(name.ptr, name.size);
+  s->ns_sym = s->name_sym = mk_nil();
   
   return (nanoclj_val_t)(SIGNATURE_SYMBOL | (uint64_t)s);
 }
@@ -832,16 +887,11 @@ static inline strview_t _to_strview(nanoclj_cell_t * c) {
 static inline strview_t to_strview(nanoclj_val_t x) {
   switch (prim_type(x)) {
   case T_BOOLEAN:
-    return decode_integer(x) == 0 ? (strview_t){ "false", 5 } : (strview_t){ "true", 4 };
-    
-  case T_SYMBOL:{
-    symbol_t * s = decode_symbol(x);
-    return (strview_t){ s->name, s->name_size };
-  }
-  case T_KEYWORD:{
-    const char * s = (const char *)decode_pointer(x);
-    return (strview_t){ s, strlen(s) };
-  }
+    return decode_integer(x) == 0 ? (strview_t){ "false", 5 } : (strview_t){ "true", 4 };    
+  case T_SYMBOL:
+    return decode_symbol(x)->full_name;
+  case T_KEYWORD:
+    return decode_keyword(x)->full_name;
   case T_PROC:{
     const char *name = dispatch_table[decode_integer(x)];
     return name ? (strview_t){ name, strlen(name) } : (strview_t){ "", 0 };
@@ -856,8 +906,7 @@ static inline strview_t to_strview(nanoclj_val_t x) {
 
 static inline int_fast16_t syntaxnum(nanoclj_val_t p) {
   if (is_symbol(p)) {
-    symbol_t * s = decode_symbol(p);
-    return s->syntax;
+    return decode_symbol(p)->syntax;
   }
   return 0;
 }
@@ -2030,10 +2079,8 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
       case T_STRING:
       case T_CHAR_ARRAY:
       case T_FILE:
-      case T_UUID:{
-	strview_t sv1 = _to_strview(a), sv2 = _to_strview(b);
-	return sv1.size == sv2.size && strncmp(sv1.ptr, sv2.ptr, sv1.size) == 0;
-      }
+      case T_UUID:
+	return strview_eq(_to_strview(a), _to_strview(b));
       case T_LONG:
       case T_DATE:
 	return _lvalue_unchecked(a) == _lvalue_unchecked(b);
@@ -2368,9 +2415,13 @@ static inline int compare(nanoclj_val_t a, nanoclj_val_t b) {
       else if (ia > ib) return +1;
       return 0;
     } else if (type_a == T_KEYWORD && type_b == T_KEYWORD) {  
-      return strcmp((const char *)decode_pointer(a), (const char *)decode_pointer(b));
+      keyword_t * ka = decode_keyword(a), * kb = decode_keyword(b);
+      int i = strcmp(ka->ns.ptr, kb->ns.ptr);
+      return i ? i : strcmp(ka->name.ptr, kb->name.ptr);
     } else if (type_a == T_SYMBOL && type_b == T_SYMBOL) {
-      return strcmp(decode_symbol(a)->name, decode_symbol(b)->name);
+      symbol_t * sa = decode_symbol(a), * sb = decode_symbol(b);
+      int i = strcmp(sa->ns.ptr, sb->ns.ptr);
+      return i ? i : strcmp(sa->name.ptr, sb->name.ptr);
     } else if (type_a == T_CELL && type_b == T_CELL) {
       nanoclj_cell_t * a2 = decode_pointer(a), * b2 = decode_pointer(b);
       type_a = _type(a2);
@@ -2506,10 +2557,8 @@ static int32_t hasheq(nanoclj_t * sc, nanoclj_val_t v) {
   case T_SYMBOL:
     return decode_symbol(v)->hash;
 
-  case T_KEYWORD:{
-    strview_t sv = to_strview(v);
-    return murmur3_hash_string(sv.ptr, sv.size);      
-  }
+  case T_KEYWORD:
+    return decode_keyword(v)->hash;
 
   case T_CELL:{
     nanoclj_cell_t * c = decode_pointer(v);
@@ -2584,14 +2633,14 @@ static inline nanoclj_cell_t * oblist_initial_value(nanoclj_t * sc) {
   return vec;
 }
 
-static inline nanoclj_val_t oblist_add_item(nanoclj_t * sc, strview_t sv, nanoclj_val_t v) {
-  int location = murmur3_hash_string(sv.ptr, sv.size) % _size_unchecked(sc->oblist);
+static inline nanoclj_val_t oblist_add_item(nanoclj_t * sc, strview_t name, nanoclj_val_t v) {
+  int location = murmur3_hash_string(name.ptr, name.size) % _size_unchecked(sc->oblist);
   set_vector_elem(sc->oblist, location, mk_pointer(cons(sc, v, decode_pointer(vector_elem(sc->oblist, location)))));
   return v;
 }
 
-static inline nanoclj_val_t oblist_find_item(nanoclj_t * sc, uint16_t type, const char *name, size_t len) {
-  int location = murmur3_hash_string(name, len) % _size_unchecked(sc->oblist);
+static inline nanoclj_val_t oblist_find_item(nanoclj_t * sc, uint16_t type, strview_t ns, strview_t name) {
+  int location = murmur3_hash_string(name.ptr, name.size) % _size_unchecked(sc->oblist);
   nanoclj_val_t x = vector_elem(sc->oblist, location);
   if (!is_nil(x)) {
     for (; x.as_long != sc->EMPTY.as_long; x = cdr(x)) {
@@ -2600,12 +2649,12 @@ static inline nanoclj_val_t oblist_find_item(nanoclj_t * sc, uint16_t type, cons
       if (type == ty) {
 	if (ty == T_SYMBOL) {
 	  symbol_t * s = decode_symbol(y);
-	  if (len == s->name_size && strncmp(name, s->name, len) == 0) {
+	  if (strview_eq(ns, s->ns) && strview_eq(name, s->name)) {
 	    return y;
 	  }
 	} else {
-	  strview_t sv = to_strview(y);
-	  if (sv.size == len && strncmp(name, sv.ptr, len) == 0) {
+	  keyword_t * k = decode_keyword(y);
+	  if (strview_eq(ns, k->ns) && strview_eq(name, k->name)) {	  
 	    return y;
 	  }
 	}
@@ -2751,33 +2800,46 @@ static inline nanoclj_cell_t * mk_arraymap(nanoclj_t * sc, size_t len) {
 }
 
 /* get new keyword */
-static inline nanoclj_val_t def_keyword_from_sv(nanoclj_t * sc, strview_t sv) {
+static inline nanoclj_val_t def_keyword_from_sv(nanoclj_t * sc, strview_t ns, strview_t name) {
   /* first check oblist */
-  nanoclj_val_t x = oblist_find_item(sc, T_KEYWORD, sv.ptr, sv.size);
+  nanoclj_val_t x = oblist_find_item(sc, T_KEYWORD, ns, name);
   if (!is_nil(x)) {
     return x;
   } else {
-    return oblist_add_item(sc, sv, mk_keyword(sc, sv.ptr, sv.size));    
+    return oblist_add_item(sc, name, mk_keyword(sc, ns, name));
   }
 }
 
 /* get new symbol */
-static inline nanoclj_val_t def_symbol_from_sv(nanoclj_t * sc, strview_t sv) {
+static inline nanoclj_val_t def_symbol_from_sv(nanoclj_t * sc, strview_t ns, strview_t name) {
   /* first check oblist */
-  nanoclj_val_t x = oblist_find_item(sc, T_SYMBOL, sv.ptr, sv.size);
-  if (!is_nil(x)) {
-    return x;
-  } else {
-    return oblist_add_item(sc, sv, mk_symbol(sc, sv, 0));
+  nanoclj_val_t x = oblist_find_item(sc, T_SYMBOL, ns, name);
+  if (is_nil(x)) {
+    x = oblist_add_item(sc, name, mk_symbol(sc, ns, name, 0));
+    if (ns.size) {
+      symbol_t * s = decode_symbol(x);
+      s->ns_sym = def_symbol_from_sv(sc, (strview_t){ "", 0 }, ns);
+      s->name_sym = def_symbol_from_sv(sc, (strview_t){ "", 0 }, name);
+    }
   }
+  return x;
 }
 
 static inline nanoclj_val_t def_keyword(nanoclj_t * sc, const char *name) {
-  return def_keyword_from_sv(sc, (strview_t){ name, strlen(name) });
+  return def_keyword_from_sv(sc, (strview_t){ "", 0 }, (strview_t){ name, strlen(name) });
 }
 
 static inline nanoclj_val_t def_symbol(nanoclj_t * sc, const char *name) {
-  return def_symbol_from_sv(sc, (strview_t){ name, strlen(name) });
+  return def_symbol_from_sv(sc, (strview_t){ "", 0 }, (strview_t){ name, strlen(name) });
+}
+
+static inline nanoclj_val_t def_qualified_keyword(nanoclj_t * sc, const char *ns, const char *name) {
+  return def_keyword_from_sv(sc, (strview_t){ ns, strlen(ns) }, (strview_t){ name, strlen(name) });
+}
+
+/* Create symbol with qualifier such as Math/sin */
+static inline nanoclj_val_t def_qualified_symbol(nanoclj_t * sc, const char *ns, const char *name) {
+  return def_symbol_from_sv(sc, (strview_t){ ns, strlen(ns) }, (strview_t){ name, strlen(name) });
 }
 
 static inline nanoclj_val_t intern_with_meta(nanoclj_t * sc, nanoclj_cell_t * envir, nanoclj_val_t symbol, nanoclj_val_t value, nanoclj_cell_t * meta) {
@@ -2837,9 +2899,27 @@ static inline nanoclj_cell_t * mk_named_type(nanoclj_t * sc, const char * name, 
 
 /* get new symbol or keyword. % is aliased to %1 */
 static inline nanoclj_val_t def_symbol_or_keyword(nanoclj_t * sc, const char *name) {
-  if (name[0] == ':') return def_keyword(sc, name + 1);
-  else if (name[0] == '%' && name[1] == 0) return def_symbol(sc, "%1");
-  else return def_symbol(sc, name);
+  if (name[0] == '%' && name[1] == 0) return def_symbol(sc, "%1");
+  else {
+    bool is_keyword = false;
+    if (name[0] == ':') {
+      is_keyword = true;
+      name++;
+    }
+    char * p;
+    if ((p = strchr(name, '/')) != NULL && p > name) {
+      *p = 0;
+      if (is_keyword) {
+	return def_qualified_keyword(sc, name, p + 1);
+      } else {
+	return def_qualified_symbol(sc, name, p + 1);
+      }
+    } else if (is_keyword) {
+      return def_keyword(sc, name);
+    } else {
+      return def_symbol(sc, name);
+    }
+  }
 }
 
 static inline nanoclj_cell_t * def_namespace_with_sym(nanoclj_t *sc, nanoclj_val_t sym) {
@@ -2865,12 +2945,13 @@ static inline nanoclj_val_t gensym(nanoclj_t * sc, const char * prefix, size_t p
     size_t len = snprintf(name, 256, "%.*s%ld", (int)prefix_len, prefix, sc->gensym_cnt);
     
     /* first check oblist */
-    x = oblist_find_item(sc, T_SYMBOL, name, len);
+    strview_t ns_sv = { "", 0 };
+    strview_t name_sv = { name, len };
+    x = oblist_find_item(sc, T_SYMBOL, ns_sv, name_sv);
     if (!is_nil(x)) {
       continue;
     } else {
-      strview_t sv = { name, len };
-      return oblist_add_item(sc, sv, mk_symbol(sc, sv, 0));
+      return oblist_add_item(sc, name_sv, mk_symbol(sc, ns_sv, name_sv, 0));
     }
   }
 
@@ -2890,17 +2971,6 @@ static inline nanoclj_val_t mk_primitive(nanoclj_t * sc, char *q) {
   char *div = 0;
   char *p;
   int sign = 1;
-
-  /* Parse namespace qualifier such as Math/sin */
-  if (!isdigit(q[0]) && q[0] != '-' && (p = strchr(q, '/')) != 0 && p != q) {
-    *p = 0;
-    return mk_pointer(cons(sc, sc->SLASH_HOOK,
-			   cons(sc,
-				mk_pointer(cons(sc,
-						sc->QUOTE,
-						cons(sc, mk_primitive(sc, p + 1), NULL))),
-				cons(sc, def_symbol(sc, q), NULL))));
-  }
   
   p = q;
   char c = *p++;
@@ -2921,7 +2991,7 @@ static inline nanoclj_val_t mk_primitive(nanoclj_t * sc, char *q) {
       return def_symbol_or_keyword(sc, q);
     }
   } else if (!isdigit(c)) {
-    return def_symbol_or_keyword(sc, q);
+    return def_symbol_or_keyword(sc, q);    
   }
 
   if (!has_dec_point && c == '0') {
@@ -2969,9 +3039,10 @@ static inline nanoclj_val_t mk_primitive(nanoclj_t * sc, char *q) {
           }
         }
       }
-      return def_symbol_or_keyword(sc, q);
+      return def_symbol_or_keyword(sc, q);      
     }
   }
+  
   if (div) {
     *div = 0;
     long long num = atoll(q), den = atoll(div + 1);
@@ -3815,7 +3886,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
     }
     break;
   case T_BOOLEAN:
-  case T_SYMBOL:{
+  case T_SYMBOL:{    
     strview_t sv = to_strview(l);
     p = sv.ptr;
     plen = sv.size;
@@ -3837,17 +3908,28 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
 	p = "()";
 	break;
       case T_CLASS:
-      case T_VAR:
-	nanoclj_val_t name_v;
-	if (get_elem(sc, _cons_metadata(c), sc->NAME, &name_v)) {
+      case T_VAR:{
+	nanoclj_val_t ns_v = mk_nil(), name_v = mk_nil();
+	get_elem(sc, _cons_metadata(c), sc->NAME, &name_v);
+	get_elem(sc, _cons_metadata(c), sc->NS_KEYWORD, &ns_v);
+	if (!is_nil(name_v)) {
 	  strview_t name = to_strview(name_v);
-	  p = name.ptr;
-	  plen = name.size;
-	  if (_type(c) == T_VAR) {
-	    plen = sprintf(sc->strbuff, "#'%.*s", (int)plen, p);
-	    p = sc->strbuff;
+	  p = sc->strbuff;
+	  if (!is_nil(ns_v)) {
+	    strview_t ns = to_strview(ns_v);
+	    if (_type(c) == T_VAR) {
+	      plen = sprintf(sc->strbuff, "#'%.*s/%.*s", (int)ns.size, ns.ptr, (int)name.size, name.ptr);
+	    } else {
+	      plen = sprintf(sc->strbuff, "%.*s/%.*s", (int)ns.size, ns.ptr, (int)name.size, name.ptr);
+	    }
+	  } else if (_type(c) == T_VAR) {
+	    plen = sprintf(sc->strbuff, "#'%.*s", (int)name.size, name.ptr);
+	  } else {
+	    p = name.ptr;
+	    plen = name.size;
 	  }
 	}
+      }
 	break;
       case T_LONG:
 	p = sc->strbuff;
@@ -4234,6 +4316,38 @@ static inline bool _Error_1(nanoclj_t * sc, const char *msg) {
 
 #define Error_0(sc,s)    return _Error_1(sc, s)
 
+static inline nanoclj_cell_t * resolve(nanoclj_t * sc, nanoclj_val_t sym0) {
+  symbol_t * s = decode_symbol(sym0);
+  nanoclj_cell_t * env;
+  nanoclj_val_t sym;
+  bool all_namespaces = true;
+  if (s->ns.size) {
+    nanoclj_cell_t * c = find_slot_in_env(sc, sc->envir, s->ns_sym, true);
+    if (c) {
+      env = decode_pointer(slot_value_in_env(c));
+      sym = s->name_sym;
+      all_namespaces = false;
+    } else {
+      symbol_t * s2 = decode_symbol(s->ns_sym);
+      snprintf(sc->strbuff, sc->strbuff_size, "%.*s is not defined", (int)s2->name.size, s2->name.ptr);
+      nanoclj_throw(sc, mk_runtime_exception(sc, sc->strbuff));
+      return 0;
+    }	  
+  } else {
+    env = sc->envir;
+    sym = sym0;
+  }
+  nanoclj_cell_t * c = find_slot_in_env(sc, env, sym, all_namespaces);
+  if (c) {
+    return c;
+  } else {
+    symbol_t * s = decode_symbol(sym0);
+    snprintf(sc->strbuff, sc->strbuff_size, "Use of undeclared Var %.*s", (int)s->full_name.size, s->full_name.ptr);
+    nanoclj_throw(sc, mk_runtime_exception(sc, sc->strbuff));
+    return 0;
+  }
+}
+
 static inline void dump_stack_reset(nanoclj_t * sc) {
   /* in this implementation, sc->dump is the number of frames on the stack */
   sc->dump = 0;
@@ -4423,10 +4537,22 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
     return mk_mapentry(sc, first(sc, args), second(sc, args));
         
   case T_SYMBOL:
-    return def_symbol_from_sv(sc, to_strview(first(sc, args)));
+    x = first(sc, args);
+    args = next(sc, args);
+    if (args) {
+      return def_symbol_from_sv(sc, to_strview(x), to_strview(first(sc, args)));
+    } else {
+      return def_symbol_from_sv(sc, (strview_t){ "", 0 }, to_strview(x));
+    }
     
   case T_KEYWORD:
-    return def_keyword_from_sv(sc, to_strview(first(sc, args)));
+    x = first(sc, args);
+    args = next(sc, args);
+    if (args) {
+      return def_keyword_from_sv(sc, to_strview(x), to_strview(first(sc, args)));
+    } else {
+      return def_keyword_from_sv(sc, (strview_t){ "", 0 }, to_strview(x));
+    }
 
   case T_LAZYSEQ:
   case T_DELAY:
@@ -4757,17 +4883,12 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	s_return(sc, sc->recur);
 #endif
       } else {
-	nanoclj_cell_t * c = find_slot_in_env(sc, sc->envir, sc->code, true);
-	if (c) {
-	  s_return(sc, slot_value_in_env(c));
-	} else {
-	  symbol_t * s = decode_symbol(sc->code);
-	  snprintf(sc->strbuff, sc->strbuff_size, "Use of undeclared Var %s", s->name);
-	  nanoclj_throw(sc, mk_runtime_exception(sc, sc->strbuff));
+	nanoclj_cell_t * c = resolve(sc, sc->code);
+	if (!c) {
 	  return false;
 	}
+	s_return(sc, slot_value_in_env(c));
       }
-
     case T_CELL:{
       nanoclj_cell_t * code_cell = decode_pointer(sc->code);
       if (code_cell) {
@@ -5073,7 +5194,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   case OP_VAR:                 /* var */
     x = car(sc->code);
     if (is_symbol(x)) {
-      s_return(sc, mk_pointer(find_slot_in_env(sc, sc->envir, x, true)));
+      nanoclj_cell_t * var = resolve(sc, x);
+      if (!var) return false;
+      s_return(sc, mk_pointer(var));
     } else {
       Error_0(sc, "Error - Not a symbol");
     }
@@ -5458,12 +5581,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     s_goto(sc, OP_APPLY);
 
   case OP_PEVAL:               /* eval */
-    if (!unpack_args_1_plus(sc, &arg0, &arg_next)) {
+    if (!unpack_args_1(sc, &arg0)) {
       return false;
     } else {
-      if (arg_next) {
-	sc->envir = decode_pointer(first(sc, arg_next));
-      }
       sc->code = arg0;
       s_goto(sc, OP_EVAL);
     }
@@ -5900,7 +6020,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       
       case T_SORTED_SET:{
 	if (!get_elem(sc, coll, arg1, NULL)) {
-	  nanoclj_cell_t * vec = conjoin(sc, coll, y);
+	  nanoclj_cell_t * vec = conjoin(sc, coll, arg1);
 	  vec = copy_vector(sc, vec);
 	  sort_vector_in_place(vec);
 	  s_return(sc, mk_pointer(vec));
@@ -6110,7 +6230,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       if (_type(c) == T_DELAY) {
 	s_return(sc, _car(c));
       } else if (_type(c) == T_VAR) {
-	s_return(sc, vector_elem(c, 0));
+	s_return(sc, vector_elem(c, 1));
       } else {
 	s_return(sc, x);
       }
@@ -6936,8 +7056,8 @@ static void Eval_Cycle(nanoclj_t * sc, enum nanoclj_opcodes op) {
 /* ========== Initialization of internal keywords ========== */
 
 static inline void assign_syntax(nanoclj_t * sc, const char *name, unsigned int syntax) {
-  strview_t sv = { name, strlen(name) };
-  oblist_add_item(sc, sv, mk_symbol(sc, sv, syntax));
+  strview_t name_sv = { name, strlen(name) };
+  oblist_add_item(sc, name_sv, mk_symbol(sc, (strview_t){ "", 0 }, name_sv, syntax));
 }
 
 static inline void assign_proc(nanoclj_t * sc, enum nanoclj_opcodes op, const char *name) {
@@ -7315,7 +7435,6 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   sc->UNQUOTE = def_symbol(sc, "unquote");
   sc->UNQUOTESP = def_symbol(sc, "unquote-splicing");
 
-  sc->SLASH_HOOK = def_symbol(sc, "*slash-hook*");
   sc->TAG_HOOK = def_symbol(sc, "*default-data-reader-fn*");
   sc->COMPILE_HOOK = def_symbol(sc, "*compile-hook*");
   sc->IN = def_symbol(sc, "*in*");
@@ -7617,27 +7736,21 @@ int main(int argc, const char **argv) {
   }
   intern(&sc, sc.global_env, def_symbol(&sc, "*command-line-args*"), mk_pointer(args));
   
-  if (!nanoclj_load_named_file(&sc, InitFile)) {
-    fprintf(stderr, "Errors encountered reading %s\n", InitFile);
-    exit(1);
-  }
-  
-  if (argc >= 2) {
-    if (!nanoclj_load_named_file(&sc, argv[1])) {
-      fprintf(stderr, "Errors encountered reading %s\n", argv[1]);
-      exit(1);
+  if (nanoclj_load_named_file(&sc, InitFile)) {
+    if (argc >= 2) {
+      if (nanoclj_load_named_file(&sc, argv[1])) {
+	/* Call -main if it exists */
+	nanoclj_val_t main = def_symbol(&sc, "-main");
+	nanoclj_cell_t * x = find_slot_in_env(&sc, sc.envir, main, true);
+	if (x) {
+	  nanoclj_val_t v = slot_value_in_env(x);
+	  nanoclj_call(&sc, v, sc.EMPTY);
+	}
+      }    
+    } else {
+      const char * expr = "(clojure.repl/repl)";
+      nanoclj_eval_string(&sc, expr, strlen(expr));
     }
-
-    /* Call -main if it exists */
-    nanoclj_val_t main = def_symbol(&sc, "-main");
-    nanoclj_cell_t * x = find_slot_in_env(&sc, sc.envir, main, true);
-    if (x) {
-      nanoclj_val_t v = slot_value_in_env(x);
-      nanoclj_call(&sc, v, sc.EMPTY);
-    }
-  } else {
-    const char * expr = "(clojure.repl/repl)";
-    nanoclj_eval_string(&sc, expr, strlen(expr));
   }
 
   int rv = 0;

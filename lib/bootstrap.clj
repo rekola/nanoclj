@@ -4,10 +4,6 @@
 (def force deref)
 (def var-get second)
 
-; Enable namespaces
-; (def *slash-hook* (fn [sym ns] (var-get (resolve ns sym))))
-(def *slash-hook* eval)
-
 (def car first)
 (def cdr rest)
 (def cadr second)
