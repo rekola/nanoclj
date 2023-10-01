@@ -10,8 +10,9 @@
 (defn linspace
   "Creates an evenly spaced vector from a to b with n points"
   ([a b] (linspace a b 100))
-  ([a b n] (let [dx (float (/ (- b a) (- n 1)))]
-            (vec (range a (+ b dx) dx)))))
+  ([a b n] (loop [a a n (double n) acc []]
+             (if (< n 0) acc
+                 (recur (+ a (/ (- b a) n)) (dec n) (conj acc a))))))
 
 (defn plot
   "Plots a series. Matlab style."
