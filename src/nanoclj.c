@@ -312,41 +312,7 @@ static inline nanoclj_val_t mk_nil() {
   return (nanoclj_val_t)kNIL;
 }
 
-static inline nanoclj_val_t mk_keyword(nanoclj_t * sc, strview_t ns, strview_t name) {
-  /* This is leaked intentionally for now */
-  char * ns_str = (char*)sc->malloc(ns.size + 1);
-  memcpy(ns_str, ns.ptr, ns.size);
-  ns_str[ns.size] = 0;
-
-  char * name_str = (char*)sc->malloc(name.size + 1);
-  memcpy(name_str, name.ptr, name.size);
-  name_str[name.size] = 0;
-  
-  char * full_name_str = (char*)sc->malloc(ns.size + name.size + 2);
-  size_t full_name_size;
-  if (ns.size) {
-    memcpy(full_name_str, ns.ptr, ns.size);
-    full_name_str[ns.size] = '/';
-    memcpy(full_name_str + ns.size + 1, name.ptr, name.size);
-    full_name_size = ns.size + 1 + name.size;
-    full_name_str[full_name_size] = 0;
-  } else {
-    full_name_str = name_str;
-    full_name_size = name.size;
-  }
-
-  symbol_t * s = sc->malloc(sizeof(symbol_t));
-  s->ns = (strview_t){ ns_str, ns.size };
-  s->name = (strview_t){ name_str, name.size };
-  s->full_name = (strview_t){ full_name_str, full_name_size };
-  s->syntax = 0;
-  s->hash = murmur3_hash_string(name.ptr, name.size);
-  s->ns_sym = s->name_sym = mk_nil();
-  
-  return (nanoclj_val_t)(SIGNATURE_KEYWORD | (uint64_t)s);
-}
-
-static inline nanoclj_val_t mk_symbol(nanoclj_t * sc, strview_t ns, strview_t name, int_fast16_t syntax) {
+static inline nanoclj_val_t mk_symbol(nanoclj_t * sc, uint16_t t, strview_t ns, strview_t name, int_fast16_t syntax) {
   /* mk_symbol allocations are leaked intentionally for now */
   char * ns_str = (char*)sc->malloc(ns.size + 1);
   memcpy(ns_str, ns.ptr, ns.size);
@@ -376,8 +342,12 @@ static inline nanoclj_val_t mk_symbol(nanoclj_t * sc, strview_t ns, strview_t na
   s->syntax = syntax;
   s->hash = murmur3_hash_string(name.ptr, name.size);
   s->ns_sym = s->name_sym = mk_nil();
-  
-  return (nanoclj_val_t)(SIGNATURE_SYMBOL | (uint64_t)s);
+
+  if (t == T_SYMBOL) {
+    return (nanoclj_val_t)(SIGNATURE_SYMBOL | (uint64_t)s);
+  } else {
+    return (nanoclj_val_t)(SIGNATURE_KEYWORD | (uint64_t)s);
+  }
 }
 
 static inline bool is_nil(nanoclj_val_t v) {
@@ -2772,50 +2742,35 @@ static inline nanoclj_cell_t * mk_arraymap(nanoclj_t * sc, size_t len) {
 }
 
 /* get new symbol */
-static inline nanoclj_val_t def_symbol_from_sv(nanoclj_t * sc, strview_t ns, strview_t name) {
+static inline nanoclj_val_t def_symbol_from_sv(nanoclj_t * sc, uint16_t t, strview_t ns, strview_t name) {
   /* first check oblist */
-  nanoclj_val_t x = oblist_find_item(sc, T_SYMBOL, ns, name);
+  nanoclj_val_t x = oblist_find_item(sc, t, ns, name);
   if (is_nil(x)) {
-    x = oblist_add_item(sc, name, mk_symbol(sc, ns, name, 0));
+    x = oblist_add_item(sc, name, mk_symbol(sc, t, ns, name, 0));
     if (ns.size) {
       symbol_t * s = decode_symbol(x);
-      s->ns_sym = def_symbol_from_sv(sc, (strview_t){ "", 0 }, ns);
-      s->name_sym = def_symbol_from_sv(sc, (strview_t){ "", 0 }, name);
-    }
-  }
-  return x;
-}
-
-/* get new keyword */
-static inline nanoclj_val_t def_keyword_from_sv(nanoclj_t * sc, strview_t ns, strview_t name) {
-  /* first check oblist */
-  nanoclj_val_t x = oblist_find_item(sc, T_KEYWORD, ns, name);
-  if (is_nil(x)) {
-    x = oblist_add_item(sc, name, mk_keyword(sc, ns, name));
-    if (ns.size) {
-      symbol_t * s = decode_symbol(x);
-      s->ns_sym = def_symbol_from_sv(sc, (strview_t){ "", 0 }, ns);
-      s->name_sym = def_keyword_from_sv(sc, (strview_t){ "", 0 }, name);
+      s->ns_sym = def_symbol_from_sv(sc, T_SYMBOL, (strview_t){ "", 0 }, ns);
+      s->name_sym = def_symbol_from_sv(sc, t, (strview_t){ "", 0 }, name);
     }
   }
   return x;
 }
 
 static inline nanoclj_val_t def_keyword(nanoclj_t * sc, const char *name) {
-  return def_keyword_from_sv(sc, (strview_t){ "", 0 }, (strview_t){ name, strlen(name) });
+  return def_symbol_from_sv(sc, T_KEYWORD, (strview_t){ "", 0 }, (strview_t){ name, strlen(name) });
 }
 
 static inline nanoclj_val_t def_symbol(nanoclj_t * sc, const char *name) {
-  return def_symbol_from_sv(sc, (strview_t){ "", 0 }, (strview_t){ name, strlen(name) });
+  return def_symbol_from_sv(sc, T_SYMBOL, (strview_t){ "", 0 }, (strview_t){ name, strlen(name) });
 }
 
 static inline nanoclj_val_t def_qualified_keyword(nanoclj_t * sc, const char *ns, const char *name) {
-  return def_keyword_from_sv(sc, (strview_t){ ns, strlen(ns) }, (strview_t){ name, strlen(name) });
+  return def_symbol_from_sv(sc, T_KEYWORD, (strview_t){ ns, strlen(ns) }, (strview_t){ name, strlen(name) });
 }
 
 /* Create symbol with qualifier such as Math/sin */
 static inline nanoclj_val_t def_qualified_symbol(nanoclj_t * sc, const char *ns, const char *name) {
-  return def_symbol_from_sv(sc, (strview_t){ ns, strlen(ns) }, (strview_t){ name, strlen(name) });
+  return def_symbol_from_sv(sc, T_SYMBOL, (strview_t){ ns, strlen(ns) }, (strview_t){ name, strlen(name) });
 }
 
 static inline nanoclj_val_t intern_with_meta(nanoclj_t * sc, nanoclj_cell_t * envir, nanoclj_val_t symbol, nanoclj_val_t value, nanoclj_cell_t * meta) {
@@ -2927,7 +2882,7 @@ static inline nanoclj_val_t gensym(nanoclj_t * sc, const char * prefix, size_t p
     if (!is_nil(x)) {
       continue;
     } else {
-      return oblist_add_item(sc, name_sv, mk_symbol(sc, ns_sv, name_sv, 0));
+      return oblist_add_item(sc, name_sv, mk_symbol(sc, T_SYMBOL, ns_sv, name_sv, 0));
     }
   }
 
@@ -4505,23 +4460,15 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
     return mk_mapentry(sc, first(sc, args), second(sc, args));
         
   case T_SYMBOL:
-    x = first(sc, args);
-    args = next(sc, args);
-    if (args) {
-      return def_symbol_from_sv(sc, to_strview(x), to_strview(first(sc, args)));
-    } else {
-      return def_symbol_from_sv(sc, (strview_t){ "", 0 }, to_strview(x));
-    }
-    
   case T_KEYWORD:
     x = first(sc, args);
     args = next(sc, args);
     if (args) {
-      return def_keyword_from_sv(sc, to_strview(x), to_strview(first(sc, args)));
+      return def_symbol_from_sv(sc, type_id, to_strview(x), to_strview(first(sc, args)));
     } else {
-      return def_keyword_from_sv(sc, (strview_t){ "", 0 }, to_strview(x));
+      return def_symbol_from_sv(sc, type_id, (strview_t){ "", 0 }, to_strview(x));
     }
-
+    
   case T_LAZYSEQ:
   case T_DELAY:
     /* make closure. first is code. second is environment */
@@ -7071,7 +7018,7 @@ static void Eval_Cycle(nanoclj_t * sc, enum nanoclj_opcodes op) {
 
 static inline void assign_syntax(nanoclj_t * sc, const char *name, unsigned int syntax) {
   strview_t name_sv = { name, strlen(name) };
-  oblist_add_item(sc, name_sv, mk_symbol(sc, (strview_t){ "", 0 }, name_sv, syntax));
+  oblist_add_item(sc, name_sv, mk_symbol(sc, T_SYMBOL, (strview_t){ "", 0 }, name_sv, syntax));
 }
 
 static inline void assign_proc(nanoclj_t * sc, enum nanoclj_opcodes op, const char *name) {
