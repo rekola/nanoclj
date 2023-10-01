@@ -658,20 +658,18 @@ static inline long long to_long_w_def(nanoclj_val_t p, long long def) {
   case T_CELL:
     {
       nanoclj_cell_t * c = decode_pointer(p);
-      if (c) {
-	switch (_type(c)) {
-	case T_LONG:
-	case T_DATE:
-	  return _lvalue_unchecked(c);
-	case T_RATIO:
-	  return to_long_w_def(vector_elem(c, 0), 0) / to_long_w_def(vector_elem(c, 1), 1);
-	case T_VECTOR:
-	case T_SORTED_SET:
-	case T_ARRAYMAP:
-	  return get_size(c);
-	case T_CLASS:
-	  return c->type;
-	}
+      switch (_type(c)) {
+      case T_LONG:
+      case T_DATE:
+	return _lvalue_unchecked(c);
+      case T_RATIO:
+	return to_long_w_def(vector_elem(c, 0), 0) / to_long_w_def(vector_elem(c, 1), 1);
+      case T_VECTOR:
+      case T_SORTED_SET:
+      case T_ARRAYMAP:
+	return get_size(c);
+      case T_CLASS:
+	return c->type;
       }
     }
   }
@@ -694,21 +692,19 @@ static inline int32_t to_int(nanoclj_val_t p) {
   case T_CELL:
     {
       nanoclj_cell_t * c = decode_pointer(p);
-      if (c) {
-	switch (_type(c)) {
-	case T_LONG:
-	case T_DATE:
-	  return _lvalue_unchecked(c);
-	case T_RATIO:
-	  return to_long(vector_elem(c, 0)) / to_long(vector_elem(c, 1));
-	case T_VECTOR:
-	case T_SORTED_SET:
-	case T_ARRAYMAP:
-	  return get_size(c);
-	case T_CLASS:
-	  return c->type;
-	}
-      }
+      switch (_type(c)) {
+      case T_LONG:
+      case T_DATE:
+	return _lvalue_unchecked(c);
+      case T_RATIO:
+	return to_long(vector_elem(c, 0)) / to_long(vector_elem(c, 1));
+      case T_VECTOR:
+      case T_SORTED_SET:
+      case T_ARRAYMAP:
+	return get_size(c);
+      case T_CLASS:
+	return c->type;
+      }      
     }     
   }
   return 0;
@@ -722,12 +718,10 @@ static inline double to_double(nanoclj_val_t p) {
     return p.as_double;
   case T_CELL: {
     nanoclj_cell_t * c = decode_pointer(p);
-    if (c) {
-      switch (_type(c)) {
-      case T_LONG:
-      case T_DATE: return (double)lvalue_unchecked(p);
-      case T_RATIO: return to_double(vector_elem(c, 0)) / to_double(vector_elem(c, 1));
-      }
+    switch (_type(c)) {
+    case T_LONG:
+    case T_DATE: return (double)lvalue_unchecked(p);
+    case T_RATIO: return to_double(vector_elem(c, 0)) / to_double(vector_elem(c, 1));    
     }
   }
   }
@@ -738,10 +732,8 @@ static inline void * to_tensor(nanoclj_t * sc, nanoclj_val_t p) {
   switch (prim_type(p)) {
   case T_CELL:{
     nanoclj_cell_t * c = decode_pointer(p);
-    if (c) {
-      switch (_type(c)) {
-      case T_TENSOR: return _tensor_unchecked(c);
-      }
+    switch (_type(c)) {
+    case T_TENSOR: return _tensor_unchecked(c);
     }
   }
   }
@@ -6127,38 +6119,62 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   case OP_BIT_AND:
     if (!unpack_args_2(sc, &arg0, &arg1)) {
       return false;
+    } else if (is_nil(arg0) || is_nil(arg1)) {
+      nanoclj_throw(sc, sc->NullPointerException);
+      return false;
+    } else {
+      s_return(sc, mk_integer(sc, to_long(arg0) & to_long(arg1)));
     }
-    s_return(sc, mk_integer(sc, to_long(arg0) & to_long(arg1)));
 
   case OP_BIT_OR:
     if (!unpack_args_2(sc, &arg0, &arg1)) {
       return false;
+    } else if (is_nil(arg0) || is_nil(arg1)) {
+      nanoclj_throw(sc, sc->NullPointerException);
+      return false;
+    } else {
+      s_return(sc, mk_integer(sc, to_long(arg0) | to_long(arg1)));
     }
-    s_return(sc, mk_integer(sc, to_long(arg0) | to_long(arg1)));
 
   case OP_BIT_XOR:
     if (!unpack_args_2(sc, &arg0, &arg1)) {
       return false;
+    } else if (is_nil(arg0) || is_nil(arg1)) {
+      nanoclj_throw(sc, sc->NullPointerException);
+      return false;
+    } else {
+      s_return(sc, mk_integer(sc, to_long(arg0) ^ to_long(arg1)));
     }
-    s_return(sc, mk_integer(sc, to_long(arg0) ^ to_long(arg1)));
 
   case OP_BIT_SHIFT_LEFT:
     if (!unpack_args_2(sc, &arg0, &arg1)) {
       return false;
+    } else if (is_nil(arg0) || is_nil(arg1)) {
+      nanoclj_throw(sc, sc->NullPointerException);
+      return false;
+    } else {
+      s_return(sc, mk_integer(sc, to_long(arg0) << to_long(arg1)));
     }
-    s_return(sc, mk_integer(sc, to_long(arg0) << to_long(arg1)));
 
   case OP_BIT_SHIFT_RIGHT:
     if (!unpack_args_2(sc, &arg0, &arg1)) {
       return false;
+    } else if (is_nil(arg0) || is_nil(arg1)) {
+      nanoclj_throw(sc, sc->NullPointerException);
+      return false;
+    } else {
+      s_return(sc, mk_integer(sc, to_long(arg0) >> to_long(arg1)));
     }
-    s_return(sc, mk_integer(sc, to_long(arg0) >> to_long(arg1)));
 
   case OP_UNSIGNED_BIT_SHIFT_RIGHT:
     if (!unpack_args_2(sc, &arg0, &arg1)) {
       return false;
+    } else if (is_nil(arg0) || is_nil(arg1)) {
+      nanoclj_throw(sc, sc->NullPointerException);
+      return false;
+    } else {
+      s_return(sc, mk_integer(sc, (unsigned long long)to_long(arg0) >> to_long(arg1)));
     }
-    s_return(sc, mk_integer(sc, (unsigned long long)to_long(arg0) >> to_long(arg1)));
     
   case OP_TYPE:                /* type */
   case OP_CLASS:
@@ -6790,7 +6806,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       nanoclj_cell_t * c = decode_pointer(arg0);
       if (c) s_return(sc, mk_int(c->flags));
     }
-    s_return(sc, mk_nil());
+    s_return(sc, mk_int(0));
 
   case OP_NAME:
     if (!unpack_args_1(sc, &arg0)) {
