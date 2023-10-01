@@ -117,6 +117,7 @@ _OP_DEF("re-pattern", OP_RE_PATTERN)
 _OP_DEF("re-find", OP_RE_FIND)
 _OP_DEF("add-watch", OP_ADD_WATCH)
 _OP_DEF("-get-cell-flags", OP_GET_CELL_FLAGS)
+_OP_DEF("namespace", OP_NAMESPACE)
 _OP_DEF("name", OP_NAME)
 
 /* Tensor ops */
