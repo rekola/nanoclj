@@ -347,7 +347,7 @@ static inline nanoclj_val_t mk_symbol(nanoclj_t * sc, uint16_t t, strview_t ns, 
   s->name = (strview_t){ name_str, name.size };
   s->full_name = (strview_t){ full_name_str, full_name_size };
   s->syntax = syntax;
-  s->hash = murmur3_hash_string(name.ptr, name.size);
+  s->hash = murmur3_hash_qualified_string(ns.ptr, ns.size, name.ptr, name.size);
   s->ns_sym = s->name_sym = mk_nil();
 
   return (nanoclj_val_t)((t == T_SYMBOL ? SIGNATURE_SYMBOL : SIGNATURE_KEYWORD) | (uint64_t)s);
@@ -795,10 +795,15 @@ static inline bool is_true(nanoclj_val_t p) {
 #define cadddr(p)        car(cdr(cdr(cdr(p))))
 #define cddddr(p)        cdr(cdr(cdr(cdr(p))))
 
-static char * dispatch_table[] = {
-#define _OP_DEF(A,OP) A,
+typedef struct {
+  char *name;
+  char *doc;
+} op_code_info;
+
+static op_code_info dispatch_table[] = {
+#define _OP_DEF(A,B,OP) {A,B},
 #include "nanoclj_opdf.h"
-  0
+  { 0 }
 };
 
 static void Eval_Cycle(nanoclj_t * sc, enum nanoclj_opcodes op);
@@ -850,7 +855,7 @@ static inline strview_t to_strview(nanoclj_val_t x) {
   case T_KEYWORD:
     return decode_symbol(x)->full_name;
   case T_PROC:{
-    const char *name = dispatch_table[decode_integer(x)];
+    const char * name = dispatch_table[decode_integer(x)].name;
     return name ? (strview_t){ name, strlen(name) } : (strview_t){ "", 0 };
   }
   case T_CELL:{
@@ -2080,11 +2085,10 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
       case T_LAZYSEQ:
       case T_MACRO:
       case T_ENVIRONMENT:
-	// case T_CLASS:
 	if (equals(sc, _car(a), _car(b))) {
 	  return equals(sc, _cdr(a), _cdr(b));
 	}
-	break;
+	break;	
       }
     } else if (is_coll_type(t_a) && is_coll_type(t_b)) {
       for (a = seq(sc, a), b = seq(sc, b); a && b; a = next(sc, a), b = next(sc, b)) {
@@ -2443,13 +2447,15 @@ static inline int compare(nanoclj_val_t a, nanoclj_val_t b) {
 	    return 0;
 	  }
 	}
+
+	case T_CLASS:
+	  return (int)a2->type - (int)b2->type;
 	  
 	case T_LIST:
 	case T_CLOSURE:
 	case T_LAZYSEQ:
 	case T_MACRO:
 	case T_ENVIRONMENT:
-	  // case T_CLASS:
 	  {
 	    int r = compare(_car(a2), _car(b2));
 	    if (r) return r;
@@ -2493,8 +2499,8 @@ static inline void sort_vector_in_place(nanoclj_cell_t * vec) {
 
 static int32_t hasheq(nanoclj_t * sc, nanoclj_val_t v) { 
   switch (prim_type(v)) {
-  case T_CHARACTER:
-  case T_PROC:
+  case T_CHARACTER: /* Clojure doesn't use murmur3 for characters */
+  case T_PROC:    
     return decode_integer(v);
 
   case T_BOOLEAN:
@@ -2528,7 +2534,7 @@ static int32_t hasheq(nanoclj_t * sc, nanoclj_val_t v) {
     case T_FILE:
     case T_UUID:{
       strview_t sv = _to_strview(c);
-      return murmur3_hash_string(sv.ptr, sv.size);      
+      return murmur3_hash_int(murmur3_hash_string(sv.ptr, sv.size));
     }
       
     case T_RATIO: /* Is this correct? */
@@ -2554,7 +2560,7 @@ static int32_t hasheq(nanoclj_t * sc, nanoclj_val_t v) {
     }
 
     case T_TYPE:
-      return c->type;
+      return murmur3_hash_int(c->type);
 
     case T_NIL:
       c = NULL;
@@ -2585,14 +2591,16 @@ static inline nanoclj_cell_t * oblist_initial_value(nanoclj_t * sc) {
   return vec;
 }
 
-static inline nanoclj_val_t oblist_add_item(nanoclj_t * sc, strview_t name, nanoclj_val_t v) {
-  int location = murmur3_hash_string(name.ptr, name.size) % _size_unchecked(sc->oblist);
+static inline nanoclj_val_t oblist_add_item(nanoclj_t * sc, strview_t ns, strview_t name, nanoclj_val_t v) {
+  uint_fast32_t h = murmur3_hash_qualified_string(ns.ptr, ns.size, name.ptr, name.size);
+  uint_fast32_t location = h % _size_unchecked(sc->oblist);
   set_vector_elem(sc->oblist, location, mk_pointer(cons(sc, v, decode_pointer(vector_elem(sc->oblist, location)))));
   return v;
 }
 
 static inline nanoclj_val_t oblist_find_item(nanoclj_t * sc, uint16_t type, strview_t ns, strview_t name) {
-  int location = murmur3_hash_string(name.ptr, name.size) % _size_unchecked(sc->oblist);
+  uint_fast32_t h = murmur3_hash_qualified_string(ns.ptr, ns.size, name.ptr, name.size);
+  uint_fast32_t location = h % _size_unchecked(sc->oblist);
   nanoclj_val_t x = vector_elem(sc->oblist, location);
   if (!is_nil(x)) {
     for (; x.as_long != sc->EMPTY.as_long; x = cdr(x)) {
@@ -2749,7 +2757,7 @@ static inline nanoclj_val_t def_symbol_from_sv(nanoclj_t * sc, uint16_t t, strvi
   /* first check oblist */
   nanoclj_val_t x = oblist_find_item(sc, t, ns, name);
   if (is_nil(x)) {
-    x = oblist_add_item(sc, name, mk_symbol(sc, t, ns, name, 0));
+    x = oblist_add_item(sc, ns, name, mk_symbol(sc, t, ns, name, 0));
     if (ns.size) {
       symbol_t * s = decode_symbol(x);
       s->ns_sym = def_symbol_from_sv(sc, T_SYMBOL, (strview_t){ "", 0 }, ns);
@@ -2791,7 +2799,7 @@ static inline nanoclj_val_t intern_foreign_func(nanoclj_t * sc, nanoclj_cell_t *
   nanoclj_val_t sym = def_symbol(sc, name);
 
   nanoclj_cell_t * md = mk_arraymap(sc, 2);
-  set_vector_elem(md, 0, mk_mapentry(sc, sc->NS_KEYWORD, ns_sym));
+  set_vector_elem(md, 0, mk_mapentry(sc, sc->NS, ns_sym));
   set_vector_elem(md, 0, mk_mapentry(sc, sc->NAME, sym));
 
   nanoclj_val_t fn = mk_foreign_func_with_arity(sc, fptr, min_arity, max_arity);
@@ -2873,7 +2881,7 @@ static inline nanoclj_val_t gensym(nanoclj_t * sc, const char * prefix, size_t p
     if (!is_nil(x)) {
       continue;
     } else {
-      return oblist_add_item(sc, name_sv, mk_symbol(sc, T_SYMBOL, ns_sv, name_sv, 0));
+      return oblist_add_item(sc, ns_sv, name_sv, mk_symbol(sc, T_SYMBOL, ns_sv, name_sv, 0));
     }
   }
 
@@ -3833,7 +3841,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
       case T_VAR:{
 	nanoclj_val_t ns_v = mk_nil(), name_v = mk_nil();
 	get_elem(sc, _cons_metadata(c), sc->NAME, &name_v);
-	get_elem(sc, _cons_metadata(c), sc->NS_KEYWORD, &ns_v);
+	get_elem(sc, _cons_metadata(c), sc->NS, &ns_v);
 	if (!is_nil(name_v)) {
 	  strview_t name = to_strview(name_v);
 	  p = sc->strbuff;
@@ -4524,7 +4532,7 @@ static inline bool unpack_args_0(nanoclj_t * sc) {
   if (is_empty(sc, sc->args)) {
     return true;
   } else {
-    const char * fn = dispatch_table[(int)sc->op];
+    const char * fn = dispatch_table[(int)sc->op].name;
     nanoclj_throw(sc, mk_arity_exception(sc, seq_length(sc, sc->args), mk_nil(), mk_string(sc, fn)));
     return false;
   }
@@ -4542,7 +4550,7 @@ static inline bool unpack_args_1(nanoclj_t * sc, nanoclj_val_t * arg0) {
       return true;
     }
   }
-  const char * fn = dispatch_table[(int)sc->op];
+  const char * fn = dispatch_table[(int)sc->op].name;
   nanoclj_throw(sc, mk_arity_exception(sc, seq_length(sc, sc->args), mk_nil(), mk_string(sc, fn)));
   return false;
 }
@@ -4553,7 +4561,7 @@ static inline bool unpack_args_1_plus(nanoclj_t * sc, nanoclj_val_t * arg0, nano
     *arg_next = next(sc, sc->args);
     return true;
   }
-  const char * fn = dispatch_table[(int)sc->op];
+  const char * fn = dispatch_table[(int)sc->op].name;
   nanoclj_throw(sc, mk_arity_exception(sc, seq_length(sc, sc->args), mk_nil(), mk_string(sc, fn)));
   return false;
 }
@@ -4569,7 +4577,7 @@ static inline bool unpack_args_2(nanoclj_t * sc, nanoclj_val_t * arg0, nanoclj_v
       }
     }
   }
-  const char * fn = dispatch_table[(int)sc->op];
+  const char * fn = dispatch_table[(int)sc->op].name;
   nanoclj_throw(sc, mk_arity_exception(sc, seq_length(sc, sc->args), mk_nil(), mk_string(sc, fn)));
   return false;
 }
@@ -4589,7 +4597,7 @@ static inline bool unpack_args_3(nanoclj_t * sc, nanoclj_val_t * arg0, nanoclj_v
       }
     }
   }
-  const char * fn = dispatch_table[(int)sc->op];
+  const char * fn = dispatch_table[(int)sc->op].name;
   nanoclj_throw(sc, mk_arity_exception(sc, seq_length(sc, sc->args), mk_nil(), mk_string(sc, fn)));
   return false;
 }
@@ -4618,7 +4626,7 @@ static inline bool unpack_args_5(nanoclj_t * sc, nanoclj_val_t * arg0, nanoclj_v
       }
     }
   }
-  const char * fn = dispatch_table[(int)sc->op];
+  const char * fn = dispatch_table[(int)sc->op].name;
   nanoclj_throw(sc, mk_arity_exception(sc, seq_length(sc, sc->args), mk_nil(), mk_string(sc, fn)));
   return false;
 }
@@ -4633,7 +4641,7 @@ static inline bool unpack_args_2_plus(nanoclj_t * sc, nanoclj_val_t * arg0, nano
       return true;
     }
   }
-  const char * fn = dispatch_table[(int)sc->op];
+  const char * fn = dispatch_table[(int)sc->op].name;
   nanoclj_throw(sc, mk_arity_exception(sc, seq_length(sc, sc->args), mk_nil(), mk_string(sc, fn)));
   return false;
 }
@@ -4780,7 +4788,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 #endif
     switch (prim_type(sc->code)) {
     case T_SYMBOL:
-      if (sc->code.as_long == sc->NS_SYM.as_long) { /* special symbols */
+      if (sc->code.as_long == sc->CURRENT_NS.as_long) { /* special symbols */
 	s_return(sc, mk_pointer(sc->global_env));
       } else if (sc->code.as_long == sc->ENV.as_long) {
 	s_return(sc, mk_pointer(sc->envir));
@@ -4937,7 +4945,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	  int n = seq_length(sc, sc->args);
 	  if (n < _min_arity_unchecked(code_cell) || n > _max_arity_unchecked(code_cell)) {
 	    nanoclj_val_t ns_v = mk_nil(), name_v = mk_nil();
-	    get_elem(sc, _ff_metadata(code_cell), sc->NS_KEYWORD, &ns_v);
+	    get_elem(sc, _ff_metadata(code_cell), sc->NS, &ns_v);
 	    get_elem(sc, _ff_metadata(code_cell), sc->NAME, &name_v);
 	    nanoclj_throw(sc, mk_arity_exception(sc, n, ns_v, name_v));
 	    return false;
@@ -4992,7 +5000,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	  int n = seq_length(sc, sc->args);
 	  if (!destructure(sc, params, sc->args, n, true)) {
 	    nanoclj_val_t ns_v = mk_nil(), name_v = mk_nil();
-	    get_elem(sc, _cons_metadata(code_cell), sc->NS_KEYWORD, &ns_v);
+	    get_elem(sc, _cons_metadata(code_cell), sc->NS, &ns_v);
 	    get_elem(sc, _cons_metadata(code_cell), sc->NAME, &name_v);
 	    nanoclj_throw(sc, mk_arity_exception(sc, n, ns_v, name_v));
 	    return false;
@@ -5013,7 +5021,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	  
 	  if (!found_match) {
 	    nanoclj_val_t ns_v = mk_nil(), name_v = mk_nil();
-	    get_elem(sc, _cons_metadata(code_cell), sc->NS_KEYWORD, &ns_v);
+	    get_elem(sc, _cons_metadata(code_cell), sc->NS, &ns_v);
 	    get_elem(sc, _cons_metadata(code_cell), sc->NAME, &name_v);
 	    nanoclj_throw(sc, mk_arity_exception(sc, needed_args, ns_v, name_v));
 	    return false;
@@ -5024,7 +5032,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	  for ( ; is_list(x); x = cdr(x), yy = next(sc, yy)) {
 	    if (!yy) {
 	      nanoclj_val_t ns_v = mk_nil(), name_v = mk_nil();
-	      get_elem(sc, _cons_metadata(code_cell), sc->NS_KEYWORD, &ns_v);
+	      get_elem(sc, _cons_metadata(code_cell), sc->NS, &ns_v);
 	      get_elem(sc, _cons_metadata(code_cell), sc->NAME, &name_v);
 	      nanoclj_throw(sc, mk_arity_exception(sc, seq_length(sc, sc->args), ns_v, name_v));
 	      return false;
@@ -5160,7 +5168,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 
     nanoclj_val_t ns_name;
     if (get_elem(sc, _cons_metadata(sc->global_env), sc->NAME, &ns_name)) {
-      meta = conjoin(sc, meta, mk_mapentry(sc, sc->NS_KEYWORD, ns_name));
+      meta = conjoin(sc, meta, mk_mapentry(sc, sc->NS, ns_name));
     }
 
     if (!is_nil(metaval)) {
@@ -6767,6 +6775,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       }
       s_return(sc, mk_string_from_sv(sc, to_strview(arg0)));
     }
+
+  case OP_THREAD:
+    return false;
     
   case OP_TENSOR_SET:
     if (!unpack_args_3(sc, &arg0, &arg1, &arg2)) {
@@ -7015,14 +7026,20 @@ static void Eval_Cycle(nanoclj_t * sc, enum nanoclj_opcodes op) {
 /* ========== Initialization of internal keywords ========== */
 
 static inline void assign_syntax(nanoclj_t * sc, const char *name, unsigned int syntax) {
+  strview_t ns_sv = { "", 0 };
   strview_t name_sv = { name, strlen(name) };
-  oblist_add_item(sc, name_sv, mk_symbol(sc, T_SYMBOL, (strview_t){ "", 0 }, name_sv, syntax));
+  oblist_add_item(sc, ns_sv, name_sv, mk_symbol(sc, T_SYMBOL, ns_sv, name_sv, syntax));
 }
 
-static inline void assign_proc(nanoclj_t * sc, enum nanoclj_opcodes op, const char *name) {
-  nanoclj_val_t x = def_symbol(sc, name);
+static inline void assign_proc(nanoclj_t * sc, enum nanoclj_opcodes op, op_code_info * i) {
+  nanoclj_val_t x = def_symbol(sc, i->name);
   nanoclj_val_t y = mk_proc(op);
-  new_slot_in_env(sc, x, y);
+  nanoclj_cell_t * meta = mk_arraymap(sc, 4);
+  set_vector_elem(meta, 0, mk_mapentry(sc, sc->NS, mk_nil()));
+  set_vector_elem(meta, 1, mk_mapentry(sc, sc->NAME, x));
+  set_vector_elem(meta, 2, mk_mapentry(sc, sc->DOC, mk_string(sc, i->doc)));
+  set_vector_elem(meta, 3, mk_mapentry(sc, sc->FILE, mk_string(sc, __FILE__)));
+  new_slot_spec_in_env(sc, sc->envir, x, y, meta);
 }
 
 static inline void update_window_info(nanoclj_t * sc, nanoclj_cell_t * out) {
@@ -7299,9 +7316,7 @@ static inline nanoclj_cell_t * mk_properties(nanoclj_t * sc) {
 
 #include "functions.h"
  
-bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc free, func_realloc realloc) {  
-  int i, n = sizeof(dispatch_table) / sizeof(dispatch_table[0]);
-
+bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc free, func_realloc realloc) {
 #if USE_INTERFACE
   sc->vptr = &vtbl;
 #endif
@@ -7374,12 +7389,6 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   assign_syntax(sc, "try", OP_TRY);
   assign_syntax(sc, "loop", OP_LOOP);
 
-  for (i = 0; i < n; i++) {
-    if (dispatch_table[i] != 0) {
-      assign_proc(sc, (enum nanoclj_opcodes)i, dispatch_table[i]);
-    }
-  }
-
   /* initialization of global nanoclj_val_ts to special symbols */
   sc->LAMBDA = def_symbol(sc, "fn");
   sc->DO = def_symbol(sc, "do");
@@ -7399,7 +7408,7 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   sc->IN = def_symbol(sc, "*in*");
   sc->OUT = def_symbol(sc, "*out*");
   sc->ERR = def_symbol(sc, "*err*");
-  sc->NS_SYM = def_symbol(sc, "*ns*");
+  sc->CURRENT_NS = def_symbol(sc, "*ns*");
   sc->ENV = def_symbol(sc, "*env*");
   sc->WINDOW_SIZE = def_symbol(sc, "*window-size*");
   sc->WINDOW_SCALE_F = def_symbol(sc, "*window-scale-factor*");
@@ -7418,7 +7427,7 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   sc->LINE = def_keyword(sc, "line");
   sc->COLUMN = def_keyword(sc, "column");
   sc->FILE = def_keyword(sc, "file");
-  sc->NS_KEYWORD = def_keyword(sc, "ns");
+  sc->NS = def_keyword(sc, "ns");
   
   sc->SORTED_SET = def_symbol(sc, "sorted-set");
   sc->ARRAY_MAP = def_symbol(sc, "array-map");
@@ -7428,7 +7437,14 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   sc->EMPTYVEC = get_vector_object(sc, T_VECTOR, 0);
 
   sc->types = mk_vector_store(sc, 0, 1024);
-  			      
+
+  size_t n = sizeof(dispatch_table) / sizeof(dispatch_table[0]);
+  for (size_t i = 0; i < n; i++) {
+    if (dispatch_table[i].name != 0) {
+      assign_proc(sc, (enum nanoclj_opcodes)i, &(dispatch_table[i]));
+    }
+  }
+
   /* Java types */
 
   nanoclj_cell_t * Object = mk_named_type(sc, "java.lang.Object", gentypeid(sc), sc->global_env);
