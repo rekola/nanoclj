@@ -2537,7 +2537,9 @@ static int32_t hasheq(nanoclj_t * sc, nanoclj_val_t v) {
       return murmur3_hash_int(murmur3_hash_string(sv.ptr, sv.size));
     }
       
-    case T_RATIO: /* Is this correct? */
+    case T_RATIO:
+      return hasheq(sc, vector_elem(c, 0)) ^ hasheq(sc, vector_elem(c, 1));
+      
     case T_MAPENTRY:
     case T_VECTOR:
     case T_VAR:{
@@ -2852,19 +2854,34 @@ static inline nanoclj_val_t def_symbol_or_keyword(nanoclj_t * sc, const char *na
   }
 }
 
-static inline nanoclj_cell_t * def_namespace_with_sym(nanoclj_t *sc, nanoclj_val_t sym) {
-  nanoclj_cell_t * md = mk_arraymap(sc, 1);
-  set_vector_elem(md, 0, mk_mapentry(sc, sc->NAME, sym));
+static inline nanoclj_cell_t * def_namespace_with_sym(nanoclj_t *sc, nanoclj_val_t sym, nanoclj_cell_t * md) {
   nanoclj_cell_t * vec = get_vector_object(sc, T_VECTOR, OBJ_LIST_SIZE);
   fill_vector(vec, mk_nil());
-
   nanoclj_cell_t * ns = get_cell(sc, T_ENVIRONMENT, 0, mk_pointer(vec), sc->root_env, md);
   intern_with_meta(sc, sc->global_env, sym, mk_pointer(ns), md);
   return ns;
 }
 
-static inline nanoclj_cell_t * def_namespace(nanoclj_t * sc, const char *name) {
-  return def_namespace_with_sym(sc, def_symbol(sc, name));
+static inline nanoclj_cell_t * def_namespace(nanoclj_t * sc, const char *name, const char *file) {
+  nanoclj_val_t sym = def_symbol(sc, name);
+  nanoclj_cell_t * md = mk_arraymap(sc, 2);
+  set_vector_elem(md, 0, mk_mapentry(sc, sc->NAME, sym));
+  set_vector_elem(md, 1, mk_mapentry(sc, sc->FILE, mk_string(sc, file)));
+  return def_namespace_with_sym(sc, sym, md);
+}
+
+static inline nanoclj_cell_t * mk_meta_from_reader(nanoclj_t * sc, nanoclj_val_t p0) {
+  nanoclj_cell_t * p = decode_pointer(p0);
+  if (_port_type_unchecked(p) == port_file) {
+    nanoclj_port_rep_t * pr = _rep_unchecked(p);
+    nanoclj_cell_t * md = mk_arraymap(sc, 3);
+    set_vector_elem(md, 0, mk_mapentry(sc, sc->LINE, mk_int(pr->stdio.line + 1)));
+    set_vector_elem(md, 1, mk_mapentry(sc, sc->COLUMN, mk_int(pr->stdio.column + 1)));
+    set_vector_elem(md, 2, mk_mapentry(sc, sc->FILE, mk_string(sc, pr->stdio.filename)));
+    return md;
+  } else {
+    return mk_arraymap(sc, 0);
+  }
 }
 
 static inline nanoclj_val_t gensym(nanoclj_t * sc, const char * prefix, size_t prefix_len) {
@@ -5163,8 +5180,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     if (!is_symbol(x)) {
       Error_0(sc, "Error - variable is not a symbol");
     }
-    nanoclj_cell_t * meta = mk_arraymap(sc, 1);
-    set_vector_elem(meta, 0, mk_mapentry(sc, sc->NAME, x));
+    nanoclj_cell_t * meta = mk_meta_from_reader(sc, sc->load_stack[sc->file_i]);
+    meta = conjoin(sc, meta, mk_mapentry(sc, sc->NAME, x));
 
     nanoclj_val_t ns_name;
     if (get_elem(sc, _cons_metadata(sc->global_env), sc->NAME, &ns_name)) {
@@ -5180,14 +5197,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       sc->code = _caddr(code);
     } else {
       sc->code = _cadr(code);
-    }
-
-    nanoclj_cell_t * p = decode_pointer(sc->load_stack[sc->file_i]);
-    if (_port_type_unchecked(p) == port_file) {
-      nanoclj_port_rep_t * pr = _rep_unchecked(p);
-      meta = conjoin(sc, meta, mk_mapentry(sc, sc->LINE, mk_int(pr->stdio.line + 1)));
-      meta = conjoin(sc, meta, mk_mapentry(sc, sc->COLUMN, mk_int(pr->stdio.column + 1)));
-      meta = conjoin(sc, meta, mk_mapentry(sc, sc->FILE, mk_string(sc, pr->stdio.filename)));
     }
     
     s_save(sc, OP_DEF1, meta, x);
@@ -5609,7 +5618,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       nanoclj_throw(sc, sc->NullPointerException);
       return false;
     } else {
-      int tx = type(arg0), ty = type(arg1);      
+      int tx = type(arg0), ty = type(arg1);
       if (tx == T_TENSOR || ty == T_TENSOR) {
 	s_return(sc, tensor_add(sc, to_tensor(sc, arg0), to_tensor(sc, arg1)));
       } else if (tx == T_REAL || ty == T_REAL) {
@@ -6679,7 +6688,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       if (var) {
 	ns = decode_pointer(slot_value_in_env(var));
       } else {
-	ns = def_namespace_with_sym(sc, arg0);
+	nanoclj_cell_t * meta = mk_meta_from_reader(sc, sc->load_stack[sc->file_i]);
+	meta = conjoin(sc, meta, mk_mapentry(sc, sc->NAME, arg0));
+	ns = def_namespace_with_sym(sc, arg0, meta);
       }
       bool r = _s_return(sc, mk_pointer(ns));
       sc->envir = sc->global_env = ns;

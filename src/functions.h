@@ -627,6 +627,10 @@ static inline nanoclj_val_t Audio_load(nanoclj_t * sc, nanoclj_val_t args) {
   return audio;
 }
 
+static inline nanoclj_val_t Geo_load(nanoclj_t * sc, nanoclj_val_t args) {
+  return mk_nil();
+}
+
 #if NANOCLJ_USE_LINENOISE
 #define MAX_COMPLETION_SYMBOLS 65535
 
@@ -784,14 +788,15 @@ static inline nanoclj_val_t linenoise_readline(nanoclj_t * sc, nanoclj_val_t arg
 #endif
 
 static inline void register_functions(nanoclj_t * sc) {
-  nanoclj_cell_t * Thread = def_namespace(sc, "Thread");
-  nanoclj_cell_t * System = def_namespace(sc, "System");
-  nanoclj_cell_t * Math = def_namespace(sc, "Math");
-  nanoclj_cell_t * numeric_tower = def_namespace(sc, "clojure.math.numeric-tower");
-  nanoclj_cell_t * clojure_java_browse = def_namespace(sc, "clojure.java.browse");
-  nanoclj_cell_t * clojure_java_shell = def_namespace(sc, "clojure.java.shell");
-  nanoclj_cell_t * Image = def_namespace(sc, "Image");
-  nanoclj_cell_t * Audio = def_namespace(sc, "Audio");
+  nanoclj_cell_t * Thread = def_namespace(sc, "Thread", __FILE__);
+  nanoclj_cell_t * System = def_namespace(sc, "System", __FILE__);
+  nanoclj_cell_t * Math = def_namespace(sc, "Math", __FILE__);
+  nanoclj_cell_t * numeric_tower = def_namespace(sc, "clojure.math.numeric-tower", __FILE__);
+  nanoclj_cell_t * clojure_java_browse = def_namespace(sc, "clojure.java.browse", __FILE__);
+  nanoclj_cell_t * clojure_java_shell = def_namespace(sc, "clojure.java.shell", __FILE__);
+  nanoclj_cell_t * Image = def_namespace(sc, "Image", __FILE__);
+  nanoclj_cell_t * Audio = def_namespace(sc, "Audio", __FILE__);
+  nanoclj_cell_t * Geo = def_namespace(sc, "Geo", __FILE__);
   
   intern_foreign_func(sc, Thread, "sleep", Thread_sleep, 1, 1);
   
@@ -838,9 +843,11 @@ static inline void register_functions(nanoclj_t * sc) {
   intern_foreign_func(sc, Image, "gaussian-blur", Image_gaussian_blur, 2, 2);
 
   intern_foreign_func(sc, Audio, "load", Audio_load, 1, 1);
+
+  intern_foreign_func(sc, Geo, "load", Geo_load, 1, 1);
   
 #if NANOCLJ_USE_LINENOISE
-  nanoclj_cell_t * linenoise = def_namespace(sc, "linenoise");
+  nanoclj_cell_t * linenoise = def_namespace(sc, "linenoise", __FILE__);
   intern_foreign_func(sc, linenoise, "read-line", linenoise_readline, 1, 1);
 #endif  
 }
