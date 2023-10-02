@@ -42,7 +42,7 @@ extern "C" {
   } nanoclj_port_type_t;
 
   /* operator code */
-  enum nanoclj_opcodes {
+  enum nanoclj_opcode {
 #define _OP_DEF(A,B,OP) OP,
 #include "nanoclj_opdf.h"
     OP_MAXDEFINED
@@ -146,7 +146,7 @@ extern "C" {
 
   /* this structure holds all the interpreter's registers */
   typedef struct dump_stack_frame_t {
-    enum nanoclj_opcodes op;
+    enum nanoclj_opcode op;
     nanoclj_cell_t * args;
     nanoclj_cell_t * envir;
     nanoclj_val_t code;
@@ -247,12 +247,9 @@ extern "C" {
     char *strbuff;
     size_t strbuff_size;
 
-    char *errbuff;
-    size_t errbuff_size;
-
     int tok;
     nanoclj_val_t value;
-    int op;
+    enum nanoclj_opcode op;
 
     void *ext_data;             /* For the benefit of foreign functions */
     nanoclj_val_t (*object_invoke_callback) (nanoclj_t *, void *, nanoclj_val_t);

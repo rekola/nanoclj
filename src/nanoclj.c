@@ -795,15 +795,15 @@ static inline bool is_true(nanoclj_val_t p) {
 typedef struct {
   char *name;
   char *doc;
-} op_code_info;
+} opcode_info;
 
-static op_code_info dispatch_table[] = {
+static opcode_info dispatch_table[] = {
 #define _OP_DEF(A,B,OP) {A,B},
 #include "nanoclj_opdf.h"
   { 0 }
 };
 
-static void Eval_Cycle(nanoclj_t * sc, enum nanoclj_opcodes op);
+static void Eval_Cycle(nanoclj_t * sc, enum nanoclj_opcode op);
 
 static inline const char* get_version() {
   return VERSION;
@@ -1100,7 +1100,7 @@ static inline nanoclj_val_t mk_int(int num) {
   return (nanoclj_val_t)(SIGNATURE_INTEGER | (uint32_t)num);
 }
 
-static inline nanoclj_val_t mk_proc(enum nanoclj_opcodes op) {
+static inline nanoclj_val_t mk_proc(enum nanoclj_opcode op) {
   return (nanoclj_val_t)(SIGNATURE_PROC | (uint32_t)op);
 }
 
@@ -1344,17 +1344,17 @@ static inline nanoclj_cell_t * mk_class_cast_exception(nanoclj_t * sc, const cha
 static inline nanoclj_cell_t * mk_arity_exception(nanoclj_t * sc, int n_args, nanoclj_val_t ns, nanoclj_val_t fn) {
   size_t l;
   if (is_nil(fn)) {
-    l = snprintf(sc->errbuff, sc->errbuff_size, "Invalid arity");
+    l = snprintf(sc->strbuff, sc->strbuff_size, "Invalid arity");
   } else {
     strview_t sv = to_strview(fn);  
     if (is_nil(ns)) {
-      l = snprintf(sc->errbuff, sc->errbuff_size, "Wrong number of args (%d) passed to %.*s", n_args, (int)sv.size, sv.ptr);
+      l = snprintf(sc->strbuff, sc->strbuff_size, "Wrong number of args (%d) passed to %.*s", n_args, (int)sv.size, sv.ptr);
     } else {
       strview_t sv2 = to_strview(ns);
-      l = snprintf(sc->errbuff, sc->errbuff_size, "Wrong number of args (%d) passed to %.*s/%.*s", n_args, (int)sv2.size, sv2.ptr, (int)sv.size, sv.ptr);
+      l = snprintf(sc->strbuff, sc->strbuff_size, "Wrong number of args (%d) passed to %.*s/%.*s", n_args, (int)sv2.size, sv2.ptr, (int)sv.size, sv.ptr);
     }
   }
-  nanoclj_val_t s = mk_pointer(get_string_object(sc, T_STRING, sc->errbuff, l, 0));
+  nanoclj_val_t s = mk_pointer(get_string_object(sc, T_STRING, sc->strbuff, l, 0));
   return get_cell(sc, T_ARITY_EXCEPTION, 0, s, NULL, NULL);
 }
 
@@ -4194,7 +4194,7 @@ static nanoclj_val_t get_in_port(nanoclj_t * sc) {
 
 #define s_return(sc,a) return _s_return(sc,a)
   
-static inline void s_save(nanoclj_t * sc, enum nanoclj_opcodes op,
+static inline void s_save(nanoclj_t * sc, enum nanoclj_opcode op,
 			  nanoclj_cell_t * args, nanoclj_val_t code) {  
   dump_stack_frame_t * next_frame = s_add_frame(sc);
   next_frame->op = op;
@@ -4677,7 +4677,7 @@ static inline int get_literal_fn_arity(nanoclj_t * sc, nanoclj_val_t body, bool 
 }
 
 /* Executes and opcode, and returns true if execution should continue */
-static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
+static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   nanoclj_val_t x, y;  
   nanoclj_cell_t * meta, * z;
   int syn;
@@ -4907,6 +4907,10 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	return false;
       }
       switch (_type(code_cell)) {
+      case T_VAR:
+	sc->code = slot_value_in_env(code_cell);
+	s_goto(sc, OP_APPLY);
+
       case T_CLASS:
 	s_return(sc, construct_by_type(sc, code_cell->type, seq(sc, sc->args)));
 	
@@ -6350,8 +6354,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	    }
 	  }
 	  
-	  sprintf(sc->errbuff, "No reader function for tag %.*s", (int)tag_sv.size, tag_sv.ptr);
-	  Error_0(sc, sc->errbuff);
+	  sprintf(sc->strbuff, "No reader function for tag %.*s", (int)tag_sv.size, tag_sv.ptr);
+	  Error_0(sc, sc->strbuff);
 	}
       }
 	
@@ -6966,11 +6970,11 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 }
  
 /* kernel of this interpreter */
-static void Eval_Cycle(nanoclj_t * sc, enum nanoclj_opcodes op) {
+static void Eval_Cycle(nanoclj_t * sc, enum nanoclj_opcode op) {
   sc->op = op;
   for (;;) {    
     ok_to_freely_gc(sc);
-    bool r = opexe(sc, (enum nanoclj_opcodes) sc->op);
+    bool r = opexe(sc, sc->op);
     if (sc->pending_exception) {
       s_rewind(sc);
       _s_return(sc, mk_nil());
@@ -6990,7 +6994,7 @@ static inline void assign_syntax(nanoclj_t * sc, const char *name, unsigned int 
   oblist_add_item(sc, ns_sv, name_sv, mk_symbol(sc, T_SYMBOL, ns_sv, name_sv, syntax));
 }
 
-static inline void assign_proc(nanoclj_t * sc, nanoclj_cell_t * ns, enum nanoclj_opcodes op, op_code_info * i) {
+static inline void assign_proc(nanoclj_t * sc, nanoclj_cell_t * ns, enum nanoclj_opcode op, opcode_info * i) {
   nanoclj_val_t ns_sym = mk_nil();
   get_elem(sc, _cons_metadata(ns), sc->NAME, &ns_sym);
 
@@ -7296,8 +7300,6 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   sc->cell_seg = sc->malloc(sizeof(*(sc->cell_seg)) * CELL_NSEGMENT);
   sc->strbuff = sc->malloc(STRBUFF_INITIAL_SIZE);
   sc->strbuff_size = STRBUFF_INITIAL_SIZE;
-  sc->errbuff = sc->malloc(STRBUFF_INITIAL_SIZE);
-  sc->errbuff_size = STRBUFF_INITIAL_SIZE;  
   sc->save_inport = mk_nil();
   sc->load_stack[0] = mk_nil();
   sc->global_env = sc->root_env = sc->envir = NULL;
@@ -7404,7 +7406,7 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   size_t n = sizeof(dispatch_table) / sizeof(dispatch_table[0]);
   for (size_t i = 0; i < n; i++) {
     if (dispatch_table[i].name != 0) {
-      assign_proc(sc, sc->root_env, (enum nanoclj_opcodes)i, &(dispatch_table[i]));
+      assign_proc(sc, sc->root_env, (enum nanoclj_opcode)i, &(dispatch_table[i]));
     }
   }
 
@@ -7543,7 +7545,6 @@ void nanoclj_deinit(nanoclj_t * sc) {
 #endif
   sc->save_inport = mk_nil();
   sc->free(sc->strbuff);
-  sc->free(sc->errbuff);
 
   sc->active_element = mk_nil();
   sc->active_element_target = mk_nil();
