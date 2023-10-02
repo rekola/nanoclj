@@ -6,17 +6,10 @@ _OP_DEF("read", 0, OP_READ)
 _OP_DEF(".read", 0, OP_READM)
 _OP_DEF("gensym", "Generates an unique symbol", OP_GENSYM)
 _OP_DEF(0, 0, OP_EVAL)
-#if USE_TRACING
-_OP_DEF(0, 0, OP_REAL_EVAL)
-#endif
 _OP_DEF(0, 0, OP_E0VEC)
 _OP_DEF(0, 0, OP_E0ARGS)
 _OP_DEF(0, 0, OP_E1ARGS)
 _OP_DEF(0, 0, OP_APPLY)
-#if USE_TRACING
-_OP_DEF(0, 0, OP_REAL_APPLY)
-_OP_DEF("tracing", 0, OP_TRACING)
-#endif
 _OP_DEF(0, 0, OP_DOMACRO)
 _OP_DEF(0, 0, OP_LAMBDA)
 _OP_DEF(0, 0, OP_LAMBDA1)

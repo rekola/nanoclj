@@ -2241,18 +2241,7 @@ static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t
  */
 
 static inline void new_frame_in_env(nanoclj_t * sc, nanoclj_cell_t * old_env) {
-  nanoclj_val_t new_frame;
-
-  /* The interaction-environment has about 300 variables in it. */
-  if (!old_env) {
-    nanoclj_cell_t * vec = get_vector_object(sc, T_VECTOR, OBJ_LIST_SIZE);
-    fill_vector(vec, mk_nil());
-    new_frame = mk_pointer(vec);
-  } else {
-    new_frame = sc->EMPTY;
-  }
-
-  sc->envir = get_cell(sc, T_ENVIRONMENT, 0, new_frame, old_env, NULL);
+  sc->envir = get_cell(sc, T_ENVIRONMENT, 0, sc->EMPTY, old_env, NULL);
 }
 
 static inline nanoclj_cell_t * new_slot_spec_in_env(nanoclj_t * sc, nanoclj_cell_t * env,
@@ -4709,7 +4698,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     } else {
       strview_t sv = to_strview(arg0);
       if (!file_push(sc, sv)) {
-	sprintf(sc->strbuff, "Error - unable to open %.*s", (int)sv.size, sv.ptr);
+	sprintf(sc->strbuff, "Unable to open %.*s", (int)sv.size, sv.ptr);
 	Error_0(sc, sc->strbuff);
       } else {
 	s_goto(sc, OP_T0LVL);
@@ -4727,7 +4716,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       }
 
       if (nesting_unchecked(sc->load_stack[sc->file_i]) != 0) {
-	Error_0(sc, "Error - unmatched parentheses");
+	Error_0(sc, "Unmatched parentheses");
       }
       
       if (sc->file_i == 0) {
@@ -4762,7 +4751,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   case OP_READ:                /* read */
     x = get_in_port(sc);
     if (!is_reader(x)) {
-      Error_0(sc, "Error - not a reader");
+      Error_0(sc, "Not a reader");
     } else {
       sc->tok = token(sc, x);
       if (sc->tok == TOK_EOF) {
@@ -4775,7 +4764,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     if (!unpack_args_1(sc, &arg0)) {
       return false;
     } else if (!is_reader(arg0)) {
-      Error_0(sc, "Error - not a reader");
+      Error_0(sc, "Not a reader");
     } else {
       s_return(sc, mk_character(inchar(arg0)));
     }
@@ -4791,17 +4780,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     }
     
   case OP_EVAL:                /* main part of evaluation */
-#if USE_TRACING
-    if (sc->tracing) {
-      /*s_save(sc,OP_VALUEPRINT,sc->EMPTY,sc->EMPTY); */
-      s_save(sc, OP_REAL_EVAL, sc->args, sc->code);
-      sc->args = decode_pointer(sc->code);
-      putstr(sc, "\nEval: ", get_err_port(sc));
-      s_goto(sc, OP_P0LIST);
-    }
-    /* fall through */
-  case OP_REAL_EVAL:
-#endif
     switch (prim_type(sc->code)) {
     case T_SYMBOL:
       if (sc->code.as_long == sc->CURRENT_NS.as_long) { /* special symbols */
@@ -4902,29 +4880,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       s_goto(sc, OP_APPLY);
     }
 
-#if USE_TRACING
-  case OP_TRACING:{
-    if (!unpack_args_1(sc, &arg0)) {
-      return false;
-    }
-
-    int tr = sc->tracing;
-    sc->tracing = to_int(arg0);
-    s_return(sc, mk_int(sc, tr));
-  }
-#endif
-
   case OP_APPLY:               /* apply 'code' to 'args' */
-#if USE_TRACING
-    if (sc->tracing) {
-      s_save(sc, OP_REAL_APPLY, sc->args, sc->code);
-      /*  sc->args=cons(sc,sc->code,sc->args); */
-      putstr(sc, "\nApply to: ", get_err_port(sc));
-      s_goto(sc, OP_P0LIST);
-    }
-    /* fall through */
-  case OP_REAL_APPLY:
-#endif
     switch (prim_type(sc->code)) {
     case T_PROC: 
       s_goto(sc, decode_integer(sc->code));
@@ -4992,7 +4948,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	} else if (arg_next) {
 	  s_return(sc, first(sc, arg_next));
 	} else {
-	  Error_0(sc, "Error - No item in collection");
+	  Error_0(sc, "No item in collection");
 	}
       case T_CLOSURE:
       case T_MACRO:
@@ -5066,21 +5022,17 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	  } else if (is_symbol(x)) {
 	    new_slot_in_env(sc, x, mk_pointer(yy));
 	  } else {
-	    Error_0(sc, "Error - syntax error in closure: not a symbol");
+	    Error_0(sc, "Syntax error in closure: not a symbol");
 	  }
 	  sc->code = cdr(closure_code(code_cell));
 	}
 	sc->args = NULL;
 	s_goto(sc, OP_DO);
       }
-
-      fprintf(stderr, "failed to handle apply for type %ld\n", _type(code_cell));
       break;
     }
-    default:
-      fprintf(stderr, "unknown prim type %ld\n", prim_type(sc->code));
     }
-    Error_0(sc, "Error - illegal function");    
+    Error_0(sc, "Illegal function");    
     
   case OP_DOMACRO:             /* do macro */
     sc->code = sc->value;
@@ -5138,7 +5090,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	return false;
       }
     } else {
-      Error_0(sc, "Error - Not a symbol");
+      Error_0(sc, "Not a symbol");
     }
 
   case OP_NS_RESOLVE:                /* ns-resolve */
@@ -5154,7 +5106,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     if (!unpack_args_2_plus(sc, &arg0, &arg1, &arg_next)) {
       return false;
     } else if (!is_environment(arg0) || !is_symbol(arg1)) {
-      Error_0(sc, "Error - Invalid types");
+      Error_0(sc, "Invalid types");
     } else { /* arg0: namespace, arg1: symbol */
       nanoclj_cell_t * ns = decode_pointer(arg0);
       if (arg_next) {
@@ -5173,7 +5125,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     }
     x = _car(code);
     if (!is_symbol(x)) {
-      Error_0(sc, "Error - variable is not a symbol");
+      Error_0(sc, "Variable is not a symbol");
     }
     nanoclj_cell_t * meta = mk_meta_from_reader(sc, sc->load_stack[sc->file_i]);
     meta = conjoin(sc, meta, mk_mapentry(sc, sc->NAME, x));
@@ -5320,7 +5272,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     
     if (is_list(sc->code)) {    /* continue */
       if (!is_list(car(sc->code)) || !is_list(cdar(sc->code))) {
-	Error_0(sc, "Error - Bad syntax of binding spec in let");
+	Error_0(sc, "Bad syntax of binding spec in let");
       }
       s_save(sc, OP_LET1, sc->args, cdr(sc->code));
       sc->code = cadar(sc->code);
@@ -5342,9 +5294,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     if (is_symbol(car(sc->code))) {     /* named let */
       for (x = cadr(sc->code), sc->args = NULL; x.as_long != sc->EMPTY.as_long; x = cdr(x)) {
         if (!is_list(x))
-          Error_0(sc, "Error - Bad syntax of binding in let");
+          Error_0(sc, "Bad syntax of binding in let");
         if (!is_list(car(x)))
-          Error_0(sc, "Error - Bad syntax of binding in let");
+          Error_0(sc, "Bad syntax of binding in let");
         sc->args = cons(sc, caar(x), sc->args);
       }
       /* make closure. first is code. second is environment */
@@ -5365,7 +5317,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       s_return(sc, mk_nil());
     }
     if (!is_list(sc->code)) {
-      Error_0(sc, "Error - syntax error in cond");
+      Error_0(sc, "Syntax error in cond");
     }
     s_save(sc, OP_COND1, NULL, sc->code);
     sc->code = car(sc->code);
@@ -5378,7 +5330,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       }
       if (is_nil(sc->code)) {
         if (!is_list(cdr(sc->code))) {
-          Error_0(sc, "Error - syntax error in cond");
+          Error_0(sc, "Syntax error in cond");
         }
         x = mk_pointer(cons(sc, sc->QUOTE, cons(sc, sc->value, NULL)));
         sc->code = mk_pointer(cons(sc, cadr(sc->code), cons(sc, x, NULL)));
@@ -5446,7 +5398,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       sc->code = cadr(sc->code);
     }
     if (!is_symbol(x)) {
-      Error_0(sc, "Error - variable is not a symbol");
+      Error_0(sc, "Variable is not a symbol");
     }
     s_save(sc, OP_MACRO1, NULL, x);
     s_goto(sc, OP_EVAL);
@@ -5806,8 +5758,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	return false;
       } else if (tx == T_REAL || ty == T_REAL) {
 	double a = to_double(arg0), b = to_double(arg1);
-	if (b == 0) {
-	  Error_0(sc, "Error - division by zero");
+	if (b == 0.0) {
+	  nanoclj_throw(sc, mk_arithmetic_exception(sc, "Division by zero"));
+	  return false;
 	}
 	double res = fmod(a, b);
 	/* remainder should have same sign as first operand */
@@ -5818,7 +5771,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       } else {
 	long long a = to_long(arg0), b = to_long(arg1);
 	if (b == 0) {
-	  Error_0(sc, "Error - division by zero");
+	  nanoclj_throw(sc, mk_arithmetic_exception(sc, "Division by zero"));
+	  return false;
 	} else {
 	  long long res = a % b;
 	  /* remainder should have same sign as first operand */
@@ -5834,7 +5788,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     if (!unpack_args_1(sc, &arg0)) {
       return false;
     } else if (!is_cell(arg0)) {
-      Error_0(sc, "Error - value is not ISeqable");    
+      Error_0(sc, "Value is not ISeqable");    
     } else {
       s_return(sc, first(sc, decode_pointer(arg0)));
     }
@@ -5843,7 +5797,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     if (!unpack_args_1(sc, &arg0)) {
       return false;
     } else if (!is_cell(arg0)) {
-      Error_0(sc, "Error - value is not ISeqable");
+      Error_0(sc, "Vvalue is not ISeqable");
     } else {
       s_return(sc, second(sc, decode_pointer(arg0)));
     }
@@ -5862,7 +5816,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	}
       }
     }
-    Error_0(sc, "Error - value is not ISeqable");
+    Error_0(sc, "Value is not ISeqable");
 
   case OP_GET:             /* get */
     if (!unpack_args_2_plus(sc, &arg0, &arg1, &arg_next)) {
@@ -5907,7 +5861,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	  long long index = to_long_w_def(first(sc, y2), -1);
 	  nanoclj_val_t value = second(sc, y2);
 	  if (index < 0 || index >= vector_len) {
-	    Error_0(sc, "Error - Index out of bounds");     
+	    Error_0(sc, "Index out of bounds");     
 	  } else {
 	    nanoclj_cell_t * vec = copy_vector(sc, coll);
 	    if (vec) set_vector_elem(vec, index, value);
@@ -5970,7 +5924,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	s_return(sc, mk_pointer(conjoin(sc, coll, arg1)));
       }
     }
-    Error_0(sc, "Error - No protocol method ICollection.-conj defined");
+    Error_0(sc, "No protocol method ICollection.-conj defined");
 
   case OP_DISJ:
     if (!unpack_args_2(sc, &arg0, &arg1)) {
@@ -5998,13 +5952,13 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	}
       }
     }    
-    Error_0(sc, "Error - No protocol method ICollection.-disjoin defined for type");      
+    Error_0(sc, "No protocol method ICollection.-disjoin defined for type");      
 
   case OP_SUBVEC:
     if (!unpack_args_2_plus(sc, &arg0, &arg1, &arg_next)) {
       return false;
     } else if (!is_cell(arg0)) {
-      Error_0(sc, "Error - Not a vector");
+      Error_0(sc, "Not a vector");
     } else {
       nanoclj_cell_t * c = decode_pointer(arg0);
       long long start = to_long(arg1);
@@ -6255,7 +6209,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   case OP_RDSEXPR:
     x = get_in_port(sc);
     if (!is_reader(x)) {
-      Error_0(sc, "Error - not a reader");
+      Error_0(sc, "Not a reader");
     } else {
       nanoclj_val_t inport = x;
 
@@ -6272,7 +6226,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	if (sc->tok == TOK_RPAREN) {       /* Empty list */
 	  s_return(sc, sc->EMPTY);
 	} else if (sc->tok == TOK_DOT) {
-	  Error_0(sc, "Error - illegal dot expression");
+	  Error_0(sc, "Illegal dot expression");
 	} else {
 	  nesting_unchecked(inport)++;
 	  s_save(sc, OP_RDLIST, NULL, sc->EMPTY);
@@ -6284,7 +6238,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	if (sc->tok == TOK_RSQUARE) {	/* Empty vector */
 	  s_return(sc, mk_pointer(sc->EMPTYVEC));
 	} else if (sc->tok == TOK_DOT) {
-	  Error_0(sc, "Error - illegal dot expression");
+	  Error_0(sc, "Illegal dot expression");
 	} else {
 	  nesting_unchecked(inport)++;
 	  s_save(sc, OP_RDVEC_ELEMENT, sc->EMPTYVEC, sc->EMPTY);
@@ -6302,7 +6256,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	if (sc->tok == TOK_RCURLY) {     /* Empty map or set */
 	  s_return(sc, sc->EMPTY);
 	} else if (sc->tok == TOK_DOT) {
-	  Error_0(sc, "Error - illegal dot expression");
+	  Error_0(sc, "Illegal dot expression");
 	} else {
 	  nesting_unchecked(inport)++;
 	  s_save(sc, OP_RDMAP_ELEMENT, NULL, sc->EMPTY);
@@ -6353,24 +6307,23 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       case TOK_DQUOTE:
 	x = readstrexp(sc, inport, false);
 	if (is_false(x)) {
-	  Error_0(sc, "Error - reading string");
+	  Error_0(sc, "Invalid string");
 	}
 	s_return(sc, x);
 	
       case TOK_REGEX:
 	x = readstrexp(sc, inport, true);
-	if (is_false(x)) {
-	  Error_0(sc, "Error - reading regex");
+	if (!is_false(x)) {
+	  x = mk_regex(sc, x);
+	  if (!is_nil(x)) {
+	    s_return(sc, x);
+	  }
 	}
-	x = mk_regex(sc, x);
-	if (is_nil(x)) {
-	  Error_0(sc, "Invalid regular expression");
-	}
-	s_return(sc, x);
+	Error_0(sc, "Invalid regex");
 	
       case TOK_CHAR_CONST:
 	if ((x = mk_char_const(sc, readstr_upto(sc, DELIMITERS, inport))).as_long == sc->EMPTY.as_long) {
-	  Error_0(sc, "Error - undefined character literal");
+	  Error_0(sc, "Undefined character literal");
 	} else {
 	  s_return(sc, x);
 	}
@@ -6412,13 +6365,13 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	
       case TOK_SHARP_CONST:
 	if ((x = mk_sharp_const(sc, readstr_upto(sc, DELIMITERS, inport))).as_long == sc->EMPTY.as_long) {
-	  Error_0(sc, "Error - undefined sharp expression");
+	  Error_0(sc, "Undefined sharp expression");
 	} else {
 	  s_return(sc, x);
 	}
 	
       default:
-	Error_0(sc, "Error - illegal token");
+	Error_0(sc, "Illegal token");
       }
       break;
     }
@@ -6426,7 +6379,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   case OP_RDLIST:
     x = get_in_port(sc);
     if (!is_reader(x)) {
-      Error_0(sc, "Error - not a reader");
+      Error_0(sc, "Not a reader");
     } else {
       nanoclj_val_t inport = x;
       sc->args = cons(sc, sc->value, sc->args);
@@ -6450,7 +6403,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   case OP_RDVEC_ELEMENT:
     x = get_in_port(sc);
     if (!is_reader(x)) {
-      Error_0(sc, "Error - not a reader");
+      Error_0(sc, "Not a reader");
     } else {
       nanoclj_val_t inport = x;
       sc->args = conjoin(sc, sc->args, sc->value);
@@ -6469,7 +6422,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   case OP_RDMAP_ELEMENT:
     x = get_in_port(sc);
     if (!is_reader(x)) {
-      Error_0(sc, "Error - not a reader");
+      Error_0(sc, "Not a reader");
     } else {
       nanoclj_val_t inport = x;
       sc->args = cons(sc, sc->value, sc->args);
@@ -6488,11 +6441,11 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
   case OP_RDDOT:
     x = get_in_port(sc);
     if (!is_reader(x)) {
-      Error_0(sc, "Error - not a reader");
+      Error_0(sc, "Not a reader");
     } else {
       nanoclj_val_t inport = x;
       if (token(sc, inport) != TOK_RPAREN) {
-	Error_0(sc, "Error - illegal dot expression");
+	Error_0(sc, "Illegal dot expression");
       } else {
 	nesting_unchecked(inport)--;
 	s_return(sc, mk_pointer(reverse_in_place(sc, sc->value, sc->args)));
@@ -6562,7 +6515,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	s_return(sc, mk_pointer(seq(sc, c)));
       }
     }
-    Error_0(sc, "Error - value is not ISeqable");
+    Error_0(sc, "Value is not ISeqable");
 
   case OP_RSEQ:
     if (!unpack_args_1(sc, &arg0)) {
@@ -6577,7 +6530,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	}
       }
     }
-    Error_0(sc, "Error - value is not reverse seqable");
+    Error_0(sc, "Value is not reverse seqable");
 
   case OP_EMPTYP:
     if (!unpack_args_1(sc, &arg0)) {
@@ -6590,7 +6543,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	s_retbool(is_empty(sc, c));
       }
     }
-    Error_0(sc, "Error - value is not ISeqable");
+    Error_0(sc, "Value is not ISeqable");
     
   case OP_HASH:
     if (!unpack_args_1(sc, &arg0)) {
@@ -6749,7 +6702,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	s_return(sc, arg0);
       }
     }
-    Error_0(sc, "Error - Watches can only be added to Vars");
+    Error_0(sc, "Watches can only be added to Vars");
 
   case OP_GET_CELL_FLAGS:
     if (!unpack_args_1(sc, &arg0)) {
