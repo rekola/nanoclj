@@ -582,24 +582,21 @@ static inline bool is_integral_type(int_fast16_t type) {
   return false;
 }
 
-static inline bool is_number(nanoclj_val_t p) {
-  switch (prim_type(p)) {
+static inline bool is_numeric_type(uint16_t t) {
+  switch (t) {
   case T_INTEGER:
   case T_REAL:
+  case T_LONG:
+  case T_RATIO:
+  case T_BIGINT:
     return true;
-  case T_CELL:{
-    nanoclj_cell_t * c = decode_pointer(p);
-    if (c) {
-      switch (_type(c)) {
-      case T_LONG:
-      case T_RATIO:
-      case T_BIGINT:
-	return true;
-      }
-    }
-  }
   }
   return false;
+}
+
+/* Returns true if argument is number */
+static inline bool is_number(nanoclj_val_t p) {
+  return !is_nil(p) && is_numeric_type(type(p));  
 }
 
 static inline char * _strvalue(nanoclj_cell_t * s) {
@@ -2858,7 +2855,9 @@ static inline nanoclj_cell_t * def_namespace_with_sym(nanoclj_t *sc, nanoclj_val
   nanoclj_cell_t * vec = get_vector_object(sc, T_VECTOR, OBJ_LIST_SIZE);
   fill_vector(vec, mk_nil());
   nanoclj_cell_t * ns = get_cell(sc, T_ENVIRONMENT, 0, mk_pointer(vec), sc->root_env, md);
-  intern_with_meta(sc, sc->global_env, sym, mk_pointer(ns), md);
+  if (sc->global_env) {
+    intern_with_meta(sc, sc->global_env, sym, mk_pointer(ns), md);
+  }
   return ns;
 }
 
@@ -5112,17 +5111,13 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
     } else if (is_symbol(car(x)) && (is_list(cadr(x)) && is_vector(caadr(x)))) {
       has_name = true;
     }
-    
-    nanoclj_val_t name;
+
     if (has_name) {
-      name = car(x);
       x = cdr(x);
-    } else {
-      name = mk_nil();
     }
     
     /* make closure. first is code. second is environment */
-    s_return(sc, mk_pointer(get_cell(sc, T_CLOSURE, 0, x, sc->envir, decode_pointer(name))));
+    s_return(sc, mk_pointer(get_cell(sc, T_CLOSURE, 0, x, sc->envir, NULL)));
   }
    
   case OP_QUOTE:               /* quote */
@@ -5618,8 +5613,11 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       nanoclj_throw(sc, sc->NullPointerException);
       return false;
     } else {
-      int tx = type(arg0), ty = type(arg1);
-      if (tx == T_TENSOR || ty == T_TENSOR) {
+      uint16_t tx = type(arg0), ty = type(arg1);
+      if (!is_numeric_type(tx) || !is_numeric_type(ty)) {
+	nanoclj_throw(sc, mk_class_cast_exception(sc, "Argument cannot be cast to java.lang.Number"));
+	return false;
+      } else if (tx == T_TENSOR || ty == T_TENSOR) {
 	s_return(sc, tensor_add(sc, to_tensor(sc, arg0), to_tensor(sc, arg1)));
       } else if (tx == T_REAL || ty == T_REAL) {
 	s_return(sc, mk_real(to_double(arg0) + to_double(arg1)));
@@ -5654,35 +5652,33 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       nanoclj_throw(sc, sc->NullPointerException);
       return false;
     } else {
-      int tx = prim_type(arg0), ty = prim_type(arg1);
-      if (tx == T_REAL || ty == T_REAL) {
+      uint16_t tx = type(arg0), ty = type(arg1);
+      if (!is_numeric_type(tx) || !is_numeric_type(ty)) {
+	nanoclj_throw(sc, mk_class_cast_exception(sc, "Argument cannot be cast to java.lang.Number"));
+	return false;
+      } else if (tx == T_REAL || ty == T_REAL) {
 	s_return(sc, mk_real(to_double(arg0) - to_double(arg1)));
       } else if (tx == T_INTEGER && ty == T_INTEGER) {
 	s_return(sc, mk_integer(sc, (long long)decode_integer(arg0) - (long long)decode_integer(arg1)));
-      } else {
-	tx = expand_type(arg0, tx);
-	ty = expand_type(arg1, ty);
-	
-	if (tx == T_RATIO || ty == T_RATIO) {
-	  long long den_x, den_y, den;
-	  long long num_x = get_ratio(arg0, &den_x);
-	  long long num_y = get_ratio(arg1, &den_y);
-	  long long num = normalize(num_x * den_y - num_y * den_x,
-				    den_x * den_y, &den);
-	  if (den == 1) {
-	    s_return(sc, mk_integer(sc, num));
-	  } else {
-	    s_return(sc, mk_ratio_long(sc, num, den));
-	  }
+      } else if (tx == T_RATIO || ty == T_RATIO) {
+	long long den_x, den_y, den;
+	long long num_x = get_ratio(arg0, &den_x);
+	long long num_y = get_ratio(arg1, &den_y);
+	long long num = normalize(num_x * den_y - num_y * den_x,
+				  den_x * den_y, &den);
+	if (den == 1) {
+	  s_return(sc, mk_integer(sc, num));
 	} else {
-	  long long res;
-	  if (__builtin_ssubll_overflow(to_long(arg0), to_long(arg1), &res) == false) {
-	    s_return(sc, mk_integer(sc, res));
-	  } else {
-	    nanoclj_throw(sc, mk_arithmetic_exception(sc, "Integer overflow"));
-	    return false;
-	  }
+	  s_return(sc, mk_ratio_long(sc, num, den));
 	}
+      } else {
+	long long res;
+	if (__builtin_ssubll_overflow(to_long(arg0), to_long(arg1), &res) == false) {
+	  s_return(sc, mk_integer(sc, res));
+	} else {
+	  nanoclj_throw(sc, mk_arithmetic_exception(sc, "Integer overflow"));
+	  return false;
+	}	
       }
     }
   
@@ -5693,41 +5689,39 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       nanoclj_throw(sc, sc->NullPointerException);
       return false;
     } else {
-      int tx = prim_type(arg0), ty = prim_type(arg1);
-      if (tx == T_REAL || ty == T_REAL) {
+      uint16_t tx = type(arg0), ty = type(arg1);
+      if (!is_numeric_type(tx) || !is_numeric_type(ty)) {
+      	nanoclj_throw(sc, mk_class_cast_exception(sc, "Argument cannot be cast to java.lang.Number"));
+	return false;
+      } else if (tx == T_REAL || ty == T_REAL) {
 	s_return(sc, mk_real(to_double(arg0) * to_double(arg1)));
       } else if (tx == T_INTEGER && ty == T_INTEGER) {
 	s_return(sc, mk_integer(sc, (long long)decode_integer(arg0) * (long long)decode_integer(arg1)));
-      } else {
-	tx = expand_type(arg0, tx);
-	ty = expand_type(arg1, ty);
-            
-	if (tx == T_RATIO || ty == T_RATIO) {
-	  long long den_x, den_y;
-	  long long num_x = get_ratio(arg0, &den_x);
-	  long long num_y = get_ratio(arg1, &den_y);
-	  long long num, den;
-	  if (__builtin_smulll_overflow(num_x, num_y, &num) ||
-	      __builtin_smulll_overflow(den_x, den_y, &den)) {
-	    nanoclj_throw(sc, mk_arithmetic_exception(sc, "Integer overflow"));
-	    return false;
-	  }
-	  num = normalize(num, den, &den);
-	  if (den == 1) {
-	    s_return(sc, mk_integer(sc, num));
-	  } else {
-	    s_return(sc, mk_ratio_long(sc, num, den));
-	  }
-	} else {
-	  long long res;
-	  if (__builtin_smulll_overflow(to_long(arg0), to_long(arg1), &res) == false) {
-	    s_return(sc, mk_integer(sc, res));
-	  } else {
-	    nanoclj_throw(sc, mk_arithmetic_exception(sc, "Integer overflow"));
-	    return false;
-	  } 
-	  s_return(sc, mk_integer(sc, res));
+      } else if (tx == T_RATIO || ty == T_RATIO) {
+	long long den_x, den_y;
+	long long num_x = get_ratio(arg0, &den_x);
+	long long num_y = get_ratio(arg1, &den_y);
+	long long num, den;
+	if (__builtin_smulll_overflow(num_x, num_y, &num) ||
+	    __builtin_smulll_overflow(den_x, den_y, &den)) {
+	  nanoclj_throw(sc, mk_arithmetic_exception(sc, "Integer overflow"));
+	  return false;
 	}
+	num = normalize(num, den, &den);
+	if (den == 1) {
+	  s_return(sc, mk_integer(sc, num));
+	} else {
+	  s_return(sc, mk_ratio_long(sc, num, den));
+	}
+      } else {
+	long long res;
+	if (__builtin_smulll_overflow(to_long(arg0), to_long(arg1), &res) == false) {
+	  s_return(sc, mk_integer(sc, res));
+	} else {
+	  nanoclj_throw(sc, mk_arithmetic_exception(sc, "Integer overflow"));
+	  return false;
+	} 
+	s_return(sc, mk_integer(sc, res));
       }
     }
 	
@@ -5738,8 +5732,11 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       nanoclj_throw(sc, sc->NullPointerException);
       return false;
     } else {
-      int tx = prim_type(arg0), ty = prim_type(arg1);
-      if (tx == T_REAL || ty == T_REAL) {
+      uint16_t tx = type(arg0), ty = type(arg1);
+      if (!is_numeric_type(tx) || !is_numeric_type(ty)) {
+      	nanoclj_throw(sc, mk_class_cast_exception(sc, "Argument cannot be cast to java.lang.Number"));
+	return false;
+      } else if (tx == T_REAL || ty == T_REAL) {
 	s_return(sc, mk_real(to_double(arg0) / to_double(arg1)));
       } else if (tx == T_INTEGER && ty == T_INTEGER) {
 	int divisor = decode_integer(arg1);
@@ -5756,48 +5753,43 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
 	    s_return(sc, mk_ratio_long(sc, num, den));
 	  }
 	}
+      } else if (tx == T_RATIO || ty == T_RATIO) {
+	long long den_x, den_y;
+	long long num_x = get_ratio(arg0, &den_x);
+	long long num_y = get_ratio(arg1, &den_y);
+	long long num, den;
+	if (__builtin_smulll_overflow(num_x, den_y, &num) ||
+	    __builtin_smulll_overflow(den_x, num_y, &den)) {
+	  nanoclj_throw(sc, mk_arithmetic_exception(sc, "Integer overflow"));
+	  return false;
+	}
+	num = normalize(num, den, &den);
+	if (den == 1) {
+	  s_return(sc, mk_integer(sc, num));
+	} else {
+	  s_return(sc, mk_ratio_long(sc, num, den));
+	}
+	s_return(sc, mk_nil());
       } else {
-	tx = expand_type(arg0, tx);
-	ty = expand_type(arg1, ty);
-	
-	if (tx == T_RATIO || ty == T_RATIO) {
-	  long long den_x, den_y;
-	  long long num_x = get_ratio(arg0, &den_x);
-	  long long num_y = get_ratio(arg1, &den_y);
-	  long long num, den;
-	  if (__builtin_smulll_overflow(num_x, den_y, &num) ||
-	      __builtin_smulll_overflow(den_x, num_y, &den)) {
-	    nanoclj_throw(sc, mk_arithmetic_exception(sc, "Integer overflow"));
-	    return false;
-	  }
-	  num = normalize(num, den, &den);
-	  if (den == 1) {
-	    s_return(sc, mk_integer(sc, num));
+	long long divisor = to_long(arg1);
+	if (divisor == 0) {
+	  nanoclj_throw(sc, mk_arithmetic_exception(sc, "Divide by zero"));
+	  return false;
+	} else {
+	  long long dividend = to_long(arg0);
+	  if (dividend % divisor == 0) {
+	    if (dividend == LLONG_MIN && divisor == -1) {
+	      nanoclj_throw(sc, mk_arithmetic_exception(sc, "Integer overflow"));
+	      return false;
+	    } else {
+	      s_return(sc, mk_integer(sc, dividend / divisor));
+	    }
 	  } else {
+	    long long den;
+	    long long num = normalize(dividend, divisor, &den);
 	    s_return(sc, mk_ratio_long(sc, num, den));
 	  }
-	  s_return(sc, mk_nil());
-	} else {
-	  long long divisor = to_long(arg1);
-	  if (divisor == 0) {
-	    nanoclj_throw(sc, mk_arithmetic_exception(sc, "Divide by zero"));
-	    return false;
-	  } else {
-	    long long dividend = to_long(arg0);
-	    if (dividend % divisor == 0) {
-	      if (dividend == LLONG_MIN && divisor == -1) {
-		nanoclj_throw(sc, mk_arithmetic_exception(sc, "Integer overflow"));
-		return false;
-	      } else {
-		s_return(sc, mk_integer(sc, dividend / divisor));
-	      }
-	    } else {
-	      long long den;
-	      long long num = normalize(dividend, divisor, &den);
-	      s_return(sc, mk_ratio_long(sc, num, den));
-	    }
-	  }
-	}
+	}       
       }
     }
     
@@ -5808,8 +5800,11 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcodes op) {
       nanoclj_throw(sc, sc->NullPointerException);
       return false;
     } else {
-      int tx = prim_type(arg0), ty = prim_type(arg1);
-      if (tx == T_REAL || ty == T_REAL) {
+      uint16_t tx = type(arg0), ty = type(arg1);
+      if (!is_numeric_type(tx) || !is_numeric_type(ty)) {
+      	nanoclj_throw(sc, mk_class_cast_exception(sc, "Argument cannot be cast to java.lang.Number"));
+	return false;
+      } else if (tx == T_REAL || ty == T_REAL) {
 	double a = to_double(arg0), b = to_double(arg1);
 	if (b == 0) {
 	  Error_0(sc, "Error - division by zero");
@@ -7042,15 +7037,18 @@ static inline void assign_syntax(nanoclj_t * sc, const char *name, unsigned int 
   oblist_add_item(sc, ns_sv, name_sv, mk_symbol(sc, T_SYMBOL, ns_sv, name_sv, syntax));
 }
 
-static inline void assign_proc(nanoclj_t * sc, enum nanoclj_opcodes op, op_code_info * i) {
+static inline void assign_proc(nanoclj_t * sc, nanoclj_cell_t * ns, enum nanoclj_opcodes op, op_code_info * i) {
+  nanoclj_val_t ns_sym = mk_nil();
+  get_elem(sc, _cons_metadata(ns), sc->NAME, &ns_sym);
+
   nanoclj_val_t x = def_symbol(sc, i->name);
   nanoclj_val_t y = mk_proc(op);
   nanoclj_cell_t * meta = mk_arraymap(sc, 4);
-  set_vector_elem(meta, 0, mk_mapentry(sc, sc->NS, mk_nil()));
+  set_vector_elem(meta, 0, mk_mapentry(sc, sc->NS, ns_sym));
   set_vector_elem(meta, 1, mk_mapentry(sc, sc->NAME, x));
   set_vector_elem(meta, 2, mk_mapentry(sc, sc->DOC, mk_string(sc, i->doc)));
   set_vector_elem(meta, 3, mk_mapentry(sc, sc->FILE, mk_string(sc, __FILE__)));
-  new_slot_spec_in_env(sc, sc->envir, x, y, meta);
+  new_slot_spec_in_env(sc, ns, x, y, meta);
 }
 
 static inline void update_window_info(nanoclj_t * sc, nanoclj_cell_t * out) {
@@ -7349,6 +7347,7 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   sc->errbuff_size = STRBUFF_INITIAL_SIZE;  
   sc->save_inport = mk_nil();
   sc->load_stack[0] = mk_nil();
+  sc->global_env = sc->root_env = sc->envir = NULL;
 
   sc->active_element = mk_nil();
   sc->active_element_target = mk_nil();
@@ -7381,9 +7380,6 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   _cons_metadata(&(sc->_sink)) = NULL;
 
   sc->oblist = oblist_initial_value(sc);
-  /* init global_env */
-  new_frame_in_env(sc, NULL);
-  sc->root_env = sc->global_env = sc->envir;
   
   assign_syntax(sc, "fn", OP_LAMBDA);
   assign_syntax(sc, "quote", OP_QUOTE);
@@ -7447,12 +7443,15 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
 
   sc->EMPTYVEC = get_vector_object(sc, T_VECTOR, 0);
 
+  /* Init root namespace clojure.core */
+  sc->root_env = sc->global_env = sc->envir = def_namespace(sc, "clojure.core", __FILE__);
+
   sc->types = mk_vector_store(sc, 0, 1024);
 
   size_t n = sizeof(dispatch_table) / sizeof(dispatch_table[0]);
   for (size_t i = 0; i < n; i++) {
     if (dispatch_table[i].name != 0) {
-      assign_proc(sc, (enum nanoclj_opcodes)i, &(dispatch_table[i]));
+      assign_proc(sc, sc->root_env, (enum nanoclj_opcodes)i, &(dispatch_table[i]));
     }
   }
 
