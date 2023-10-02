@@ -1346,13 +1346,8 @@ static inline nanoclj_cell_t * mk_arity_exception(nanoclj_t * sc, int n_args, na
   if (is_nil(fn)) {
     l = snprintf(sc->strbuff, sc->strbuff_size, "Invalid arity");
   } else {
-    strview_t sv = to_strview(fn);  
-    if (is_nil(ns)) {
-      l = snprintf(sc->strbuff, sc->strbuff_size, "Wrong number of args (%d) passed to %.*s", n_args, (int)sv.size, sv.ptr);
-    } else {
-      strview_t sv2 = to_strview(ns);
-      l = snprintf(sc->strbuff, sc->strbuff_size, "Wrong number of args (%d) passed to %.*s/%.*s", n_args, (int)sv2.size, sv2.ptr, (int)sv.size, sv.ptr);
-    }
+    strview_t sv1 = to_strview(ns), sv2 = to_strview(fn);
+    l = snprintf(sc->strbuff, sc->strbuff_size, "Wrong number of args (%d) passed to %.*s/%.*s", n_args, (int)sv1.size, sv1.ptr, (int)sv2.size, sv2.ptr);
   }
   nanoclj_val_t s = mk_pointer(get_string_object(sc, T_STRING, sc->strbuff, l, 0));
   return get_cell(sc, T_ARITY_EXCEPTION, 0, s, NULL, NULL);
@@ -4537,8 +4532,9 @@ static inline bool unpack_args_0(nanoclj_t * sc) {
   if (is_empty(sc, sc->args)) {
     return true;
   } else {
+    nanoclj_val_t ns = mk_string(sc, "clojure.core");
     const char * fn = dispatch_table[(int)sc->op].name;
-    nanoclj_throw(sc, mk_arity_exception(sc, seq_length(sc, sc->args), mk_nil(), mk_string(sc, fn)));
+    nanoclj_throw(sc, mk_arity_exception(sc, seq_length(sc, sc->args), ns, mk_string(sc, fn)));
     return false;
   }
 }
@@ -4555,8 +4551,9 @@ static inline bool unpack_args_1(nanoclj_t * sc, nanoclj_val_t * arg0) {
       return true;
     }
   }
+  nanoclj_val_t ns = mk_string(sc, "clojure.core");
   const char * fn = dispatch_table[(int)sc->op].name;
-  nanoclj_throw(sc, mk_arity_exception(sc, seq_length(sc, sc->args), mk_nil(), mk_string(sc, fn)));
+  nanoclj_throw(sc, mk_arity_exception(sc, seq_length(sc, sc->args), ns, mk_string(sc, fn)));
   return false;
 }
 
@@ -4566,8 +4563,9 @@ static inline bool unpack_args_1_plus(nanoclj_t * sc, nanoclj_val_t * arg0, nano
     *arg_next = next(sc, sc->args);
     return true;
   }
+  nanoclj_val_t ns = mk_string(sc, "clojure.core");
   const char * fn = dispatch_table[(int)sc->op].name;
-  nanoclj_throw(sc, mk_arity_exception(sc, seq_length(sc, sc->args), mk_nil(), mk_string(sc, fn)));
+  nanoclj_throw(sc, mk_arity_exception(sc, seq_length(sc, sc->args), ns, mk_string(sc, fn)));
   return false;
 }
 
@@ -4582,8 +4580,9 @@ static inline bool unpack_args_2(nanoclj_t * sc, nanoclj_val_t * arg0, nanoclj_v
       }
     }
   }
+  nanoclj_val_t ns = mk_string(sc, "clojure.core");
   const char * fn = dispatch_table[(int)sc->op].name;
-  nanoclj_throw(sc, mk_arity_exception(sc, seq_length(sc, sc->args), mk_nil(), mk_string(sc, fn)));
+  nanoclj_throw(sc, mk_arity_exception(sc, seq_length(sc, sc->args), ns, mk_string(sc, fn)));
   return false;
 }
 
@@ -4602,8 +4601,9 @@ static inline bool unpack_args_3(nanoclj_t * sc, nanoclj_val_t * arg0, nanoclj_v
       }
     }
   }
+  nanoclj_val_t ns = mk_string(sc, "clojure.core");
   const char * fn = dispatch_table[(int)sc->op].name;
-  nanoclj_throw(sc, mk_arity_exception(sc, seq_length(sc, sc->args), mk_nil(), mk_string(sc, fn)));
+  nanoclj_throw(sc, mk_arity_exception(sc, seq_length(sc, sc->args), ns, mk_string(sc, fn)));
   return false;
 }
 
@@ -4631,8 +4631,9 @@ static inline bool unpack_args_5(nanoclj_t * sc, nanoclj_val_t * arg0, nanoclj_v
       }
     }
   }
+  nanoclj_val_t ns = mk_string(sc, "clojure.core");
   const char * fn = dispatch_table[(int)sc->op].name;
-  nanoclj_throw(sc, mk_arity_exception(sc, seq_length(sc, sc->args), mk_nil(), mk_string(sc, fn)));
+  nanoclj_throw(sc, mk_arity_exception(sc, seq_length(sc, sc->args), ns, mk_string(sc, fn)));
   return false;
 }
 
@@ -4646,8 +4647,9 @@ static inline bool unpack_args_2_plus(nanoclj_t * sc, nanoclj_val_t * arg0, nano
       return true;
     }
   }
+  nanoclj_val_t ns = mk_string(sc, "clojure.core");
   const char * fn = dispatch_table[(int)sc->op].name;
-  nanoclj_throw(sc, mk_arity_exception(sc, seq_length(sc, sc->args), mk_nil(), mk_string(sc, fn)));
+  nanoclj_throw(sc, mk_arity_exception(sc, seq_length(sc, sc->args), ns, mk_string(sc, fn)));
   return false;
 }
 
@@ -7476,7 +7478,6 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   sc->OutOfMemoryError = mk_exception(sc, OutOfMemoryError, "Out of memory");
   sc->NullPointerException = mk_exception(sc, NullPointerException, "Null pointer exception");
   
-  intern(sc, sc->global_env, def_symbol(sc, "root"), mk_pointer(sc->root_env));
   intern(sc, sc->global_env, def_symbol(sc, "nil"), mk_nil());
   intern(sc, sc->global_env, sc->MOUSE_POS, mk_nil());
 
@@ -7512,7 +7513,7 @@ void nanoclj_set_output_port_callback(nanoclj_t * sc,
 				      ) {
   nanoclj_val_t p = mk_writer_from_callback(sc, text, color, restore, image);
   intern(sc, sc->root_env, sc->OUT, p);
-  intern(sc, sc->global_env, sc->WINDOW_SIZE, mk_nil());
+  intern(sc, sc->root_env, sc->WINDOW_SIZE, mk_nil());
 }
 
 void nanoclj_set_error_port_callback(nanoclj_t * sc, void (*text) (const char *, size_t, void *)) {
