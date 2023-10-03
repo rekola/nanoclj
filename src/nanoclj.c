@@ -51,42 +51,42 @@
 #include "term.h"
 #include "nanoclj_utf8.h"
 
-#define kNIL		  UINT64_C(18444492273895866368)
-#define kTRUE		  UINT64_C(9221683186994511873)
-#define kFALSE		  UINT64_C(9221683186994511872)
+/* Predefined primitive values */
+#define kNIL			UINT64_C(18444492273895866368)
+#define kTRUE			UINT64_C(9221683186994511873)
+#define kFALSE			UINT64_C(9221683186994511872)
 
 /* Masks for NaN packing */
-#define MASK_SIGN         0x8000000000000000
-#define MASK_EXPONENT     0x7ff0000000000000
-#define MASK_QUIET        0x0008000000000000
-#define MASK_TYPE         0x0007000000000000
-#define MASK_SIGNATURE    0xffff000000000000
-#define MASK_PAYLOAD_PTR  0x0000ffffffffffff
-#define MASK_PAYLOAD_INT  0x00000000ffffffff
+#define MASK_SIGN		0x8000000000000000
+#define MASK_EXPONENT		0x7ff0000000000000
+#define MASK_QUIET		0x0008000000000000
+#define MASK_TYPE		0x0007000000000000
+#define MASK_SIGNATURE		0xffff000000000000
+#define MASK_PAYLOAD_PTR	0x0000ffffffffffff
+#define MASK_PAYLOAD_INT	0x00000000ffffffff
 
 /* Masks for primitive types */
-#define MASK_TYPE_NAN     UINT64_C(0x0000000000000000)
-#define MASK_TYPE_TYPE    UINT64_C(0x0001000000000000)
-#define MASK_TYPE_BOOLEAN UINT64_C(0x0002000000000000)
-#define MASK_TYPE_INTEGER UINT64_C(0x0003000000000000)
-#define MASK_TYPE_CHAR    UINT64_C(0x0004000000000000)
-#define MASK_TYPE_PROC    UINT64_C(0x0005000000000000)
-#define MASK_TYPE_KEYWORD UINT64_C(0x0006000000000000)
-#define MASK_TYPE_SYMBOL  UINT64_C(0x0007000000000000)
+#define MASK_TYPE_NAN		UINT64_C(0x0000000000000000)
+// unassigned			UINT64_C(0x0001000000000000)
+#define MASK_TYPE_BOOLEAN	UINT64_C(0x0002000000000000)
+#define MASK_TYPE_INTEGER	UINT64_C(0x0003000000000000)
+#define MASK_TYPE_CODEPOINT	UINT64_C(0x0004000000000000)
+#define MASK_TYPE_PROC		UINT64_C(0x0005000000000000)
+#define MASK_TYPE_KEYWORD	UINT64_C(0x0006000000000000)
+#define MASK_TYPE_SYMBOL	UINT64_C(0x0007000000000000)
 
 /* Constant short encoded values */
-#define kNaN   (MASK_EXPONENT | MASK_QUIET)
+#define kNaN			(MASK_EXPONENT | MASK_QUIET)
 
 /* Signatures for primitive types */
-#define SIGNATURE_NAN     kNaN
-// #define SIGNATURE_TYPE    (kNaN | MASK_TYPE_TYPE)
-#define SIGNATURE_BOOLEAN (kNaN | MASK_TYPE_BOOLEAN)
-#define SIGNATURE_INTEGER (kNaN | MASK_TYPE_INTEGER)
-#define SIGNATURE_CHAR    (kNaN | MASK_TYPE_CHAR)
-#define SIGNATURE_PROC    (kNaN | MASK_TYPE_PROC)
-#define SIGNATURE_KEYWORD (kNaN | MASK_TYPE_KEYWORD)
-#define SIGNATURE_SYMBOL  (kNaN | MASK_TYPE_SYMBOL)
-#define SIGNATURE_POINTER (kNaN | MASK_SIGN)
+#define SIGNATURE_NAN		kNaN
+#define SIGNATURE_BOOLEAN	(kNaN | MASK_TYPE_BOOLEAN)
+#define SIGNATURE_INTEGER	(kNaN | MASK_TYPE_INTEGER)
+#define SIGNATURE_CODEPOINT	(kNaN | MASK_TYPE_CODEPOINT)
+#define SIGNATURE_PROC		(kNaN | MASK_TYPE_PROC)
+#define SIGNATURE_KEYWORD	(kNaN | MASK_TYPE_KEYWORD)
+#define SIGNATURE_SYMBOL	(kNaN | MASK_TYPE_SYMBOL)
+#define SIGNATURE_CELL		(kNaN | MASK_SIGN)
 
 /* Parsing tokens */
 #define TOK_EOF		(-1)
@@ -162,7 +162,7 @@ enum nanoclj_types {
   T_CLOSURE = 9,
   T_RATIO = 10,
   T_FOREIGN_FUNCTION = 11,
-  T_CHARACTER = 12,
+  T_CODEPOINT = 12,
   T_READER = 13,
   T_WRITER = 14,
   T_VECTOR = 15,
@@ -253,22 +253,22 @@ static int_fast16_t prim_type(nanoclj_val_t value) {
   switch (signature) {
   case SIGNATURE_BOOLEAN: return T_BOOLEAN;
   case SIGNATURE_INTEGER: return T_INTEGER;
-  case SIGNATURE_CHAR:    return T_CHARACTER;
-  case SIGNATURE_PROC:    return T_PROC;
+  case SIGNATURE_CODEPOINT: return T_CODEPOINT;
+  case SIGNATURE_PROC: return T_PROC;
   case SIGNATURE_KEYWORD: return T_KEYWORD;
-  case SIGNATURE_SYMBOL:  return T_SYMBOL;
-  case SIGNATURE_POINTER: return T_CELL;
+  case SIGNATURE_SYMBOL: return T_SYMBOL;
+  case SIGNATURE_CELL: return T_CELL;
   }
 
   return T_REAL;
 }
 
 static inline bool is_cell(nanoclj_val_t v) {
-  return (v.as_long & MASK_SIGNATURE) == SIGNATURE_POINTER;
+  return (v.as_long & MASK_SIGNATURE) == SIGNATURE_CELL;
 }
 
 static inline bool is_primitive(nanoclj_val_t v) {
-  return (v.as_long & MASK_SIGNATURE) != SIGNATURE_POINTER;
+  return (v.as_long & MASK_SIGNATURE) != SIGNATURE_CELL;
 }
 
 static inline bool is_symbol(nanoclj_val_t v) {
@@ -315,7 +315,7 @@ static inline bool is_list(nanoclj_val_t value) {
 }
 
 static inline nanoclj_val_t mk_pointer(nanoclj_cell_t * ptr) {
-  return (nanoclj_val_t)(SIGNATURE_POINTER | (uint64_t)ptr);
+  return (nanoclj_val_t)(SIGNATURE_CELL | (uint64_t)ptr);
 }
 
 static inline nanoclj_val_t mk_nil() {
@@ -575,7 +575,7 @@ static inline bool is_integral_type(int_fast16_t type) {
   switch (type) {
   case T_BOOLEAN:
   case T_INTEGER:
-  case T_CHARACTER:
+  case T_CODEPOINT:
   case T_PROC:
     return true;
   }
@@ -621,7 +621,7 @@ static inline long long to_long_w_def(nanoclj_val_t p, long long def) {
   switch (prim_type(p)) {
   case T_INTEGER:
   case T_PROC:
-  case T_CHARACTER:
+  case T_CODEPOINT:
     return decode_integer(p);
   case T_REAL:
     return (long long)p.as_double;
@@ -653,7 +653,7 @@ static inline long long to_long(nanoclj_val_t p) {
 
 static inline int32_t to_int(nanoclj_val_t p) {
   switch (prim_type(p)) {
-  case T_CHARACTER:
+  case T_CODEPOINT:
   case T_PROC:
   case T_INTEGER:
     return decode_integer(p);
@@ -1088,8 +1088,9 @@ static inline nanoclj_val_t mk_foreign_object(nanoclj_t * sc, void * o) {
   return mk_pointer(x);
 }
 
-static inline nanoclj_val_t mk_character(int c) {
-  return (nanoclj_val_t)(SIGNATURE_CHAR | (uint32_t)c);
+/* Creates a primitive for utf8 codepoint */
+static inline nanoclj_val_t mk_codepoint(int c) {
+  return (nanoclj_val_t)(SIGNATURE_CODEPOINT | (uint32_t)c);
 }
 
 static inline nanoclj_val_t mk_boolean(bool b) {
@@ -1418,7 +1419,7 @@ static inline void update_cursor(int32_t c, nanoclj_cell_t * p, int line_len) {
   }
 }
 
-/* get new character from input file */
+/* get new codepoint from input file */
 static inline int32_t inchar(nanoclj_val_t p0) {
   nanoclj_cell_t * p = decode_pointer(p0);
   if (_backchar_unchecked(p)[1] >= 0) {
@@ -1448,7 +1449,7 @@ static inline int32_t inchar(nanoclj_val_t p0) {
   return c;
 }
 
-/* back character to input buffer */
+/* back codepoint to input buffer */
 static inline void backchar(int c, nanoclj_val_t p) {
   if (backchar_unchecked(p)[0] == -1) {
     backchar_unchecked(p)[0] = c;
@@ -1963,9 +1964,9 @@ static inline nanoclj_val_t first(nanoclj_t * sc, nanoclj_cell_t * coll) {
 	const char * start = _strvalue(coll);
 	const char * end = start + get_size(coll);
 	const char * last = utf8_prev(end);
-	return mk_character(utf8_decode(last));
+	return mk_codepoint(utf8_decode(last));
       } else {
-	return mk_character(utf8_decode(_strvalue(coll)));
+	return mk_codepoint(utf8_decode(_strvalue(coll)));
       }
     }
     break;
@@ -2160,7 +2161,7 @@ static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t
       }
       
       if (index == 0 && str < end) {
-	if (result) *result = mk_character(utf8_decode(str));
+	if (result) *result = mk_codepoint(utf8_decode(str));
 	return true;
       }
     }
@@ -2480,9 +2481,9 @@ static inline void sort_vector_in_place(nanoclj_cell_t * vec) {
 
 static int32_t hasheq(nanoclj_t * sc, nanoclj_val_t v) { 
   switch (prim_type(v)) {
-  case T_CHARACTER: /* Clojure doesn't use murmur3 for characters */
+  case T_CODEPOINT: /* Clojure doesn't use murmur3 for characters */
   case T_PROC:    
-    return decode_integer(v);
+    return murmur3_hash_int(decode_integer(v));
 
   case T_BOOLEAN:
     return v.as_long == kFALSE ? 1237 : 1231;
@@ -3028,7 +3029,7 @@ static inline nanoclj_val_t mk_char_const(nanoclj_t * sc, char *name) {
     } else {
       return mk_nil();
     }
-    return mk_character(c);
+    return mk_codepoint(c);
   } else {
     return mk_nil();
   }
@@ -3042,7 +3043,7 @@ static inline nanoclj_val_t mk_sharp_const(nanoclj_t * sc, char *name) {
   } else if (str_eq(name, "NaN")) {
     return mk_real(NAN);
   } else if (str_eq(name, "Eof")) {
-    return mk_character(EOF);
+    return mk_codepoint(EOF);
   } else {
     return mk_nil();
   }
@@ -3775,7 +3776,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
       plen = sprintf(sc->strbuff, "%.15g", l.as_double);
     }
     break;
-  case T_CHARACTER:    
+  case T_CODEPOINT:
     if (!print_flag) {
       p = sc->strbuff;
       plen = char_to_utf8(decode_integer(l), sc->strbuff);
@@ -4095,16 +4096,10 @@ static inline nanoclj_val_t mk_format(nanoclj_t * sc, strview_t fmt0, nanoclj_ce
     case T_DATE:
     case T_PROC:
     case T_BOOLEAN:
+    case T_CODEPOINT:
       switch (n_args) {
       case 0: arg0l = to_long(arg); break;
       case 1: arg1l = to_long(arg); break;
-      }
-      plan += 1 * m;
-      break;
-    case T_CHARACTER:
-      switch (n_args) {
-      case 0: arg0l = decode_integer(arg); break;
-      case 1: arg1l = decode_integer(arg); break;
       }
       plan += 1 * m;
       break;
@@ -4429,8 +4424,8 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
   case T_REAL:
     return mk_real(to_double(first(sc, args)));
 
-  case T_CHARACTER:
-    return mk_character(to_int(first(sc, args)));
+  case T_CODEPOINT:
+    return mk_codepoint(to_int(first(sc, args)));
 
   case T_CLASS:
     return mk_pointer(mk_type(sc, to_int(first(sc, args)), rest(sc, args), NULL));
@@ -4775,7 +4770,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     } else if (!is_reader(arg0)) {
       Error_0(sc, "Not a reader");
     } else {
-      s_return(sc, mk_character(inchar(arg0)));
+      s_return(sc, mk_codepoint(inchar(arg0)));
     }
     
   case OP_GENSYM:
@@ -6229,7 +6224,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 
       switch (sc->tok) {
       case TOK_EOF:
-	s_return(sc, mk_character(EOF));
+	s_return(sc, mk_codepoint(EOF));
 	
       case TOK_FN:
       case TOK_LPAREN:
@@ -6373,7 +6368,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	readstr_upto(sc, DELIMITERS, inport);
 	sc->tok = token(sc, inport);
 	if (sc->tok == TOK_EOF) {
-	  s_return(sc, mk_character(EOF));
+	  s_return(sc, mk_codepoint(EOF));
 	}
 	s_goto(sc, OP_RDSEXPR);      
 	
@@ -6399,7 +6394,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       sc->args = cons(sc, sc->value, sc->args);
       sc->tok = token(sc, inport);
       if (sc->tok == TOK_EOF) {
-	s_return(sc, mk_character(EOF));
+	s_return(sc, mk_codepoint(EOF));
       } else if (sc->tok == TOK_RPAREN) {
 	nesting_unchecked(inport)--;
 	s_return(sc, mk_pointer(reverse_in_place(sc, sc->args)));
@@ -6423,7 +6418,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       sc->args = conjoin(sc, sc->args, sc->value);
       sc->tok = token(sc, inport);
       if (sc->tok == TOK_EOF) {
-	s_return(sc, mk_character(EOF));
+	s_return(sc, mk_codepoint(EOF));
       } else if (sc->tok == TOK_RSQUARE) {
 	nesting_unchecked(inport)--;
 	s_return(sc, mk_pointer(sc->args));
@@ -6442,7 +6437,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       sc->args = cons(sc, sc->value, sc->args);
       sc->tok = token(sc, inport);
       if (sc->tok == TOK_EOF) {
-	s_return(sc, mk_character(EOF));
+	s_return(sc, mk_codepoint(EOF));
       } else if (sc->tok == TOK_RCURLY) {
 	nesting_unchecked(inport)--;
 	s_return(sc, mk_pointer(reverse_in_place(sc, sc->args)));
@@ -7137,7 +7132,7 @@ static struct nanoclj_interface vtbl = {
   def_symbol,
   mk_string,
   mk_counted_string,
-  mk_character,
+  mk_codepoint,
   mk_vector,
   mk_foreign_func,
   mk_boolean,
@@ -7436,7 +7431,6 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   mk_named_type(sc, "java.lang.Class", T_CLASS, AFn); /* non-standard parent */
   mk_named_type(sc, "java.lang.String", T_STRING, Object);
   mk_named_type(sc, "java.lang.Boolean", T_BOOLEAN, Object);
-  mk_named_type(sc, "java.lang.Character", T_CHARACTER, Object);
   mk_named_type(sc, "java.lang.Integer", T_INTEGER, Number);
   mk_named_type(sc, "java.lang.Double", T_REAL, Number);
   mk_named_type(sc, "java.lang.Long", T_LONG, Number);
@@ -7477,6 +7471,7 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   mk_named_type(sc, "nanoclj.core.ForeignFunction", T_FOREIGN_FUNCTION, AFn);
   mk_named_type(sc, "nanoclj.core.ForeignObject", T_FOREIGN_OBJECT, AFn);
 
+  mk_named_type(sc, "nanoclj.core.Codepoint", T_CODEPOINT, Object);
   mk_named_type(sc, "nanoclj.core.CharArray", T_CHAR_ARRAY, Object);
   mk_named_type(sc, "nanoclj.core.Image", T_IMAGE, Object);
   mk_named_type(sc, "nanoclj.core.Audio", T_AUDIO, Object);

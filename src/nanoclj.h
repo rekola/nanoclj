@@ -98,7 +98,7 @@ extern "C" {
   nanoclj_val_t gensym(nanoclj_t * sc);
   nanoclj_val_t mk_string(nanoclj_t * sc, const char *str);
   nanoclj_val_t mk_counted_string(nanoclj_t * sc, const char *str, int len);
-  nanoclj_val_t mk_character(nanoclj_t * sc, int c);
+  nanoclj_val_t mk_codepoint(nanoclj_t * sc, int c);
   nanoclj_val_t mk_foreign_func(nanoclj_t * sc, foreign_func f);
   int list_length(nanoclj_t * sc, nanoclj_val_t a);
 #endif
@@ -112,7 +112,7 @@ extern "C" {
     nanoclj_val_t (*mk_symbol) (nanoclj_t * sc, const char *name);
     nanoclj_val_t (*mk_string) (nanoclj_t * sc, const char *str);
     nanoclj_val_t (*mk_counted_string) (nanoclj_t * sc, const char *str, size_t len);
-    nanoclj_val_t (*mk_character) (int c);
+    nanoclj_val_t (*mk_codepoint) (int c);
     nanoclj_val_t (*mk_vector) (nanoclj_t * sc, size_t len);
     nanoclj_val_t (*mk_foreign_func) (nanoclj_t * sc, foreign_func f);
     nanoclj_val_t (*mk_boolean) (bool b);
