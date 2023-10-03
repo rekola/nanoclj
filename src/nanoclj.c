@@ -4154,7 +4154,18 @@ static inline nanoclj_val_t mk_format(nanoclj_t * sc, strview_t fmt0, nanoclj_ce
 /* ========== Routines for Evaluation Cycle ========== */
 
 /* reverse list --- in-place */
-static inline nanoclj_cell_t * reverse_in_place(nanoclj_t * sc, nanoclj_val_t term, nanoclj_cell_t * list) {
+static inline nanoclj_cell_t * reverse_in_place(nanoclj_t * sc, nanoclj_cell_t * p) {
+  nanoclj_cell_t * result = &(sc->_EMPTY);
+  while (p != &(sc->_EMPTY)) {
+    nanoclj_cell_t * q = decode_pointer(_cdr(p));
+    _set_cdr(p, mk_pointer(result));
+    result = p;
+    p = q;
+  }
+  return result;
+}
+
+static inline nanoclj_cell_t * reverse_in_place_with_term(nanoclj_t * sc, nanoclj_val_t term, nanoclj_cell_t * list) {
   nanoclj_cell_t * p = list, * q;
   nanoclj_val_t result = term;
   while (p != &(sc->_EMPTY)) {
@@ -4292,8 +4303,6 @@ static inline void dump_stack_free(nanoclj_t * sc) {
 
 static inline bool destructure(nanoclj_t * sc, nanoclj_cell_t * binding, nanoclj_cell_t * y, size_t num_args, bool first_level) {
   size_t n = get_size(binding);
-
-  y = seq(sc, y);
   
   if (first_level) {
     bool multi = n >= 2 && vector_elem(binding, n - 2).as_long == sc->AMP.as_long;
@@ -4312,8 +4321,7 @@ static inline bool destructure(nanoclj_t * sc, nanoclj_cell_t * binding, nanoclj
 	if (is_primitive(e)) {
 	  new_slot_in_env(sc, e, mk_pointer(y));
 	} else {
-	  nanoclj_cell_t * y2 = next(sc, y); /* TODO: what is this? */
-	  if (!destructure(sc, decode_pointer(e), y2, 0, false)) {
+	  if (!destructure(sc, decode_pointer(e), seq(sc, y), 0, false)) {
 	    return false;
 	  }
 	}
@@ -4330,8 +4338,7 @@ static inline bool destructure(nanoclj_t * sc, nanoclj_cell_t * binding, nanoclj
 	if (!is_cell(y2)) {
 	  return false;
 	} else {
-	  nanoclj_cell_t * y3 = decode_pointer(y2);
-	  if (!destructure(sc, decode_pointer(e), y3, 0, false)) {
+	  if (!destructure(sc, decode_pointer(e), seq(sc, decode_pointer(y2)), 0, false)) {
 	    return false;
 	  }
 	}
@@ -4529,7 +4536,7 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
 }
 
 static inline bool unpack_args_0(nanoclj_t * sc) {
-  if (is_empty(sc, sc->args)) {
+  if (!sc->args) {
     return true;
   } else {
     nanoclj_val_t ns = mk_string(sc, "clojure.core");
@@ -4540,12 +4547,12 @@ static inline bool unpack_args_0(nanoclj_t * sc) {
 }
 
 static inline bool unpack_args_0_plus(nanoclj_t * sc, nanoclj_cell_t ** arg_next) {
-  *arg_next = seq(sc, sc->args);
+  *arg_next = sc->args;
   return true;
 }
 
 static inline bool unpack_args_1(nanoclj_t * sc, nanoclj_val_t * arg0) {
-  if (!is_empty(sc, sc->args)) {
+  if (sc->args) {
     *arg0 = first(sc, sc->args);
     if (next(sc, sc->args) == NULL) {
       return true;
@@ -4558,7 +4565,7 @@ static inline bool unpack_args_1(nanoclj_t * sc, nanoclj_val_t * arg0) {
 }
 
 static inline bool unpack_args_1_plus(nanoclj_t * sc, nanoclj_val_t * arg0, nanoclj_cell_t ** arg_next) {
-  if (!is_empty(sc, sc->args)) {
+  if (sc->args) {
     *arg0 = first(sc, sc->args);
     *arg_next = next(sc, sc->args);
     return true;
@@ -4570,7 +4577,7 @@ static inline bool unpack_args_1_plus(nanoclj_t * sc, nanoclj_val_t * arg0, nano
 }
 
 static inline bool unpack_args_2(nanoclj_t * sc, nanoclj_val_t * arg0, nanoclj_val_t * arg1) {
-  if (!is_empty(sc, sc->args)) {
+  if (sc->args) {
     *arg0 = first(sc, sc->args);
     nanoclj_cell_t * r = next(sc, sc->args);
     if (r) {
@@ -4587,7 +4594,7 @@ static inline bool unpack_args_2(nanoclj_t * sc, nanoclj_val_t * arg0, nanoclj_v
 }
 
 static inline bool unpack_args_3(nanoclj_t * sc, nanoclj_val_t * arg0, nanoclj_val_t * arg1, nanoclj_val_t * arg2) {
-  if (!is_empty(sc, sc->args)) {
+  if (sc->args) {
     *arg0 = first(sc, sc->args);
     nanoclj_cell_t * r = next(sc, sc->args);
     if (r) {
@@ -4609,7 +4616,7 @@ static inline bool unpack_args_3(nanoclj_t * sc, nanoclj_val_t * arg0, nanoclj_v
 
 static inline bool unpack_args_5(nanoclj_t * sc, nanoclj_val_t * arg0, nanoclj_val_t * arg1,
 				 nanoclj_val_t * arg2, nanoclj_val_t * arg3, nanoclj_val_t * arg4) {
-  if (!is_empty(sc, sc->args)) {
+  if (sc->args) {
     *arg0 = first(sc, sc->args);
     nanoclj_cell_t * r = next(sc, sc->args);
     if (r) {
@@ -4638,7 +4645,7 @@ static inline bool unpack_args_5(nanoclj_t * sc, nanoclj_val_t * arg0, nanoclj_v
 }
 
 static inline bool unpack_args_2_plus(nanoclj_t * sc, nanoclj_val_t * arg0, nanoclj_val_t * arg1, nanoclj_cell_t ** arg_next) {
-  if (!is_empty(sc, sc->args)) {
+  if (sc->args) {
     *arg0 = first(sc, sc->args);
     nanoclj_cell_t * r = next(sc, sc->args);
     if (r) {
@@ -4875,7 +4882,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       s_goto(sc, OP_EVAL);
     } else {                    /* end */
       if (_type(sc->args) == T_LIST) {
-	sc->args = reverse_in_place(sc, sc->EMPTY, sc->args);
+	sc->args = reverse_in_place(sc, sc->args);
       }
       sc->code = first(sc, sc->args);
       sc->args = next(sc, sc->args);
@@ -4914,7 +4921,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	s_goto(sc, OP_APPLY);
 
       case T_CLASS:
-	s_return(sc, construct_by_type(sc, code_cell->type, seq(sc, sc->args)));
+	s_return(sc, construct_by_type(sc, code_cell->type, sc->args));
 	
       case T_FOREIGN_FUNCTION:{
 	/* Keep nested calls from GC'ing the arglist */
@@ -5285,7 +5292,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       sc->args = NULL;
       s_goto(sc, OP_EVAL);
     } else {                    /* end */
-      sc->args = reverse_in_place(sc, sc->EMPTY, sc->args);
+      sc->args = reverse_in_place(sc, sc->args);
       sc->code = _car(sc->args);
       sc->args = decode_pointer(_cdr(sc->args));
       s_goto(sc, OP_LET2);      
@@ -5306,8 +5313,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
         sc->args = cons(sc, caar(x), sc->args);
       }
       /* make closure. first is code. second is environment */
-      x = mk_pointer(get_cell(sc, T_CLOSURE, 0, mk_pointer(cons(sc, mk_pointer(reverse_in_place(sc, sc->EMPTY, sc->args)),
-								 decode_pointer(cddr(sc->code)))), sc->envir, NULL));
+      x = mk_pointer(get_cell(sc, T_CLOSURE, 0, mk_pointer(cons(sc, mk_pointer(reverse_in_place(sc, sc->args)),
+								decode_pointer(cddr(sc->code)))), sc->envir, NULL));
 
       new_slot_in_env(sc, car(sc->code), x);
       sc->code = cddr(sc->code);
@@ -5467,7 +5474,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       return false;
     }
     sc->code = arg0;
-    sc->args = decode_pointer(arg1);
+    sc->args = seq(sc, decode_pointer(arg1));
     s_goto(sc, OP_APPLY);
 
   case OP_PEVAL:               /* eval */
@@ -6124,19 +6131,20 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     s_retbool(arg0.as_long == arg1.as_long);
 
   case OP_DEREF:
-    x = first(sc, sc->args);
-    if (!is_cell(x)) {
-      s_return(sc, x);
+    if (!unpack_args_1(sc, &arg0)) {
+      return false;
+    } else if (!is_cell(arg0)) {
+      s_return(sc, arg0);
     } else {
-      nanoclj_cell_t * c = decode_pointer(x);
+      nanoclj_cell_t * c = decode_pointer(arg0);
       if (!c) {
 	s_return(sc, mk_nil());
       }
       if (_type(c) == T_LAZYSEQ || _type(c) == T_DELAY) {
 	if (!_is_realized(c)) {
 	  /* Should change type to closure here */
-	  s_save(sc, OP_SAVE_FORCED, NULL, x);
-	  sc->code = x;
+	  s_save(sc, OP_SAVE_FORCED, NULL, arg0);
+	  sc->code = arg0;
 	  sc->args = NULL;
 	  s_goto(sc, OP_APPLY);
 	} else if (_type(c) == T_LAZYSEQ && is_nil(_car(c)) && is_nil(_cdr(c))) {
@@ -6148,7 +6156,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       } else if (_type(c) == T_VAR) {
 	s_return(sc, vector_elem(c, 1));
       } else {
-	s_return(sc, x);
+	s_return(sc, arg0);
       }
     }
 
@@ -6394,7 +6402,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	s_return(sc, mk_character(EOF));
       } else if (sc->tok == TOK_RPAREN) {
 	nesting_unchecked(inport)--;
-	s_return(sc, mk_pointer(reverse_in_place(sc, sc->EMPTY, sc->args)));
+	s_return(sc, mk_pointer(reverse_in_place(sc, sc->args)));
       } else if (sc->tok == TOK_DOT) {
 	s_save(sc, OP_RDDOT, sc->args, sc->EMPTY);
 	sc->tok = token(sc, x);
@@ -6437,7 +6445,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	s_return(sc, mk_character(EOF));
       } else if (sc->tok == TOK_RCURLY) {
 	nesting_unchecked(inport)--;
-	s_return(sc, mk_pointer(reverse_in_place(sc, sc->EMPTY, sc->args)));
+	s_return(sc, mk_pointer(reverse_in_place(sc, sc->args)));
       } else {
 	s_save(sc, OP_RDMAP_ELEMENT, sc->args, sc->EMPTY);
 	s_goto(sc, OP_RDSEXPR);
@@ -6454,7 +6462,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	Error_0(sc, "Illegal dot expression");
       } else {
 	nesting_unchecked(inport)--;
-	s_return(sc, mk_pointer(reverse_in_place(sc, sc->value, sc->args)));
+	s_return(sc, mk_pointer(reverse_in_place_with_term(sc, sc->value, sc->args)));
       }
     }
 
@@ -7607,7 +7615,7 @@ nanoclj_val_t nanoclj_eval_string(nanoclj_t * sc, const char *cmd, size_t len) {
 nanoclj_val_t nanoclj_call(nanoclj_t * sc, nanoclj_val_t func, nanoclj_val_t args) {
   save_from_C_call(sc);
   sc->envir = sc->global_env;
-  sc->args = decode_pointer(args);
+  sc->args = seq(sc, decode_pointer(args));
   sc->code = func;
   Eval_Cycle(sc, OP_APPLY);  
   return sc->value;
