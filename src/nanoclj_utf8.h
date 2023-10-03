@@ -32,10 +32,11 @@ static inline int_fast32_t utf8_decode(const char *p) {
   return c;
 }
 
-static inline int utf8_num_codepoints(const char *s) {
+static inline int utf8_num_codepoints(const char *s, size_t size) {
+  const char * end = s + size;
   int count = 0;
-  while (*s) {
-    count += (*s++ & 0xC0) != 0x80;
+  for (; s < end; s++) {
+    count += (*s & 0xC0) != 0x80;
   }
   return count;
 }

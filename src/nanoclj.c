@@ -1884,7 +1884,7 @@ static inline nanoclj_cell_t * rest(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_STRING:
   case T_CHAR_ARRAY:
   case T_FILE:
-    if (get_size(coll) >= 2) {
+    if (get_size(coll)) {
       nanoclj_cell_t * s;
       if (_is_reverse(coll)) {
 	s = remove_suffix(sc, coll, 1);
@@ -1893,8 +1893,8 @@ static inline nanoclj_cell_t * rest(nanoclj_t * sc, nanoclj_cell_t * coll) {
 	s = remove_prefix(sc, coll, 1);
 	_set_seq(s);
       }
-      return s;
-    }
+      return get_size(s) ? s : &(sc->_EMPTY);
+    }  
     break;
   }
 
