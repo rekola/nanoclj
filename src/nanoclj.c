@@ -57,36 +57,23 @@
 #define kFALSE			UINT64_C(9221683186994511872)
 
 /* Masks for NaN packing */
-#define MASK_SIGN		0x8000000000000000
-#define MASK_EXPONENT		0x7ff0000000000000
-#define MASK_QUIET		0x0008000000000000
-#define MASK_TYPE		0x0007000000000000
-#define MASK_SIGNATURE		0xffff000000000000
-#define MASK_PAYLOAD_PTR	0x0000ffffffffffff
-#define MASK_PAYLOAD_INT	0x00000000ffffffff
+#define MASK_SIGN		UINT64_C(0x8000)
+#define MASK_EXPONENT		UINT64_C(0x7ff0)
+#define MASK_QUIET		UINT64_C(0x0008)
+#define MASK_TYPE		UINT64_C(0x0007)
 
-/* Masks for primitive types */
-#define MASK_TYPE_NAN		UINT64_C(0x0000000000000000)
-// unassigned			UINT64_C(0x0001000000000000)
-#define MASK_TYPE_BOOLEAN	UINT64_C(0x0002000000000000)
-#define MASK_TYPE_INTEGER	UINT64_C(0x0003000000000000)
-#define MASK_TYPE_CODEPOINT	UINT64_C(0x0004000000000000)
-#define MASK_TYPE_PROC		UINT64_C(0x0005000000000000)
-#define MASK_TYPE_KEYWORD	UINT64_C(0x0006000000000000)
-#define MASK_TYPE_SYMBOL	UINT64_C(0x0007000000000000)
-
-/* Constant short encoded values */
-#define kNaN			(MASK_EXPONENT | MASK_QUIET)
+#define MASK_PAYLOAD		0x0000ffffffffffff
 
 /* Signatures for primitive types */
-#define SIGNATURE_NAN		kNaN
-#define SIGNATURE_BOOLEAN	(kNaN | MASK_TYPE_BOOLEAN)
-#define SIGNATURE_INTEGER	(kNaN | MASK_TYPE_INTEGER)
-#define SIGNATURE_CODEPOINT	(kNaN | MASK_TYPE_CODEPOINT)
-#define SIGNATURE_PROC		(kNaN | MASK_TYPE_PROC)
-#define SIGNATURE_KEYWORD	(kNaN | MASK_TYPE_KEYWORD)
-#define SIGNATURE_SYMBOL	(kNaN | MASK_TYPE_SYMBOL)
-#define SIGNATURE_CELL		(kNaN | MASK_SIGN)
+#define SIGNATURE_CELL		(MASK_EXPONENT | MASK_QUIET | MASK_SIGN)
+#define SIGNATURE_NAN		(MASK_EXPONENT | MASK_QUIET | 0)
+#define SIGNATURE_BOOLEAN	(MASK_EXPONENT | MASK_QUIET | 1)
+#define SIGNATURE_INTEGER	(MASK_EXPONENT | MASK_QUIET | 2)
+#define SIGNATURE_CODEPOINT	(MASK_EXPONENT | MASK_QUIET | 3)
+#define SIGNATURE_PROC		(MASK_EXPONENT | MASK_QUIET | 4)
+#define SIGNATURE_KEYWORD	(MASK_EXPONENT | MASK_QUIET | 5)
+#define SIGNATURE_SYMBOL	(MASK_EXPONENT | MASK_QUIET | 6)
+// 7: unassigned
 
 /* Parsing tokens */
 #define TOK_EOF		(-1)
@@ -120,12 +107,6 @@
 
 #define PORT_SAW_EOF	1
 
-/*
- *  Basic memory allocation units
- */
-
-#define OBJ_LIST_SIZE 727
-
 #define VERSION "0.2.0"
 
 #include <string.h>
@@ -137,6 +118,10 @@
 #define InitFile "init.clj"
 #endif
 
+/*
+ *  Basic memory allocation units
+ */
+
 #ifndef FIRST_CELLSEGS
 #define FIRST_CELLSEGS 3
 #endif
@@ -144,55 +129,54 @@
 #ifndef STRBUFF_INITIAL_SIZE
 #define STRBUFF_INITIAL_SIZE 128
 #endif
-#ifndef AUXBUFF_SIZE
-#define AUXBUFF_SIZE 256
-#endif
+
+#define OBJ_LIST_SIZE 727
 
 enum nanoclj_types {
-  T_CELL = -1,
   T_NIL = 0,
-  T_BOOLEAN = 1,
-  T_STRING = 2,
+  T_REAL = 1,
+  T_BOOLEAN = 2,
   T_INTEGER = 3,
-  T_LONG = 4,
-  T_REAL = 5,
-  T_SYMBOL = 6,
-  T_PROC = 7,
-  T_LIST = 8,
-  T_CLOSURE = 9,
-  T_RATIO = 10,
-  T_FOREIGN_FUNCTION = 11,
-  T_CODEPOINT = 12,
-  T_READER = 13,
-  T_WRITER = 14,
-  T_VECTOR = 15,
-  T_MACRO = 16,
-  T_LAZYSEQ = 17,
-  T_ENVIRONMENT = 18,
-  T_CLASS = 19,
-  T_KEYWORD = 20,
-  T_MAPENTRY = 21,
-  T_ARRAYMAP = 22,
-  T_SORTED_SET = 23,
-  T_VAR = 24,
-  T_FOREIGN_OBJECT = 25,
-  T_BIGINT = 26,
-  T_CHAR_ARRAY = 27,
-  T_INPUT_STREAM = 28,
-  T_OUTPUT_STREAM = 29,
-  T_REGEX = 30,
-  T_DELAY = 31,
-  T_IMAGE = 32,
-  T_AUDIO = 33,
-  T_FILE = 34,
-  T_DATE = 35,
-  T_UUID = 36,
-  T_RUNTIME_EXCEPTION = 37,
-  T_ARITY_EXCEPTION = 38,
-  T_ILLEGAL_ARG_EXCEPTION = 39,
-  T_ARITHMETIC_EXCEPTION = 40,
-  T_CLASS_CAST_EXCEPTION = 41,
-  T_TENSOR = 42,
+  T_CODEPOINT = 4,
+  T_PROC = 5,
+  T_KEYWORD = 6,
+  T_SYMBOL = 7,
+  /* unassigned = 8 */
+  T_LIST = 9,
+  T_STRING = 10,
+  T_LONG = 11,
+  T_CLOSURE = 12,
+  T_RATIO = 13,
+  T_FOREIGN_FUNCTION = 14,
+  T_READER = 15,
+  T_WRITER = 16,
+  T_VECTOR = 17,
+  T_MACRO = 18,
+  T_LAZYSEQ = 19,
+  T_ENVIRONMENT = 20,
+  T_CLASS = 21,
+  T_MAPENTRY = 22,
+  T_ARRAYMAP = 23,
+  T_SORTED_SET = 24,
+  T_VAR = 25,
+  T_FOREIGN_OBJECT = 26,
+  T_BIGINT = 27,
+  T_CHAR_ARRAY = 28,
+  T_INPUT_STREAM = 29,
+  T_OUTPUT_STREAM = 30,
+  T_REGEX = 31,
+  T_DELAY = 32,
+  T_IMAGE = 33,
+  T_AUDIO = 34,
+  T_FILE = 35,
+  T_DATE = 36,
+  T_UUID = 37,
+  T_RUNTIME_EXCEPTION = 38,
+  T_ARITY_EXCEPTION = 39,
+  T_ILLEGAL_ARG_EXCEPTION = 40,
+  T_ARITHMETIC_EXCEPTION = 41,
+  T_CLASS_CAST_EXCEPTION = 42,
+  T_TENSOR = 43,
   T_MAX_TYPE
 };
 
@@ -247,36 +231,29 @@ typedef struct {
 #define UNMARK         127      /* 01111111 */
 
 static int_fast16_t prim_type(nanoclj_val_t value) {
-  uint64_t signature = value.as_long & MASK_SIGNATURE;
-  
-  /* Short encoded types */
-  switch (signature) {
-  case SIGNATURE_BOOLEAN: return T_BOOLEAN;
-  case SIGNATURE_INTEGER: return T_INTEGER;
-  case SIGNATURE_CODEPOINT: return T_CODEPOINT;
-  case SIGNATURE_PROC: return T_PROC;
-  case SIGNATURE_KEYWORD: return T_KEYWORD;
-  case SIGNATURE_SYMBOL: return T_SYMBOL;
-  case SIGNATURE_CELL: return T_CELL;
+  uint64_t signature = value.as_long >> 48;   
+  if (signature == SIGNATURE_CELL) {
+    return T_NIL;
+  } else if ((signature & (MASK_EXPONENT | MASK_QUIET)) == (MASK_EXPONENT | MASK_QUIET)) {
+    return (signature & 7) + 1;
   }
-
-  return T_REAL;
+  return T_REAL;  
 }
 
 static inline bool is_cell(nanoclj_val_t v) {
-  return (v.as_long & MASK_SIGNATURE) == SIGNATURE_CELL;
+  return (v.as_long >> 48) == SIGNATURE_CELL;
 }
 
 static inline bool is_primitive(nanoclj_val_t v) {
-  return (v.as_long & MASK_SIGNATURE) != SIGNATURE_CELL;
+  return !is_cell(v);
 }
 
 static inline bool is_symbol(nanoclj_val_t v) {
-  return (v.as_long & MASK_SIGNATURE) == SIGNATURE_SYMBOL;
+  return (v.as_long >> 48) == SIGNATURE_SYMBOL;
 }
 
 static inline bool is_keyword(nanoclj_val_t v) {
-  return (v.as_long & MASK_SIGNATURE) == SIGNATURE_KEYWORD;
+  return (v.as_long >> 48) == SIGNATURE_KEYWORD;
 }
 
 /* returns the type of a, a must not be NULL */
@@ -286,21 +263,21 @@ static inline int_fast16_t _type(nanoclj_cell_t * a) {
 }
 
 static inline nanoclj_cell_t * decode_pointer(nanoclj_val_t value) {
-  return (nanoclj_cell_t *)(value.as_long & MASK_PAYLOAD_PTR);
+  return (nanoclj_cell_t *)(value.as_long & MASK_PAYLOAD);
 }
 
 static inline symbol_t * decode_symbol(nanoclj_val_t value) {
-  return (symbol_t *)(value.as_long & MASK_PAYLOAD_PTR);
+  return (symbol_t *)(value.as_long & MASK_PAYLOAD);
 }
 
 static inline int_fast16_t expand_type(nanoclj_val_t value, int_fast16_t primitive_type) {
-  if (primitive_type == T_CELL) return _type(decode_pointer(value));
+  if (!primitive_type) return _type(decode_pointer(value));
   return primitive_type;
 }
 
 static inline int_fast16_t type(nanoclj_val_t value) {
   int_fast16_t type = prim_type(value);
-  if (type == T_CELL) {
+  if (!type) {
     nanoclj_cell_t * c = decode_pointer(value);
     return _type(c);
   } else {
@@ -315,7 +292,7 @@ static inline bool is_list(nanoclj_val_t value) {
 }
 
 static inline nanoclj_val_t mk_pointer(nanoclj_cell_t * ptr) {
-  return (nanoclj_val_t)(SIGNATURE_CELL | (uint64_t)ptr);
+  return (nanoclj_val_t)((SIGNATURE_CELL << 48) | (uint64_t)ptr);
 }
 
 static inline nanoclj_val_t mk_nil() {
@@ -350,7 +327,7 @@ static inline nanoclj_val_t mk_symbol(nanoclj_t * sc, uint16_t t, strview_t ns, 
   s->hash = murmur3_hash_qualified_string(ns.ptr, ns.size, name.ptr, name.size);
   s->ns_sym = s->name_sym = mk_nil();
 
-  return (nanoclj_val_t)((t == T_SYMBOL ? SIGNATURE_SYMBOL : SIGNATURE_KEYWORD) | (uint64_t)s);
+  return (nanoclj_val_t)((t == T_SYMBOL ? (SIGNATURE_SYMBOL << 48) : (SIGNATURE_KEYWORD << 48)) | (uint64_t)s);
 }
 
 static inline bool is_nil(nanoclj_val_t v) {
@@ -434,7 +411,7 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define audio_unchecked(p)	  (_audio_unchecked(decode_pointer(p)))
 
 static inline int32_t decode_integer(nanoclj_val_t value) {
-  return (int32_t)value.as_long & MASK_PAYLOAD_INT;
+  return (uint32_t)value.as_long;
 }
 
 static inline bool is_string(nanoclj_val_t p) {
@@ -625,7 +602,7 @@ static inline long long to_long_w_def(nanoclj_val_t p, long long def) {
     return decode_integer(p);
   case T_REAL:
     return (long long)p.as_double;
-  case T_CELL:
+  case T_NIL:
     {
       nanoclj_cell_t * c = decode_pointer(p);
       switch (_type(c)) {
@@ -659,7 +636,7 @@ static inline int32_t to_int(nanoclj_val_t p) {
     return decode_integer(p);
   case T_REAL:
     return (int32_t)p.as_double;
-  case T_CELL:
+  case T_NIL:
     {
       nanoclj_cell_t * c = decode_pointer(p);
       switch (_type(c)) {
@@ -686,7 +663,7 @@ static inline double to_double(nanoclj_val_t p) {
     return (double)decode_integer(p);
   case T_REAL:
     return p.as_double;
-  case T_CELL: {
+  case T_NIL: {
     nanoclj_cell_t * c = decode_pointer(p);
     switch (_type(c)) {
     case T_LONG:
@@ -700,7 +677,7 @@ static inline double to_double(nanoclj_val_t p) {
 
 static inline void * to_tensor(nanoclj_t * sc, nanoclj_val_t p) {
   switch (prim_type(p)) {
-  case T_CELL:{
+  case T_NIL:{
     nanoclj_cell_t * c = decode_pointer(p);
     switch (_type(c)) {
     case T_TENSOR: return _tensor_unchecked(c);
@@ -855,7 +832,7 @@ static inline strview_t to_strview(nanoclj_val_t x) {
     const char * name = dispatch_table[decode_integer(x)].name;
     return name ? (strview_t){ name, strlen(name) } : (strview_t){ "", 0 };
   }
-  case T_CELL:{
+  case T_NIL:{
     nanoclj_cell_t * c = decode_pointer(x);
     if (c) return _to_strview(c);
   }
@@ -1090,19 +1067,19 @@ static inline nanoclj_val_t mk_foreign_object(nanoclj_t * sc, void * o) {
 
 /* Creates a primitive for utf8 codepoint */
 static inline nanoclj_val_t mk_codepoint(int c) {
-  return (nanoclj_val_t)(SIGNATURE_CODEPOINT | (uint32_t)c);
+  return (nanoclj_val_t)((SIGNATURE_CODEPOINT << 48) | (uint32_t)c);
 }
 
 static inline nanoclj_val_t mk_boolean(bool b) {
-  return (nanoclj_val_t)(SIGNATURE_BOOLEAN | (b ? (uint32_t)1 : (uint32_t)0));
+  return (nanoclj_val_t)((SIGNATURE_BOOLEAN << 48) | (b ? (uint32_t)1 : (uint32_t)0));
 }
 
 static inline nanoclj_val_t mk_int(int num) {
-  return (nanoclj_val_t)(SIGNATURE_INTEGER | (uint32_t)num);
+  return (nanoclj_val_t)((SIGNATURE_INTEGER << 48) | (uint32_t)num);
 }
 
 static inline nanoclj_val_t mk_proc(enum nanoclj_opcode op) {
-  return (nanoclj_val_t)(SIGNATURE_PROC | (uint32_t)op);
+  return (nanoclj_val_t)((SIGNATURE_PROC << 48) | (uint32_t)op);
 }
 
 static inline nanoclj_val_t mk_real(double n) {
@@ -1245,7 +1222,7 @@ static inline long long get_ratio(nanoclj_val_t n, long long * den) {
   case T_INTEGER:
     *den = 1;
     return decode_integer(n);
-  case T_CELL:{
+  case T_NIL:{
     nanoclj_cell_t * c = decode_pointer(n);
     switch (_type(c)) {
     case T_LONG:
@@ -2023,7 +2000,7 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
     return a0.as_double == b0.as_double; /* 0.0 == -0.0 */
   } else if (a0.as_long == b0.as_long) {
     return true;
-  } else if (t_a != T_CELL || t_b != T_CELL || a0.as_long == kNIL || b0.as_long == kNIL) {
+  } else if (t_a || t_b || a0.as_long == kNIL || b0.as_long == kNIL) {
     return false;
   } else {
     nanoclj_cell_t * a = decode_pointer(a0), * b = decode_pointer(b0);
@@ -2323,7 +2300,7 @@ static inline bool equiv(nanoclj_val_t a, nanoclj_val_t b) {
     return to_double(a) == to_double(b);
   } else if (a.as_long == b.as_long) {
     return true;
-  } else if (type_a != T_CELL && type_b != T_CELL) {
+  } else if (type_a && type_b) {
     return false;
   } else {
     type_a = expand_type(a, type_a);
@@ -2362,7 +2339,7 @@ static inline int compare(nanoclj_val_t a, nanoclj_val_t b) {
       symbol_t * sa = decode_symbol(a), * sb = decode_symbol(b);
       int i = strview_cmp(sa->ns, sb->ns);
       return i ? i : strview_cmp(sa->name, sb->name);
-    } else if (type_a == T_CELL && type_b == T_CELL) {
+    } else if (!type_a && !type_b) {
       nanoclj_cell_t * a2 = decode_pointer(a), * b2 = decode_pointer(b);
       type_a = _type(a2);
       type_b = _type(b2);
@@ -2500,7 +2477,7 @@ static int32_t hasheq(nanoclj_t * sc, nanoclj_val_t v) {
   case T_KEYWORD:
     return decode_symbol(v)->hash;
 
-  case T_CELL:{
+  case T_NIL:{
     nanoclj_cell_t * c = decode_pointer(v);
     if (!c) return 0;
     
@@ -3829,7 +3806,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
     plen = snprintf(sc->strbuff, sc->strbuff_size, ":%.*s", (int)sv.size, sv.ptr);
   }
     break;
-  case T_CELL:{
+  case T_NIL:{
     nanoclj_cell_t * c = decode_pointer(l);
     if (c == NULL) {
       p = "nil";    
@@ -4807,7 +4784,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  return false;
 	}
       }
-    case T_CELL:{
+    case T_NIL:{
       nanoclj_cell_t * code_cell = decode_pointer(sc->code);
       if (code_cell) {
 	switch (_type(code_cell)) {
@@ -4904,7 +4881,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       }
     }
 
-    case T_CELL:{      
+    case T_NIL:{      
       nanoclj_cell_t * code_cell = decode_pointer(sc->code);
       if (!code_cell) {
 	nanoclj_throw(sc, sc->NullPointerException);
@@ -5504,7 +5481,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     switch (prim_type(arg0)) {
     case T_INTEGER: s_return(sc, mk_integer(sc, decode_integer(arg0) + 1));
     case T_REAL: s_return(sc, mk_real(arg0.as_double + 1.0));
-    case T_CELL: {
+    case T_NIL: {
       nanoclj_cell_t * c = decode_pointer(arg0);
       switch (_type(c)) {
       case T_LONG: {
@@ -5540,7 +5517,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     switch (prim_type(arg0)) {
     case T_INTEGER: s_return(sc, mk_integer(sc, decode_integer(arg0) - 1));
     case T_REAL: s_return(sc, mk_real(arg0.as_double - 1.0));
-    case T_CELL: {
+    case T_NIL: {
       nanoclj_cell_t * c = decode_pointer(arg0);
       switch (_type(c)) {
       case T_LONG:{
@@ -5795,20 +5772,24 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_FIRST:                 /* first */
     if (!unpack_args_1(sc, &arg0)) {
       return false;
-    } else if (!is_cell(arg0)) {
-      Error_0(sc, "Value is not ISeqable");    
-    } else {
-      s_return(sc, first(sc, decode_pointer(arg0)));
+    } else if (is_cell(arg0)) {
+      nanoclj_cell_t * c = decode_pointer(arg0);
+      if (is_seqable_type(_type(c))) {
+	s_return(sc, first(sc, c));
+      }
     }
+    Error_0(sc, "Value is not ISeqable");    
 
   case OP_SECOND:
     if (!unpack_args_1(sc, &arg0)) {
       return false;
-    } else if (!is_cell(arg0)) {
-      Error_0(sc, "Vvalue is not ISeqable");
-    } else {
-      s_return(sc, second(sc, decode_pointer(arg0)));
+    } else if (is_cell(arg0)) {
+      nanoclj_cell_t * c = decode_pointer(arg0);
+      if (is_seqable_type(_type(c))) {
+	s_return(sc, second(sc, decode_pointer(arg0)));
+      }
     }
+    Error_0(sc, "Value is not ISeqable");
 
   case OP_REST:                 /* rest */
   case OP_NEXT:
@@ -7481,7 +7462,6 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   sc->OutOfMemoryError = mk_exception(sc, OutOfMemoryError, "Out of memory");
   sc->NullPointerException = mk_exception(sc, NullPointerException, "Null pointer exception");
   
-  intern(sc, sc->global_env, def_symbol(sc, "nil"), mk_nil());
   intern(sc, sc->global_env, sc->MOUSE_POS, mk_nil());
 
   register_functions(sc);
