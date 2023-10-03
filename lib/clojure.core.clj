@@ -31,12 +31,16 @@
   "Returns true if x is a Sequence"
   [x] (or (instance? clojure.lang.Cons x) (instance? clojure.lang.LazySeq x) (equals? (-bit-and (-get-cell-flags x) 4) 4)))
 
+(defn seqable?
+  "Returns true if x supportes seq"
+  [x] (is-any-of? (type x) java.lang.String clojure.lang.LazySeq clojure.lang.PersistentVector clojure.lang.Cons clojure.lang.PersistentTreeSet clojure.lang.PersistentArrayMap))
+
 (defn realized?
   "Returns true if Delay or LazySeq has been realized"
   [x] (equals? (-bit-and (-get-cell-flags x) 8) 8))
 
 (def keyword clojure.lang.Keyword)
-(def char java.lang.Character)
+(def char nanoclj.core.Codepoint)
 (def short java.lang.Integer)
 (def double java.lang.Double)
 (def float java.lang.Double)

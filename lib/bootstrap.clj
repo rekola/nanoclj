@@ -1,3 +1,4 @@
+(def nil (next '()))
 (def true (equals? 1 1))
 (def false (equals? 1 2))
 
@@ -65,8 +66,8 @@
   (fn [x] (instance? clolojure.lang.Var x)))
 
 (def char?
-  "Returns true if argument is a character"
-  (fn [x] (instance? java.lang.Character x)))
+  "Returns true if argument is a character (actually a utf8 codepoint)"
+  (fn [x] (instance? nanoclj.core.Codepoint x)))
 
 (def file?
   "Returns true if argument is a File"
