@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <unistd.h>
 #include <glob.h>
+#include <shapefil.h>
 
 #include "linenoise.h"
 #include "nanoclj_utils.h"
@@ -628,7 +629,159 @@ static inline nanoclj_val_t Audio_load(nanoclj_t * sc, nanoclj_val_t args) {
 }
 
 static inline nanoclj_val_t Geo_load(nanoclj_t * sc, nanoclj_val_t args) {
-  return mk_nil();
+  char * filename = alloc_c_str(sc, to_strview(car(args)));
+
+  SHPHandle shp = SHPOpen(filename, "rb");
+  if (!shp) return nanoclj_throw(sc, mk_runtime_exception(sc, "Failed to open file"));
+
+  DBFHandle dbf = DBFOpen(filename, "rb");
+  if (!dbf) return nanoclj_throw(sc, mk_runtime_exception(sc, "Failed to open file"));
+
+  size_t field_count = DBFGetFieldCount(dbf);
+
+  double minb[4], maxb[4];
+  int shape_count, default_shape_type;
+  SHPGetInfo(shp, &shape_count, &default_shape_type, minb, maxb);
+
+  nanoclj_cell_t * r = NULL;
+
+  nanoclj_val_t type_key = def_keyword(sc, "type");
+  nanoclj_val_t geom_key = def_keyword(sc, "geometry");
+  nanoclj_val_t prop_key = def_keyword(sc, "properties");
+  nanoclj_val_t coord_key = def_keyword(sc, "coordinates");
+
+  nanoclj_val_t point_id = mk_string(sc, "Point");
+  nanoclj_val_t linestring_id = mk_string(sc, "LineString");
+  nanoclj_val_t multilinestring_id = mk_string(sc, "MultiLineString");
+  nanoclj_val_t multipolygon_id = mk_string(sc, "MultiPolygon");
+  
+  SHPObject * o;
+  for (int i = 0; i < shape_count; i++) {
+    o = SHPReadObject(shp, i);
+
+    bool has_z = o->nSHPType != SHPT_POINT && o->nSHPType != SHPT_MULTIPOINT &&
+      o->nSHPType != SHPT_ARC && o->nSHPType != SHPT_POLYGON;
+
+    nanoclj_val_t type_id = mk_nil();
+    nanoclj_cell_t * coord = NULL;
+    
+    switch (o->nSHPType) {
+    case SHPT_POINT:
+    case SHPT_POINTZ:
+    case SHPT_POINTM:
+    case SHPT_MULTIPOINT:
+    case SHPT_MULTIPOINTZ:
+    case SHPT_MULTIPOINTM:
+      type_id = point_id;
+      if (has_z) {
+	coord = decode_pointer(mk_vector_3d(sc, o->padfX[0], o->padfY[0], o->padfZ[0]));
+      } else {
+	coord = decode_pointer(mk_vector_2d(sc, o->padfX[0], o->padfY[0]));
+      }
+      /* TODO: Implement multipoint */    
+      break;
+      
+    case SHPT_ARC: // = polyline
+    case SHPT_ARCZ:
+    case SHPT_ARCM:
+      if (o->nParts == 1) {
+	type_id = linestring_id;
+	coord = mk_vector(sc, o->nVertices);
+	for (int j = 0; j < o->nVertices; j++) {
+	  double x = o->padfX[j], y = o->padfY[j], z = o->padfZ[j];
+	  if (has_z) {
+	    set_vector_elem(coord, j, mk_vector_3d(sc, x, y, z));
+	  } else {
+	    set_vector_elem(coord, j, mk_vector_2d(sc, x, y));
+	  }
+	}	
+      } else {
+	type_id = multilinestring_id;
+	coord = mk_vector(sc, o->nParts);
+	for (int j = 0; j < o->nParts; j++) {
+	  int start = o->panPartStart[j];
+	  int end = j + 1 < o->nParts ? o->panPartStart[j + 1] : o->nVertices;
+	  nanoclj_cell_t * part = mk_vector(sc, end - start);
+	  for (int k = 0; k < end - start; k++) {
+	    double x = o->padfX[start + k], y = o->padfY[start + k], z = o->padfZ[start + k];
+	    if (has_z) {
+	      set_vector_elem(part, k, mk_vector_3d(sc, x, y, z));
+	    } else {
+	      set_vector_elem(part, k, mk_vector_2d(sc, x, y));
+	    }
+	  }
+	  set_vector_elem(coord, j, mk_pointer(part));
+	}
+      }
+      break;
+      
+    case SHPT_POLYGON:
+    case SHPT_POLYGONZ:
+    case SHPT_POLYGONM:
+      type_id = multipolygon_id;
+      coord = mk_vector(sc, o->nParts);
+      for (int j = 0; j < o->nParts; j++) {
+	int start = o->panPartStart[j];
+	int end = j + 1 < o->nParts ? o->panPartStart[j + 1] : o->nVertices;
+	nanoclj_cell_t * part = mk_vector(sc, end - start);
+	for (int k = 0; k < end - start; k++) {
+	  double x = o->padfX[start + k], y = o->padfY[start + k], z = o->padfZ[start + k];
+	  if (has_z) {
+	    set_vector_elem(part, k, mk_vector_3d(sc, x, y, z));
+	  } else {
+	    set_vector_elem(part, k, mk_vector_2d(sc, x, y));
+	  }
+	}
+	set_vector_elem(coord, j, mk_pointer(part));
+      }
+      break;
+    }
+
+    SHPDestroyObject(o);
+
+    if (is_nil(type_id)) continue;
+
+    nanoclj_cell_t * geom = mk_arraymap(sc, 2);
+    set_vector_elem(geom, 0, mk_mapentry(sc, type_key, type_id));
+    set_vector_elem(geom, 1, mk_mapentry(sc, coord_key, mk_pointer(coord)));
+
+    nanoclj_cell_t * prop = mk_arraymap(sc, 0);
+
+    for (size_t j = 0; j < field_count; j++) {
+      if (DBFIsAttributeNULL(dbf, i, j)) continue;
+
+      char name[255];
+      int type = DBFGetFieldInfo(dbf, j, name, 0, 0);
+      nanoclj_val_t name_v = mk_string(sc, name);
+      
+      switch (type) {
+      case FTString:
+	prop = conjoin(sc, prop, mk_mapentry(sc, name_v, mk_string(sc, DBFReadStringAttribute(dbf, i, j))));
+	break;
+      case FTInteger:
+	prop = conjoin(sc, prop, mk_mapentry(sc, name_v, mk_int(DBFReadIntegerAttribute(dbf, i, j))));
+	break;
+      case FTDouble:
+	prop = conjoin(sc, prop, mk_mapentry(sc, name_v, mk_real(DBFReadDoubleAttribute(dbf, i, j))));
+	break;
+      case FTLogical:
+	prop = conjoin(sc, prop, mk_mapentry(sc, name_v, mk_boolean(DBFReadLogicalAttribute(dbf, i, j))));
+	break;
+      }
+    }
+
+    nanoclj_cell_t * feat = mk_arraymap(sc, 3);
+    set_vector_elem(feat, 0, mk_mapentry(sc, type_key, mk_string(sc, "Feature")));
+    set_vector_elem(feat, 1, mk_mapentry(sc, geom_key, mk_pointer(geom)));
+    set_vector_elem(feat, 2, mk_mapentry(sc, prop_key, mk_pointer(prop)));
+
+    r = cons(sc, mk_pointer(feat), r);
+  }
+
+  SHPClose(shp);
+  DBFClose(dbf);
+
+  return mk_pointer(r);
 }
 
 #if NANOCLJ_USE_LINENOISE

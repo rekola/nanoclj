@@ -449,6 +449,7 @@ static inline bool is_seqable_type(int_fast16_t type_id) {
   case T_ARRAYMAP:
   case T_SORTED_SET:
   case T_CLASS:
+  case T_MAPENTRY:
     return true;
   }
   return false;
@@ -1517,6 +1518,10 @@ static inline bool resize_vector(nanoclj_t * sc, nanoclj_cell_t * vec, size_t ne
   return true;
 }
 
+static inline nanoclj_cell_t * mk_vector(nanoclj_t * sc, size_t len) {
+  return get_vector_object(sc, T_VECTOR, len);
+}
+
 static inline nanoclj_val_t mk_mapentry(nanoclj_t * sc, nanoclj_val_t key, nanoclj_val_t val) {
   nanoclj_cell_t * vec = get_vector_object(sc, T_MAPENTRY, 2);
   if (vec) {
@@ -2547,7 +2552,7 @@ static inline void ok_to_freely_gc(nanoclj_t * sc) {
 /* ========== oblist implementation  ========== */
 
 static inline nanoclj_cell_t * oblist_initial_value(nanoclj_t * sc) {
-  nanoclj_cell_t * vec = get_vector_object(sc, T_VECTOR, OBJ_LIST_SIZE);
+  nanoclj_cell_t * vec = mk_vector(sc, OBJ_LIST_SIZE);
   fill_vector(vec, mk_nil());
   return vec;
 }
@@ -2578,14 +2583,18 @@ static inline nanoclj_val_t oblist_find_item(nanoclj_t * sc, uint16_t type, strv
   return mk_nil();
 }
 
-static inline nanoclj_val_t mk_vector(nanoclj_t * sc, size_t len) {
-  return mk_pointer(get_vector_object(sc, T_VECTOR, len));
+static inline nanoclj_val_t mk_vector_2d(nanoclj_t * sc, double x, double y) {
+  nanoclj_cell_t * vec = mk_vector(sc, 2);
+  set_vector_elem(vec, 0, mk_real(x));
+  set_vector_elem(vec, 1, mk_real(y));
+  return mk_pointer(vec);
 }
 
-static inline nanoclj_val_t mk_vector_2d(nanoclj_t * sc, double a, double b) {
-  nanoclj_cell_t * vec = get_vector_object(sc, T_VECTOR, 2);
-  set_vector_elem(vec, 0, mk_real(a));
-  set_vector_elem(vec, 1, mk_real(b));
+static inline nanoclj_val_t mk_vector_3d(nanoclj_t * sc, double x, double y, double z) {
+  nanoclj_cell_t * vec = mk_vector(sc, 3);
+  set_vector_elem(vec, 0, mk_real(x));
+  set_vector_elem(vec, 1, mk_real(y));
+  set_vector_elem(vec, 2, mk_real(z));
   return mk_pointer(vec);
 }
 
@@ -2776,7 +2785,7 @@ static inline nanoclj_cell_t * mk_type(nanoclj_t * sc, int type_id, nanoclj_cell
     }
     sc->types->size = type_id + 1;
   }
-  nanoclj_cell_t * vec = get_vector_object(sc, T_VECTOR, OBJ_LIST_SIZE);
+  nanoclj_cell_t * vec = mk_vector(sc, OBJ_LIST_SIZE);
   fill_vector(vec, mk_nil());
   nanoclj_cell_t * t = get_cell(sc, type_id, T_TYPE, mk_pointer(vec), parent_type, meta);
   sc->types->data[type_id] = mk_pointer(t);
@@ -2814,7 +2823,7 @@ static inline nanoclj_val_t def_symbol_or_keyword(nanoclj_t * sc, const char *na
 }
 
 static inline nanoclj_cell_t * def_namespace_with_sym(nanoclj_t *sc, nanoclj_val_t sym, nanoclj_cell_t * md) {
-  nanoclj_cell_t * vec = get_vector_object(sc, T_VECTOR, OBJ_LIST_SIZE);
+  nanoclj_cell_t * vec = mk_vector(sc, OBJ_LIST_SIZE);
   fill_vector(vec, mk_nil());
   nanoclj_cell_t * ns = get_cell(sc, T_ENVIRONMENT, 0, mk_pointer(vec), sc->root_env, md);
   if (sc->global_env) {
@@ -4412,7 +4421,7 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
     if (args) {
       parent = decode_pointer(first(sc, args));
     }
-    nanoclj_cell_t * vec = get_vector_object(sc, T_VECTOR, OBJ_LIST_SIZE);
+    nanoclj_cell_t * vec = mk_vector(sc, OBJ_LIST_SIZE);
     fill_vector(vec, mk_nil());
     return mk_pointer(get_cell(sc, T_ENVIRONMENT, 0, mk_pointer(vec), parent, NULL));
   }
@@ -5200,7 +5209,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     size_t n = get_size(input_vec) / 2;
 
     nanoclj_cell_t * values = 0;
-    nanoclj_cell_t * args = get_vector_object(sc, T_VECTOR, n);
+    nanoclj_cell_t * args = mk_vector(sc, n);
 
     for (int i = (int)n - 1; i >= 0; i--) {
       set_vector_elem(args, i, vector_elem(input_vec, 2 * i + 0));
@@ -5774,7 +5783,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       return false;
     } else if (is_cell(arg0)) {
       nanoclj_cell_t * c = decode_pointer(arg0);
-      if (is_seqable_type(_type(c))) {
+      if (!c || is_seqable_type(_type(c))) {
 	s_return(sc, first(sc, c));
       }
     }
@@ -5785,8 +5794,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       return false;
     } else if (is_cell(arg0)) {
       nanoclj_cell_t * c = decode_pointer(arg0);
-      if (is_seqable_type(_type(c))) {
-	s_return(sc, second(sc, decode_pointer(arg0)));
+      if (!c || is_seqable_type(_type(c))) {
+	s_return(sc, second(sc, c));
       }
     }
     Error_0(sc, "Value is not ISeqable");
@@ -6470,7 +6479,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     bool has_rest;
     int n_args = get_literal_fn_arity(sc, sc->value, &has_rest);
     size_t vsize = n_args + (has_rest ? 2 : 0);
-    nanoclj_cell_t * vec = get_vector_object(sc, T_VECTOR, vsize);
+    nanoclj_cell_t * vec = mk_vector(sc, vsize);
     if (n_args >= 1) set_vector_elem(vec, 0, sc->ARG1);
     if (n_args >= 2) set_vector_elem(vec, 1, sc->ARG2);
     if (n_args >= 3) set_vector_elem(vec, 2, sc->ARG3);
@@ -6572,7 +6581,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     if (l == 0) {
       s_return(sc, sc->EMPTY);
     } else {
-      nanoclj_cell_t * vec = get_vector_object(sc, T_VECTOR, l);
+      nanoclj_cell_t * vec = mk_vector(sc, l);
       for (size_t i = 0; i < l; i++, seq = rest(sc, seq)) {
 	set_vector_elem(vec, i, first(sc, seq));
       }
@@ -7101,6 +7110,10 @@ void nanoclj_intern(nanoclj_t * sc, nanoclj_val_t ns, nanoclj_val_t symbol, nano
   intern(sc, decode_pointer(ns), symbol, value);  
 }
 
+nanoclj_val_t nanoclj_mk_vector(nanoclj_t * sc, size_t size) {
+  return mk_pointer(mk_vector(sc, size));
+}
+
 static inline nanoclj_val_t mk_counted_string(nanoclj_t * sc, const char *str, size_t len) {
   return mk_pointer(get_string_object(sc, T_STRING, str, len, 0));
 }
@@ -7114,7 +7127,7 @@ static struct nanoclj_interface vtbl = {
   mk_string,
   mk_counted_string,
   mk_codepoint,
-  mk_vector,
+  nanoclj_mk_vector,
   mk_foreign_func,
   mk_boolean,
 
@@ -7382,7 +7395,7 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   sc->CATCH = def_symbol(sc, "catch");
   sc->FINALLY = def_symbol(sc, "finally");
 
-  sc->EMPTYVEC = get_vector_object(sc, T_VECTOR, 0);
+  sc->EMPTYVEC = mk_vector(sc, 0);
 
   /* Init root namespace clojure.core */
   sc->root_env = sc->global_env = sc->envir = def_namespace(sc, "clojure.core", __FILE__);
