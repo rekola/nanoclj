@@ -53,8 +53,8 @@
 
 /* Predefined primitive values */
 #define kNIL			UINT64_C(18444492273895866368)
-#define kTRUE			UINT64_C(9221683186994511873)
-#define kFALSE			UINT64_C(9221683186994511872)
+#define kTRUE                  UINT64_C(9221401712017801217)
+#define kFALSE                 UINT64_C(9221401712017801216)
 
 /* Masks for NaN packing */
 #define MASK_SIGN		UINT64_C(0x8000)
