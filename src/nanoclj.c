@@ -43,7 +43,7 @@
 #include <pcre2.h>
 
 #include <utf8proc.h>
-#include <sixel/sixel.h>
+#include <sixel.h>
 
 #include "clock.h"
 #include "murmur3.h"
