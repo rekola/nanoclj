@@ -30,7 +30,8 @@
                           (catch java.lang.Throwable e
                             (save)
                             (set-color [ 255 0 0 ])
-                            (prn e)
+                            (println (type e) ": " e)
                             (restore)
+                            (newline)
                             (recur)))
                      nil)))] (f)))
