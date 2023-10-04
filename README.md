@@ -49,20 +49,20 @@ have been tested:
 
 ## Differences to Clojure:
 
-- Characters are 32 bit and strings and char arrays are UTF-8 (length is O(n))
+- Characters are 32 bit and strings and char arrays are UTF-8 (count is O(n))
 - Strings are compared and sorted by the sequences of their UTF-32 codepoints.
 - By default 32 bit integers are used, since 64 bit integers don't fit in the NaN boxing.
-- List length has complexity of O(n)
+- List count has complexity of O(n)
 - Vectors support O(1) append, but update is O(n)
 - Macros use the TinyScheme syntax
 - Tail-call optimization
-- sort is not stable and cannot throw on type mismatch
+- sort is not stable and doesn't throw on mismatching types
 - License is BSD 2-Clause License instead of EPL
-- No 32 bit floating point numbers or small integers
-- (identical 'a 'a) ; => true
+- No 32-bit floating point numbers or small integers
+- Symbols are interned and cannot have metadata
 - Primitives such as doubles and 32 bit integers are passed by value, and are in effect, interned
 - Strings are not interned (identical? "abc" "abc") ;=> false
-- Ratios use smallest suitable integer type for numerator and denominator
+- `rationalize` is exact and Ratios use the smallest suitable integer type for numerator and denominator
 - No chunked lazy sequences
 
 ## Differences to (Tiny)Scheme:
@@ -96,6 +96,7 @@ have been tested:
 - cairo
 - libsixel
 - utf8proc
+- shapelib
 
 ## Missing functionality
 
@@ -131,11 +132,11 @@ have been tested:
   - memoize
   - group-by
   - condp
-  - when-let, if-let, letfn, if-some
+  - when-let, letfn, if-let, if-some
   - reduced, reduced?
   - with-local-vars, var-set, find-var, alter-var-root, declare, binding
   - as-url, resource
-  - sequence, seqable?
+  - sequence
   - make-hierarchy, ancestors, supers, bases
   - bound?
   - random-uuid
