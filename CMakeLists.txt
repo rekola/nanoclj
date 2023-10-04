@@ -30,32 +30,39 @@ set(SOURCE_FILES
 
 add_executable(nanoclj ${SOURCE_FILES})
 
-find_library(MATH_LIBRARY m)
+find_library(MATH_LIBRARY m REQUIRED)
 if(MATH_LIBRARY)
   target_link_libraries(nanoclj ${MATH_LIBRARY})
 endif()
 
-find_library(UTF8PROC_LIBRARY utf8proc)
+find_library(UTF8PROC_LIBRARY utf8proc REQUIRED)
 if(UTF8PROC_LIBRARY)
   target_link_libraries(nanoclj utf8proc)
 endif()
 
-find_library(CAIRO_LIBRARY cairo)
+find_library(CAIRO_LIBRARY cairo REQUIRED)
 if(CAIRO_LIBRARY)
   target_link_libraries(nanoclj cairo)
 endif()
 
-find_library(SIXEL_LIBRARY sixel)
-if(SIXEL_LIBRARY)
+find_library(SIXEL_LIBRARY sixel REQUIRED)
+if(SIXEL_LIBRARY) 
   target_link_libraries(nanoclj sixel)
+  find_path(SIXEL_INCLUDE_DIR NAMES sixel.h PATHS "/usr/include" "/usr/include/sixel")
+  target_include_directories(nanoclj PRIVATE ${SIXEL_INCLUDE_DIR})
 endif()
 
-find_library(PCRE2_LIBRARY pcre2-8)
+find_library(PCRE2_LIBRARY pcre2-8 REQUIRED)
 if(PCRE2_LIBRARY)
   target_link_libraries(nanoclj pcre2-8)
 endif()
 
-FIND_PACKAGE(CURL)
+find_library(SHP_LIBRARY shp REQUIRED)
+if(SHP_LIBRARY)
+  target_link_libraries(nanoclj shp)
+endif()
+
+FIND_PACKAGE(CURL REQUIRED)
 if(CURL_FOUND)
   include_directories(${CURL_INCLUDE_DIR})
   target_link_libraries(nanoclj ${CURL_LIBRARIES})
