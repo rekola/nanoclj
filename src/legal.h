@@ -8,7 +8,6 @@ static inline void legal() {
 	 "Copyright (c) 1989, Atsushi Moriwaki\n"
 	 "Copyright (c) 2000, Dimitrios Souflis\n"
 	 "Copyright (c) 2007, Kevin Cozens\n"
-	 "Copyright (c) 2023, Mikael Rekola\n"
 	 "(and others - see AUTHORS)\n"
 	 "\n"
 	 "All rights reserved.\n"
