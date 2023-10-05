@@ -14,6 +14,14 @@
              (if (< n 0) acc
                  (recur (+ a (/ (- b a) n)) (dec n) (conj acc a))))))
 
+(defn geo-plot
+  "Plots a map"
+  ([& args]
+   (let [width (*window-size* 0)
+         height (int (/ width 3))
+         ]
+     )))
+
 (defn plot
   "Plots a series. Matlab style."
   ([& args]
