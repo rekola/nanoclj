@@ -163,8 +163,8 @@ extern "C" {
 
     bool tracing;
 
-    char **alloc_seg;
-    nanoclj_val_t *cell_seg;
+    nanoclj_cell_t ** alloc_seg;
+    nanoclj_val_t * cell_seg;
     int last_cell_seg;
 
 /* We use 5 registers. */

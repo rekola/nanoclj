@@ -73,6 +73,8 @@ static nanoclj_val_t System_getenv(nanoclj_t * sc, nanoclj_val_t args0) {
     int l = 0;
     for ( ; environ[l]; l++) { }
     nanoclj_cell_t * map = mk_arraymap(sc, l);
+    fill_vector(map, mk_nil());
+
     for (int i = 0; i < l; i++) {
       char * p = environ[i];
       int j = 0;
@@ -649,15 +651,21 @@ static inline nanoclj_val_t Geo_load(nanoclj_t * sc, nanoclj_val_t args) {
   nanoclj_val_t geom_key = def_keyword(sc, "geometry");
   nanoclj_val_t prop_key = def_keyword(sc, "properties");
   nanoclj_val_t coord_key = def_keyword(sc, "coordinates");
+  nanoclj_val_t bbox_key = def_keyword(sc, "bbox");
+  nanoclj_val_t id_key = def_keyword(sc, "id");
 
   nanoclj_val_t point_id = mk_string(sc, "Point");
   nanoclj_val_t linestring_id = mk_string(sc, "LineString");
   nanoclj_val_t multilinestring_id = mk_string(sc, "MultiLineString");
   nanoclj_val_t multipolygon_id = mk_string(sc, "MultiPolygon");
-  
-  SHPObject * o;
+
+  retain_value(sc, point_id);
+  retain_value(sc, linestring_id);
+  retain_value(sc, multilinestring_id);
+  retain_value(sc, multipolygon_id);
+
   for (int i = 0; i < shape_count; i++) {
-    o = SHPReadObject(shp, i);
+    SHPObject * o = SHPReadObject(shp, i);
 
     bool has_z = o->nSHPType != SHPT_POINT && o->nSHPType != SHPT_MULTIPOINT &&
       o->nSHPType != SHPT_ARC && o->nSHPType != SHPT_POLYGON;
@@ -678,6 +686,7 @@ static inline nanoclj_val_t Geo_load(nanoclj_t * sc, nanoclj_val_t args) {
       } else {
 	coord = decode_pointer(mk_vector_2d(sc, o->padfX[0], o->padfY[0]));
       }
+      retain(sc, coord);
       /* TODO: Implement multipoint */    
       break;
       
@@ -687,6 +696,9 @@ static inline nanoclj_val_t Geo_load(nanoclj_t * sc, nanoclj_val_t args) {
       if (o->nParts == 1) {
 	type_id = linestring_id;
 	coord = mk_vector(sc, o->nVertices);
+	fill_vector(coord, mk_nil());
+	retain(sc, coord);
+	
 	for (int j = 0; j < o->nVertices; j++) {
 	  double x = o->padfX[j], y = o->padfY[j], z = o->padfZ[j];
 	  if (has_z) {
@@ -698,10 +710,14 @@ static inline nanoclj_val_t Geo_load(nanoclj_t * sc, nanoclj_val_t args) {
       } else {
 	type_id = multilinestring_id;
 	coord = mk_vector(sc, o->nParts);
+	fill_vector(coord, mk_nil());
+	retain(sc, coord);
 	for (int j = 0; j < o->nParts; j++) {
 	  int start = o->panPartStart[j];
 	  int end = j + 1 < o->nParts ? o->panPartStart[j + 1] : o->nVertices;
 	  nanoclj_cell_t * part = mk_vector(sc, end - start);
+	  fill_vector(part, mk_nil());
+
 	  for (int k = 0; k < end - start; k++) {
 	    double x = o->padfX[start + k], y = o->padfY[start + k], z = o->padfZ[start + k];
 	    if (has_z) {
@@ -720,10 +736,15 @@ static inline nanoclj_val_t Geo_load(nanoclj_t * sc, nanoclj_val_t args) {
     case SHPT_POLYGONM:
       type_id = multipolygon_id;
       coord = mk_vector(sc, o->nParts);
+      fill_vector(coord, mk_nil());
+      retain(sc, coord);
+
       for (int j = 0; j < o->nParts; j++) {
 	int start = o->panPartStart[j];
 	int end = j + 1 < o->nParts ? o->panPartStart[j + 1] : o->nVertices;
 	nanoclj_cell_t * part = mk_vector(sc, end - start);
+	fill_vector(part, mk_nil());
+	retain(sc, part);
 	for (int k = 0; k < end - start; k++) {
 	  double x = o->padfX[start + k], y = o->padfY[start + k], z = o->padfZ[start + k];
 	  if (has_z) {
@@ -737,15 +758,18 @@ static inline nanoclj_val_t Geo_load(nanoclj_t * sc, nanoclj_val_t args) {
       break;
     }
 
-    SHPDestroyObject(o);
-
     if (is_nil(type_id)) continue;
 
     nanoclj_cell_t * geom = mk_arraymap(sc, 2);
+    fill_vector(geom, mk_nil());
+    retain(sc, geom);
+    
     set_vector_elem(geom, 0, mk_mapentry(sc, type_key, type_id));
-    set_vector_elem(geom, 1, mk_mapentry(sc, coord_key, mk_pointer(coord)));
+    set_vector_elem(geom, 1, mk_mapentry(sc, coord_key, mk_pointer(coord)));    
 
     nanoclj_cell_t * prop = mk_arraymap(sc, 0);
+    fill_vector(prop, mk_nil());
+    retain(sc, prop);
 
     for (size_t j = 0; j < field_count; j++) {
       if (DBFIsAttributeNULL(dbf, i, j)) continue;
@@ -753,10 +777,13 @@ static inline nanoclj_val_t Geo_load(nanoclj_t * sc, nanoclj_val_t args) {
       char name[255];
       int type = DBFGetFieldInfo(dbf, j, name, 0, 0);
       nanoclj_val_t name_v = mk_string(sc, name);
-      
+
       switch (type) {
       case FTString:
 	prop = conjoin(sc, prop, mk_mapentry(sc, name_v, mk_string(sc, DBFReadStringAttribute(dbf, i, j))));
+	if (strcmp(name, "NAME_EN") == 0) {
+	  fprintf(stderr, "id = %d: %s\n", o->nShapeId, DBFReadStringAttribute(dbf, i, j));
+	}
 	break;
       case FTInteger:
 	prop = conjoin(sc, prop, mk_mapentry(sc, name_v, mk_int(DBFReadIntegerAttribute(dbf, i, j))));
@@ -770,14 +797,29 @@ static inline nanoclj_val_t Geo_load(nanoclj_t * sc, nanoclj_val_t args) {
       }
     }
 
-    nanoclj_cell_t * feat = mk_arraymap(sc, 3);
+    nanoclj_val_t bbox;
+    if (has_z) {
+      bbox = mk_vector_6d(sc, o->dfXMin, o->dfYMin, o->dfZMin, o->dfXMax, o->dfYMax, o->dfZMax);
+    } else {
+      bbox = mk_vector_4d(sc, o->dfXMin, o->dfYMin, o->dfXMax, o->dfYMax);
+    }
+    retain_value(sc, bbox);
+    
+    nanoclj_cell_t * feat = mk_arraymap(sc, 5);
+    fill_vector(feat, mk_nil());
+    retain(sc, feat);
+    
     set_vector_elem(feat, 0, mk_mapentry(sc, type_key, mk_string(sc, "Feature")));
     set_vector_elem(feat, 1, mk_mapentry(sc, geom_key, mk_pointer(geom)));
     set_vector_elem(feat, 2, mk_mapentry(sc, prop_key, mk_pointer(prop)));
+    set_vector_elem(feat, 3, mk_mapentry(sc, bbox_key, bbox));
+    set_vector_elem(feat, 4, mk_mapentry(sc, id_key, mk_integer(sc, o->nShapeId)));
 
     r = cons(sc, mk_pointer(feat), r);
-  }
 
+    SHPDestroyObject(o);
+  }
+  
   SHPClose(shp);
   DBFClose(dbf);
 

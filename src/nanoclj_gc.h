@@ -199,7 +199,7 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_c
     }
   }
     
-  sc->free_cell = free_cell;
+  sc->free_cell = free_cell != &(sc->_EMPTY) ? free_cell : NULL;
 
 #if GC_VERBOSE
   char msg[80];

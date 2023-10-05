@@ -11,7 +11,7 @@
 #include "nanoclj_priv.h"
 
 // #define VECTOR_ARGS
-// #define RETAIN_ALLOCS 1
+#define RETAIN_ALLOCS 1
 
 #ifdef _WIN32
 
@@ -855,14 +855,14 @@ static inline int alloc_cellseg(nanoclj_t * sc, int n) {
     if (sc->last_cell_seg >= CELL_NSEGMENT - 1) {
       return k;
     }
-    char * cp = (char *) sc->malloc(CELL_SEGSIZE * sizeof(nanoclj_cell_t));
-    if (cp == 0) {
+    nanoclj_cell_t * cp = sc->malloc(CELL_SEGSIZE * sizeof(nanoclj_cell_t));
+    if (!cp) {
       return k;
     }
     long i = ++sc->last_cell_seg;
     sc->alloc_seg[i] = cp;    
     /* insert new segment in address order */
-    nanoclj_val_t newp = mk_pointer((nanoclj_cell_t *)cp);
+    nanoclj_val_t newp = mk_pointer(cp);
     sc->cell_seg[i] = newp;
     while (i > 0 && sc->cell_seg[i - 1].as_long > sc->cell_seg[i].as_long) {
       p = sc->cell_seg[i];
@@ -878,8 +878,8 @@ static inline int alloc_cellseg(nanoclj_t * sc, int n) {
       set_car(p, sc->EMPTY);
     }
     /* insert new cells in address order on free list */
-    if (sc->free_cell == &(sc->_EMPTY) || decode_pointer(p) < sc->free_cell) {
-      set_cdr(last, mk_pointer(sc->free_cell));
+    if (!sc->free_cell || decode_pointer(p) < sc->free_cell) {
+      set_cdr(last, sc->free_cell ? mk_pointer(sc->free_cell) : sc->EMPTY);
       sc->free_cell = decode_pointer(newp);
     } else {
       nanoclj_cell_t * p = sc->free_cell;
@@ -982,26 +982,31 @@ static inline void finalize_cell(nanoclj_t * sc, nanoclj_cell_t * a) {
 /* get new cell.  parameter a, b is marked by gc. */
 
 static inline nanoclj_cell_t * get_cell_x(nanoclj_t * sc, uint16_t type_id, uint8_t flags, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_cell_t * c) {
-  if (sc->free_cell == &(sc->_EMPTY)) {
+  if (!sc->free_cell) {
     const int min_to_be_recovered = sc->last_cell_seg * 8;
     gc(sc, a, b, c);
-    if (sc->fcells < min_to_be_recovered || sc->free_cell == &(sc->_EMPTY)) {
+    if (!sc->free_cell || sc->fcells < min_to_be_recovered) {
       /* if only a few recovered, get more to avoid fruitless gc's */
-      if (!alloc_cellseg(sc, 1) && sc->free_cell == &(sc->_EMPTY)) {
-	return NULL;
-      }
+      alloc_cellseg(sc, 1);
     }
   }
 
-  nanoclj_cell_t * x = sc->free_cell;
-  sc->free_cell = decode_pointer(_cdr(x));
-  --sc->fcells;
+  if (sc->free_cell) {
+    nanoclj_cell_t * x = sc->free_cell;
+    sc->free_cell = decode_pointer(_cdr(x));
+    if (sc->free_cell == &(sc->_EMPTY)) {
+      sc->free_cell = NULL;
+    }
+    --sc->fcells;
 
-  x->type = type_id;
-  x->flags = flags;
-  x->hasheq = 0;
-  
-  return x;
+    x->type = type_id;
+    x->flags = flags;
+    x->hasheq = 0;
+    return x;
+  }
+
+  sc->pending_exception = sc->OutOfMemoryError;
+  return NULL;
 }
 
 /* To retain recent allocs before interpreter knows about them -
@@ -1014,6 +1019,13 @@ static inline void retain(nanoclj_t * sc, nanoclj_cell_t * recent) {
     _set_cdr(holder, car(sc->sink));
     _cons_metadata(holder) = NULL;
     set_car(sc->sink, mk_pointer(holder));
+  }
+}
+
+static inline void retain_value(nanoclj_t * sc, nanoclj_val_t recent) {
+  if (is_cell(recent)) {
+    nanoclj_cell_t * c = decode_pointer(recent);
+    if (c) retain(sc, c);
   }
 }
 
@@ -1600,7 +1612,7 @@ static inline nanoclj_val_t mk_regex(nanoclj_t * sc, nanoclj_val_t pattern) {
       _re_unchecked(x) = re;
 
 #if RETAIN_ALLOCS
-      retain(sc, main_cell);
+      retain(sc, x);
 #endif
       return mk_pointer(x);
     }
@@ -2595,6 +2607,26 @@ static inline nanoclj_val_t mk_vector_3d(nanoclj_t * sc, double x, double y, dou
   set_vector_elem(vec, 0, mk_real(x));
   set_vector_elem(vec, 1, mk_real(y));
   set_vector_elem(vec, 2, mk_real(z));
+  return mk_pointer(vec);
+}
+
+static inline nanoclj_val_t mk_vector_4d(nanoclj_t * sc, double x, double y, double z, double w) {
+  nanoclj_cell_t * vec = mk_vector(sc, 4);
+  set_vector_elem(vec, 0, mk_real(x));
+  set_vector_elem(vec, 1, mk_real(y));
+  set_vector_elem(vec, 2, mk_real(z));
+  set_vector_elem(vec, 3, mk_real(w));
+  return mk_pointer(vec);
+}
+
+static inline nanoclj_val_t mk_vector_6d(nanoclj_t * sc, double x, double y, double z, double w, double a, double b) {
+  nanoclj_cell_t * vec = mk_vector(sc, 6);
+  set_vector_elem(vec, 0, mk_real(x));
+  set_vector_elem(vec, 1, mk_real(y));
+  set_vector_elem(vec, 2, mk_real(z));
+  set_vector_elem(vec, 3, mk_real(w));
+  set_vector_elem(vec, 4, mk_real(a));
+  set_vector_elem(vec, 5, mk_real(b));
   return mk_pointer(vec);
 }
 
@@ -7293,7 +7325,7 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   sc->last_cell_seg = -1;
   sc->sink = mk_pointer(&sc->_sink);
   sc->EMPTY = mk_pointer(&sc->_EMPTY);
-  sc->free_cell = &sc->_EMPTY;
+  sc->free_cell = NULL;
   sc->fcells = 0;
   sc->alloc_seg = sc->malloc(sizeof(*(sc->alloc_seg)) * CELL_NSEGMENT);
   sc->cell_seg = sc->malloc(sizeof(*(sc->cell_seg)) * CELL_NSEGMENT);
