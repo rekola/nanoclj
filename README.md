@@ -1,5 +1,7 @@
 # nanoclj
 
+[![CI](https://github.com/rekola/nanoclj/workflows/CI/badge.svg)]()
+
 ## A Tiny Clojure Interpreter
 
 This is small Clojure language implementation written in C language.
