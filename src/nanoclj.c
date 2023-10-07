@@ -4758,7 +4758,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	if (sc->tok == TOK_EOF) {
 	  s_return(sc, mk_nil());
 	}
-	s_goto(sc, OP_RDSEXPR);
+	s_goto(sc, OP_RD_SEXPR);
       }
     }
     Error_0(sc, "Not a reader");
@@ -6220,7 +6220,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 
     /* ========== reading part ========== */
     
-  case OP_RDSEXPR:
+  case OP_RD_SEXPR:
     x = get_in_port(sc);
     if (is_cell(x)) {
       nanoclj_cell_t * inport = decode_pointer(x);      
@@ -6231,7 +6231,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       case TOK_FN:
       case TOK_LPAREN:
 	if (sc->tok == TOK_FN) {
-	  s_save(sc, OP_RDFN, NULL, sc->EMPTY);
+	  s_save(sc, OP_RD_FN, NULL, sc->EMPTY);
 	}
 	sc->tok = token(sc, inport);
 	if (sc->tok == TOK_RPAREN) {       /* Empty list */
@@ -6240,8 +6240,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  Error_0(sc, "Illegal dot expression");
 	} else {
 	  _nesting_unchecked(inport)++;
-	  s_save(sc, OP_RDLIST, NULL, sc->EMPTY);
-	  s_goto(sc, OP_RDSEXPR);
+	  s_save(sc, OP_RD_LIST, NULL, sc->EMPTY);
+	  s_goto(sc, OP_RD_SEXPR);
 	}
 	
       case TOK_VEC:
@@ -6252,16 +6252,16 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  Error_0(sc, "Illegal dot expression");
 	} else {
 	  _nesting_unchecked(inport)++;
-	  s_save(sc, OP_RDVEC_ELEMENT, sc->EMPTYVEC, sc->EMPTY);
-	  s_goto(sc, OP_RDSEXPR);
+	  s_save(sc, OP_RD_VEC_ELEMENT, sc->EMPTYVEC, sc->EMPTY);
+	  s_goto(sc, OP_RD_SEXPR);
 	}      
 	
       case TOK_SET:
       case TOK_MAP:
 	if (sc->tok == TOK_SET) {
-	  s_save(sc, OP_RDSET, NULL, sc->EMPTY);
+	  s_save(sc, OP_RD_SET, NULL, sc->EMPTY);
 	} else {
-	  s_save(sc, OP_RDMAP, NULL, sc->EMPTY);
+	  s_save(sc, OP_RD_MAP, NULL, sc->EMPTY);
 	}
 	sc->tok = token(sc, inport);
 	if (sc->tok == TOK_RCURLY) {     /* Empty map or set */
@@ -6270,44 +6270,44 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  Error_0(sc, "Illegal dot expression");
 	} else {
 	  _nesting_unchecked(inport)++;
-	  s_save(sc, OP_RDMAP_ELEMENT, NULL, sc->EMPTY);
-	  s_goto(sc, OP_RDSEXPR);
+	  s_save(sc, OP_RD_MAP_ELEMENT, NULL, sc->EMPTY);
+	  s_goto(sc, OP_RD_SEXPR);
 	}
 	
       case TOK_QUOTE:
-	s_save(sc, OP_RDQUOTE, NULL, sc->EMPTY);
+	s_save(sc, OP_RD_QUOTE, NULL, sc->EMPTY);
 	sc->tok = token(sc, inport);
-	s_goto(sc, OP_RDSEXPR);
+	s_goto(sc, OP_RD_SEXPR);
 	
       case TOK_DEREF:
-	s_save(sc, OP_RDDEREF, NULL, sc->EMPTY);
+	s_save(sc, OP_RD_DEREF, NULL, sc->EMPTY);
 	sc->tok = token(sc, inport);
-	s_goto(sc, OP_RDSEXPR);
+	s_goto(sc, OP_RD_SEXPR);
 	
       case TOK_VAR:
-	s_save(sc, OP_RDVAR, NULL, sc->EMPTY);
+	s_save(sc, OP_RD_VAR, NULL, sc->EMPTY);
 	sc->tok = token(sc, inport);
-	s_goto(sc, OP_RDSEXPR);      
+	s_goto(sc, OP_RD_SEXPR);      
 	
       case TOK_BQUOTE:
 	sc->tok = token(sc, inport);
 	if (sc->tok == TOK_VEC) {
-	  s_save(sc, OP_RDQQUOTEVEC, NULL, sc->EMPTY);
+	  s_save(sc, OP_RD_QQUOTEVEC, NULL, sc->EMPTY);
 	  sc->tok = TOK_LPAREN; // ?
-	  s_goto(sc, OP_RDSEXPR);
+	  s_goto(sc, OP_RD_SEXPR);
 	} else {
-	  s_save(sc, OP_RDQQUOTE, NULL, sc->EMPTY);
+	  s_save(sc, OP_RD_QQUOTE, NULL, sc->EMPTY);
 	}
-	s_goto(sc, OP_RDSEXPR);
+	s_goto(sc, OP_RD_SEXPR);
 	
       case TOK_COMMA:
-	s_save(sc, OP_RDUNQUOTE, NULL, sc->EMPTY);
+	s_save(sc, OP_RD_UNQUOTE, NULL, sc->EMPTY);
 	sc->tok = token(sc, inport);
-	s_goto(sc, OP_RDSEXPR);
+	s_goto(sc, OP_RD_SEXPR);
       case TOK_ATMARK:
-	s_save(sc, OP_RDUQTSP, NULL, sc->EMPTY);
+	s_save(sc, OP_RD_UQTSP, NULL, sc->EMPTY);
 	sc->tok = token(sc, inport);
-	s_goto(sc, OP_RDSEXPR);
+	s_goto(sc, OP_RD_SEXPR);
       case TOK_PRIMITIVE:
 	x = mk_primitive(sc, readstr_upto(sc, DELIMITERS, inport));
 	if (is_nil(x)) {
@@ -6372,7 +6372,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	if (sc->tok == TOK_EOF) {
 	  s_return(sc, mk_codepoint(EOF));
 	}
-	s_goto(sc, OP_RDSEXPR);      
+	s_goto(sc, OP_RD_SEXPR);      
 	
       case TOK_SHARP_CONST:
 	if ((x = mk_sharp_const(sc, readstr_upto(sc, DELIMITERS, inport))).as_long == sc->EMPTY.as_long) {
@@ -6388,7 +6388,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
     Error_0(sc, "Not a reader");
     
-  case OP_RDLIST:
+  case OP_RD_LIST:
     x = get_in_port(sc);
     if (is_cell(x)) {
       nanoclj_cell_t * inport = decode_pointer(x);
@@ -6401,18 +6401,18 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  _nesting_unchecked(inport)--;
 	  s_return(sc, mk_pointer(reverse_in_place(sc, sc->args)));
 	} else if (sc->tok == TOK_DOT) {
-	  s_save(sc, OP_RDDOT, sc->args, sc->EMPTY);
+	  s_save(sc, OP_RD_DOT, sc->args, sc->EMPTY);
 	  sc->tok = token(sc, inport);
-	  s_goto(sc, OP_RDSEXPR);
+	  s_goto(sc, OP_RD_SEXPR);
 	} else {
-	  s_save(sc, OP_RDLIST, sc->args, sc->EMPTY);
-	  s_goto(sc, OP_RDSEXPR);
+	  s_save(sc, OP_RD_LIST, sc->args, sc->EMPTY);
+	  s_goto(sc, OP_RD_SEXPR);
 	}
       }
     }
     Error_0(sc, "Not a reader");
     
-  case OP_RDVEC_ELEMENT:
+  case OP_RD_VEC_ELEMENT:
     x = get_in_port(sc);
     if (is_cell(x)) {
       nanoclj_cell_t * inport = decode_pointer(x);
@@ -6425,14 +6425,14 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  _nesting_unchecked(inport)--;
 	  s_return(sc, mk_pointer(sc->args));
 	} else {
-	  s_save(sc, OP_RDVEC_ELEMENT, sc->args, sc->EMPTY);
-	  s_goto(sc, OP_RDSEXPR);
+	  s_save(sc, OP_RD_VEC_ELEMENT, sc->args, sc->EMPTY);
+	  s_goto(sc, OP_RD_SEXPR);
 	}
       }
     }
     Error_0(sc, "Not a reader");
 
-  case OP_RDMAP_ELEMENT:
+  case OP_RD_MAP_ELEMENT:
     x = get_in_port(sc);
     if (is_cell(x)) {
       nanoclj_cell_t * inport = decode_pointer(x);
@@ -6445,14 +6445,14 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  _nesting_unchecked(inport)--;
 	  s_return(sc, mk_pointer(reverse_in_place(sc, sc->args)));
 	} else {
-	  s_save(sc, OP_RDMAP_ELEMENT, sc->args, sc->EMPTY);
-	  s_goto(sc, OP_RDSEXPR);
+	  s_save(sc, OP_RD_MAP_ELEMENT, sc->args, sc->EMPTY);
+	  s_goto(sc, OP_RD_SEXPR);
 	}
       }
     }
     Error_0(sc, "Not a reader");
     
-  case OP_RDDOT:
+  case OP_RD_DOT:
     x = get_in_port(sc);
     if (is_cell(x)) {
       nanoclj_cell_t * inport = decode_pointer(x);
@@ -6467,31 +6467,31 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
     Error_0(sc, "Not a reader");
 
-  case OP_RDQUOTE:
+  case OP_RD_QUOTE:
     s_return(sc, mk_pointer(cons(sc, sc->QUOTE, cons(sc, sc->value, NULL))));
 
-  case OP_RDDEREF:
+  case OP_RD_DEREF:
     s_return(sc, mk_pointer(cons(sc, sc->DEREF, cons(sc, sc->value, NULL))));
 
-  case OP_RDVAR:
+  case OP_RD_VAR:
     s_return(sc, mk_pointer(cons(sc, sc->VAR, cons(sc, sc->value, NULL))));
     
-  case OP_RDQQUOTE:
+  case OP_RD_QQUOTE:
     s_return(sc, mk_pointer(cons(sc, sc->QQUOTE, cons(sc, sc->value, NULL))));
     
-  case OP_RDQQUOTEVEC:
+  case OP_RD_QQUOTEVEC:
     s_return(sc, mk_pointer(cons(sc, def_symbol(sc, "apply"),
 				 cons(sc, def_symbol(sc, "vector"),
 				      cons(sc, mk_pointer(cons(sc, sc->QQUOTE,
 							       cons(sc, sc->value, NULL))), NULL)))));
     
-  case OP_RDUNQUOTE:
+  case OP_RD_UNQUOTE:
     s_return(sc, mk_pointer(cons(sc, sc->UNQUOTE, cons(sc, sc->value, NULL))));
 
-  case OP_RDUQTSP:
+  case OP_RD_UQTSP:
     s_return(sc, mk_pointer(cons(sc, sc->UNQUOTESP, cons(sc, sc->value, NULL))));
     
-  case OP_RDFN:{
+  case OP_RD_FN:{
     bool has_rest;
     int n_args = get_literal_fn_arity(sc, sc->value, &has_rest);
     size_t vsize = n_args + (has_rest ? 2 : 0);
@@ -6506,14 +6506,14 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     s_return(sc, mk_pointer(cons(sc, sc->LAMBDA, cons(sc, mk_pointer(vec), cons(sc, sc->value, NULL)))));
   }
     
-  case OP_RDSET:
+  case OP_RD_SET:
     if (sc->value.as_long == sc->EMPTY.as_long) {
       s_return(sc, mk_pointer(mk_sorted_set(sc, 0)));
     } else {
       s_return(sc, mk_pointer(cons(sc, sc->SORTED_SET, decode_pointer(sc->value))));
     }
     
-  case OP_RDMAP:
+  case OP_RD_MAP:
     if (sc->value.as_long == sc->EMPTY.as_long) {
       s_return(sc, mk_pointer(mk_arraymap(sc, 0)));
     } else {
