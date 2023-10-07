@@ -1,6 +1,7 @@
 # nanoclj
 
 [![CI](https://github.com/rekola/nanoclj/workflows/CI/badge.svg)]()
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](http://makeapullrequest.com)
 
 ## A Tiny Clojure Interpreter
 
@@ -136,12 +137,18 @@ have been tested:
   - re-groups, re-matcher, re-seq, re-matches
   - hash-ordered-coll, hash-unordered-coll
   - assert-args
+  clojure.core.reducers
 - clojure.string
   - upper-case
   - capitalize
   - split
   - replace, replace-first
 - clojure.set
-- clojure.data.csv
+- clojure.data
 - clojure.xml
+- clojure.walk
+- clojure.zip
+- clojure.pprint
+- clojure.spec
+- clojure.test
 - ...and lots more...
