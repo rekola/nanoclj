@@ -6223,168 +6223,170 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_RD_SEXPR:
     x = get_in_port(sc);
     if (is_cell(x)) {
-      nanoclj_cell_t * inport = decode_pointer(x);      
-      switch (sc->tok) {
-      case TOK_EOF:
-	s_return(sc, mk_codepoint(EOF));
+      nanoclj_cell_t * inport = decode_pointer(x);
+      if (inport && _type(inport) == T_READER) {
+	switch (sc->tok) {
+	case TOK_EOF:
+	  s_return(sc, mk_codepoint(EOF));
 	
-      case TOK_FN:
-      case TOK_LPAREN:
-	if (sc->tok == TOK_FN) {
-	  s_save(sc, OP_RD_FN, NULL, sc->EMPTY);
-	}
-	sc->tok = token(sc, inport);
-	if (sc->tok == TOK_RPAREN) {       /* Empty list */
-	  s_return(sc, sc->EMPTY);
-	} else if (sc->tok == TOK_DOT) {
-	  Error_0(sc, "Illegal dot expression");
-	} else {
-	  _nesting_unchecked(inport)++;
-	  s_save(sc, OP_RD_LIST, NULL, sc->EMPTY);
+	case TOK_FN:
+	case TOK_LPAREN:
+	  if (sc->tok == TOK_FN) {
+	    s_save(sc, OP_RD_FN, NULL, sc->EMPTY);
+	  }
+	  sc->tok = token(sc, inport);
+	  if (sc->tok == TOK_RPAREN) {       /* Empty list */
+	    s_return(sc, sc->EMPTY);
+	  } else if (sc->tok == TOK_DOT) {
+	    Error_0(sc, "Illegal dot expression");
+	  } else {
+	    _nesting_unchecked(inport)++;
+	    s_save(sc, OP_RD_LIST, NULL, sc->EMPTY);
+	    s_goto(sc, OP_RD_SEXPR);
+	  }
+	
+	case TOK_VEC:
+	  sc->tok = token(sc, inport);
+	  if (sc->tok == TOK_RSQUARE) {	/* Empty vector */
+	    s_return(sc, mk_pointer(sc->EMPTYVEC));
+	  } else if (sc->tok == TOK_DOT) {
+	    Error_0(sc, "Illegal dot expression");
+	  } else {
+	    _nesting_unchecked(inport)++;
+	    s_save(sc, OP_RD_VEC_ELEMENT, sc->EMPTYVEC, sc->EMPTY);
+	    s_goto(sc, OP_RD_SEXPR);
+	  }      
+	
+	case TOK_SET:
+	case TOK_MAP:
+	  if (sc->tok == TOK_SET) {
+	    s_save(sc, OP_RD_SET, NULL, sc->EMPTY);
+	  } else {
+	    s_save(sc, OP_RD_MAP, NULL, sc->EMPTY);
+	  }
+	  sc->tok = token(sc, inport);
+	  if (sc->tok == TOK_RCURLY) {     /* Empty map or set */
+	    s_return(sc, sc->EMPTY);
+	  } else if (sc->tok == TOK_DOT) {
+	    Error_0(sc, "Illegal dot expression");
+	  } else {
+	    _nesting_unchecked(inport)++;
+	    s_save(sc, OP_RD_MAP_ELEMENT, NULL, sc->EMPTY);
+	    s_goto(sc, OP_RD_SEXPR);
+	  }
+	
+	case TOK_QUOTE:
+	  s_save(sc, OP_RD_QUOTE, NULL, sc->EMPTY);
+	  sc->tok = token(sc, inport);
 	  s_goto(sc, OP_RD_SEXPR);
-	}
 	
-      case TOK_VEC:
-	sc->tok = token(sc, inport);
-	if (sc->tok == TOK_RSQUARE) {	/* Empty vector */
-	  s_return(sc, mk_pointer(sc->EMPTYVEC));
-	} else if (sc->tok == TOK_DOT) {
-	  Error_0(sc, "Illegal dot expression");
-	} else {
-	  _nesting_unchecked(inport)++;
-	  s_save(sc, OP_RD_VEC_ELEMENT, sc->EMPTYVEC, sc->EMPTY);
+	case TOK_DEREF:
+	  s_save(sc, OP_RD_DEREF, NULL, sc->EMPTY);
+	  sc->tok = token(sc, inport);
 	  s_goto(sc, OP_RD_SEXPR);
-	}      
 	
-      case TOK_SET:
-      case TOK_MAP:
-	if (sc->tok == TOK_SET) {
-	  s_save(sc, OP_RD_SET, NULL, sc->EMPTY);
-	} else {
-	  s_save(sc, OP_RD_MAP, NULL, sc->EMPTY);
-	}
-	sc->tok = token(sc, inport);
-	if (sc->tok == TOK_RCURLY) {     /* Empty map or set */
-	  s_return(sc, sc->EMPTY);
-	} else if (sc->tok == TOK_DOT) {
-	  Error_0(sc, "Illegal dot expression");
-	} else {
-	  _nesting_unchecked(inport)++;
-	  s_save(sc, OP_RD_MAP_ELEMENT, NULL, sc->EMPTY);
+	case TOK_VAR:
+	  s_save(sc, OP_RD_VAR, NULL, sc->EMPTY);
+	  sc->tok = token(sc, inport);
+	  s_goto(sc, OP_RD_SEXPR);      
+	
+	case TOK_BQUOTE:
+	  sc->tok = token(sc, inport);
+	  if (sc->tok == TOK_VEC) {
+	    s_save(sc, OP_RD_QQUOTEVEC, NULL, sc->EMPTY);
+	    sc->tok = TOK_LPAREN; // ?
+	    s_goto(sc, OP_RD_SEXPR);
+	  } else {
+	    s_save(sc, OP_RD_QQUOTE, NULL, sc->EMPTY);
+	  }
 	  s_goto(sc, OP_RD_SEXPR);
-	}
 	
-      case TOK_QUOTE:
-	s_save(sc, OP_RD_QUOTE, NULL, sc->EMPTY);
-	sc->tok = token(sc, inport);
-	s_goto(sc, OP_RD_SEXPR);
-	
-      case TOK_DEREF:
-	s_save(sc, OP_RD_DEREF, NULL, sc->EMPTY);
-	sc->tok = token(sc, inport);
-	s_goto(sc, OP_RD_SEXPR);
-	
-      case TOK_VAR:
-	s_save(sc, OP_RD_VAR, NULL, sc->EMPTY);
-	sc->tok = token(sc, inport);
-	s_goto(sc, OP_RD_SEXPR);      
-	
-      case TOK_BQUOTE:
-	sc->tok = token(sc, inport);
-	if (sc->tok == TOK_VEC) {
-	  s_save(sc, OP_RD_QQUOTEVEC, NULL, sc->EMPTY);
-	  sc->tok = TOK_LPAREN; // ?
+	case TOK_COMMA:
+	  s_save(sc, OP_RD_UNQUOTE, NULL, sc->EMPTY);
+	  sc->tok = token(sc, inport);
 	  s_goto(sc, OP_RD_SEXPR);
-	} else {
-	  s_save(sc, OP_RD_QQUOTE, NULL, sc->EMPTY);
-	}
-	s_goto(sc, OP_RD_SEXPR);
-	
-      case TOK_COMMA:
-	s_save(sc, OP_RD_UNQUOTE, NULL, sc->EMPTY);
-	sc->tok = token(sc, inport);
-	s_goto(sc, OP_RD_SEXPR);
-      case TOK_ATMARK:
-	s_save(sc, OP_RD_UQTSP, NULL, sc->EMPTY);
-	sc->tok = token(sc, inport);
-	s_goto(sc, OP_RD_SEXPR);
-      case TOK_PRIMITIVE:
-	x = mk_primitive(sc, readstr_upto(sc, DELIMITERS, inport));
-	if (is_nil(x)) {
-	  Error_0(sc, "Invalid number format");
-	} else {
-	  s_return(sc, x);
-	}
-      case TOK_DQUOTE:
-	x = readstrexp(sc, inport, false);
-	if (is_false(x)) {
-	  Error_0(sc, "Invalid string");
-	}
-	s_return(sc, x);
-	
-      case TOK_REGEX:
-	x = readstrexp(sc, inport, true);
-	if (!is_false(x)) {
-	  x = mk_regex(sc, x);
-	  if (!is_nil(x)) {
+	case TOK_ATMARK:
+	  s_save(sc, OP_RD_UQTSP, NULL, sc->EMPTY);
+	  sc->tok = token(sc, inport);
+	  s_goto(sc, OP_RD_SEXPR);
+	case TOK_PRIMITIVE:
+	  x = mk_primitive(sc, readstr_upto(sc, DELIMITERS, inport));
+	  if (is_nil(x)) {
+	    Error_0(sc, "Invalid number format");
+	  } else {
 	    s_return(sc, x);
 	  }
-	}
-	Error_0(sc, "Invalid regex");
-	
-      case TOK_CHAR_CONST:
-	if ((x = mk_char_const(sc, readstr_upto(sc, DELIMITERS, inport))).as_long == sc->EMPTY.as_long) {
-	  Error_0(sc, "Undefined character literal");
-	} else {
+	case TOK_DQUOTE:
+	  x = readstrexp(sc, inport, false);
+	  if (is_false(x)) {
+	    Error_0(sc, "Invalid string");
+	  }
 	  s_return(sc, x);
-	}
 	
-      case TOK_TAG:{
-	nanoclj_val_t tag = mk_string(sc, readstr_upto(sc, DELIMITERS, inport));
-	if (skipspace(sc, inport) != '"') {
-	  Error_0(sc, "Invalid literal");	 
-	}
-	nanoclj_val_t value = readstrexp(sc, inport, false);
-	strview_t tag_sv = to_strview(tag);
-	
-	if (tag_sv.size == 4 && memcmp(tag_sv.ptr, "inst", 4) == 0) {
-	  s_return(sc, construct_by_type(sc, T_DATE, cons(sc, value, NULL)));	
-	} else if (tag_sv.size == 4 && memcmp(tag_sv.ptr, "uuid", 4) == 0) {
-	  s_return(sc, construct_by_type(sc, T_UUID, cons(sc, value, NULL)));	
-	} else {
-	  nanoclj_cell_t * f = find_slot_in_env(sc, sc->envir, sc->TAG_HOOK, true);
-	  if (f) {
-	    nanoclj_val_t hook = slot_value_in_env(f);
-	    if (!is_nil(hook)) {
-	      sc->code = mk_pointer(cons(sc, hook, cons(sc, tag, cons(sc, value, NULL))));
-	      s_goto(sc, OP_EVAL);
+	case TOK_REGEX:
+	  x = readstrexp(sc, inport, true);
+	  if (!is_false(x)) {
+	    x = mk_regex(sc, x);
+	    if (!is_nil(x)) {
+	      s_return(sc, x);
 	    }
 	  }
+	  Error_0(sc, "Invalid regex");
+	
+	case TOK_CHAR_CONST:
+	  if ((x = mk_char_const(sc, readstr_upto(sc, DELIMITERS, inport))).as_long == sc->EMPTY.as_long) {
+	    Error_0(sc, "Undefined character literal");
+	  } else {
+	    s_return(sc, x);
+	  }
+	
+	case TOK_TAG:{
+	  nanoclj_val_t tag = mk_string(sc, readstr_upto(sc, DELIMITERS, inport));
+	  if (skipspace(sc, inport) != '"') {
+	    Error_0(sc, "Invalid literal");	 
+	  }
+	  nanoclj_val_t value = readstrexp(sc, inport, false);
+	  strview_t tag_sv = to_strview(tag);
+	
+	  if (tag_sv.size == 4 && memcmp(tag_sv.ptr, "inst", 4) == 0) {
+	    s_return(sc, construct_by_type(sc, T_DATE, cons(sc, value, NULL)));	
+	  } else if (tag_sv.size == 4 && memcmp(tag_sv.ptr, "uuid", 4) == 0) {
+	    s_return(sc, construct_by_type(sc, T_UUID, cons(sc, value, NULL)));	
+	  } else {
+	    nanoclj_cell_t * f = find_slot_in_env(sc, sc->envir, sc->TAG_HOOK, true);
+	    if (f) {
+	      nanoclj_val_t hook = slot_value_in_env(f);
+	      if (!is_nil(hook)) {
+		sc->code = mk_pointer(cons(sc, hook, cons(sc, tag, cons(sc, value, NULL))));
+		s_goto(sc, OP_EVAL);
+	      }
+	    }
 	  
-	  sprintf(sc->strbuff, "No reader function for tag %.*s", (int)tag_sv.size, tag_sv.ptr);
-	  Error_0(sc, sc->strbuff);
+	    sprintf(sc->strbuff, "No reader function for tag %.*s", (int)tag_sv.size, tag_sv.ptr);
+	    Error_0(sc, sc->strbuff);
+	  }
 	}
+	
+	case TOK_IGNORE:
+	  readstr_upto(sc, DELIMITERS, inport);
+	  sc->tok = token(sc, inport);
+	  if (sc->tok == TOK_EOF) {
+	    s_return(sc, mk_codepoint(EOF));
+	  }
+	  s_goto(sc, OP_RD_SEXPR);      
+	
+	case TOK_SHARP_CONST:
+	  if ((x = mk_sharp_const(sc, readstr_upto(sc, DELIMITERS, inport))).as_long == sc->EMPTY.as_long) {
+	    Error_0(sc, "Undefined sharp expression");
+	  } else {
+	    s_return(sc, x);
+	  }
+	
+	default:
+	  Error_0(sc, "Illegal token");
+	}
+	break;
       }
-	
-      case TOK_IGNORE:
-	readstr_upto(sc, DELIMITERS, inport);
-	sc->tok = token(sc, inport);
-	if (sc->tok == TOK_EOF) {
-	  s_return(sc, mk_codepoint(EOF));
-	}
-	s_goto(sc, OP_RD_SEXPR);      
-	
-      case TOK_SHARP_CONST:
-	if ((x = mk_sharp_const(sc, readstr_upto(sc, DELIMITERS, inport))).as_long == sc->EMPTY.as_long) {
-	  Error_0(sc, "Undefined sharp expression");
-	} else {
-	  s_return(sc, x);
-	}
-	
-      default:
-	Error_0(sc, "Illegal token");
-      }
-      break;
     }
     Error_0(sc, "Not a reader");
     
