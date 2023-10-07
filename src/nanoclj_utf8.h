@@ -2,6 +2,7 @@
 #define _NANOCLJ_UTF8_H_
 
 #include <stdint.h>
+#include <stdbool.h>
 
 static inline size_t utf8_sequence_length(uint8_t lead) {
   if (lead < 0x80) return 1;
@@ -101,11 +102,14 @@ static inline int utf8_num_cells(const char *p, size_t len) {
   return nc;
 }
 
-static inline int unicode_isblank(int32_t c) {
+/* returns true if c is space or invisible character */
+static inline bool unicode_isspace(int32_t c) {
   switch (c) {
   case 0x0009: /* tab */
+  case 0x0010: /* new-line */
+  case 0x0013: /* carriage return */
   case 0x0020: /* space */
-  case 0x00A0: /* nbsp */
+  case 0x00a0: /* nbsp */
   case 0x1680: /* ogham space mark */
   case 0x2000: /* en quad */
   case 0x2001: /* em quad */
@@ -117,13 +121,21 @@ static inline int unicode_isblank(int32_t c) {
   case 0x2007: /* figure space */
   case 0x2008: /* punctuation space */
   case 0x2009: /* thin space */
-  case 0x200A: /* hair space */
-  case 0x202F: /* narrow no-break space */
-  case 0x205F: /* medium mathematical space */
+  case 0x200a: /* hair space */
+  case 0x200b: /* zero width space */
+  case 0x200c: /* zero width non-joiner */
+  case 0x200d: /* zero width joiner */
+  case 0x200e: /* left-to-right mark */
+  case 0x200f: /* right-to-left mark */
+  case 0x202c: /* pop directional formatting */
+  case 0x202f: /* narrow no-break space */
+  case 0x205f: /* medium mathematical space */
   case 0x3000: /* ideographic space */
-    return 1;
+  case 0xfe0f: /* variation selector-16 */
+  case 0xfeff: /* zero width no-break space */    
+    return true;
   }
-  return 0;
+  return false;
 }
 
 #endif

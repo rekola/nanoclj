@@ -3606,7 +3606,7 @@ static inline void print_slashstring(nanoclj_t * sc, strview_t sv, nanoclj_val_t
     int c = decode_utf8(p);
     p = utf8_next(p);
     
-    if (unicode_isblank(c) || c == '"' || c < ' ' || c == '\\' || (c >= 0x7f && c <= 0xa0)) {
+    if ((unicode_isspace(c) && c != ' ') || c == '"' || c < ' ' || c == '\\' || (c >= 0x7f && c <= 0xa0)) {
       putcharacter(sc, '\\', out);
       switch (c) {
       case '"':
@@ -3803,7 +3803,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
 	break;
       default:
 	p = sc->strbuff;
-      	if (unicode_isblank(c) || c < 32 || (c >= 0x7f && c <= 0xa0)) {
+      	if (unicode_isspace(c) || c < 32 || (c >= 0x7f && c <= 0xa0)) {
           plen = sprintf(sc->strbuff, "\\u%04x", c);
         } else {
 	  sc->strbuff[0] = '\\';
