@@ -30,13 +30,13 @@ static inline int32_t decode_utf8(const char *s) {
   case 2:
     p++;
     codepoint = ((codepoint << 6) & 0x7ff) + (*p & 0x3f);
-    break;                                                                                  
+    break;
   case 3:
     p++;
     codepoint = ((codepoint << 12) & 0xffff) + ((*p << 6) & 0xfff);
     p++;
     codepoint += *p & 0x3f;
-    break;                                                                                  
+    break;  
   case 4:
     p++;
     codepoint = ((codepoint << 18) & 0x1fffff) + ((*p << 12) & 0x3ffff);

@@ -3388,7 +3388,7 @@ static inline char *readstr_upto(nanoclj_t * sc, char *delim, nanoclj_cell_t * i
 static inline nanoclj_val_t readstrexp(nanoclj_t * sc, nanoclj_cell_t * inport, bool regex_mode) {
   char *p = sc->strbuff;
   int c1 = 0;
-  enum { st_ok, st_bsl, st_x1, st_x2, st_oct1, st_oct2 } state = st_ok;
+  enum { st_ok, st_bsl, st_u1, st_u2, st_u3, st_u4, st_oct1, st_oct2 } state = st_ok;
 
   for (;;) {
     int c = inchar(inport);
@@ -3423,9 +3423,8 @@ static inline nanoclj_val_t readstrexp(nanoclj_t * sc, nanoclj_cell_t * inport, 
 	  state = st_oct1;
 	  c1 = c - '0';
 	  break;
-	case 'x':
-	case 'X':
-	  state = st_x1;
+	case 'u':
+	  state = st_u1;
 	  c1 = 0;
 	  break;
 	case 'n':
@@ -3457,23 +3456,25 @@ static inline nanoclj_val_t readstrexp(nanoclj_t * sc, nanoclj_cell_t * inport, 
 	state = st_ok;
       }
       break;
-    case st_x1:
-    case st_x2:
-      c = toupper(c);
-      if (c >= '0' && c <= 'F') {
-        if (c <= '9') {
-          c1 = (c1 << 4) + c - '0';
-        } else {
-          c1 = (c1 << 4) + c - 'A' + 10;
-        }
-        if (state == st_x1) {
-          state = st_x2;
-        } else {
-          *p++ = c1;
-          state = st_ok;
-        }
+    case st_u1:
+    case st_u2:
+    case st_u3:
+    case st_u4:
+      c1 <<= 4;
+      if (c >= '0' && c <= '9') {
+	c1 += c - '0';
+      } else if (c >= 'a' && c <= 'f') {
+	c1 += c - 'a' + 10;
+      } else if (c >= 'A' && c <= 'F') {
+	c1 += c - 'A' + 10;
       } else {
         return (nanoclj_val_t)kFALSE;
+      }
+      if (state == st_u4) {
+	p += encode_utf8(c1, p);
+	state = st_ok;
+      } else {
+	state++;
       }
       break;
     case st_oct1:
@@ -3598,6 +3599,20 @@ static inline int token(nanoclj_t * sc, nanoclj_cell_t * inport) {
 
 /* ========== Routines for Printing ========== */
 
+static inline const char * escape_char(int c, char * buffer) {
+  switch (c) {
+  case 0:	return "\\0";
+  case '"':	return "\\\"";
+  case '\n':	return "\\n";
+  case '\t':	return "\\t";
+  case '\r':	return "\\r";
+  case '\b':	return "\\b";
+  case '\\':	return "\\";
+  }
+  sprintf(buffer, "\\u%04x", c);
+  return buffer;  
+}
+
 static inline void print_slashstring(nanoclj_t * sc, strview_t sv, nanoclj_val_t out) {
   const char * p = sv.ptr;
   putcharacter(sc, '"', out);
@@ -3606,32 +3621,8 @@ static inline void print_slashstring(nanoclj_t * sc, strview_t sv, nanoclj_val_t
     int c = decode_utf8(p);
     p = utf8_next(p);
     
-    if ((unicode_isspace(c) && c != ' ') || c == '"' || c < ' ' || c == '\\' || (c >= 0x7f && c <= 0xa0)) {
-      putcharacter(sc, '\\', out);
-      switch (c) {
-      case '"':
-        putcharacter(sc, '"', out);
-        break;
-      case '\n':
-        putcharacter(sc, 'n', out);
-        break;
-      case '\t':
-        putcharacter(sc, 't', out);
-        break;
-      case '\r':
-        putcharacter(sc, 'r', out);
-        break;
-      case '\\':
-        putcharacter(sc, '\\', out);
-        break;
-      default:{
-	putchars(sc, "u00", 3, out);
-	int d = c / 16;
-	putcharacter(sc, d + (d < 10 ? '0' : 'A' - 10), out);
-	d = c % 16;
-	putcharacter(sc, d + (d < 10 ? '0' : 'A' - 10), out);
-      }
-      }
+    if ((unicode_isspace(c) && c != ' ') || c == '"' || c < ' ' || c == '\\' || (c >= 0x7f && c <= 0xa0)) {      
+      putstr(sc, escape_char(c, sc->strbuff), out);
     } else {
       putcharacter(sc, c, out);
     }
