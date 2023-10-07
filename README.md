@@ -4,19 +4,8 @@
 
 ## A Tiny Clojure Interpreter
 
-This is small Clojure language implementation written in C language.
-It is based on TinyScheme R7, which is based on TinyScheme,
-which is based on MiniScheme. nanoclj does not attempt to be a real
-Clojure but a real Lisp with Clojure syntax. I.e. lists are actual
-Lisp lists built from cons cells. It is not yet complete nor fast. It
-is somewhat similar to Janet, but has Unicode out of the box. Similar
-to Planck but doesn't use Javascript or ClojureScript.
-
-## Possible applications
-
-- as a tiny engine for running plugins and other extensions in your C/C++ program (suppose you want to change some part of logic of your program without recompiling it every time).
-- as a sandbox to learn the language (as it supports most common features except those which will make implementation not "nano")
-- as utility script-running tool, even to create CGI-scripts for web-server
+This is a small Clojure language implementation written in C
+language. It is based on TinyScheme which was based on MiniScheme.
 
 ## 2D Graphics
 
@@ -37,14 +26,14 @@ a canvas or image. The terminal must, of course, has to support sixel
 graphics and sixel support must be enabled. The following terminals
 have been tested:
 
-| Terminal | Graphics | Mouse | Other |
+| Terminal | Graphics | Mouse | Notes |
 | - | - | - | - |
-| wezterm | OK | OK | Buggy |
-| mlterm | OK | | Output flickers when updated. |
+| foot | OK | OK | Wayland only |
+| wezterm | OK | OK | Buggy (as of 20230712) |
+| mlterm | OK | ? | Output flickers when updated. |
 | xterm | Sixels work, but no True color | OK | |
 | Black Box | OK | ? | On HiDPI system the images are upscaled, and the terminal and the flatpak system use too much CPU time when idling. |
 | GNOME Terminal | True color works, but sixel support is not enabled. | | |
-| foot | OK | | Mouse not working. |  
 
 ![Plotting from nanoclj](https://user-images.githubusercontent.com/6755525/262003070-b5eac109-f1cc-4071-ad7b-a1e5d107a1d9.jpeg "Plotting from nanoclj")
 *The plot function returns an image which can then be saved with Image/save or modified using other functions in the Image namespace.*
@@ -107,7 +96,7 @@ have been tested:
 - Refs, Agents, Atoms, Validators
 - Queues, Arrays
 - Reader Conditionals
-- BigInts, BigDecimals and Exotic numeric literals (e.g. 2r0, 3N, 0.1M, hexadecimal floats)
+- BigInts, BigDecimals and Exotic numeric literals (e.g. NrXXX, 3N, 0.1M, hexadecimal floats)
 - Persistent data structures
 - Transient data structures
 - Unchecked operations

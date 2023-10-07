@@ -512,27 +512,10 @@
 (defn print-str [& xs] (with-out-str (apply print xs)))
 (defn println-str [& xs] (with-out-str (apply println xs)))
 
-(def read-line (fn
-                 ([] (read-line *in*))
-                 ([rdr] (let [rls (fn [acc]
-                                  (let [c (.read rdr)]
-                                    (if (or (= c \newline) (= c ##Eof))
-                                      (if (and (list? acc) (= (car acc) \return))
-                                        (cdr acc) acc)
-                                      (rls (cons c acc))))
-                                    )
-                              line (rls '())
-                              ]
-                          (if (empty? line) nil (apply str (reverse line)))))))
-
 (defn read-string [s] (with-in-str s (read)))
 (defn load-string [s] (eval (read-string s)))
 
 (defn str [& args] (with-out-str (apply print args)))
-
-(defn line-seq [rdr] (let [line (read-line rdr)]
-                       (if line
-                         (cons line (lazy-seq (line-seq rdr))))))
 
 ; Logic
 

@@ -171,16 +171,12 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_c
      (which are also kept sorted by address) downwards to build the
      free-list in sorted order.
    */
-
-  long total_cells = 0;
   
   for (int_fast32_t i = sc->last_cell_seg; i >= 0; i--) {
     nanoclj_cell_t * min_p = decode_pointer(sc->cell_seg[i]);
     nanoclj_cell_t * p = min_p + CELL_SEGSIZE;
       
-    while (--p >= min_p) {
-      total_cells++;
-      
+    while (--p >= min_p) {      
       if (_is_mark(p)) {
 	_clrmark(p);
       } else {
@@ -203,7 +199,7 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_c
 
 #if GC_VERBOSE
   char msg[80];
-  sprintf(msg, "done: %ld / %ld cells were recovered.\n", sc->fcells, total_cells);
+  sprintf(msg,80,"done: %ld cells were recovered.\n", sc->fcells);
   putstr(sc, msg, get_err_port(sc));
 #endif
 }

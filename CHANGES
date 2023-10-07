@@ -1,16 +1,6 @@
 Change Log
 ----------
 
-Version 21.03 (as TinyScheme R7)
-    Changes and improvements:
-        - basic bytevector functions implemented
-	- UTF-8 is now supported in strings and characters with minor limitation of case-conversion not extended above ASCII range
-	- symbols are case-sensitive by default (to match R6RS, R7RS and speed-up a bit)
-	- fixes for various bugs (many of them found in "open" state in original repo)
-	- tests in simple shell scripts are added
-	- removed some old unused code (eg. objlist implementation)
-	- code cleanup / formatting (with indent -br -brs -brf -nut -ci4 -nlp -npsl -npro -npcs -ce *.c)
-
 Version 1.42
     Other changes:
         - Fixed segfault crash caused by invalid syntax to cond  (PG)

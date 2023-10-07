@@ -3,10 +3,6 @@
 
 #include "nanoclj.h"
 
-// Memory limits, by default enough
-// for list of over 100k elements
-// also controlled by env vars of the same name
-
 #ifndef CELL_SEGSIZE
 #define CELL_SEGSIZE    262144
 #endif
@@ -23,6 +19,10 @@
 
 #ifndef GC_VERBOSE
 #define GC_VERBOSE 0
+#endif
+
+#ifndef STRBUFFSIZE
+#define STRBUFFSIZE 256
 #endif
 
 #ifdef __cplusplus
@@ -44,7 +44,7 @@ extern "C" {
   /* operator code */
   enum nanoclj_opcode {
 #define _OP_DEF(A,B,OP) OP,
-#include "nanoclj_opdf.h"
+#include "nanoclj-op.h"
     OP_MAXDEFINED
   };
   
@@ -122,7 +122,6 @@ extern "C" {
       struct pcre2_real_code_8 * _re;
       struct {
 	nanoclj_port_rep_t * rep;
-	int backchar[2];
 	int nesting;
 	uint8_t type, flags;
       } _port;
@@ -163,8 +162,8 @@ extern "C" {
 
     bool tracing;
 
-    nanoclj_cell_t ** alloc_seg;
-    nanoclj_val_t * cell_seg;
+    nanoclj_cell_t *alloc_seg[CELL_NSEGMENT];
+    nanoclj_val_t cell_seg[CELL_NSEGMENT];
     int last_cell_seg;
 
 /* We use 5 registers. */
@@ -244,8 +243,7 @@ extern "C" {
     nanoclj_val_t load_stack[MAXFIL];    /* Stack of open files for port -1 (LOADing) */
     int file_i;
     
-    char *strbuff;
-    size_t strbuff_size;
+    char strbuff[STRBUFFSIZE];
 
     int tok;
     nanoclj_val_t value;

@@ -1,14 +1,24 @@
-/* This version of nanoclj was branched at 21.03 from TinyScheme R7
- * which was branched at 1.42 from https://sourceforge.net/p/tinyscheme
- * There was reference to authors of MiniScheme from which TinyScheme
- * was created long ago, but nowadays it is somewhat misleading.
- * Many people put efforts to this thing, so please look at the
- * comprehensive list of contributors here:
- * http://tinyscheme.sourceforge.net/credits.html
+/* nanoclj 0.2.0
+ * Mikael Rekola (mikael.rekola@gmail.com)
+ * 
+ * This version of nanoclj was branched at 1.42 from TinyScheme:
+ *
+ * T I N Y S C H E M E    1 . 4 2
+ *   Dimitrios Souflis (dsouflis@acm.org)
+ *   Based on MiniScheme (original credits follow)
+ * (MINISCM)               coded by Atsushi Moriwaki (11/5/1989)
+ * (MINISCM)           E-MAIL :  moriwaki@kurims.kurims.kyoto-u.ac.jp
+ * (MINISCM) This version has been modified by R.C. Secrist.
+ * (MINISCM)
+ * (MINISCM) Mini-Scheme is now maintained by Akira KIDA.
+ * (MINISCM)
+ * (MINISCM) This is a revised and modified version by Akira KIDA.
+ * (MINISCM)    current version is 0.85k4 (15 May 1994)
+ *
  */
 
 #define _NANOCLJ_SOURCE
-#include "nanoclj_priv.h"
+#include "nanoclj-private.h"
 
 // #define VECTOR_ARGS
 #define RETAIN_ALLOCS 1
@@ -107,12 +117,10 @@
 
 #define PORT_SAW_EOF	1
 
-#define VERSION "0.2.0"
+#define banner "nanoclj 0.2.0"
 
 #include <string.h>
 #include <stdlib.h>
-
-#define str_eq(X,Y) (!strcmp((X),(Y)))
 
 #ifndef InitFile
 #define InitFile "init.clj"
@@ -125,12 +133,6 @@
 #ifndef FIRST_CELLSEGS
 #define FIRST_CELLSEGS 3
 #endif
-
-#ifndef STRBUFF_INITIAL_SIZE
-#define STRBUFF_INITIAL_SIZE 128
-#endif
-
-#define OBJ_LIST_SIZE 727
 
 enum nanoclj_types {
   T_NIL = 0,
@@ -177,7 +179,7 @@ enum nanoclj_types {
   T_ARITHMETIC_EXCEPTION = 41,
   T_CLASS_CAST_EXCEPTION = 42,
   T_TENSOR = 43,
-  T_MAX_TYPE
+  T_LAST_SYSTEM_TYPE=44
 };
 
 typedef struct {
@@ -368,7 +370,6 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define _smalldata_unchecked(p)   (&((p)->_object._small_collection.data[0]))
 
 #define _rep_unchecked(p)	  ((p)->_object._port.rep)
-#define _backchar_unchecked(p)	  ((p)->_object._port.backchar)
 #define _port_type_unchecked(p)	  ((p)->_object._port.type)
 #define _port_flags_unchecked(p)  ((p)->_object._port.flags)
 #define _nesting_unchecked(p)     ((p)->_object._port.nesting)
@@ -402,7 +403,6 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define lvalue_unchecked(p)       (_lvalue_unchecked(decode_pointer(p)))
 
 #define rep_unchecked(p)	  _rep_unchecked(decode_pointer(p))
-#define backchar_unchecked(p)	  _backchar_unchecked(decode_pointer(p))
 #define port_type_unchecked(p)	  _port_type_unchecked(decode_pointer(p))
 #define port_flags_unchecked(p)	  _port_flags_unchecked(decode_pointer(p))
 #define nesting_unchecked(p)      _nesting_unchecked(decode_pointer(p))
@@ -777,15 +777,11 @@ typedef struct {
 
 static opcode_info dispatch_table[] = {
 #define _OP_DEF(A,B,OP) {A,B},
-#include "nanoclj_opdf.h"
+#include "nanoclj-op.h"
   { 0 }
 };
 
 static void Eval_Cycle(nanoclj_t * sc, enum nanoclj_opcode op);
-
-static inline const char* get_version() {
-  return VERSION;
-}
 
 static inline strview_t _to_strview(nanoclj_cell_t * c) {
   switch (_type(c)) {
@@ -1335,10 +1331,10 @@ static inline nanoclj_cell_t * mk_class_cast_exception(nanoclj_t * sc, const cha
 static inline nanoclj_cell_t * mk_arity_exception(nanoclj_t * sc, int n_args, nanoclj_val_t ns, nanoclj_val_t fn) {
   size_t l;
   if (is_nil(fn)) {
-    l = snprintf(sc->strbuff, sc->strbuff_size, "Invalid arity");
+    l = snprintf(sc->strbuff, STRBUFFSIZE, "Invalid arity");
   } else {
     strview_t sv1 = to_strview(ns), sv2 = to_strview(fn);
-    l = snprintf(sc->strbuff, sc->strbuff_size, "Wrong number of args (%d) passed to %.*s/%.*s", n_args, (int)sv1.size, sv1.ptr, (int)sv2.size, sv2.ptr);
+    l = snprintf(sc->strbuff, STRBUFFSIZE, "Wrong number of args (%d) passed to %.*s/%.*s", n_args, (int)sv1.size, sv1.ptr, (int)sv2.size, sv2.ptr);
   }
   nanoclj_val_t s = mk_pointer(get_string_object(sc, T_STRING, sc->strbuff, l, 0));
   return get_cell(sc, T_ARITY_EXCEPTION, 0, s, NULL, NULL);
@@ -1348,7 +1344,7 @@ static inline nanoclj_cell_t * mk_illegal_arg_exception(nanoclj_t * sc, const ch
   return get_cell(sc, T_ILLEGAL_ARG_EXCEPTION, 0, mk_string(sc, msg), NULL, NULL);
 }
 
-static inline int32_t basic_inchar(nanoclj_cell_t * p) {
+static inline int32_t inchar_raw(nanoclj_cell_t * p) {
   nanoclj_port_rep_t * pr = _rep_unchecked(p);
   switch (_port_type_unchecked(p)) {
   case port_file:
@@ -1363,22 +1359,29 @@ static inline int32_t basic_inchar(nanoclj_cell_t * p) {
   return EOF;
 }
 
-static inline int32_t utf8_inchar(nanoclj_cell_t * p) {
-  int32_t c = basic_inchar(p);
-  if (c == EOF || c < 0x80) {
-    return c;
+static inline int32_t inchar_utf8(nanoclj_cell_t * p) {
+  int c = inchar_raw(p);
+  if (c < 0) return EOF;
+  uint32_t codepoint = c;
+  switch (utf8_sequence_length(c)) {
+  case 2:
+    codepoint = ((codepoint << 6) & 0x7ff) + (inchar_raw(p) & 0x3f);
+    break;
+  case 3:
+    codepoint = ((codepoint << 12) & 0xffff) + ((inchar_raw(p) << 6) & 0xfff);
+    codepoint += inchar_raw(p) & 0x3f;
+    break;
+  case 4:
+    codepoint = ((codepoint << 18) & 0x1fffff) + ((inchar_raw(p) << 12) & 0x3ffff);
+    codepoint += (inchar_raw(p) << 6) & 0xfff;
+    codepoint += inchar_raw(p) & 0x3f;
+    break;
   }
-  char buf[4];
-  buf[0] = (char) c;
-  int bytes = (c < 0xE0) ? 2 : ((c < 0xF0) ? 3 : 4);
-  for (int i = 1; i < bytes; i++) {
-    c = basic_inchar(p);
-    if (c == EOF) {
-      return EOF;
-    }
-    buf[i] = (char) c;
+  if (_port_flags_unchecked(p) & PORT_SAW_EOF) {
+    return EOF;
+  } else {
+    return codepoint;
   }
-  return utf8_decode(buf);
 }
 
 static inline void update_cursor(int32_t c, nanoclj_cell_t * p, int line_len) {
@@ -1410,25 +1413,15 @@ static inline void update_cursor(int32_t c, nanoclj_cell_t * p, int line_len) {
 }
 
 /* get new codepoint from input file */
-static inline int32_t inchar(nanoclj_val_t p0) {
-  nanoclj_cell_t * p = decode_pointer(p0);
-  if (_backchar_unchecked(p)[1] >= 0) {
-    int32_t c = _backchar_unchecked(p)[1];
-    _backchar_unchecked(p)[1] = -1;
-    return c;
-  } else if (_backchar_unchecked(p)[0] >= 0) {
-    int32_t c = _backchar_unchecked(p)[0];
-    _backchar_unchecked(p)[0] = -1;
-    return c;
-  }
+static inline int32_t inchar(nanoclj_cell_t * p) {
   if (_port_flags_unchecked(p) & PORT_SAW_EOF) {
     return EOF;
   }
   int32_t c;
   if (_type(p) == T_INPUT_STREAM) { /* Binary */
-    c = basic_inchar(p);
+    c = inchar_raw(p);
   } else {
-    c = utf8_inchar(p);
+    c = inchar_utf8(p);
   }
   if (c == EOF) {
     /* Instead, set port_saw_EOF */
@@ -1440,11 +1433,26 @@ static inline int32_t inchar(nanoclj_val_t p0) {
 }
 
 /* back codepoint to input buffer */
-static inline void backchar(int c, nanoclj_val_t p) {
-  if (backchar_unchecked(p)[0] == -1) {
-    backchar_unchecked(p)[0] = c;
-  } else {
-    backchar_unchecked(p)[1] = c;
+static inline void backchar_raw(uint8_t c, nanoclj_cell_t * p) {
+  if (c == EOF) return;
+  nanoclj_port_rep_t *pr = _rep_unchecked(p);
+  switch (_port_type_unchecked(p)) {
+  case port_file:
+    ungetc(c, pr->stdio.file);
+    break;
+  case port_string:
+    if (pr->string.curr != pr->string.data.data) {
+      --pr->string.curr;
+    }
+    break;
+  }
+}
+
+static inline void backchar(int32_t c, nanoclj_cell_t * p) {
+  char buff[4];
+  size_t l = encode_utf8(c, &buff[0]);
+  for (size_t i = 0; i < l; i++) {
+    backchar_raw(buff[i], p);
   }
 }
 
@@ -1958,9 +1966,9 @@ static inline nanoclj_val_t first(nanoclj_t * sc, nanoclj_cell_t * coll) {
 	const char * start = _strvalue(coll);
 	const char * end = start + get_size(coll);
 	const char * last = utf8_prev(end);
-	return mk_codepoint(utf8_decode(last));
+	return mk_codepoint(decode_utf8(last));
       } else {
-	return mk_codepoint(utf8_decode(_strvalue(coll)));
+	return mk_codepoint(decode_utf8(_strvalue(coll)));
       }
     }
     break;
@@ -2155,7 +2163,7 @@ static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t
       }
       
       if (index == 0 && str < end) {
-	if (result) *result = mk_codepoint(utf8_decode(str));
+	if (result) *result = mk_codepoint(decode_utf8(str));
 	return true;
       }
     }
@@ -2247,7 +2255,7 @@ static inline nanoclj_cell_t * new_slot_spec_in_env(nanoclj_t * sc, nanoclj_cell
   
   if (is_vector(x)) {
     nanoclj_cell_t * vec = decode_pointer(x);
-    if (get_size(vec) == 0) resize_vector(sc, vec, OBJ_LIST_SIZE);
+    if (get_size(vec) == 0) resize_vector(sc, vec, 727);
     symbol_t * s = decode_symbol(variable);
     int location = s->hash % _size_unchecked(vec);
     set_vector_elem(vec, location, mk_pointer(cons(sc, slot, decode_pointer(vector_elem(vec, location)))));
@@ -2377,7 +2385,7 @@ static inline int compare(nanoclj_val_t a, nanoclj_val_t b) {
 	    if (p1 >= end1 && p2 >= end2) return 0;
 	    else if (p1 >= end1) return -1;
 	    else if (p2 >= end2) return 1;
-	    int d = utf8_decode(p1) - utf8_decode(p2);
+	    int d = decode_utf8(p1) - decode_utf8(p2);
 	    if (d) return d;
 	    p1 = utf8_next(p1), p2 = utf8_next(p2);
 	  }
@@ -2564,7 +2572,7 @@ static inline void ok_to_freely_gc(nanoclj_t * sc) {
 /* ========== oblist implementation  ========== */
 
 static inline nanoclj_cell_t * oblist_initial_value(nanoclj_t * sc) {
-  nanoclj_cell_t * vec = mk_vector(sc, OBJ_LIST_SIZE);
+  nanoclj_cell_t * vec = mk_vector(sc, 727);
   fill_vector(vec, mk_nil());
   return vec;
 }
@@ -2646,35 +2654,6 @@ static inline nanoclj_cell_t * copy_vector(nanoclj_t * sc, nanoclj_cell_t * vec)
   }
 }
 
-static inline size_t char_to_utf8(int c, char *p) {
-  if (c == EOF) {
-    return 0;
-  } else {
-    if (c < 0 || c > 0x10FFFF) {
-      fprintf(stderr, "char_to_utf8: bad char %d\n", c);
-      c = '?';
-    }
-
-    unsigned char *s = (unsigned char *)p;
- 
-    if (c < 0x80) {
-      *s++ = (unsigned char) c;
-      return 1;
-    } else {
-      size_t bytes = (c < 0x800) ? 2 : ((c < 0x10000) ? 3 : 4);
-      size_t len = bytes;
-      s[0] = 0x80;
-      while (--bytes) {
-	s[0] |= (0x80 >> bytes);
-	s[bytes] = (unsigned char) (0x80 | (c & 0x3F));
-	c >>= 6;
-      }
-      s[0] |= (unsigned char) c;
-      return len;
-    }
-  }
-}
-
 static inline nanoclj_cell_t * conjoin(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t new_value) {
   if (!coll) coll = &(sc->_EMPTY);
 	       
@@ -2712,7 +2691,7 @@ static inline nanoclj_cell_t * conjoin(nanoclj_t * sc, nanoclj_cell_t * coll, na
     }
   } else if (t == T_STRING || t == T_CHAR_ARRAY || t == T_FILE) {
     size_t old_size = get_size(coll);
-    size_t input_len = char_to_utf8(decode_integer(new_value), sc->strbuff);
+    size_t input_len = encode_utf8(decode_integer(new_value), sc->strbuff);
     if (_is_small(coll)) {
       nanoclj_cell_t * new_coll = get_string_object(sc, t, NULL, old_size + input_len, 0);
       const char * data = _smallstrvalue_unchecked(coll);
@@ -2817,7 +2796,7 @@ static inline nanoclj_cell_t * mk_type(nanoclj_t * sc, int type_id, nanoclj_cell
     }
     sc->types->size = type_id + 1;
   }
-  nanoclj_cell_t * vec = mk_vector(sc, OBJ_LIST_SIZE);
+  nanoclj_cell_t * vec = mk_vector(sc, 727);
   fill_vector(vec, mk_nil());
   nanoclj_cell_t * t = get_cell(sc, type_id, T_TYPE, mk_pointer(vec), parent_type, meta);
   sc->types->data[type_id] = mk_pointer(t);
@@ -2855,7 +2834,7 @@ static inline nanoclj_val_t def_symbol_or_keyword(nanoclj_t * sc, const char *na
 }
 
 static inline nanoclj_cell_t * def_namespace_with_sym(nanoclj_t *sc, nanoclj_val_t sym, nanoclj_cell_t * md) {
-  nanoclj_cell_t * vec = mk_vector(sc, OBJ_LIST_SIZE);
+  nanoclj_cell_t * vec = mk_vector(sc, 727);
   fill_vector(vec, mk_nil());
   nanoclj_cell_t * ns = get_cell(sc, T_ENVIRONMENT, 0, mk_pointer(vec), sc->root_env, md);
   if (sc->global_env) {
@@ -2917,6 +2896,7 @@ static inline nanoclj_val_t mk_primitive(nanoclj_t * sc, char *q) {
   bool has_fp_exp = false;
   bool has_hex_prefix = false;
   bool has_octal_prefix = false;
+  bool has_binary_prefix = false;
   char *div = 0;
   char *p;
   int sign = 1;
@@ -2943,13 +2923,19 @@ static inline nanoclj_val_t mk_primitive(nanoclj_t * sc, char *q) {
     return def_symbol_or_keyword(sc, q);    
   }
 
-  if (!has_dec_point && c == '0') {
-    if (*p == 'x') {
-      has_hex_prefix = true;
+  if (!has_dec_point) {
+    if (c == '0') {
+      if (*p == 'x') {
+	has_hex_prefix = true;
+	p++;
+	q = p;     
+      } else if (isdigit(*p)) {
+	has_octal_prefix = true;
+	q = p;
+      }
+    } else if (c == '2' && *p == 'r') {
+      has_binary_prefix = true;
       p++;
-      q = p;
-    } else if (isdigit(*p)) {
-      has_octal_prefix = true;
       q = p;
     }
   }
@@ -2957,6 +2943,12 @@ static inline nanoclj_val_t mk_primitive(nanoclj_t * sc, char *q) {
   for (; (c = *p) != 0; ++p) {
     if (has_hex_prefix) {
       if (isdigit(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+	continue;
+      } else {
+	return mk_nil();
+      }
+    } else if (has_binary_prefix) {
+      if (c == '0' || c == '1') {
 	continue;
       } else {
 	return mk_nil();
@@ -2980,8 +2972,8 @@ static inline nanoclj_val_t mk_primitive(nanoclj_t * sc, char *q) {
 	}
       } else if ((c == 'e') || (c == 'E')) {
         if (!has_fp_exp) {
-          has_fp_exp = 1;
-          has_dec_point = 1;    /* decimal point illegal further */
+          has_fp_exp = true;
+          has_dec_point = true;    /* decimal point illegal from now on */
           p++;
           if ((*p == '-') || (*p == '+') || isdigit(*p)) {
             continue;
@@ -3009,6 +3001,9 @@ static inline nanoclj_val_t mk_primitive(nanoclj_t * sc, char *q) {
   if (has_hex_prefix) {
     return mk_integer(sc, sign * strtoll(q, (char **)NULL, 16));
   }
+  if (has_binary_prefix) {
+    return mk_integer(sc, sign * strtoll(q, (char **)NULL, 2));
+  }
   if (has_octal_prefix) {
     return mk_integer(sc, sign * strtoll(q, (char **)NULL, 8));
   }
@@ -3021,17 +3016,17 @@ static inline nanoclj_val_t mk_primitive(nanoclj_t * sc, char *q) {
 static inline nanoclj_val_t mk_char_const(nanoclj_t * sc, char *name) {
   if (*name == '\\') {   /* \w (character) */
     int c = 0;
-    if (str_eq(name + 1, "space")) {
+    if (strcmp(name + 1, "space") == 0) {
       c = ' ';
-    } else if (str_eq(name + 1, "newline")) {
+    } else if (strcmp(name + 1, "newline") == 0) {
       c = '\n';
-    } else if (str_eq(name + 1, "return")) {
+    } else if (strcmp(name + 1, "return") == 0) {
       c = '\r';
-    } else if (str_eq(name + 1, "tab")) {
+    } else if (strcmp(name + 1, "tab") == 0) {
       c = '\t';
-    } else if (str_eq(name + 1, "formfeed")) {
+    } else if (strcmp(name + 1, "formfeed") == 0) {
       c = '\f';
-    } else if (str_eq(name + 1, "backspace")) {
+    } else if (strcmp(name + 1, "backspace") == 0) {
       c = '\b';
     } else if (name[1] == 'u' && name[2] != 0) {
       int c1 = 0;
@@ -3043,7 +3038,7 @@ static inline nanoclj_val_t mk_char_const(nanoclj_t * sc, char *name) {
     } else if (name[2] == 0) {
       c = name[1];
     } else if (*(utf8_next(name + 1)) == 0) {
-      c = utf8_decode(name + 1);
+      c = decode_utf8(name + 1);
     } else {
       return mk_nil();
     }
@@ -3054,13 +3049,13 @@ static inline nanoclj_val_t mk_char_const(nanoclj_t * sc, char *name) {
 }
 
 static inline nanoclj_val_t mk_sharp_const(nanoclj_t * sc, char *name) {
-  if (str_eq(name, "Inf")) {
+  if (strcmp(name, "Inf") == 0) {
     return mk_real(INFINITY);
-  } else if (str_eq(name, "-Inf")) {
+  } else if (strcmp(name, "-Inf") == 0) {
     return mk_real(-INFINITY);
-  } else if (str_eq(name, "NaN")) {
+  } else if (strcmp(name, "NaN") == 0) {
     return mk_real(NAN);
-  } else if (str_eq(name, "Eof")) {
+  } else if (strcmp(name, "Eof") == 0) {
     return mk_codepoint(EOF);
   } else {
     return mk_nil();
@@ -3075,7 +3070,6 @@ static inline nanoclj_cell_t * get_port_object(nanoclj_t * sc, uint16_t type, na
     nanoclj_port_rep_t * pr = sc->malloc(sizeof(nanoclj_port_rep_t));
     if (pr) {
       x->_object._port.rep = pr;
-      _backchar_unchecked(x)[0] = _backchar_unchecked(x)[1] = -1;
       _port_type_unchecked(x) = port_type;
       _port_flags_unchecked(x) = 0;
       _nesting_unchecked(x) = 0;
@@ -3258,7 +3252,7 @@ static inline void putchars(nanoclj_t * sc, const char *s, size_t len, nanoclj_v
     fwrite(s, 1, len, pr->stdio.file);
     const char * end = s + len;
     while (s < end) {
-      update_cursor(utf8_decode(s), out, sc->window_columns);
+      update_cursor(decode_utf8(s), out, sc->window_columns);
       s = utf8_next(s);
     }
   }
@@ -3287,7 +3281,7 @@ static inline void putstr(nanoclj_t * sc, const char *s, nanoclj_val_t out) {
 
 static inline void putcharacter(nanoclj_t * sc, int c, nanoclj_val_t out) {
   if (c != EOF) {
-    size_t len = char_to_utf8(c, sc->strbuff);
+    size_t len = encode_utf8(c, sc->strbuff);
     putchars(sc, sc->strbuff, len, out);
   }
 }
@@ -3354,18 +3348,6 @@ static inline void set_bg_color(nanoclj_t * sc, nanoclj_cell_t * vec, nanoclj_va
   }
 }
 
-static inline void check_strbuff_size(nanoclj_t * sc, char **p) {
-  int len = *p - sc->strbuff;
-  if (len + 4 >= sc->strbuff_size) {
-    sc->strbuff_size *= 2;
-    char * t = sc->malloc(sc->strbuff_size);
-    memcpy(t, sc->strbuff, len);
-    *p = t + len;
-    sc->free(sc->strbuff);
-    sc->strbuff = t;
-  }
-}
-
 /* check c is in chars */
 static inline bool is_one_of(const char *s, int c) {
   if (c < 0) return true; /* always accept EOF */
@@ -3374,27 +3356,26 @@ static inline bool is_one_of(const char *s, int c) {
 }
 
 /* read characters up to delimiter, but cater to character constants */
-static inline char *readstr_upto(nanoclj_t * sc, char *delim, nanoclj_val_t inport) {
+static inline char *readstr_upto(nanoclj_t * sc, char *delim, nanoclj_cell_t * inport) {
   char *p = sc->strbuff;
   bool found_delim = false;
   
-  while (1) {
+  while (p - sc->strbuff < sizeof(sc->strbuff)) {
     int c = inchar(inport);
-    if (c == EOF) break;
-    
-    check_strbuff_size(sc, &p);
-    p += char_to_utf8(c, p);
+    if (c == EOF) break; 
 
+    p += encode_utf8(c, p);
+    
     if (is_one_of(delim, c)) {
       found_delim = true;
       break;
-    }
+    }   
   }
 
   /* Check if the delimiter was escaped */
   if (p == sc->strbuff + 2 && p[-2] == '\\') {
     *p = 0;
-  } else if (found_delim) { /* Return the delimiter */
+  } else if (found_delim) { /* Return the delimiter to the port */
     backchar(p[-1], inport);
     *--p = '\0';
   } else {
@@ -3404,17 +3385,16 @@ static inline char *readstr_upto(nanoclj_t * sc, char *delim, nanoclj_val_t inpo
 }
 
 /* read string expression "xxx...xxx" */
-static inline nanoclj_val_t readstrexp(nanoclj_t * sc, nanoclj_val_t inport, bool regex_mode) {
+static inline nanoclj_val_t readstrexp(nanoclj_t * sc, nanoclj_cell_t * inport, bool regex_mode) {
   char *p = sc->strbuff;
   int c1 = 0;
   enum { st_ok, st_bsl, st_x1, st_x2, st_oct1, st_oct2 } state = st_ok;
 
   for (;;) {
     int c = inchar(inport);
-    if (c == EOF) {
+    if (c == EOF || p - sc->strbuff > sizeof(sc->strbuff) - 1) { 
       return (nanoclj_val_t)kFALSE;
     }
-    check_strbuff_size(sc, &p);
     
     switch (state) {
     case st_ok:
@@ -3425,7 +3405,7 @@ static inline nanoclj_val_t readstrexp(nanoclj_t * sc, nanoclj_val_t inport, boo
       case '"':
         return mk_pointer(get_string_object(sc, T_STRING, sc->strbuff, p - sc->strbuff, 0));
       default:
-        p += char_to_utf8(c, p);
+        p += encode_utf8(c, p);
         break;
       }
       break;
@@ -3521,7 +3501,7 @@ static inline nanoclj_val_t readstrexp(nanoclj_t * sc, nanoclj_val_t inport, boo
 }
 
 /* skip white space characters, returns the first non-whitespace character */
-static inline int skipspace(nanoclj_t * sc, nanoclj_val_t inport) {
+static inline int skipspace(nanoclj_t * sc, nanoclj_cell_t * inport) {
   int c = 0;
   do {
     c = inchar(inport);
@@ -3531,7 +3511,7 @@ static inline int skipspace(nanoclj_t * sc, nanoclj_val_t inport) {
 }
 
 /* get token */
-static inline int token(nanoclj_t * sc, nanoclj_val_t inport) {
+static inline int token(nanoclj_t * sc, nanoclj_cell_t * inport) {
   int c;
   switch (c = skipspace(sc, inport)) {
   case EOF: return TOK_EOF;
@@ -3620,14 +3600,13 @@ static inline int token(nanoclj_t * sc, nanoclj_val_t inport) {
 
 static inline void print_slashstring(nanoclj_t * sc, strview_t sv, nanoclj_val_t out) {
   const char * p = sv.ptr;
-  int c, d;
   putcharacter(sc, '"', out);
   const char * end = p + sv.size;
   while (p < end) {
-    c = utf8_decode(p);
+    int c = decode_utf8(p);
     p = utf8_next(p);
     
-    if (c == '"' || c < ' ' || c == '\\' || (c >= 0x7f && c <= 0xa0)) {
+    if (unicode_isblank(c) || c == '"' || c < ' ' || c == '\\' || (c >= 0x7f && c <= 0xa0)) {
       putcharacter(sc, '\\', out);
       switch (c) {
       case '"':
@@ -3647,7 +3626,7 @@ static inline void print_slashstring(nanoclj_t * sc, strview_t sv, nanoclj_val_t
         break;
       default:{
 	putchars(sc, "u00", 3, out);
-	d = c / 16;
+	int d = c / 16;
 	putcharacter(sc, d + (d < 10 ? '0' : 'A' - 10), out);
 	d = c % 16;
 	putcharacter(sc, d + (d < 10 ? '0' : 'A' - 10), out);
@@ -3747,7 +3726,7 @@ static inline void print_image(nanoclj_t * sc, nanoclj_image_t * img, nanoclj_va
   }
   
   char * p = sc->strbuff;
-  size_t len = snprintf(sc->strbuff, sc->strbuff_size, "#<Image %d %d %d>", img->width, img->height, img->channels);
+  size_t len = snprintf(sc->strbuff, STRBUFFSIZE, "#<Image %d %d %d>", img->width, img->height, img->channels);
   putchars(sc, p, 3, out);
 }
 
@@ -3797,7 +3776,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
   case T_CODEPOINT:
     if (!print_flag) {
       p = sc->strbuff;
-      plen = char_to_utf8(decode_integer(l), sc->strbuff);
+      plen = encode_utf8(decode_integer(l), sc->strbuff);
     } else {
       int c = decode_integer(l);
       switch (c) {
@@ -3824,11 +3803,11 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
 	break;
       default:
 	p = sc->strbuff;
-      	if (c < 32 || (c >= 0x7f && c <= 0xa0)) {
+      	if (unicode_isblank(c) || c < 32 || (c >= 0x7f && c <= 0xa0)) {
           plen = sprintf(sc->strbuff, "\\u%04x", c);
         } else {
 	  sc->strbuff[0] = '\\';
-	  plen = 1 + char_to_utf8(c, sc->strbuff + 1);
+	  plen = 1 + encode_utf8(c, sc->strbuff + 1);
 	}
         break;
       }
@@ -3844,7 +3823,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
   case T_KEYWORD:{
     strview_t sv = to_strview(l);
     p = sc->strbuff;
-    plen = snprintf(sc->strbuff, sc->strbuff_size, ":%.*s", (int)sv.size, sv.ptr);
+    plen = snprintf(sc->strbuff, STRBUFFSIZE, ":%.*s", (int)sv.size, sv.ptr);
   }
     break;
   case T_NIL:{
@@ -3944,12 +3923,12 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
 	  name = (strview_t){ "", 0 };
 	}
 	p = sc->strbuff;
-	plen = snprintf(sc->strbuff, sc->strbuff_size, "#<Namespace %.*s>", (int)name.size, name.ptr);
+	plen = snprintf(sc->strbuff, STRBUFFSIZE, "#<Namespace %.*s>", (int)name.size, name.ptr);
       }
 	break;
       case T_RATIO:
 	p = sc->strbuff;
-	plen = snprintf(sc->strbuff, sc->strbuff_size, "%lld/%lld", to_long(vector_elem(c, 0)), to_long(vector_elem(c, 1)));
+	plen = snprintf(sc->strbuff, STRBUFFSIZE, "%lld/%lld", to_long(vector_elem(c, 0)), to_long(vector_elem(c, 1)));
 	break;
       case T_FILE:
 	if (!print_flag) {
@@ -3957,7 +3936,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
 	  plen = get_size(c);
 	} else {
 	  p = sc->strbuff;
-	  plen = snprintf(sc->strbuff, sc->strbuff_size, "#<File %.*s>", (int)get_size(c), _strvalue(c));
+	  plen = snprintf(sc->strbuff, STRBUFFSIZE, "#<File %.*s>", (int)get_size(c), _strvalue(c));
 	}
 	break;
       case T_TENSOR:
@@ -3982,7 +3961,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
       if (get_elem(sc, _cons_metadata(get_type_object(sc, l)), sc->NAME, &name_v)) {
 	strview_t sv = to_strview(name_v);
 	p = sc->strbuff;
-	plen = snprintf(sc->strbuff, sc->strbuff_size, "#object[%.*s]", (int)sv.size, sv.ptr);
+	plen = snprintf(sc->strbuff, STRBUFFSIZE, "#object[%.*s]", (int)sv.size, sv.ptr);
       } else {
 	p = "#object";
       }
@@ -4283,7 +4262,7 @@ static inline nanoclj_cell_t * resolve(nanoclj_t * sc, nanoclj_cell_t * env0, na
       all_namespaces = false;
     } else {
       symbol_t * s2 = decode_symbol(s->ns_sym);
-      snprintf(sc->strbuff, sc->strbuff_size, "%.*s is not defined", (int)s2->name.size, s2->name.ptr);
+      snprintf(sc->strbuff, STRBUFFSIZE, "%.*s is not defined", (int)s2->name.size, s2->name.ptr);
       nanoclj_throw(sc, mk_runtime_exception(sc, sc->strbuff));
       return NULL;
     }	  
@@ -4453,7 +4432,7 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
     if (args) {
       parent = decode_pointer(first(sc, args));
     }
-    nanoclj_cell_t * vec = mk_vector(sc, OBJ_LIST_SIZE);
+    nanoclj_cell_t * vec = mk_vector(sc, 727);
     fill_vector(vec, mk_nil());
     return mk_pointer(get_cell(sc, T_ENVIRONMENT, 0, mk_pointer(vec), parent, NULL));
   }
@@ -4772,24 +4751,28 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 
   case OP_READ:                /* read */
     x = get_in_port(sc);
-    if (!is_reader(x)) {
-      Error_0(sc, "Not a reader");
-    } else {
-      sc->tok = token(sc, x);
-      if (sc->tok == TOK_EOF) {
-	s_return(sc, mk_nil());
+    if (is_cell(x)) {
+      nanoclj_cell_t * inport = decode_pointer(x);
+      if (inport && _type(inport) == T_READER) {
+	sc->tok = token(sc, inport);
+	if (sc->tok == TOK_EOF) {
+	  s_return(sc, mk_nil());
+	}
+	s_goto(sc, OP_RDSEXPR);
       }
-      s_goto(sc, OP_RDSEXPR);
     }
+    Error_0(sc, "Not a reader");
 
   case OP_READM:               /* .read */
     if (!unpack_args_1(sc, &arg0)) {
       return false;
-    } else if (!is_reader(arg0)) {
-      Error_0(sc, "Not a reader");
-    } else {
-      s_return(sc, mk_codepoint(inchar(arg0)));
+    } else if (is_cell(arg0)) {
+      nanoclj_cell_t * p = decode_pointer(arg0);
+      if (p && _type(p) == T_READER) {
+	s_return(sc, mk_codepoint(inchar(p)));
+      }
     }
+    Error_0(sc, "Not a reader");
     
   case OP_GENSYM:
     if (!unpack_args_0_plus(sc, &arg_next)) {
@@ -4820,7 +4803,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  s_return(sc, slot_value_in_env(c));
 	} else {
 	  symbol_t * s = decode_symbol(sc->code);
-	  snprintf(sc->strbuff, sc->strbuff_size, "Use of undeclared Var %.*s", (int)s->full_name.size, s->full_name.ptr);
+	  snprintf(sc->strbuff, STRBUFFSIZE, "Use of undeclared Var %.*s", (int)s->full_name.size, s->full_name.ptr);
 	  nanoclj_throw(sc, mk_runtime_exception(sc, sc->strbuff));
 	  return false;
 	}
@@ -5111,7 +5094,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	s_return(sc, mk_pointer(var));
       } else {
 	symbol_t * s = decode_symbol(x);
-	snprintf(sc->strbuff, sc->strbuff_size, "Use of undeclared Var %.*s", (int)s->full_name.size, s->full_name.ptr);
+	snprintf(sc->strbuff, STRBUFFSIZE, "Use of undeclared Var %.*s", (int)s->full_name.size, s->full_name.ptr);
 	nanoclj_throw(sc, mk_runtime_exception(sc, sc->strbuff));
 	return false;
       }
@@ -5789,7 +5772,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  return false;
 	}
 	double res = fmod(a, b);
-	/* remainder should have same sign as first operand */
+	/* set remainder sign the same as the first arg */
 	if (res > 0 && a < 0) res -= fabs(b);
 	else if (res < 0 && a > 0) res += fabs(b);
 	
@@ -5801,7 +5784,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  return false;
 	} else {
 	  long long res = a % b;
-	  /* remainder should have same sign as first operand */
+	  /* set remainder sign the same as the first arg */
 	  if (res > 0 && a < 0) res -= labs(b);
 	  else if (res < 0 && a > 0) res += labs(b);
 	  
@@ -6239,11 +6222,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     
   case OP_RDSEXPR:
     x = get_in_port(sc);
-    if (!is_reader(x)) {
-      Error_0(sc, "Not a reader");
-    } else {
-      nanoclj_val_t inport = x;
-
+    if (is_cell(x)) {
+      nanoclj_cell_t * inport = decode_pointer(x);      
       switch (sc->tok) {
       case TOK_EOF:
 	s_return(sc, mk_codepoint(EOF));
@@ -6259,7 +6239,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	} else if (sc->tok == TOK_DOT) {
 	  Error_0(sc, "Illegal dot expression");
 	} else {
-	  nesting_unchecked(inport)++;
+	  _nesting_unchecked(inport)++;
 	  s_save(sc, OP_RDLIST, NULL, sc->EMPTY);
 	  s_goto(sc, OP_RDSEXPR);
 	}
@@ -6271,7 +6251,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	} else if (sc->tok == TOK_DOT) {
 	  Error_0(sc, "Illegal dot expression");
 	} else {
-	  nesting_unchecked(inport)++;
+	  _nesting_unchecked(inport)++;
 	  s_save(sc, OP_RDVEC_ELEMENT, sc->EMPTYVEC, sc->EMPTY);
 	  s_goto(sc, OP_RDSEXPR);
 	}      
@@ -6289,7 +6269,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	} else if (sc->tok == TOK_DOT) {
 	  Error_0(sc, "Illegal dot expression");
 	} else {
-	  nesting_unchecked(inport)++;
+	  _nesting_unchecked(inport)++;
 	  s_save(sc, OP_RDMAP_ELEMENT, NULL, sc->EMPTY);
 	  s_goto(sc, OP_RDSEXPR);
 	}
@@ -6406,82 +6386,86 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       }
       break;
     }
+    Error_0(sc, "Not a reader");
     
   case OP_RDLIST:
     x = get_in_port(sc);
-    if (!is_reader(x)) {
-      Error_0(sc, "Not a reader");
-    } else {
-      nanoclj_val_t inport = x;
-      sc->args = cons(sc, sc->value, sc->args);
-      sc->tok = token(sc, inport);
-      if (sc->tok == TOK_EOF) {
-	s_return(sc, mk_codepoint(EOF));
-      } else if (sc->tok == TOK_RPAREN) {
-	nesting_unchecked(inport)--;
-	s_return(sc, mk_pointer(reverse_in_place(sc, sc->args)));
-      } else if (sc->tok == TOK_DOT) {
-	s_save(sc, OP_RDDOT, sc->args, sc->EMPTY);
-	sc->tok = token(sc, x);
-	s_goto(sc, OP_RDSEXPR);
-      } else {
-	s_save(sc, OP_RDLIST, sc->args, sc->EMPTY);
-	s_goto(sc, OP_RDSEXPR);
+    if (is_cell(x)) {
+      nanoclj_cell_t * inport = decode_pointer(x);
+      if (inport && _type(inport) == T_READER) {
+	sc->args = cons(sc, sc->value, sc->args);
+	sc->tok = token(sc, inport);
+	if (sc->tok == TOK_EOF) {
+	  s_return(sc, mk_codepoint(EOF));
+	} else if (sc->tok == TOK_RPAREN) {
+	  _nesting_unchecked(inport)--;
+	  s_return(sc, mk_pointer(reverse_in_place(sc, sc->args)));
+	} else if (sc->tok == TOK_DOT) {
+	  s_save(sc, OP_RDDOT, sc->args, sc->EMPTY);
+	  sc->tok = token(sc, inport);
+	  s_goto(sc, OP_RDSEXPR);
+	} else {
+	  s_save(sc, OP_RDLIST, sc->args, sc->EMPTY);
+	  s_goto(sc, OP_RDSEXPR);
+	}
       }
-
     }
+    Error_0(sc, "Not a reader");
     
   case OP_RDVEC_ELEMENT:
     x = get_in_port(sc);
-    if (!is_reader(x)) {
-      Error_0(sc, "Not a reader");
-    } else {
-      nanoclj_val_t inport = x;
-      sc->args = conjoin(sc, sc->args, sc->value);
-      sc->tok = token(sc, inport);
-      if (sc->tok == TOK_EOF) {
-	s_return(sc, mk_codepoint(EOF));
-      } else if (sc->tok == TOK_RSQUARE) {
-	nesting_unchecked(inport)--;
-	s_return(sc, mk_pointer(sc->args));
-      } else {
-	s_save(sc, OP_RDVEC_ELEMENT, sc->args, sc->EMPTY);
-	s_goto(sc, OP_RDSEXPR);
+    if (is_cell(x)) {
+      nanoclj_cell_t * inport = decode_pointer(x);
+      if (inport && _type(inport) == T_READER) {
+	sc->args = conjoin(sc, sc->args, sc->value);
+	sc->tok = token(sc, inport);
+	if (sc->tok == TOK_EOF) {
+	  s_return(sc, mk_codepoint(EOF));
+	} else if (sc->tok == TOK_RSQUARE) {
+	  _nesting_unchecked(inport)--;
+	  s_return(sc, mk_pointer(sc->args));
+	} else {
+	  s_save(sc, OP_RDVEC_ELEMENT, sc->args, sc->EMPTY);
+	  s_goto(sc, OP_RDSEXPR);
+	}
       }
     }
+    Error_0(sc, "Not a reader");
 
   case OP_RDMAP_ELEMENT:
     x = get_in_port(sc);
-    if (!is_reader(x)) {
-      Error_0(sc, "Not a reader");
-    } else {
-      nanoclj_val_t inport = x;
-      sc->args = cons(sc, sc->value, sc->args);
-      sc->tok = token(sc, inport);
-      if (sc->tok == TOK_EOF) {
-	s_return(sc, mk_codepoint(EOF));
-      } else if (sc->tok == TOK_RCURLY) {
-	nesting_unchecked(inport)--;
-	s_return(sc, mk_pointer(reverse_in_place(sc, sc->args)));
-      } else {
-	s_save(sc, OP_RDMAP_ELEMENT, sc->args, sc->EMPTY);
-	s_goto(sc, OP_RDSEXPR);
+    if (is_cell(x)) {
+      nanoclj_cell_t * inport = decode_pointer(x);
+      if (inport && _type(inport) == T_READER) {
+	sc->args = cons(sc, sc->value, sc->args);
+	sc->tok = token(sc, inport);
+	if (sc->tok == TOK_EOF) {
+	  s_return(sc, mk_codepoint(EOF));
+	} else if (sc->tok == TOK_RCURLY) {
+	  _nesting_unchecked(inport)--;
+	  s_return(sc, mk_pointer(reverse_in_place(sc, sc->args)));
+	} else {
+	  s_save(sc, OP_RDMAP_ELEMENT, sc->args, sc->EMPTY);
+	  s_goto(sc, OP_RDSEXPR);
+	}
       }
     }
+    Error_0(sc, "Not a reader");
     
   case OP_RDDOT:
     x = get_in_port(sc);
-    if (!is_reader(x)) {
-      Error_0(sc, "Not a reader");
-    } else {
-      nanoclj_val_t inport = x;
-      if (token(sc, inport) != TOK_RPAREN) {
-	Error_0(sc, "Illegal dot expression");
-      } else {
-	nesting_unchecked(inport)--;
-	s_return(sc, mk_pointer(reverse_in_place_with_term(sc, sc->value, sc->args)));
+    if (is_cell(x)) {
+      nanoclj_cell_t * inport = decode_pointer(x);
+      if (inport && _type(inport) == T_READER) {
+	if (token(sc, inport) != TOK_RPAREN) {
+	  Error_0(sc, "Illegal dot expression");
+	} else {
+	  _nesting_unchecked(inport)--;
+	  s_return(sc, mk_pointer(reverse_in_place_with_term(sc, sc->value, sc->args)));
+	}
       }
     }
+    Error_0(sc, "Not a reader");
 
   case OP_RDQUOTE:
     s_return(sc, mk_pointer(cons(sc, sc->QUOTE, cons(sc, sc->value, NULL))));
@@ -6990,7 +6974,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     s_return(sc, mk_nil());
 
   default:
-    sprintf(sc->strbuff, "%d: illegal operator", sc->op);
+    snprintf(sc->strbuff, STRBUFFSIZE, "%d: illegal operator", sc->op);
     Error_0(sc, sc->strbuff);
   }
   return false;                 /* NOTREACHED */
@@ -7269,7 +7253,7 @@ static inline nanoclj_cell_t * mk_properties(nanoclj_t * sc) {
   const char * line_separator = "\n";
 #endif
 
-  int ua_len = sprintf(sc->strbuff, "nanoclj/%s", get_version());
+  int ua_len = sprintf(sc->strbuff, "%s", banner);
   nanoclj_val_t ua = mk_string_from_sv(sc, (strview_t){sc->strbuff, ua_len});
 
   nanoclj_cell_t * l = NULL;
@@ -7295,7 +7279,7 @@ static inline nanoclj_cell_t * mk_properties(nanoclj_t * sc) {
   l = cons(sc, mk_string(sc, "java.class.path"), l);
   l = cons(sc, mk_string(sc, term), l);
   l = cons(sc, mk_string(sc, "term"), l);
-  l = cons(sc, mk_string(sc, get_version()), l);
+  l = cons(sc, mk_string(sc, banner), l);
   l = cons(sc, mk_string(sc, "nanoclj.version"), l);
   l = cons(sc, ua, l);
   l = cons(sc, mk_string(sc, "http.agent"), l);
@@ -7318,7 +7302,7 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   sc->vptr = &vtbl;
 #endif
   sc->gensym_cnt = 0;
-  sc->gentypeid_cnt = T_MAX_TYPE;
+  sc->gentypeid_cnt = T_LAST_SYSTEM_TYPE;
   sc->malloc = malloc;
   sc->free = free;
   sc->realloc = realloc;
@@ -7327,10 +7311,6 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   sc->EMPTY = mk_pointer(&sc->_EMPTY);
   sc->free_cell = NULL;
   sc->fcells = 0;
-  sc->alloc_seg = sc->malloc(sizeof(*(sc->alloc_seg)) * CELL_NSEGMENT);
-  sc->cell_seg = sc->malloc(sizeof(*(sc->cell_seg)) * CELL_NSEGMENT);
-  sc->strbuff = sc->malloc(STRBUFF_INITIAL_SIZE);
-  sc->strbuff_size = STRBUFF_INITIAL_SIZE;
   sc->save_inport = mk_nil();
   sc->load_stack[0] = mk_nil();
   sc->global_env = sc->root_env = sc->envir = NULL;
@@ -7573,7 +7553,6 @@ void nanoclj_deinit(nanoclj_t * sc) {
   sc->recur = mk_nil();
 #endif
   sc->save_inport = mk_nil();
-  sc->free(sc->strbuff);
 
   sc->active_element = mk_nil();
   sc->active_element_target = mk_nil();
@@ -7587,8 +7566,6 @@ void nanoclj_deinit(nanoclj_t * sc) {
   for (int i = 0; i <= sc->last_cell_seg; i++) {
     sc->free(sc->alloc_seg[i]);
   }
-  sc->free(sc->cell_seg);
-  sc->free(sc->alloc_seg);
 }
 
 bool nanoclj_load_named_file(nanoclj_t * sc, const char *filename) {
@@ -7670,13 +7647,13 @@ nanoclj_val_t nanoclj_eval(nanoclj_t * sc, nanoclj_val_t obj) {
 
 int main(int argc, const char **argv) {
   if (argc == 1) {
-    printf("nanoclj %s\n", get_version());
+    printf("%s\n", banner);
   }
-  if (argc == 2 && str_eq(argv[1], "--help")) {
+  if (argc == 2 && strcmp(argv[1], "--help") == 0) {
     printf("Usage: %s [switches] [--] [programfile] [arguments]\n", argv[0]);
     return 1;
   }
-  if (argc == 2 && str_eq(argv[1], "--legal")) {
+  if (argc == 2 && strcmp(argv[1], "--legal") == 0) {
     legal();
     return 1;
   }
