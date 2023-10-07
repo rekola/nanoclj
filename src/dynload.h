@@ -7,6 +7,6 @@
 
 #include "nanoclj-private.h"
 
-SCHEME_EXPORT pointer scm_load_ext(scheme *sc, pointer arglist);
+SCHEME_EXPORT pointer scm_load_ext(nanoclj_t *sc, nanoclj_val_t arglist);
 
 #endif

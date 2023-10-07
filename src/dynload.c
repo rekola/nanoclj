@@ -1,4 +1,4 @@
-/* dynload.c Dynamic Loader for TinyScheme */
+/* dynload.c Dynamic Loader for nanoclj */
 /* Original Copyright (c) 1999 Alexander Shendi     */
 /* Modifications for NT and dl_* interface, scm_load_ext: D. Souflis */
 /* Refurbished by Stephen Gildea */
@@ -37,7 +37,7 @@ typedef void (*FARPROC)();
    FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_ALLOCATE_BUFFER,
 		 NULL, GetLastError(), 0,
 		 (LPTSTR)&msg_buf, 0, NULL);
-   fprintf(stderr, "scheme load-extension: %s: %s", additional_message, msg_buf);
+   fprintf(stderr, "nanoclj load-extension: %s: %s", additional_message, msg_buf);
    LocalFree(msg_buf);
  }
 
@@ -67,7 +67,7 @@ static void dl_detach(HMODULE mo) {
 static HMODULE dl_attach(const char *module) {
   HMODULE so=dlopen(module,RTLD_LAZY);
   if(!so) {
-    fprintf(stderr, "Error loading scheme extension \"%s\": %s\n", module, dlerror());
+    fprintf(stderr, "Error loading nanoclj extension \"%s\": %s\n", module, dlerror());
   }
   return so;
 }
@@ -78,7 +78,7 @@ static FARPROC dl_proc(HMODULE mo, const char *proc) {
   if ((errmsg = dlerror()) == 0) {
     return fp;
   }
-  fprintf(stderr, "Error initializing scheme module \"%s\": %s\n", proc, errmsg);
+  fprintf(stderr, "Error initializing nanoclj module \"%s\": %s\n", proc, errmsg);
  return 0;
 }
 
@@ -87,14 +87,14 @@ static void dl_detach(HMODULE mo) {
 }
 #endif
 
-pointer scm_load_ext(scheme *sc, pointer args)
+pointer scm_load_ext(nanoclj_t *sc, pointer args)
 {
    pointer first_arg;
    pointer retval;
    char filename[MAXPATHLEN], init_fn[MAXPATHLEN+6];
    char *name;
    HMODULE dll_handle;
-   void (*module_init)(scheme *sc);
+   void (*module_init)(nanoclj_t *sc);
 
    if ((args != sc->NIL) && is_string((first_arg = pair_car(args)))) {
       name = string_value(first_arg);
@@ -105,7 +105,7 @@ pointer scm_load_ext(scheme *sc, pointer args)
          retval = sc -> F;
       }
       else {
-         module_init = (void(*)(scheme *))dl_proc(dll_handle, init_fn);
+         module_init = (void(*)(nanoclj_t *))dl_proc(dll_handle, init_fn);
          if (module_init != 0) {
             (*module_init)(sc);
             retval = sc -> T;
@@ -137,10 +137,3 @@ static void make_init_fn(const char *name, char *init_fn) {
  strcpy(init_fn,"init_");
  strcat(init_fn,p);
 }
-
-
-/*
-Local variables:
-c-file-style: "k&r"
-End:
-*/
