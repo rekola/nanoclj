@@ -3013,7 +3013,7 @@ static inline nanoclj_val_t mk_primitive(nanoclj_t * sc, char *q) {
   return mk_integer(sc, atoll(q));
 }
 
-static inline nanoclj_val_t mk_char_const(nanoclj_t * sc, char *name) {
+static inline nanoclj_val_t mk_char_const(nanoclj_t * sc, const char *name) {
   if (*name == '\\') {   /* \w (character) */
     int c = 0;
     if (strcmp(name + 1, "space") == 0) {
@@ -3558,11 +3558,7 @@ static inline int token(nanoclj_t * sc, nanoclj_cell_t * inport) {
 
   case '\\':
     backchar('\\', inport);
-    if (1) { // next_char != ' ') {
-      return (TOK_CHAR_CONST);
-    } else {
-      return TOK_PRIMITIVE;
-    }
+    return TOK_CHAR_CONST;
     
   case '#':
     c = inchar(inport);
@@ -6324,14 +6320,17 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  }
 	  Error_0(sc, "Invalid regex");
 	
-	case TOK_CHAR_CONST:
-	  x = mk_char_const(sc, readstr_upto(sc, DELIMITERS, inport));
+	case TOK_CHAR_CONST:{
+	  const char * p = readstr_upto(sc, DELIMITERS, inport);
+	  x = mk_char_const(sc, p);
 	  if (is_nil(x)) {
-	    Error_0(sc, "Undefined character literal");
+	    sprintf(sc->errbuff, "Undefined character literal: %s", p);
+	    Error_0(sc, sc->errbuff);
 	  } else {
 	    s_return(sc, x);
 	  }
-	
+	}
+	    
 	case TOK_TAG:{
 	  nanoclj_val_t tag = mk_string(sc, readstr_upto(sc, DELIMITERS, inport));
 	  if (skipspace(sc, inport) != '"') {
@@ -6368,7 +6367,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  s_goto(sc, OP_RD_SEXPR);      
 	
 	case TOK_SHARP_CONST:
-	  if ((x = mk_sharp_const(sc, readstr_upto(sc, DELIMITERS, inport))).as_long == sc->EMPTY.as_long) {
+	  x = mk_sharp_const(sc, readstr_upto(sc, DELIMITERS, inport));
+	  if (is_nil(x)) {
 	    Error_0(sc, "Undefined sharp expression");
 	  } else {
 	    s_return(sc, x);
