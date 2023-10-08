@@ -6325,7 +6325,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  Error_0(sc, "Invalid regex");
 	
 	case TOK_CHAR_CONST:
-	  if ((x = mk_char_const(sc, readstr_upto(sc, DELIMITERS, inport))).as_long == sc->EMPTY.as_long) {
+	  x = mk_char_const(sc, readstr_upto(sc, DELIMITERS, inport));
+	  if (is_nil(x)) {
 	    Error_0(sc, "Undefined character literal");
 	  } else {
 	    s_return(sc, x);
