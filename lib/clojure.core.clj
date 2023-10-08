@@ -153,8 +153,8 @@
          
 ; Strings
 
-(def subs (fn ([s start]     (str (drop start s)))
-     	      ([s start end] (str (take (- end start) (drop start s))))))
+(def subs (fn ([s start]     (apply str (drop start s)))
+     	      ([s start end] (apply str (take (- end start) (drop start s))))))
 
 
 ; Sequences
