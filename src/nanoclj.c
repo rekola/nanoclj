@@ -3013,39 +3013,28 @@ static inline nanoclj_val_t mk_primitive(nanoclj_t * sc, char *q) {
   return mk_integer(sc, atoll(q));
 }
 
-static inline nanoclj_val_t mk_char_const(nanoclj_t * sc, const char *name) {
-  if (*name == '\\') {   /* \w (character) */
-    int c = 0;
-    if (strcmp(name + 1, "space") == 0) {
-      c = ' ';
-    } else if (strcmp(name + 1, "newline") == 0) {
-      c = '\n';
-    } else if (strcmp(name + 1, "return") == 0) {
-      c = '\r';
-    } else if (strcmp(name + 1, "tab") == 0) {
-      c = '\t';
-    } else if (strcmp(name + 1, "formfeed") == 0) {
-      c = '\f';
-    } else if (strcmp(name + 1, "backspace") == 0) {
-      c = '\b';
-    } else if (name[1] == 'u' && name[2] != 0) {
-      int c1 = 0;
-      if (sscanf(name + 2, "%x", (unsigned int *) &c1) == 1) {
-        c = c1;
-      } else {
-        return mk_nil();
-      }   
-    } else if (name[2] == 0) {
-      c = name[1];
-    } else if (*(utf8_next(name + 1)) == 0) {
-      c = decode_utf8(name + 1);
-    } else {
-      return mk_nil();
+static inline int32_t parse_char_literal(nanoclj_t * sc, const char *name) {
+  if (strcmp(name, "space") == 0) {
+    return ' ';
+  } else if (strcmp(name, "newline") == 0) {
+    return '\n';
+  } else if (strcmp(name, "return") == 0) {
+    return '\r';
+  } else if (strcmp(name, "tab") == 0) {
+    return '\t';
+  } else if (strcmp(name, "formfeed") == 0) {
+    return '\f';
+  } else if (strcmp(name, "backspace") == 0) {
+    return '\b';
+  } else if (name[0] == 'u') {
+    unsigned int c;
+    if (sscanf(name + 1, "%x", &c) == 1) {
+      return c;
     }
-    return mk_codepoint(c);
-  } else {
-    return mk_nil();
+  } else if (*(utf8_next(name)) == 0) {
+    return decode_utf8(name);
   }
+  return -1;
 }
 
 static inline nanoclj_val_t mk_sharp_const(nanoclj_t * sc, char *name) {
@@ -3356,9 +3345,8 @@ static inline bool is_one_of(const char *s, int c) {
 }
 
 /* read characters up to delimiter, but cater to character constants */
-static inline char *readstr_upto(nanoclj_t * sc, char *delim, nanoclj_cell_t * inport) {
+static inline char *readstr_upto(nanoclj_t * sc, char *delim, nanoclj_cell_t * inport, bool is_escaped) {
   char *p = sc->strbuff;
-  bool found_delim = false;
   
   while (p - sc->strbuff < sizeof(sc->strbuff)) {
     int c = inchar(inport);
@@ -3366,21 +3354,16 @@ static inline char *readstr_upto(nanoclj_t * sc, char *delim, nanoclj_cell_t * i
 
     p += encode_utf8(c, p);
     
-    if (is_one_of(delim, c)) {
-      found_delim = true;
+    if (is_escaped) {
+      is_escaped = false;
+    } else if (is_one_of(delim, c)) {
+      backchar(p[-1], inport);
+      *--p = '\0';
       break;
-    }   
+    }
   }
 
-  /* Check if the delimiter was escaped */
-  if (p == sc->strbuff + 2 && p[-2] == '\\') {
-    *p = 0;
-  } else if (found_delim) { /* Return the delimiter to the port */
-    backchar(p[-1], inport);
-    *--p = '\0';
-  } else {
-    *p = 0;
-  }
+  *p = 0;
   return sc->strbuff;
 }
 
@@ -3526,6 +3509,7 @@ static inline int token(nanoclj_t * sc, nanoclj_cell_t * inport) {
   case '\'': return TOK_QUOTE;
   case '@': return TOK_DEREF;
   case BACKQUOTE: return TOK_BQUOTE;
+  case '\\': return TOK_CHAR_CONST;
   
   case '.':
     c = inchar(inport);
@@ -3555,10 +3539,6 @@ static inline int token(nanoclj_t * sc, nanoclj_cell_t * inport) {
       backchar(c, inport);
       return TOK_COMMA;
     }
-
-  case '\\':
-    backchar('\\', inport);
-    return TOK_CHAR_CONST;
     
   case '#':
     c = inchar(inport);
@@ -3595,18 +3575,40 @@ static inline int token(nanoclj_t * sc, nanoclj_cell_t * inport) {
 
 /* ========== Routines for Printing ========== */
 
-static inline const char * escape_char(int c, char * buffer) {
-  switch (c) {
-  case 0:	return "\\0";
-  case '"':	return "\\\"";
-  case '\n':	return "\\n";
-  case '\t':	return "\\t";
-  case '\r':	return "\\r";
-  case '\b':	return "\\b";
-  case '\\':	return "\\";
+static inline const char * escape_char(int32_t c, char * buffer, bool in_string) {
+  if (in_string) {
+    switch (c) {
+    case 0:	return "\\0";
+    case ' ':   return " ";
+    case '"':	return "\\\"";
+    case '\n':	return "\\n";
+    case '\t':	return "\\t";
+    case '\r':	return "\\r";
+    case '\b':	return "\\b";
+    case '\\':	return "\\";
+    }
+  } else {
+    switch (c) {
+    case -1:	return "##Eof";
+    case ' ':	return "\\space";
+    case '\n':	return "\\newline";
+    case '\r':	return "\\return";
+    case '\t':	return "\\tab";
+    case '\f':	return "\\formfeed";
+    case '\b':	return "\\backspace";
+    }
   }
-  sprintf(buffer, "\\u%04x", c);
-  return buffer;  
+  if (unicode_isspace(c) || unicode_isctrl(c)) {
+    sprintf(buffer, "\\u%04x", c);
+  } else {
+    char * p = buffer;
+    if (!in_string) {
+      *p++ = '\\';
+    }
+    p += encode_utf8(c, p);
+    *p = 0;
+  }
+  return buffer;
 }
 
 static inline void print_slashstring(nanoclj_t * sc, strview_t sv, nanoclj_val_t out) {
@@ -3615,13 +3617,8 @@ static inline void print_slashstring(nanoclj_t * sc, strview_t sv, nanoclj_val_t
   const char * end = p + sv.size;
   while (p < end) {
     int c = decode_utf8(p);
-    p = utf8_next(p);
-    
-    if ((unicode_isspace(c) && c != ' ') || c == '"' || c < ' ' || c == '\\' || (c >= 0x7f && c <= 0xa0)) {      
-      putstr(sc, escape_char(c, sc->strbuff), out);
-    } else {
-      putcharacter(sc, c, out);
-    }
+    p = utf8_next(p);    
+    putstr(sc, escape_char(c, sc->strbuff, true), out);    
   }
   putcharacter(sc, '"', out);
 }
@@ -3765,39 +3762,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
       p = sc->strbuff;
       plen = encode_utf8(decode_integer(l), sc->strbuff);
     } else {
-      int c = decode_integer(l);
-      switch (c) {
-      case -1:
-	p = "##Eof";
-	break;
-      case ' ':
-        p = "\\space";
-        break;
-      case '\n':
-        p = "\\newline";
-        break;
-      case '\r':
-        p = "\\return";
-        break;
-      case '\t':
-        p = "\\tab";
-        break;
-      case '\f':
-	p = "\\formfeed";
-	break;
-      case '\b':
-	p = "\\backspace";
-	break;
-      default:
-	p = sc->strbuff;
-      	if (unicode_isspace(c) || c < 32 || (c >= 0x7f && c <= 0xa0)) {
-          plen = sprintf(sc->strbuff, "\\u%04x", c);
-        } else {
-	  sc->strbuff[0] = '\\';
-	  plen = 1 + encode_utf8(c, sc->strbuff + 1);
-	}
-        break;
-      }
+      p = escape_char(decode_integer(l), sc->strbuff, false);
     }
     break;
   case T_BOOLEAN:
@@ -6297,7 +6262,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  sc->tok = token(sc, inport);
 	  s_goto(sc, OP_RD_SEXPR);
 	case TOK_PRIMITIVE:
-	  x = mk_primitive(sc, readstr_upto(sc, DELIMITERS, inport));
+	  x = mk_primitive(sc, readstr_upto(sc, DELIMITERS, inport, false));
 	  if (is_nil(x)) {
 	    Error_0(sc, "Invalid number format");
 	  } else {
@@ -6321,18 +6286,18 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  Error_0(sc, "Invalid regex");
 	
 	case TOK_CHAR_CONST:{
-	  const char * p = readstr_upto(sc, DELIMITERS, inport);
-	  x = mk_char_const(sc, p);
-	  if (is_nil(x)) {
+	  const char * p = readstr_upto(sc, DELIMITERS, inport, true);
+	  int c = parse_char_literal(sc, p);
+	  if (c == -1) {
 	    sprintf(sc->errbuff, "Undefined character literal: %s", p);
 	    Error_0(sc, sc->errbuff);
 	  } else {
-	    s_return(sc, x);
+	    s_return(sc, mk_codepoint(c));
 	  }
 	}
 	    
 	case TOK_TAG:{
-	  nanoclj_val_t tag = mk_string(sc, readstr_upto(sc, DELIMITERS, inport));
+	  nanoclj_val_t tag = mk_string(sc, readstr_upto(sc, DELIMITERS, inport, false));
 	  if (skipspace(sc, inport) != '"') {
 	    Error_0(sc, "Invalid literal");	 
 	  }
@@ -6359,7 +6324,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	}
 	
 	case TOK_IGNORE:
-	  readstr_upto(sc, DELIMITERS, inport);
+	  readstr_upto(sc, DELIMITERS, inport, false);
 	  sc->tok = token(sc, inport);
 	  if (sc->tok == TOK_EOF) {
 	    s_return(sc, mk_codepoint(EOF));
@@ -6367,7 +6332,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  s_goto(sc, OP_RD_SEXPR);      
 	
 	case TOK_SHARP_CONST:
-	  x = mk_sharp_const(sc, readstr_upto(sc, DELIMITERS, inport));
+	  x = mk_sharp_const(sc, readstr_upto(sc, DELIMITERS, inport, false));
 	  if (is_nil(x)) {
 	    Error_0(sc, "Undefined sharp expression");
 	  } else {

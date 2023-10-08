@@ -105,9 +105,6 @@ static inline int utf8_num_cells(const char *p, size_t len) {
 /* returns true if c is space or invisible character */
 static inline bool unicode_isspace(int32_t c) {
   switch (c) {
-  case 0x0009: /* tab */
-  case 0x0010: /* new-line */
-  case 0x0013: /* carriage return */
   case 0x0020: /* space */
   case 0x00a0: /* nbsp */
   case 0x1680: /* ogham space mark */
@@ -125,14 +122,25 @@ static inline bool unicode_isspace(int32_t c) {
   case 0x200b: /* zero width space */
   case 0x200c: /* zero width non-joiner */
   case 0x200d: /* zero width joiner */
-  case 0x200e: /* left-to-right mark */
-  case 0x200f: /* right-to-left mark */
-  case 0x202c: /* pop directional formatting */
   case 0x202f: /* narrow no-break space */
   case 0x205f: /* medium mathematical space */
   case 0x3000: /* ideographic space */
-  case 0xfe0f: /* variation selector-16 */
   case 0xfeff: /* zero width no-break space */    
+    return true;
+  }
+  return false;
+}
+
+/* returns true if c is a control character */
+static inline bool unicode_isctrl(int32_t c) {
+  if (c < ' ' || (c >= 0x7f && c < 0xa0)) {
+    return true;
+  }
+  switch (c) {
+  case 0x200e: /* left-to-right mark */
+  case 0x200f: /* right-to-left mark */
+  case 0x202c: /* pop directional formatting */
+  case 0xfe0f: /* variation selector-16 */
     return true;
   }
   return false;
