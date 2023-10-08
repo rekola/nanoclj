@@ -303,13 +303,13 @@ static inline nanoclj_val_t mk_nil() {
 
 static inline nanoclj_val_t mk_symbol(nanoclj_t * sc, uint16_t t, strview_t ns, strview_t name, int_fast16_t syntax) {
   /* mk_symbol allocations are leaked intentionally for now */
-  char * ns_str = (char*)sc->malloc(ns.size);
+  char * ns_str = sc->malloc(ns.size);
   memcpy(ns_str, ns.ptr, ns.size);
 
-  char * name_str = (char*)sc->malloc(name.size);
+  char * name_str = sc->malloc(name.size);
   memcpy(name_str, name.ptr, name.size);
 
-  char * full_name_str = (char*)sc->malloc(ns.size + name.size + 1);
+  char * full_name_str = sc->malloc(ns.size + name.size + 1);
   size_t full_name_size;
   if (ns.size) {
     memcpy(full_name_str, ns.ptr, ns.size);
@@ -794,26 +794,13 @@ static inline strview_t _to_strview(nanoclj_cell_t * c) {
     } else {
       return (strview_t){ _str_store_unchecked(c)->data + _offset_unchecked(c), _size_unchecked(c) };
     }
-  case T_READER:{
+  case T_READER:
+  case T_WRITER:
     if (_port_type_unchecked(c) == port_string) {
       nanoclj_port_rep_t * pr = _rep_unchecked(c);
-      return (strview_t){
-	pr->string.data.data,
-	pr->string.data.size
-      };
-    }
-  }
-    break;
-  case T_WRITER:{
-    if (_port_type_unchecked(c) == port_string) {
-      nanoclj_port_rep_t * pr = _rep_unchecked(c);
-      return (strview_t){
-	pr->string.data.data,
-	pr->string.curr - pr->string.data.data
-      };
+      return (strview_t){ pr->string.data->data, pr->string.data->size };
     }
     break;
-  }    
   }
   return (strview_t){ "", 0 };
 }
@@ -904,8 +891,13 @@ static inline void port_close(nanoclj_t * sc, nanoclj_cell_t * p) {
     }
     pr->stdio.file = NULL;
     break;
-  case port_string:
-    sc->free(pr->string.data.data);
+  case port_string:{
+    nanoclj_byte_array_t * s = pr->string.data;
+    if (s) {
+      sc->free(s->data);
+      sc->free(s);
+    }
+  }
     break;
 #if NANOCLJ_HAS_CANVAS
   case port_canvas:
@@ -1139,7 +1131,7 @@ static inline nanoclj_val_t mk_image(nanoclj_t * sc, int32_t width, int32_t heig
     if (r_data) {
       if (data) memcpy(r_data, data, size);
 
-      nanoclj_image_t * image = (nanoclj_image_t*)sc->malloc(sizeof(nanoclj_image_t));
+      nanoclj_image_t * image = sc->malloc(sizeof(nanoclj_image_t));
       if (!image) {
 	sc->free(r_data);
       } else {
@@ -1170,7 +1162,7 @@ static inline nanoclj_val_t mk_audio(nanoclj_t * sc, size_t frames, int32_t chan
     if (r_data) {
       if (data) memcpy(r_data, data, size);
 
-      nanoclj_audio_t * audio = (nanoclj_audio_t*)sc->malloc(sizeof(nanoclj_audio_t));
+      nanoclj_audio_t * audio = sc->malloc(sizeof(nanoclj_audio_t));
       if (!audio) {
 	sc->free(r_data);
       } else {
@@ -1249,7 +1241,7 @@ static inline long long get_ratio(nanoclj_val_t n, long long * den) {
 }
 
 static inline char * alloc_c_str(nanoclj_t * sc, strview_t sv) {
-  char * buffer = (char*)sc->malloc(sv.size + 1);
+  char * buffer = sc->malloc(sv.size + 1);
   if (!buffer) {
     sc->pending_exception = sc->OutOfMemoryError;
   } else {
@@ -1261,7 +1253,7 @@ static inline char * alloc_c_str(nanoclj_t * sc, strview_t sv) {
 
 /* Creates a string store */
 static inline nanoclj_byte_array_t * mk_string_store(nanoclj_t * sc, size_t len, size_t padding) {
-  nanoclj_byte_array_t * s = (nanoclj_byte_array_t *)sc->malloc(sizeof(nanoclj_byte_array_t));
+  nanoclj_byte_array_t * s = sc->malloc(sizeof(nanoclj_byte_array_t));
   s->data = sc->malloc((len + padding) * sizeof(char));
   s->size = len;
   s->reserved = len + padding;
@@ -1351,10 +1343,10 @@ static inline int32_t inchar_raw(nanoclj_cell_t * p) {
   case port_file:
     return fgetc(pr->stdio.file);
   case port_string:
-    if (pr->string.curr == pr->string.data.data + pr->string.data.size) {
+    if (pr->string.read_pos == pr->string.data->size) {
       return EOF;
     } else {
-      return (unsigned char)(*pr->string.curr++);
+      return (unsigned char)pr->string.data->data[pr->string.read_pos++];
     }
   }
   return EOF;
@@ -1442,8 +1434,8 @@ static inline void backchar_raw(uint8_t c, nanoclj_cell_t * p) {
     ungetc(c, pr->stdio.file);
     break;
   case port_string:
-    if (pr->string.curr != pr->string.data.data) {
-      --pr->string.curr;
+    if (pr->string.read_pos > 0) {
+      --pr->string.read_pos;
     }
     break;
   }
@@ -1468,7 +1460,7 @@ static inline nanoclj_cell_t * cons(nanoclj_t * sc, nanoclj_val_t head, nanoclj_
 static inline nanoclj_vector_t * mk_vector_store(nanoclj_t * sc, size_t len, size_t reserve) {
   nanoclj_val_t * data = sc->malloc(reserve * sizeof(nanoclj_val_t));
   if (data) {
-    nanoclj_vector_t * s = (nanoclj_vector_t *)sc->malloc(sizeof(nanoclj_vector_t));
+    nanoclj_vector_t * s = sc->malloc(sizeof(nanoclj_vector_t));
     if (!s) {
       sc->free(data);
     } else if (s) {
@@ -1632,9 +1624,10 @@ static inline nanoclj_val_t mk_regex(nanoclj_t * sc, nanoclj_val_t pattern) {
 static inline dump_stack_frame_t * s_add_frame(nanoclj_t * sc) {
   /* enough room for the next frame? */
   if (sc->dump >= sc->dump_size) {
-    sc->dump_size *= 2;
+    if (sc->dump_size == 0) sc->dump_size = 256;
+    else sc->dump_size *= 2;
     fprintf(stderr, "reallocing dump stack (%zu)\n", sc->dump_size);
-    sc->dump_base = (dump_stack_frame_t *)sc->realloc(sc->dump_base, sizeof(dump_stack_frame_t) * sc->dump_size);
+    sc->dump_base = sc->realloc(sc->dump_base, sizeof(dump_stack_frame_t) * sc->dump_size);
   }
   return sc->dump_base + sc->dump++;
 }
@@ -2655,6 +2648,16 @@ static inline nanoclj_cell_t * copy_vector(nanoclj_t * sc, nanoclj_cell_t * vec)
   }
 }
 
+static inline size_t append_bytes(nanoclj_t * sc, nanoclj_byte_array_t * s, const char * ptr, size_t n) {
+  if (s->size + n > s->reserved) {
+    s->reserved = 2 * (s->size + n);
+    s->data = sc->realloc(s->data, s->reserved);    
+  }
+  memcpy(s->data + s->size, ptr, n);
+  s->size += n;
+  return n;
+}
+ 
 static inline size_t append_codepoint(nanoclj_t * sc, nanoclj_byte_array_t * s, int32_t c) {
   if (s->size + 4 >= s->reserved) {
     s->reserved = 2 * (s->size + 4);
@@ -3089,7 +3092,7 @@ static inline int http_open_thread(nanoclj_t * sc, strview_t sv) {
     return 0;
   }
 
-  http_load_t * d = malloc(sizeof(http_load_t));
+  http_load_t * d = sc->malloc(sizeof(http_load_t));
   d->url = alloc_c_str(sc, sv);
   d->useragent = NULL;
   d->http_keepalive = true;
@@ -3194,52 +3197,20 @@ static inline nanoclj_val_t mk_writer_from_callback(nanoclj_t * sc,
 
 static inline nanoclj_val_t port_from_string(nanoclj_t * sc, strview_t sv, uint8_t type) {
   nanoclj_cell_t * p = get_port_object(sc, type, port_string);
-
-  char * buffer = (char *)sc->malloc(sv.size);
-  memcpy(buffer, sv.ptr, sv.size);
-
+  if (!p) return mk_nil();
+  
+  nanoclj_byte_array_t * s = mk_string_store(sc, sv.size, 0);
+  memcpy(s->data, sv.ptr, sv.size);
+  
   nanoclj_port_rep_t * pr = _rep_unchecked(p);
-  pr->string.curr = buffer;
-  pr->string.data.data = buffer;
-  pr->string.data.size = sv.size;
+  pr->string.data = s;
+  pr->string.read_pos = 0;
   
   return mk_pointer(p);  
 }
 
-#define INITIAL_STRING_LENGTH 256
-
 static inline nanoclj_val_t port_from_scratch(nanoclj_t * sc) {
-  nanoclj_cell_t * p = get_port_object(sc, T_WRITER, port_string);
-  if (!p) return mk_nil();
-
-  char * start = sc->malloc(INITIAL_STRING_LENGTH);
-  if (!start) {
-    return mk_nil();
-  }
-
-  nanoclj_port_rep_t * pr = _rep_unchecked(p);
-  pr->string.curr = start;
-  pr->string.data.data = start;
-  pr->string.data.size = INITIAL_STRING_LENGTH;
-
-  return mk_pointer(p);
-}
-
-static inline bool realloc_port_string(nanoclj_t * sc, nanoclj_cell_t * p) {
-  nanoclj_port_rep_t * pr = _rep_unchecked(p);
-  char *start = pr->string.data.data;
-  size_t new_size = 2 * pr->string.data.size;
-  char *str = sc->malloc(new_size);
-  if (str) {
-    memcpy(str, start, pr->string.data.size);
-    pr->string.curr -= start - str;
-    pr->string.data.data = str;
-    pr->string.data.size = new_size;
-    sc->free(start);
-    return true;
-  } else {
-    return false;
-  }
+  return port_from_string(sc, (strview_t){ "", 0 }, T_WRITER);
 }
 
 static inline void putchars(nanoclj_t * sc, const char *s, size_t len, nanoclj_val_t out0) {
@@ -3260,11 +3231,7 @@ static inline void putchars(nanoclj_t * sc, const char *s, size_t len, nanoclj_v
     pr->callback.text(s, len, sc->ext_data);
     break;
   case port_string:
-    for (; len; len--) {
-      if (pr->string.curr != pr->string.data.data + pr->string.data.size || realloc_port_string(sc, out)) {
-	*pr->string.curr++ = *s++;
-      }
-    }
+    append_bytes(sc, pr->string.data, s, len);
     break;
 #if NANOCLJ_HAS_CANVAS
   case port_canvas:  
@@ -3573,9 +3540,9 @@ static inline int token(nanoclj_t * sc, nanoclj_cell_t * inport) {
       while ((c = inchar(inport)) != '\n' && c != EOF) { }
 
       if (c == EOF) {
-        return (TOK_EOF);
+        return TOK_EOF;
       } else {
-        return (token(sc, inport));
+        return token(sc, inport);
       }
     } else {
       backchar(c, inport);
@@ -3707,7 +3674,7 @@ static inline void print_image(nanoclj_t * sc, nanoclj_image_t * img, nanoclj_va
   } else if (sc->sixel_term && (port_type_unchecked(out) == port_file) && pr->stdio.file == stdout) {      
 #if NANOCLJ_SIXEL
     if (img->channels == 4) {
-      unsigned char * tmp = (unsigned char *)sc->malloc(3 * img->width * img->height);
+      unsigned char * tmp = sc->malloc(3 * img->width * img->height);
       for (unsigned int i = 0; i < img->width * img->height; i++) {
 	tmp[3 * i + 0] = img->data[4 * i + 0];
 	tmp[3 * i + 1] = img->data[4 * i + 1];
@@ -3854,8 +3821,8 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
 	nanoclj_port_rep_t * pr = rep_unchecked(l);
 	switch (_port_type_unchecked(c)) {
 	case port_string:
-	  p = pr->string.data.data;
-	  plen = pr->string.curr - pr->string.data.data;	
+	  p = pr->string.data->data;
+	  plen = pr->string.data->size;
 	  break;
 #if NANOCLJ_HAS_CANVAS
 	case port_canvas:
@@ -4245,8 +4212,8 @@ static inline void dump_stack_reset(nanoclj_t * sc) {
 }
 
 static inline void dump_stack_initialize(nanoclj_t * sc) {
-  sc->dump_size = 256;
-  sc->dump_base = (dump_stack_frame_t *)sc->malloc(sizeof(dump_stack_frame_t) * sc->dump_size);
+  sc->dump_size = 0;
+  sc->dump_base = 0;
   dump_stack_reset(sc);
 }
 
@@ -7155,7 +7122,7 @@ static struct nanoclj_interface vtbl = {
 #endif
 
 nanoclj_t *nanoclj_init_new() {
-  nanoclj_t *sc = (nanoclj_t *) malloc(sizeof(nanoclj_t));
+  nanoclj_t *sc = malloc(sizeof(nanoclj_t));
   if (!nanoclj_init(sc)) {
     free(sc);
     return 0;
@@ -7165,7 +7132,7 @@ nanoclj_t *nanoclj_init_new() {
 }
 
 nanoclj_t *nanoclj_init_new_custom_alloc(func_alloc malloc, func_dealloc free, func_realloc realloc) {
-  nanoclj_t *sc = (nanoclj_t *) malloc(sizeof(nanoclj_t));
+  nanoclj_t *sc = malloc(sizeof(nanoclj_t));
   if (!nanoclj_init_custom_alloc(sc, malloc, free, realloc)) {
     free(sc);
     return 0;
@@ -7563,19 +7530,10 @@ bool nanoclj_load_named_file(nanoclj_t * sc, const char *filename) {
 nanoclj_val_t nanoclj_eval_string(nanoclj_t * sc, const char *cmd, size_t len) {
   dump_stack_reset(sc);
 
-  char * buffer = (char *)sc->malloc(len);
-  memcpy(buffer, cmd, len);
-
-  nanoclj_cell_t * p = get_port_object(sc, T_READER, port_string);
   sc->envir = sc->global_env;
   sc->file_i = 0;
-  sc->load_stack[0] = mk_pointer(p);
+  sc->load_stack[0] = port_from_string(sc, (strview_t){ cmd, len }, T_READER);
   sc->args = NULL;
-
-  nanoclj_port_rep_t * pr = _rep_unchecked(p);
-  pr->string.curr = buffer;
-  pr->string.data.data = buffer;
-  pr->string.data.size = len;
   
   Eval_Cycle(sc, OP_T0LVL);
 

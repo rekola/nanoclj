@@ -80,8 +80,8 @@ extern "C" {
       nanoclj_term_state_t states[256];
     } stdio;
     struct {
-      char *curr;
-      nanoclj_byte_array_t data;
+      size_t read_pos;
+      nanoclj_byte_array_t * data;
     } string;
     struct {
       void (*text) (const char *, size_t, void*);
