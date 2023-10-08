@@ -906,6 +906,7 @@ static inline void port_close(nanoclj_t * sc, nanoclj_cell_t * p) {
     break;
   case port_string:
     sc->free(pr->string.data.data);
+    break;
 #if NANOCLJ_HAS_CANVAS
   case port_canvas:
     finalize_canvas(sc, pr->canvas.impl);
@@ -1261,7 +1262,7 @@ static inline char * alloc_c_str(nanoclj_t * sc, strview_t sv) {
 /* Creates a string store */
 static inline nanoclj_byte_array_t * mk_string_store(nanoclj_t * sc, size_t len, size_t padding) {
   nanoclj_byte_array_t * s = (nanoclj_byte_array_t *)sc->malloc(sizeof(nanoclj_byte_array_t));
-  s->data = (char *)sc->malloc((len + padding) * sizeof(char));
+  s->data = sc->malloc((len + padding) * sizeof(char));
   s->size = len;
   s->reserved = len + padding;
   s->refcnt = 1;
@@ -2654,6 +2655,16 @@ static inline nanoclj_cell_t * copy_vector(nanoclj_t * sc, nanoclj_cell_t * vec)
   }
 }
 
+static inline size_t append_codepoint(nanoclj_t * sc, nanoclj_byte_array_t * s, int32_t c) {
+  if (s->size + 4 >= s->reserved) {
+    s->reserved = 2 * (s->size + 4);
+    s->data = sc->realloc(s->data, s->reserved);    
+  }
+  size_t n = encode_utf8(c, s->data + s->size);
+  s->size += n;
+  return n;
+}
+
 static inline nanoclj_cell_t * conjoin(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t new_value) {
   if (!coll) coll = &(sc->_EMPTY);
 	       
@@ -2690,10 +2701,11 @@ static inline nanoclj_cell_t * conjoin(nanoclj_t * sc, nanoclj_cell_t * coll, na
       return _get_vector_object(sc, t, old_offset, old_size + 1, s);
     }
   } else if (t == T_STRING || t == T_CHAR_ARRAY || t == T_FILE) {
-    size_t old_size = get_size(coll);
-    size_t input_len = encode_utf8(decode_integer(new_value), sc->strbuff);
+    int32_t c = decode_integer(new_value);
+    size_t size = get_size(coll);
     if (_is_small(coll)) {
-      nanoclj_cell_t * new_coll = get_string_object(sc, t, NULL, old_size + input_len, 0);
+      size_t input_len = encode_utf8(c, sc->strbuff);
+      nanoclj_cell_t * new_coll = get_string_object(sc, t, NULL, size + input_len, 0);
       const char * data = _smallstrvalue_unchecked(coll);
       char * new_data;
       if (_is_small(new_coll)) {
@@ -2701,24 +2713,22 @@ static inline nanoclj_cell_t * conjoin(nanoclj_t * sc, nanoclj_cell_t * coll, na
       } else {
 	new_data = _str_store_unchecked(new_coll)->data;
       }
-      memcpy(new_data, data, old_size * sizeof(char));
-      memcpy(new_data + old_size, sc->strbuff, input_len);
+      memcpy(new_data, data, size * sizeof(char));
+      memcpy(new_data + size, sc->strbuff, input_len);
       return new_coll;
     } else {
       nanoclj_byte_array_t * s = _str_store_unchecked(coll);
-      size_t old_offset = _offset_unchecked(coll);
-      if (!(old_offset + old_size == s->size && s->size + input_len <= s->reserved)) {
+      size_t offset = _offset_unchecked(coll);
+      if (offset + size != s->size) {
 	nanoclj_byte_array_t * old_s = s;
-	s = mk_string_store(sc, old_size, old_size);
-	memcpy(s->data, old_s->data + old_offset, old_size);
+	s = mk_string_store(sc, size, size);
+	memcpy(s->data, old_s->data + offset, size);
+	offset = 0;
       } else {
 	s->refcnt++;
       }
-
-      memcpy(s->data + s->size, sc->strbuff, input_len);
-      s->size += input_len;
-      
-      return _get_string_object(sc, t, old_offset, old_size + input_len, s);
+      size += append_codepoint(sc, s, c);
+      return _get_string_object(sc, t, offset, size, s);
     }
   } else {
     return NULL;
@@ -3270,8 +3280,9 @@ static inline void putstr(nanoclj_t * sc, const char *s, nanoclj_val_t out) {
 
 static inline void putcharacter(nanoclj_t * sc, int c, nanoclj_val_t out) {
   if (c != EOF) {
-    size_t len = encode_utf8(c, sc->strbuff);
-    putchars(sc, sc->strbuff, len, out);
+    char buff[4];
+    size_t len = encode_utf8(c, buff);
+    putchars(sc, buff, len, out);
   }
 }
 
@@ -3346,37 +3357,40 @@ static inline bool is_one_of(const char *s, int c) {
 
 /* read characters up to delimiter, but cater to character constants */
 static inline char *readstr_upto(nanoclj_t * sc, char *delim, nanoclj_cell_t * inport, bool is_escaped) {
-  char *p = sc->strbuff;
+  nanoclj_byte_array_t * rdbuff = sc->rdbuff;
+  rdbuff->size = 0;
   
-  while (p - sc->strbuff < sizeof(sc->strbuff)) {
+  while (1) {
     int c = inchar(inport);
     if (c == EOF) break; 
 
-    p += encode_utf8(c, p);
+    append_codepoint(sc, rdbuff, c);
     
     if (is_escaped) {
       is_escaped = false;
     } else if (is_one_of(delim, c)) {
-      backchar(p[-1], inport);
-      *--p = '\0';
+      backchar(c, inport);
+      rdbuff->size--;
       break;
     }
   }
 
-  *p = 0;
-  return sc->strbuff;
+  rdbuff->data[rdbuff->size] = 0;
+  return rdbuff->data;
 }
 
 /* read string expression "xxx...xxx" */
 static inline nanoclj_val_t readstrexp(nanoclj_t * sc, nanoclj_cell_t * inport, bool regex_mode) {
-  char *p = sc->strbuff;
+  nanoclj_byte_array_t * rdbuff = sc->rdbuff;
+  rdbuff->size = 0;
+
   int c1 = 0;
   enum { st_ok, st_bsl, st_u1, st_u2, st_u3, st_u4, st_oct1, st_oct2 } state = st_ok;
 
   for (;;) {
     int c = inchar(inport);
-    if (c == EOF || p - sc->strbuff > sizeof(sc->strbuff) - 1) { 
-      return (nanoclj_val_t)kFALSE;
+    if (c == EOF) { 
+      return mk_nil();
     }
     
     switch (state) {
@@ -3386,9 +3400,9 @@ static inline nanoclj_val_t readstrexp(nanoclj_t * sc, nanoclj_cell_t * inport, 
         state = st_bsl;
         break;
       case '"':
-        return mk_pointer(get_string_object(sc, T_STRING, sc->strbuff, p - sc->strbuff, 0));
+        return mk_pointer(get_string_object(sc, T_STRING, rdbuff->data, rdbuff->size, 0));
       default:
-        p += encode_utf8(c, p);
+        append_codepoint(sc, rdbuff, c);
         break;
       }
       break;
@@ -3411,31 +3425,31 @@ static inline nanoclj_val_t readstrexp(nanoclj_t * sc, nanoclj_cell_t * inport, 
 	  c1 = 0;
 	  break;
 	case 'n':
-	  *p++ = '\n';
+	  append_codepoint(sc, rdbuff, '\n');
 	  state = st_ok;
 	  break;
 	case 't':
-	  *p++ = '\t';
+	  append_codepoint(sc, rdbuff, '\t');
 	  state = st_ok;
 	  break;
 	case 'r':
-	  *p++ = '\r';
+	  append_codepoint(sc, rdbuff, '\r');
 	  state = st_ok;
 	  break;
 	case '"':
-	  *p++ = '"';
+	  append_codepoint(sc, rdbuff, '"');
 	  state = st_ok;
 	  break;
 	default:
-	  *p++ = c;
+	  append_codepoint(sc, rdbuff, c);
 	  state = st_ok;
 	  break;
 	}
       } else {
 	if (c != '"' && c != '\\') {
-	  *p++ = '\\';
+	  append_codepoint(sc, rdbuff, '\\');
 	}
-	*p++ = c;
+	append_codepoint(sc, rdbuff, c);
 	state = st_ok;
       }
       break;
@@ -3451,10 +3465,10 @@ static inline nanoclj_val_t readstrexp(nanoclj_t * sc, nanoclj_cell_t * inport, 
       } else if (c >= 'A' && c <= 'F') {
 	c1 += c - 'A' + 10;
       } else {
-        return (nanoclj_val_t)kFALSE;
+        return mk_nil();
       }
       if (state == st_u4) {
-	p += encode_utf8(c1, p);
+	append_codepoint(sc, rdbuff, c1);
 	state = st_ok;
       } else {
 	state++;
@@ -3463,19 +3477,19 @@ static inline nanoclj_val_t readstrexp(nanoclj_t * sc, nanoclj_cell_t * inport, 
     case st_oct1:
     case st_oct2:
       if (c < '0' || c > '7') {
-        *p++ = c1;
+	append_codepoint(sc, rdbuff, c1);
         backchar(c, inport);
         state = st_ok;
       } else {
         if (state == st_oct2 && c1 >= 32)
-          return (nanoclj_val_t)kFALSE;
+          return mk_nil();
 
         c1 = (c1 << 3) + (c - '0');
 
-        if (state == st_oct1)
+        if (state == st_oct1) {
           state = st_oct2;
-        else {
-          *p++ = c1;
+	} else {
+          append_codepoint(sc, rdbuff, c1);
           state = st_ok;
         }
       }
@@ -6270,14 +6284,14 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  }
 	case TOK_DQUOTE:
 	  x = readstrexp(sc, inport, false);
-	  if (is_false(x)) {
+	  if (is_nil(x)) {
 	    Error_0(sc, "Invalid string");
 	  }
 	  s_return(sc, x);
 	
 	case TOK_REGEX:
 	  x = readstrexp(sc, inport, true);
-	  if (!is_false(x)) {
+	  if (!is_nil(x)) {
 	    x = mk_regex(sc, x);
 	    if (!is_nil(x)) {
 	      s_return(sc, x);
@@ -7279,6 +7293,8 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   sc->active_element_x = sc->active_element_y = 0;
 
   sc->pending_exception = NULL;
+
+  sc->rdbuff = mk_string_store(sc, 0, 0);
 
   if (alloc_cellseg(sc, FIRST_CELLSEGS) != FIRST_CELLSEGS) {
     return false;

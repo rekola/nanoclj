@@ -245,6 +245,7 @@ extern "C" {
     
     char strbuff[STRBUFFSIZE];
     char errbuff[STRBUFFSIZE];
+    nanoclj_byte_array_t * rdbuff;
 
     int tok;
     nanoclj_val_t value;
