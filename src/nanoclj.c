@@ -2855,14 +2855,23 @@ static inline nanoclj_val_t def_symbol_or_keyword(nanoclj_t * sc, const char *na
       t = T_KEYWORD;
       name++;
     }
-    strview_t ns_sv, name_sv;
-    const char * p = strchr(name, '/');
-    if (p && p > name) {
-      ns_sv = (strview_t){ name, p - name };
-      name_sv = (strview_t){ p + 1, strlen(p + 1) };
+    strview_t ns_sv = (strview_t){ "", 0 }, name_sv;
+    if (t == T_KEYWORD && name[0] == ':') {
+      name++;
+      nanoclj_val_t ns_name;
+      if (get_elem(sc, _cons_metadata(sc->global_env), sc->NAME, &ns_name)) {
+	ns_sv = to_strview(ns_name);
+      }
+      name_sv = (strview_t){ name, strlen(name) };      
     } else {
-      ns_sv = (strview_t){ "", 0 };
-      name_sv = (strview_t){ name, strlen(name) };
+      const char * p = strchr(name, '/');
+      if (p && p > name) {
+	ns_sv = (strview_t){ name, p - name };
+	name_sv = (strview_t){ p + 1, strlen(p + 1) };
+      } else {
+	ns_sv = (strview_t){ "", 0 };
+	name_sv = (strview_t){ name, strlen(name) };
+      }
     }
     return def_symbol_from_sv(sc, t, ns_sv, name_sv);
   }
