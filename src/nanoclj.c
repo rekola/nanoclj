@@ -21,7 +21,7 @@
 #include "nanoclj-private.h"
 
 // #define VECTOR_ARGS
-#define RETAIN_ALLOCS 1
+// #define RETAIN_ALLOCS 1
 
 #ifdef _WIN32
 
@@ -1301,6 +1301,27 @@ static inline nanoclj_val_t mk_string(nanoclj_t * sc, const char *str) {
   }
 }
 
+static inline nanoclj_val_t mk_string_fmt(nanoclj_t * sc, char *fmt, ...) {
+  /* Determine required size */
+  va_list ap;
+  va_start(ap, fmt);
+  int n = vsnprintf(NULL, 0, fmt, ap);
+  va_end(ap);
+
+  nanoclj_cell_t * r = NULL;
+  if (n >= 0) {
+    /* Reserve 1-byte padding for the 0-marker */
+    r = get_string_object(sc, T_STRING, NULL, n, 1);
+
+    if (n > 0) {
+      va_start(ap, fmt);
+      vsnprintf(_strvalue(r), n + 1, fmt, ap);
+      va_end(ap);
+    }
+  }
+  return mk_pointer(r);
+}
+
 static inline nanoclj_val_t mk_string_from_sv(nanoclj_t * sc, strview_t sv) {
   return mk_pointer(get_string_object(sc, T_STRING, sv.ptr, sv.size, 0));
 }
@@ -1309,8 +1330,8 @@ static inline nanoclj_cell_t * mk_exception(nanoclj_t * sc, nanoclj_cell_t * typ
   return get_cell(sc, type->type, 0, mk_string(sc, msg), NULL, NULL);
 }
 
-static inline nanoclj_cell_t * mk_runtime_exception(nanoclj_t * sc, const char * msg) {
-  return get_cell(sc, T_RUNTIME_EXCEPTION, 0, mk_string(sc, msg), NULL, NULL);
+static inline nanoclj_cell_t * mk_runtime_exception(nanoclj_t * sc, nanoclj_val_t msg) {
+  return get_cell(sc, T_RUNTIME_EXCEPTION, 0, msg, NULL, NULL);
 }
 
 static inline nanoclj_cell_t * mk_arithmetic_exception(nanoclj_t * sc, const char * msg) {
@@ -1322,14 +1343,13 @@ static inline nanoclj_cell_t * mk_class_cast_exception(nanoclj_t * sc, const cha
 }
 
 static inline nanoclj_cell_t * mk_arity_exception(nanoclj_t * sc, int n_args, nanoclj_val_t ns, nanoclj_val_t fn) {
-  size_t l;
+  nanoclj_val_t s;
   if (is_nil(fn)) {
-    l = snprintf(sc->strbuff, STRBUFFSIZE, "Invalid arity");
+    s = mk_string(sc, "Invalid arity");
   } else {
     strview_t sv1 = to_strview(ns), sv2 = to_strview(fn);
-    l = snprintf(sc->strbuff, STRBUFFSIZE, "Wrong number of args (%d) passed to %.*s/%.*s", n_args, (int)sv1.size, sv1.ptr, (int)sv2.size, sv2.ptr);
+    s = mk_string_fmt(sc, "Wrong number of args (%d) passed to %.*s/%.*s", n_args, (int)sv1.size, sv1.ptr, (int)sv2.size, sv2.ptr);
   }
-  nanoclj_val_t s = mk_pointer(get_string_object(sc, T_STRING, sc->strbuff, l, 0));
   return get_cell(sc, T_ARITY_EXCEPTION, 0, s, NULL, NULL);
 }
 
@@ -1625,8 +1645,10 @@ static inline dump_stack_frame_t * s_add_frame(nanoclj_t * sc) {
   /* enough room for the next frame? */
   if (sc->dump >= sc->dump_size) {
     if (sc->dump_size == 0) sc->dump_size = 256;
-    else sc->dump_size *= 2;
-    fprintf(stderr, "reallocing dump stack (%zu)\n", sc->dump_size);
+    else {
+      sc->dump_size *= 2;
+      fprintf(stderr, "reallocing dump stack (%zu)\n", sc->dump_size);
+    }	  
     sc->dump_base = sc->realloc(sc->dump_base, sizeof(dump_stack_frame_t) * sc->dump_size);
   }
   return sc->dump_base + sc->dump++;
@@ -3976,28 +3998,6 @@ static inline nanoclj_cell_t * mk_collection(nanoclj_t * sc, int type, nanoclj_c
   return coll;
 }
 
-static inline nanoclj_val_t mk_format_va(nanoclj_t * sc, char *fmt, ...) {
-  /* Determine required size */
-  va_list ap;
-  va_start(ap, fmt);
-  int n = vsnprintf(NULL, 0, fmt, ap);
-  va_end(ap);
-
-  nanoclj_cell_t * r = NULL;
-  if (n >= 0) {
-    /* Reserve 1-byte padding for the 0-marker */
-    r = get_string_object(sc, T_STRING, NULL, n, 1);
-
-    if (n > 0) {
-      va_start(ap, fmt);
-      vsnprintf(_strvalue(r), n + 1, fmt, ap);
-      va_end(ap);
-    }
-  }
-  sc->free(fmt);
-  return mk_pointer(r);
-}
-
 static inline nanoclj_val_t mk_format(nanoclj_t * sc, strview_t fmt0, nanoclj_cell_t * args) {
   char * fmt = sc->malloc(2 * fmt0.size + 1);
   size_t fmt_size = 0;
@@ -4054,26 +4054,29 @@ static inline nanoclj_val_t mk_format(nanoclj_t * sc, strview_t fmt0, nanoclj_ce
       break;
     }
   }
-  
+
+  nanoclj_val_t r;
   switch (plan) {
-  case 1: return mk_format_va(sc, fmt, arg0l);
-  case 2: return mk_format_va(sc, fmt, arg0d);
-  case 3: return mk_format_va(sc, fmt, (int)arg0s.size, arg0s.ptr);
+  case 1: r = mk_string_fmt(sc, fmt, arg0l); break;
+  case 2: r = mk_string_fmt(sc, fmt, arg0d); break;
+  case 3: r = mk_string_fmt(sc, fmt, (int)arg0s.size, arg0s.ptr); break;
     
-  case 5: return mk_format_va(sc, fmt, arg0l, arg1l);
-  case 6: return mk_format_va(sc, fmt, arg0d, arg1l);
-  case 7: return mk_format_va(sc, fmt, (int)arg0s.size, arg0s.ptr, arg1l);
+  case 5: r = mk_string_fmt(sc, fmt, arg0l, arg1l); break;
+  case 6: r = mk_string_fmt(sc, fmt, arg0d, arg1l); break;
+  case 7: r = mk_string_fmt(sc, fmt, (int)arg0s.size, arg0s.ptr, arg1l); break;
     
-  case 9: return mk_format_va(sc, fmt, arg0l, arg1d);
-  case 10: return mk_format_va(sc, fmt, arg0d, arg1d);
-  case 11: return mk_format_va(sc, fmt, (int)arg0s.size, arg0s.ptr, arg1d);
+  case 9: r = mk_string_fmt(sc, fmt, arg0l, arg1d); break;
+  case 10: r = mk_string_fmt(sc, fmt, arg0d, arg1d); break;
+  case 11: r = mk_string_fmt(sc, fmt, (int)arg0s.size, arg0s.ptr, arg1d); break;
 
-  case 13: return mk_format_va(sc, fmt, arg0l, arg1s);
-  case 14: return mk_format_va(sc, fmt, arg0d, arg1s);
-  case 15: return mk_format_va(sc, fmt, (int)arg0s.size, arg0s.ptr, (int)arg1s.size, arg1s.ptr);
+  case 13: r = mk_string_fmt(sc, fmt, arg0l, arg1s); break;
+  case 14: r = mk_string_fmt(sc, fmt, arg0d, arg1s); break;
+  case 15: r = mk_string_fmt(sc, fmt, (int)arg0s.size, arg0s.ptr, (int)arg1s.size, arg1s.ptr); break;
 
-  default: return mk_format_va(sc, fmt);
+  default: r = mk_string(sc, fmt);
   }
+  sc->free(fmt);
+  return r;
 }
 
 /* ========== Routines for Evaluation Cycle ========== */
@@ -4176,7 +4179,7 @@ static inline nanoclj_val_t nanoclj_throw(nanoclj_t * sc, nanoclj_cell_t * e) {
 }
 
 static inline bool _Error_1(nanoclj_t * sc, const char *msg) {
-  nanoclj_throw(sc, mk_runtime_exception(sc, msg));
+  nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, msg)));
   return false;
 }
 
@@ -4195,8 +4198,8 @@ static inline nanoclj_cell_t * resolve(nanoclj_t * sc, nanoclj_cell_t * env0, na
       all_namespaces = false;
     } else {
       symbol_t * s2 = decode_symbol(s->ns_sym);
-      snprintf(sc->strbuff, STRBUFFSIZE, "%.*s is not defined", (int)s2->name.size, s2->name.ptr);
-      nanoclj_throw(sc, mk_runtime_exception(sc, sc->strbuff));
+      nanoclj_val_t msg = mk_string_fmt(sc, "%.*s is not defined", (int)s2->name.size, s2->name.ptr);
+      nanoclj_throw(sc, mk_runtime_exception(sc, msg));
       return NULL;
     }	  
   } else {
@@ -4632,8 +4635,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     } else {
       strview_t sv = to_strview(arg0);
       if (!file_push(sc, sv)) {
-	sprintf(sc->strbuff, "Unable to open %.*s", (int)sv.size, sv.ptr);
-	Error_0(sc, sc->strbuff);
+	nanoclj_val_t msg = mk_string_fmt(sc, "Unable to open %.*s", (int)sv.size, sv.ptr);
+	nanoclj_throw(sc, mk_runtime_exception(sc, msg));
+	return false;
       } else {
 	s_goto(sc, OP_T0LVL);
       }
@@ -4736,8 +4740,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  s_return(sc, slot_value_in_env(c));
 	} else {
 	  symbol_t * s = decode_symbol(sc->code);
-	  snprintf(sc->strbuff, STRBUFFSIZE, "Use of undeclared Var %.*s", (int)s->full_name.size, s->full_name.ptr);
-	  nanoclj_throw(sc, mk_runtime_exception(sc, sc->strbuff));
+	  nanoclj_val_t msg = mk_string_fmt(sc, "Use of undeclared Var %.*s", (int)s->full_name.size, s->full_name.ptr);
+	  nanoclj_throw(sc, mk_runtime_exception(sc, msg));
 	  return false;
 	}
       }
@@ -5027,8 +5031,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	s_return(sc, mk_pointer(var));
       } else {
 	symbol_t * s = decode_symbol(x);
-	snprintf(sc->strbuff, STRBUFFSIZE, "Use of undeclared Var %.*s", (int)s->full_name.size, s->full_name.ptr);
-	nanoclj_throw(sc, mk_runtime_exception(sc, sc->strbuff));
+	nanoclj_val_t msg = mk_string_fmt(sc, "Use of undeclared Var %.*s", (int)s->full_name.size, s->full_name.ptr);
+	nanoclj_throw(sc, mk_runtime_exception(sc, msg));
 	return false;
       }
     } else {
@@ -6270,8 +6274,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  const char * p = readstr_upto(sc, DELIMITERS, inport, true);
 	  int c = parse_char_literal(sc, p);
 	  if (c == -1) {
-	    sprintf(sc->errbuff, "Undefined character literal: %s", p);
-	    Error_0(sc, sc->errbuff);
+	    nanoclj_val_t msg = mk_string_fmt(sc, "Undefined character literal: %s", p);
+	    nanoclj_throw(sc, mk_runtime_exception(sc, msg));
+	    return false;
 	  } else {
 	    s_return(sc, mk_codepoint(c));
 	  }
@@ -6299,8 +6304,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	      }
 	    }
 	  
-	    sprintf(sc->strbuff, "No reader function for tag %.*s", (int)tag_sv.size, tag_sv.ptr);
-	    Error_0(sc, sc->strbuff);
+	    nanoclj_val_t msg = mk_string_fmt(sc, "No reader function for tag %.*s", (int)tag_sv.size, tag_sv.ptr);
+	    nanoclj_throw(sc, mk_runtime_exception(sc, msg));
+	    return false;
 	  }
 	}
 	
@@ -7193,8 +7199,7 @@ static inline nanoclj_cell_t * mk_properties(nanoclj_t * sc) {
   const char * line_separator = "\n";
 #endif
 
-  int ua_len = sprintf(sc->strbuff, "%s", banner);
-  nanoclj_val_t ua = mk_string_from_sv(sc, (strview_t){sc->strbuff, ua_len});
+  nanoclj_val_t ua = mk_string(sc, banner);
 
   nanoclj_cell_t * l = NULL;
   l = cons(sc, mk_string(sc, user_name), l);
