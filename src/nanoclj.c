@@ -2734,15 +2734,15 @@ static inline nanoclj_cell_t * conjoin(nanoclj_t * sc, nanoclj_cell_t * coll, na
       nanoclj_vector_t * s = _vec_store_unchecked(coll);
       size_t old_offset = _offset_unchecked(coll);
     
-      if (!(old_offset + old_size == s->size && s->size < s->reserved)) {
+      if (old_offset + old_size != s->size) {
 	nanoclj_vector_t * old_s = s;
-	s = mk_vector_store(sc, old_size, 2 * old_size);
+	s = mk_vector_store(sc, old_size, 2 * old_size + 1);
 	memcpy(s->data, old_s->data + old_offset, old_size * sizeof(nanoclj_val_t));    
       } else {
 	s->refcnt++;
       }
-      
-      s->data[s->size++] = new_value;
+
+      vector_push(sc, s, new_value);
       return _get_vector_object(sc, t, old_offset, old_size + 1, s);
     }
   } else if (t == T_STRING || t == T_CHAR_ARRAY || t == T_FILE) {
@@ -2845,11 +2845,8 @@ static inline nanoclj_val_t intern_foreign_func(nanoclj_t * sc, nanoclj_cell_t *
 }
 
 static inline nanoclj_cell_t * mk_type(nanoclj_t * sc, int type_id, nanoclj_cell_t * parent_type, nanoclj_cell_t * meta) {
-  if (sc->types->size <= (size_t)type_id) {
-    for (size_t i = sc->types->size; i < (size_t)type_id; i++) {
-      sc->types->data[i] = mk_nil();
-    }
-    sc->types->size = type_id + 1;
+  while (sc->types->size <= (size_t)type_id) {
+    vector_push(sc, sc->types, mk_nil());
   }
   nanoclj_cell_t * vec = mk_vector(sc, 727);
   fill_vector(vec, mk_nil());
