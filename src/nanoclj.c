@@ -4792,7 +4792,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  
 	case T_VECTOR:{
 	  if (get_size(code_cell) > 0) {
-	    s_save(sc, OP_E0VEC, mk_long(sc, 0), sc->code);
+	    s_save(sc, OP_E0VEC, NULL, sc->code);
 	    sc->code = vector_elem(code_cell, 0);
 	    s_goto(sc, OP_EVAL);
 	  }
@@ -4806,10 +4806,13 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 
   case OP_E0VEC:{	       /* eval vector element */
     nanoclj_cell_t * vec = decode_pointer(sc->code);
-    long long i = _lvalue_unchecked(sc->args);
+    long long i = sc->args ? to_long(_car(sc->args)) : 0;
     set_vector_elem(vec, i, sc->value);
     if (i + 1 < get_size(vec)) {
-      s_save(sc, OP_E0VEC, mk_long(sc, i + 1), sc->code);
+      nanoclj_cell_t * args = sc->args;
+      if (args) _set_car(args, mk_integer(sc, i + 1));
+      else args = cons(sc, mk_integer(sc, i + 1), NULL);
+      s_save(sc, OP_E0VEC, args, sc->code);
       sc->code = vector_elem(vec, i + 1);
       s_goto(sc, OP_EVAL);
     } else {
@@ -5208,7 +5211,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     if (is_vector(x)) {       /* Clojure style */
       nanoclj_cell_t * vec = decode_pointer(x);
       new_frame_in_env(sc, sc->envir);
-      s_save(sc, OP_LET1_VEC, mk_long(sc, 0), sc->code);
+      s_save(sc, OP_LET1_VEC, NULL, sc->code);
       
       sc->code = vector_elem(vec, 1);
       sc->args = NULL;
@@ -5223,11 +5226,14 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 
   case OP_LET1_VEC:{   
     nanoclj_cell_t * vec = decode_pointer(car(sc->code));
-    long long i = _lvalue_unchecked(sc->args);
+    long long i = sc->args ? to_long(_car(sc->args)) : 0;
     new_slot_in_env(sc, vector_elem(vec, i), sc->value);
     
     if (i + 2 < get_size(vec)) {
-      s_save(sc, OP_LET1_VEC, mk_long(sc, i + 2), sc->code);
+      nanoclj_cell_t * args = sc->args;
+      if (args) _set_car(args, mk_integer(sc, i + 2));
+      else args = cons(sc, mk_integer(sc, i + 2), NULL);
+      s_save(sc, OP_LET1_VEC, args, sc->code);
       
       sc->code = vector_elem(vec, i + 3);
       sc->args = NULL;
