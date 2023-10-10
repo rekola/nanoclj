@@ -2670,6 +2670,26 @@ static inline nanoclj_cell_t * copy_vector(nanoclj_t * sc, nanoclj_cell_t * vec)
   }
 }
 
+static inline void vector_push(nanoclj_t * sc, nanoclj_vector_t * vec, nanoclj_val_t val) {
+  if (vec->size >= vec->reserved) {
+    vec->reserved = 2 * (1 + vec->reserved);
+    vec->data = sc->realloc(vec->data, vec->reserved * sizeof(nanoclj_val_t));
+  }  
+  vec->data[vec->size++] = val;
+}
+
+static inline void vector_pop(nanoclj_vector_t * vec) {
+  if (vec->size) vec->size--;  
+}
+
+static inline nanoclj_val_t vector_peek(nanoclj_vector_t * vec) {
+  if (vec->size) {
+    return vec->data[vec->size - 1];
+  } else {
+    return mk_nil();
+  }
+}
+
 static inline size_t append_bytes(nanoclj_t * sc, nanoclj_byte_array_t * s, const char * ptr, size_t n) {
   if (s->size + n > s->reserved) {
     s->reserved = 2 * (s->size + n);
@@ -3196,19 +3216,19 @@ static inline nanoclj_val_t port_from_filename(nanoclj_t * sc, strview_t sv, uin
 }
 
 static inline bool file_push(nanoclj_t * sc, strview_t sv) {
-  if (sc->file_i == MAXFIL - 1) {
+  nanoclj_val_t p = port_from_filename(sc, sv, T_READER);
+  if (!is_nil(p)) {
+    vector_push(sc, sc->load_stack, p);
+    return !sc->pending_exception;
+  } else {
     return false;
   }
-  sc->file_i++;  
-  sc->load_stack[sc->file_i] = port_from_filename(sc, sv, T_READER);
-  
-  return true;
 }
 
 static inline void file_pop(nanoclj_t * sc) {
-  if (sc->file_i != 0) {
-    port_close(sc, decode_pointer(sc->load_stack[sc->file_i]));
-    sc->file_i--;
+  if (sc->load_stack->size != 0) {
+    port_close(sc, decode_pointer(vector_peek(sc->load_stack)));
+    vector_pop(sc->load_stack);
   }
 }
 
@@ -3244,9 +3264,8 @@ static inline nanoclj_val_t port_from_scratch(nanoclj_t * sc) {
   return port_from_string(sc, (strview_t){ "", 0 }, T_WRITER);
 }
 
-static inline void putchars(nanoclj_t * sc, const char *s, size_t len, nanoclj_val_t out0) {
+static inline void putchars(nanoclj_t * sc, const char *s, size_t len, nanoclj_cell_t * out) {
   assert(s);
-  nanoclj_cell_t * out = decode_pointer(out0);
   nanoclj_port_rep_t * pr = _rep_unchecked(out);
   switch (_port_type_unchecked(out)) {
   case port_file:{
@@ -3273,14 +3292,14 @@ static inline void putchars(nanoclj_t * sc, const char *s, size_t len, nanoclj_v
 }
 
 static inline void putstr(nanoclj_t * sc, const char *s, nanoclj_val_t out) {
-  putchars(sc, s, strlen(s), out);
+  putchars(sc, s, strlen(s), decode_pointer(out));
 }
 
 static inline void putcharacter(nanoclj_t * sc, int c, nanoclj_val_t out) {
   if (c != EOF) {
     char buff[4];
     size_t len = encode_utf8(c, buff);
-    putchars(sc, buff, len, out);
+    putchars(sc, buff, len, decode_pointer(out));
   }
 }
 
@@ -3635,7 +3654,7 @@ static inline void print_slashstring(nanoclj_t * sc, strview_t sv, nanoclj_val_t
   putcharacter(sc, '"', out);
 }
 
-static void print_tensor(nanoclj_t * sc, void * tensor, nanoclj_val_t out) {
+static void print_tensor(nanoclj_t * sc, void * tensor, nanoclj_cell_t * out) {
   switch (tensor_get_n_dims(tensor)) {
   case 1:{
     putchars(sc, "[", 1, out);
@@ -3723,7 +3742,7 @@ static inline void print_image(nanoclj_t * sc, nanoclj_image_t * img, nanoclj_va
   
   char * p = sc->strbuff;
   size_t len = snprintf(sc->strbuff, STRBUFFSIZE, "#<Image %d %d %d>", img->width, img->height, img->channels);
-  putchars(sc, p, 3, out);
+  putchars(sc, p, len, decode_pointer(out));
 }
 
 static inline nanoclj_cell_t * get_type_object(nanoclj_t * sc, nanoclj_val_t v) {
@@ -3904,7 +3923,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
 	}
 	break;
       case T_TENSOR:
-	print_tensor(sc, _tensor_unchecked(c), out);
+	print_tensor(sc, _tensor_unchecked(c), decode_pointer(out));
 	return;
       case T_IMAGE:
 	print_image(sc, _image_unchecked(c), out);
@@ -3936,7 +3955,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_fl
     plen = strlen(p);
   }
   
-  putchars(sc, p, plen, out);
+  putchars(sc, p, plen, decode_pointer(out));
 }
 
 static inline size_t seq_length(nanoclj_t * sc, nanoclj_cell_t * a) {
@@ -4654,7 +4673,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 
   case OP_T0LVL:               /* top level */
     /* If we reached the end of file, this loop is done. */
-    if (port_flags_unchecked(sc->load_stack[sc->file_i]) & PORT_SAW_EOF) {
+    if (port_flags_unchecked(vector_peek(sc->load_stack)) & PORT_SAW_EOF) {
       if (sc->global_env != sc->root_env) {
 #if 0
 	fprintf(stderr, "restoring root env\n");
@@ -4662,11 +4681,13 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	sc->envir = sc->global_env = sc->root_env;
       }
 
-      if (nesting_unchecked(sc->load_stack[sc->file_i]) != 0) {
+      if (nesting_unchecked(vector_peek(sc->load_stack)) != 0) {
 	Error_0(sc, "Unmatched parentheses");
       }
       
-      if (sc->file_i == 0) {
+      file_pop(sc);
+      
+      if (sc->load_stack->size == 0) {
 #if 0
         sc->args = sc->EMPTY;
         s_goto(sc, OP_QUIT);
@@ -4674,7 +4695,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	return false;
 #endif
       } else {
-        file_pop(sc);
 	s_return(sc, sc->value); 
       }
       /* NOTREACHED */
@@ -4682,7 +4702,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     
     /* Set up another iteration of REPL */
     sc->save_inport = get_in_port(sc);
-    intern(sc, sc->root_env, sc->IN, sc->load_stack[sc->file_i]);
+    intern(sc, sc->root_env, sc->IN, vector_peek(sc->load_stack));
       
     s_save(sc, OP_T0LVL, NULL, sc->EMPTY);
     s_save(sc, OP_T1LVL, NULL, sc->EMPTY);
@@ -5082,7 +5102,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     if (!is_symbol(x)) {
       Error_0(sc, "Variable is not a symbol");
     }
-    nanoclj_cell_t * meta = mk_meta_from_reader(sc, sc->load_stack[sc->file_i]);
+    nanoclj_cell_t * meta = mk_meta_from_reader(sc, vector_peek(sc->load_stack));
     meta = conjoin(sc, meta, mk_mapentry(sc, sc->NAME, x));
 
     nanoclj_val_t ns_name;
@@ -6606,7 +6626,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       if (var) {
 	ns = decode_pointer(slot_value_in_env(var));
       } else {
-	nanoclj_cell_t * meta = mk_meta_from_reader(sc, sc->load_stack[sc->file_i]);
+	nanoclj_cell_t * meta = mk_meta_from_reader(sc, vector_peek(sc->load_stack));
 	meta = conjoin(sc, meta, mk_mapentry(sc, sc->NAME, arg0));
 	ns = def_namespace_with_sym(sc, arg0, meta);
       }
@@ -7266,7 +7286,6 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   sc->free_cell = NULL;
   sc->fcells = 0;
   sc->save_inport = mk_nil();
-  sc->load_stack[0] = mk_nil();
   sc->global_env = sc->root_env = sc->envir = NULL;
 
   sc->active_element = mk_nil();
@@ -7276,6 +7295,7 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   sc->pending_exception = NULL;
 
   sc->rdbuff = mk_string_store(sc, 0, 0);
+  sc->load_stack = mk_vector_store(sc, 0, 256);
 
   if (alloc_cellseg(sc, FIRST_CELLSEGS) != FIRST_CELLSEGS) {
     return false;
@@ -7513,9 +7533,7 @@ void nanoclj_deinit(nanoclj_t * sc) {
   sc->active_element = mk_nil();
   sc->active_element_target = mk_nil();
   
-  for (int i = 0; i <= sc->file_i; i++) {
-    sc->load_stack[i] = mk_nil();    
-  }
+  sc->load_stack->size = 0;
 
   gc(sc, NULL, NULL, NULL);
   
@@ -7530,13 +7548,10 @@ bool nanoclj_load_named_file(nanoclj_t * sc, const char *filename) {
   nanoclj_val_t p = port_from_filename(sc, (strview_t){ filename, strlen(filename) }, T_READER);
 
   sc->envir = sc->global_env;
-  sc->file_i = 0;
-  sc->load_stack[0] = p;
+  vector_push(sc, sc->load_stack, p);
   sc->args = NULL;
     
   Eval_Cycle(sc, OP_T0LVL);
-
-  sc->load_stack[0] = mk_nil();
 
   return sc->pending_exception == NULL;
 }
@@ -7544,14 +7559,14 @@ bool nanoclj_load_named_file(nanoclj_t * sc, const char *filename) {
 nanoclj_val_t nanoclj_eval_string(nanoclj_t * sc, const char *cmd, size_t len) {
   dump_stack_reset(sc);
 
+  nanoclj_val_t p = port_from_string(sc, (strview_t){ cmd, len }, T_READER);
+  
   sc->envir = sc->global_env;
-  sc->file_i = 0;
-  sc->load_stack[0] = port_from_string(sc, (strview_t){ cmd, len }, T_READER);
+  vector_push(sc, sc->load_stack, p);
   sc->args = NULL;
   
   Eval_Cycle(sc, OP_T0LVL);
 
-  sc->load_stack[0] = mk_nil();
   return sc->value;
 }
 

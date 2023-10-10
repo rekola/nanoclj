@@ -135,8 +135,8 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_c
   mark_value(sc->value);
   mark_value(sc->save_inport);
 
-  for (int i = 0; i <= sc->file_i; i++) {
-    mark_value(sc->load_stack[i]);
+  for (size_t i = 0; i < sc->load_stack->size; i++) {
+    mark_value(sc->load_stack->data[i]);
   }
   
   /* Exceptions */

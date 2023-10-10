@@ -13,10 +13,6 @@
 #define NANOCLJ_SMALL_VEC_SIZE 2
 #define NANOCLJ_SMALL_STR_SIZE 24
 
-#ifndef MAXFIL
-#define MAXFIL 64
-#endif
-
 #ifndef GC_VERBOSE
 #define GC_VERBOSE 0
 #endif
@@ -239,9 +235,7 @@ extern "C" {
     long fcells;                  /* # of free cells */
     
     nanoclj_val_t save_inport;
-
-    nanoclj_val_t load_stack[MAXFIL];    /* Stack of open files for port -1 (LOADing) */
-    int file_i;
+    nanoclj_vector_t * load_stack;
     
     char strbuff[STRBUFFSIZE];
     char errbuff[STRBUFFSIZE];
