@@ -630,6 +630,10 @@ static inline nanoclj_val_t Audio_load(nanoclj_t * sc, nanoclj_val_t args) {
   return audio;
 }
 
+static inline nanoclj_val_t Audio_lowpass(nanoclj_t * sc, nanoclj_val_t args) {
+  return mk_nil();
+}
+
 static inline nanoclj_val_t Geo_load(nanoclj_t * sc, nanoclj_val_t args) {
   char * filename = alloc_c_str(sc, to_strview(car(args)));
 
@@ -942,27 +946,24 @@ static inline void on_window_size() {
   update_window_info(linenoise_sc, decode_pointer(get_out_port(linenoise_sc)));
 }
 
-static inline nanoclj_val_t linenoise_readline(nanoclj_t * sc, nanoclj_val_t args) {
-  if (!linenoise_sc) {
-    linenoise_sc = sc;
+static inline void init_linenoise(nanoclj_t * sc) {
+  linenoise_sc = sc;
+    
+  linenoiseSetMultiLine(0);
+  linenoiseSetupSigWinchHandler();
+  linenoiseSetCompletionCallback(completion);
+  linenoiseSetHintsCallback(hints);
+  linenoiseSetFreeHintsCallback(free_hints);
+  linenoiseSetMouseMotionCallback(on_mouse_motion);
+  linenoiseSetWindowSizeCallback(on_window_size);
+  linenoiseHistorySetMaxLen(10000);
+}
 
-    linenoiseSetMultiLine(0);
-    linenoiseSetupSigWinchHandler();
-    linenoiseSetCompletionCallback(completion);
-    linenoiseSetHintsCallback(hints);
-    linenoiseSetFreeHintsCallback(free_hints);
-    linenoiseSetMouseMotionCallback(on_mouse_motion);
-    linenoiseSetWindowSizeCallback(on_window_size);
-    linenoiseHistorySetMaxLen(10000);
-    linenoiseHistoryLoad(".nanoclj_history");
-  }
+static inline nanoclj_val_t linenoise_readline(nanoclj_t * sc, nanoclj_val_t args) {
   strview_t prompt = to_strview(car(args));
   char * line = linenoise(prompt.ptr, prompt.size);
   if (line == NULL) return mk_nil();
   
-  linenoiseHistoryAdd(line);
-  linenoiseHistorySave(".nanoclj_history");
-
   nanoclj_val_t r;
   char * missing_parens = complete_parens(line);
   if (!missing_parens) {
@@ -980,6 +981,28 @@ static inline nanoclj_val_t linenoise_readline(nanoclj_t * sc, nanoclj_val_t arg
 
   return r;
 }
+
+static inline nanoclj_val_t linenoise_history_load(nanoclj_t * sc, nanoclj_val_t args) {
+  char * fn = alloc_c_str(sc, to_strview(car(args)));
+  linenoiseHistoryLoad(fn);
+  sc->free(fn);
+  return mk_nil();
+}
+
+static inline nanoclj_val_t linenoise_history_save(nanoclj_t * sc, nanoclj_val_t args) {
+  char * fn = alloc_c_str(sc, to_strview(car(args)));
+  linenoiseHistorySave(fn);
+  sc->free(fn);
+  return mk_nil();
+}
+
+static inline nanoclj_val_t linenoise_history_add(nanoclj_t * sc, nanoclj_val_t args) {
+  char * line = alloc_c_str(sc, to_strview(car(args)));
+  linenoiseHistoryAdd(line);
+  sc->free(line);
+  return mk_nil();
+}
+
 #endif
 
 static inline void register_functions(nanoclj_t * sc) {
@@ -1038,12 +1061,18 @@ static inline void register_functions(nanoclj_t * sc) {
   intern_foreign_func(sc, Image, "gaussian-blur", Image_gaussian_blur, 2, 2);
 
   intern_foreign_func(sc, Audio, "load", Audio_load, 1, 1);
+  intern_foreign_func(sc, Audio, "lowpass", Audio_lowpass, 1, 1);
 
   intern_foreign_func(sc, Geo, "load", Geo_load, 1, 1);
   
 #if NANOCLJ_USE_LINENOISE
   nanoclj_cell_t * linenoise = def_namespace(sc, "linenoise", __FILE__);
   intern_foreign_func(sc, linenoise, "read-line", linenoise_readline, 1, 1);
+  intern_foreign_func(sc, linenoise, "history-load", linenoise_history_load, 1, 1);
+  intern_foreign_func(sc, linenoise, "history-save", linenoise_history_save, 1, 1);
+  intern_foreign_func(sc, linenoise, "history-add", linenoise_history_add, 1, 1);
+
+  init_linenoise(sc);  
 #endif  
 }
 
