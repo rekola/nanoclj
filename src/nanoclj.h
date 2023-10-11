@@ -128,8 +128,6 @@ extern "C" {
     void (*fill_vector) (nanoclj_val_t vec, nanoclj_val_t elem);
     nanoclj_val_t (*vector_elem) (nanoclj_val_t vec, size_t ielem);
     void (*set_vector_elem) (nanoclj_val_t vec, size_t ielem, nanoclj_val_t newel);
-    bool (*is_reader) (nanoclj_val_t p);
-    bool (*is_writer) (nanoclj_val_t p);
     
     bool (*is_list) (nanoclj_val_t p);
     nanoclj_val_t (*pair_car) (nanoclj_val_t p);

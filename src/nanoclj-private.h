@@ -260,7 +260,8 @@ extern "C" {
     double window_scale_factor;
     
     /* Dynamic printing */
-    nanoclj_val_t active_element, active_element_target;
+    nanoclj_val_t active_element;
+    nanoclj_cell_t * active_element_target;
     int active_element_x, active_element_y;
 
     nanoclj_cell_t * properties;

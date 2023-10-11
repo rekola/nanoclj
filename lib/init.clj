@@ -1,7 +1,7 @@
 ;    Initialization file for NanoClojure 1.0
 
-(load "bootstrap.clj")
-(load "clojure.core.clj")
+(load-file "bootstrap.clj")
+(load-file "clojure.core.clj")
 
 ;;;;; I/O
 
@@ -109,13 +109,13 @@
 
 (defn ns-interns [ns] (doall (map first (reduce concat '() (car ns)))))
 
-(load "clojure.java.io.clj")
-(load "clojure.string.clj")
-(load "clojure.repl.clj")
-(load "java.lang.Integer.clj")
-(load "java.lang.Long.clj")
-(load "java.util.Date.clj")
-(load "sparkline.clj")
-(load "Plot.clj")
-(load "nanoclj.core.Tensor.clj")
+(load-file "clojure.java.io.clj")
+(load-file "clojure.string.clj")
+(load-file "clojure.repl.clj")
+(load-file "java.lang.Integer.clj")
+(load-file "java.lang.Long.clj")
+(load-file "java.util.Date.clj")
+(load-file "sparkline.clj")
+(load-file "Plot.clj")
+(load-file "nanoclj.core.Tensor.clj")
 

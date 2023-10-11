@@ -145,7 +145,7 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_c
   mark(sc->NullPointerException);
   
   mark_value(sc->active_element);
-  mark_value(sc->active_element_target);
+  if (sc->active_element_target) mark(sc->active_element_target);
   mark(sc->EMPTYVEC);
   
   /* Mark recent objects the interpreter doesn't know about yet. */
