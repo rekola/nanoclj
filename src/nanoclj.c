@@ -3772,7 +3772,7 @@ static inline bool isa(nanoclj_t * sc, nanoclj_cell_t * t0, nanoclj_val_t v) {
 }
 
 /* Uses internal buffer unless string pointer is already available */
-static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, int print_flag, nanoclj_cell_t * out) {
+static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_flag, nanoclj_cell_t * out) {
   const char *p = 0;
   int plen = -1;
 
@@ -4737,7 +4737,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       }
     }
     Error_0(sc, "Not a reader");
-    
+
   case OP_GENSYM:
     if (!unpack_args_0_plus(sc, &arg_next)) {
       return false;
@@ -6162,7 +6162,24 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       }
     }
     s_return(sc, mk_nil());
-  
+
+  case OP_WRITEM:               /* .writer */
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
+      return false;
+    } else if (is_cell(arg0)) {
+      nanoclj_cell_t * out = decode_pointer(arg0);
+      if (is_writable(out)) {
+	if (_type(out) == T_OUTPUT_STREAM) {
+	  char c = to_int(arg1);
+	  putchars(sc, &c, 1, out);
+	} else {
+	  print_primitive(sc, arg1, false, out);
+	}
+	s_return(sc, mk_nil());
+      }
+    }
+    Error_0(sc, "Not a writer");
+
   case OP_FORMAT:
     if (!unpack_args_1_plus(sc, &arg0, &arg_next)) {
       return false;
