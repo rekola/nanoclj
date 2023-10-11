@@ -311,34 +311,6 @@ static inline nanoclj_val_t browse_url(nanoclj_t * sc, nanoclj_val_t args) {
 #endif
 }
 
-static inline nanoclj_val_t shell_sh(nanoclj_t * sc, nanoclj_val_t args0) {
-  nanoclj_cell_t * args = decode_pointer(args0);
-  size_t n = seq_length(sc, args);
-  if (n >= 1) {
-#ifdef WIN32
-    /* TODO */
-    return mk_nil();
-#else
-    pid_t r = fork();
-    if (r == 0) {
-      char * cmd = (char *)alloc_c_str(sc, to_strview(first(sc, args)));
-      args = rest(sc, args);
-      n--;
-      char ** output_args = (char **)sc->malloc(n * sizeof(char*));
-      for (size_t i = 0; i < n; i++, args = rest(sc, args)) {
-	output_args[i] = alloc_c_str(sc, to_strview(first(sc, args)));
-      }
-      execvp(cmd, output_args);
-      exit(1);
-    } else {
-      return r < 0 ? (nanoclj_val_t)kFALSE : (nanoclj_val_t)kTRUE;
-    }
-  } else {
-    return mk_nil();
-  }
-#endif
-}
-
 static inline nanoclj_val_t Image_load(nanoclj_t * sc, nanoclj_val_t args) {
   char * filename = alloc_c_str(sc, to_strview(car(args)));
 	    
@@ -1011,7 +983,6 @@ static inline void register_functions(nanoclj_t * sc) {
   nanoclj_cell_t * Math = def_namespace(sc, "Math", __FILE__);
   nanoclj_cell_t * numeric_tower = def_namespace(sc, "clojure.math.numeric-tower", __FILE__);
   nanoclj_cell_t * clojure_java_browse = def_namespace(sc, "clojure.java.browse", __FILE__);
-  nanoclj_cell_t * clojure_java_shell = def_namespace(sc, "clojure.java.shell", __FILE__);
   nanoclj_cell_t * Image = def_namespace(sc, "Image", __FILE__);
   nanoclj_cell_t * Audio = def_namespace(sc, "Audio", __FILE__);
   nanoclj_cell_t * Geo = def_namespace(sc, "Geo", __FILE__);
@@ -1050,8 +1021,6 @@ static inline void register_functions(nanoclj_t * sc) {
   intern_foreign_func(sc, numeric_tower, "expt", numeric_tower_expt, 2, 2);
 
   intern_foreign_func(sc, clojure_java_browse, "browse-url", browse_url, 1, 1);
-
-  intern_foreign_func(sc, clojure_java_shell, "sh", shell_sh, 1, 0x7fffffff);
 
   intern_foreign_func(sc, Image, "load", Image_load, 1, 1);
   intern_foreign_func(sc, Image, "resize", Image_resize, 3, 3);

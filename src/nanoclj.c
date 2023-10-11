@@ -47,6 +47,7 @@
 #include <signal.h>
 #include <pthread.h>
 #include <sys/utsname.h>
+#include <sys/stat.h>
 #include <pwd.h>
 
 #define PCRE2_CODE_UNIT_WIDTH 8
@@ -893,7 +894,8 @@ static inline int alloc_cellseg(nanoclj_t * sc, int n) {
   return n;
 }
 
-static inline void port_close(nanoclj_t * sc, nanoclj_cell_t * p) {
+static inline int port_close(nanoclj_t * sc, nanoclj_cell_t * p) {
+  int r = 0;
   nanoclj_port_rep_t * pr = _rep_unchecked(p);
   switch (_port_type_unchecked(p)) {
   case port_file:
@@ -903,7 +905,14 @@ static inline void port_close(nanoclj_t * sc, nanoclj_cell_t * p) {
     }
     FILE * fh = pr->stdio.file;
     if (fh && (fh != stdout && fh != stderr && fh != stdin)) {
-      fclose(fh);
+      int fd = fileno(fh);
+      struct stat statbuf;
+      fstat(fd, &statbuf);
+      if (S_ISFIFO(statbuf.st_mode)) {
+	r = pclose(fh) >> 8;
+      } else {
+	fclose(fh);
+      }
     }
     pr->stdio.file = NULL;
     break;
@@ -922,6 +931,7 @@ static inline void port_close(nanoclj_t * sc, nanoclj_cell_t * p) {
 #endif
   }
   _port_type_unchecked(p) = port_free;
+  return r;
 }
 
 static inline void finalize_cell(nanoclj_t * sc, nanoclj_cell_t * a) {
@@ -959,10 +969,9 @@ static inline void finalize_cell(nanoclj_t * sc, nanoclj_cell_t * a) {
   case T_READER:
   case T_WRITER:
   case T_INPUT_STREAM:
-  case T_OUTPUT_STREAM:{
+  case T_OUTPUT_STREAM:
     port_close(sc, a);
     sc->free(_rep_unchecked(a));
-  }
     break;
   case T_IMAGE:{
     nanoclj_image_t * image = _image_unchecked(a);
@@ -3203,12 +3212,14 @@ static inline nanoclj_val_t port_rep_from_file(nanoclj_t * sc, uint8_t type, FIL
 
 static inline nanoclj_val_t port_from_filename(nanoclj_t * sc, strview_t sv, uint16_t type) {
   const char * mode;
-  if (type == T_WRITER || type == T_OUTPUT_STREAM) {
-    mode = "w";
-  } else {
-    mode = "r";
+  switch (type) {
+  case T_WRITER: mode = "w"; break;
+  case T_OUTPUT_STREAM: mode = "wb"; break;
+  case T_READER: mode = "r"; break;
+  case T_INPUT_STREAM: mode = "rb"; break;
+  default: return mk_nil();
   }
-
+  
   FILE * f = NULL;
   char * filename = alloc_c_str(sc, sv);
   if (strcmp(filename, "-") == 0) {
@@ -3219,6 +3230,8 @@ static inline nanoclj_val_t port_from_filename(nanoclj_t * sc, strview_t sv, uin
     f = fdopen(fd, mode);
   } else if (strncmp(filename, "file://", 7) == 0) {
     f = fopen(filename + 7, mode);
+  } else if (filename[0] == '|') {
+    f = popen(filename + 1, mode);
   } else {
     f = fopen(filename, mode);
   }
@@ -6194,7 +6207,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       return false;
     }
     
-  case OP_CLOSE:        /* close */
+  case OP_CLOSEM:        /* .close */
     if (!unpack_args_1(sc, &arg0)) {
       return false;
     } else if (is_nil(arg0)) {
@@ -6206,7 +6219,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       case T_WRITER:
       case T_INPUT_STREAM:
       case T_OUTPUT_STREAM:
-	port_close(sc, decode_pointer(arg0));
+	s_return(sc, mk_int(port_close(sc, decode_pointer(arg0))));
       }
       s_return(sc, mk_nil());
     }
