@@ -21,19 +21,19 @@
                                       clojure.lang.PersistentArrayMap))
 (defn sequential?
   "Returns true if coll is sequential (ordered)"
-  [coll] (is-any-of? (type x) clojure.lang.PersistentVector clojure.lang.Cons))
+  [coll] (is-any-of? (type coll) clojure.lang.PersistentVector clojure.lang.Cons))
 
 (defn counted?
   "Returns true if coll implements count in constant time"
-  [x] (is-any-of? (type x) clojure.lang.PersistentTreeSet clojure.lang.PersistentArrayMap clojure.lang.PersistentVector))
+  [coll] (is-any-of? (type coll) clojure.lang.PersistentTreeSet clojure.lang.PersistentArrayMap clojure.lang.PersistentVector))
 
 (defn seq?
-  "Returns true if x is a Sequence"
-  [x] (or (instance? clojure.lang.Cons x) (instance? clojure.lang.LazySeq x) (equals? (-bit-and (-get-cell-flags x) 4) 4)))
+  "Returns true if coll is a Sequence"
+  [coll] (or (instance? clojure.lang.Cons coll) (instance? clojure.lang.LazySeq coll) (equals? (-bit-and (-get-cell-flags coll) 4) 4)))
 
 (defn seqable?
-  "Returns true if x supportes seq"
-  [x] (is-any-of? (type x) java.lang.String clojure.lang.LazySeq clojure.lang.PersistentVector clojure.lang.Cons clojure.lang.PersistentTreeSet clojure.lang.PersistentArrayMap))
+  "Returns true if coll supportes seq"
+  [coll] (is-any-of? (type coll) java.lang.String clojure.lang.LazySeq clojure.lang.PersistentVector clojure.lang.Cons clojure.lang.PersistentTreeSet clojure.lang.PersistentArrayMap))
 
 (defn realized?
   "Returns true if Delay or LazySeq has been realized"
