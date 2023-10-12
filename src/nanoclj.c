@@ -1355,7 +1355,31 @@ static inline nanoclj_cell_t * mk_exception(nanoclj_t * sc, nanoclj_cell_t * typ
   return get_cell(sc, type->type, 0, mk_string(sc, msg), NULL, NULL);
 }
 
+static inline nanoclj_val_t vector_peek(nanoclj_vector_t * vec) {
+  if (vec->size) {
+    return vec->data[vec->size - 1];
+  } else {
+    return mk_nil();
+  }
+}
+
+static inline nanoclj_val_t add_exception_source(nanoclj_t * sc, strview_t msg) {
+  int line = 0;
+  char * file = "NO_SOURCE_FILE";
+  nanoclj_val_t p0 = vector_peek(sc->load_stack);
+  if (is_cell(p0)) {
+    nanoclj_cell_t * p = decode_pointer(p0);
+    if (is_readable(p) && _port_type_unchecked(p) == port_file) {
+      nanoclj_port_rep_t * pr = _rep_unchecked(p);
+      line = pr->stdio.line + 1;
+      file = pr->stdio.filename;
+    }
+  }
+  return mk_string_fmt(sc, "%.*s (%s:%d)", (int)msg.size, msg.ptr, file, line);
+}
+
 static inline nanoclj_cell_t * mk_runtime_exception(nanoclj_t * sc, nanoclj_val_t msg) {
+  msg = add_exception_source(sc, to_strview(msg));
   return get_cell(sc, T_RUNTIME_EXCEPTION, 0, msg, NULL, NULL);
 }
 
@@ -1368,14 +1392,15 @@ static inline nanoclj_cell_t * mk_class_cast_exception(nanoclj_t * sc, const cha
 }
 
 static inline nanoclj_cell_t * mk_arity_exception(nanoclj_t * sc, int n_args, nanoclj_val_t ns, nanoclj_val_t fn) {
-  nanoclj_val_t s;
+  nanoclj_val_t msg0;
   if (is_nil(fn)) {
-    s = mk_string(sc, "Invalid arity");
+    msg0 = mk_string(sc, "Invalid arity");
   } else {
     strview_t sv1 = to_strview(ns), sv2 = to_strview(fn);
-    s = mk_string_fmt(sc, "Wrong number of args (%d) passed to %.*s/%.*s", n_args, (int)sv1.size, sv1.ptr, (int)sv2.size, sv2.ptr);
+    msg0 = mk_string_fmt(sc, "Wrong number of args (%d) passed to %.*s/%.*s", n_args, (int)sv1.size, sv1.ptr, (int)sv2.size, sv2.ptr);
   }
-  return get_cell(sc, T_ARITY_EXCEPTION, 0, s, NULL, NULL);
+  nanoclj_val_t msg = add_exception_source(sc, to_strview(msg0));
+  return get_cell(sc, T_ARITY_EXCEPTION, 0, msg, NULL, NULL);
 }
 
 static inline nanoclj_cell_t * mk_illegal_arg_exception(nanoclj_t * sc, const char * msg) {
@@ -2705,14 +2730,6 @@ static inline void vector_push(nanoclj_t * sc, nanoclj_vector_t * vec, nanoclj_v
 
 static inline void vector_pop(nanoclj_vector_t * vec) {
   if (vec->size) vec->size--;  
-}
-
-static inline nanoclj_val_t vector_peek(nanoclj_vector_t * vec) {
-  if (vec->size) {
-    return vec->data[vec->size - 1];
-  } else {
-    return mk_nil();
-  }
 }
 
 static inline size_t append_bytes(nanoclj_t * sc, nanoclj_byte_array_t * s, const char * ptr, size_t n) {
