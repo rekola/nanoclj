@@ -81,9 +81,9 @@ static inline size_t encode_utf8(int32_t c, char *p) {
 
 
 /* Returns the number of codepoints in utf8 string */
-static inline int utf8_num_codepoints(const char *s, size_t size) {
+static inline long long utf8_num_codepoints(const char *s, size_t size) {
   const char * end = s + size;
-  int count = 0;
+  long long count = 0;
   for (; s < end; s++) {
     if ((*s & 0xC0) != 0x80) count++;
   }

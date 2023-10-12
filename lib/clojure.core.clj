@@ -150,12 +150,6 @@
 (defn constantly
   "Creates a function that always returns x and accepts any number of arguments"
   [x] (fn [& args] x))
-         
-; Strings
-
-(def subs (fn ([s start]     (apply str (drop start s)))
-     	      ([s start end] (apply str (take (- end start) (drop start s))))))
-
 
 ; Sequences
 

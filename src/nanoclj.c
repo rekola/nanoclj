@@ -5966,13 +5966,11 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       }
     }    
     Error_0(sc, "No protocol method ICollection.-disjoin defined for type");      
-
+    
   case OP_SUBVEC:
     if (!unpack_args_2_plus(sc, &arg0, &arg1, &arg_next)) {
       return false;
-    } else if (!is_cell(arg0)) {
-      Error_0(sc, "Not a vector");
-    } else {
+    } else if (is_cell(arg0)) {
       nanoclj_cell_t * c = decode_pointer(arg0);
       long long start = to_long(arg1);
       long long end;
@@ -5984,6 +5982,31 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       if (end < start) end = start;
       s_return(sc, mk_pointer(subvec(sc, c, start, end - start)));
     }
+    Error_0(sc, "Not a vector");
+
+  case OP_SUBS:
+    if (!unpack_args_2_plus(sc, &arg0, &arg1, &arg_next)) {
+      return false;
+    } else if (is_cell(arg0)) {
+      nanoclj_cell_t * c = decode_pointer(arg0);
+      if (!c) {
+	nanoclj_throw(sc, sc->NullPointerException);
+	return false;
+      } else if (_type(c) == T_STRING) {
+	long long start = to_long(arg1);
+	if (arg_next) {
+	  long long new_n = to_long(first(sc, arg_next)) - start;
+	  if (start > 0) c = remove_prefix(sc, c, start);
+	  long long n = utf8_num_codepoints(_strvalue(c), get_size(c));
+	  if (new_n < n) c = remove_suffix(sc, c, n - new_n);
+	} else if (start > 0) {
+	  c = remove_prefix(sc, c, start);
+	}
+	s_return(sc, mk_pointer(c));
+      }
+    }
+    Error_0(sc, "Not a string");
+
   case OP_NOT:                 /* not */
     if (!unpack_args_1(sc, &arg0)) {
       return false;
