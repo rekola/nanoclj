@@ -1016,7 +1016,6 @@ static inline void register_functions(nanoclj_t * sc) {
 
   intern(sc, Math, def_symbol(sc, "E"), mk_real(M_E));
   intern(sc, Math, def_symbol(sc, "PI"), mk_real(M_PI));
-  intern(sc, Math, def_symbol(sc, "SQRT2"), mk_real(M_SQRT2));
 
   intern_foreign_func(sc, numeric_tower, "expt", numeric_tower_expt, 2, 2);
 
