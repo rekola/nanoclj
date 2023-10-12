@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 2.8.12)
 project(nanoclj C)
 
+find_package(Threads REQUIRED)
+
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
@@ -21,14 +23,15 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux")
 endif()
   
 set(SOURCE_FILES
-    src/nanoclj.c
-    src/linenoise.c
-    src/wcwidth.c
-    src/ggml.c
-    src/ggml-alloc.c
-    )
+  src/nanoclj.c
+  src/linenoise.c
+  src/wcwidth.c
+  src/ggml.c
+  src/ggml-alloc.c
+  )
 
 add_executable(nanoclj ${SOURCE_FILES})
+target_link_libraries(nanoclj Threads::Threads)
 
 find_library(MATH_LIBRARY m REQUIRED)
 if(MATH_LIBRARY)
@@ -72,6 +75,7 @@ configure_file(lib/init.clj init.clj @ONLY)
 configure_file(lib/bootstrap.clj bootstrap.clj @ONLY)
 configure_file(lib/clojure.core.clj clojure.core.clj @ONLY)
 configure_file(lib/clojure.java.io.clj clojure.java.io.clj @ONLY)
+configure_file(lib/clojure.java.shell.clj clojure.java.shell.clj @ONLY)
 configure_file(lib/clojure.repl.clj clojure.repl.clj @ONLY)
 configure_file(lib/clojure.string.clj clojure.string.clj @ONLY)
 configure_file(lib/java.lang.Integer.clj java.lang.Integer.clj @ONLY)
