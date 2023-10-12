@@ -110,6 +110,8 @@ have been tested:
 - Threading macros (->, -->, some-> and some->>)
 - Homogenous vectors (vector-of)
 - Pre and post conditions for functions
+- Readers, Writers, spit and slurp do not accept options such as :encoding or :append
+- spit and slurp do not accept Writers or Readers
 - `*print-length*`, `*print-level*`, `*file*`, `*flush-on-newline*`, `*clojure-version*`, `*load-tests*`
 - Missing core functions and macros
   - doseq, for, dotimes
@@ -137,7 +139,11 @@ have been tested:
   - re-groups, re-matcher, re-seq, re-matches
   - hash-ordered-coll, hash-unordered-coll
   - assert-args
-  clojure.core.reducers
+  - make-parents
+  - with-open
+- clojure.core.reducers
+- clojure.main
+  - load-script
 - clojure.string
   - upper-case
   - capitalize
