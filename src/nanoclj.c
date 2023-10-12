@@ -1114,18 +1114,6 @@ static inline nanoclj_val_t mk_real(double n) {
   return (nanoclj_val_t)(isnan(n) ? NAN : n);
 }
 
-static inline nanoclj_cell_t * mk_long(nanoclj_t * sc, long long num) {
-  nanoclj_cell_t * x = get_cell_x(sc, T_LONG, T_GC_ATOM, NULL, NULL, NULL);
-  if (x) {
-    _lvalue_unchecked(x) = num;
-
-#if RETAIN_ALLOCS
-    retain(sc, x);
-#endif
-  }
-  return x;
-}
-
 static inline nanoclj_val_t mk_date(nanoclj_t * sc, long long num) {
   nanoclj_cell_t * x = get_cell_x(sc, T_DATE, T_GC_ATOM, NULL, NULL, NULL);
   if (x) {
@@ -1143,7 +1131,15 @@ static inline nanoclj_val_t mk_integer(nanoclj_t * sc, long long num) {
   if (num >= INT_MIN && num <= INT_MAX) {
     return mk_int(num);
   } else {
-    return mk_pointer(mk_long(sc, num));
+    nanoclj_cell_t * x = get_cell_x(sc, T_LONG, T_GC_ATOM, NULL, NULL, NULL);
+    if (x) {
+      _lvalue_unchecked(x) = num;
+
+#if RETAIN_ALLOCS
+      retain(sc, x);
+#endif
+    }
+    return mk_pointer(x);
   }
 }
 
@@ -2033,6 +2029,35 @@ static inline nanoclj_val_t first(nanoclj_t * sc, nanoclj_cell_t * coll) {
   }
 
   return mk_nil();
+}
+
+static inline size_t count(nanoclj_t * sc, nanoclj_cell_t * coll) {
+  if (!coll) return 0;
+  switch (_type(coll)) {
+  case T_NIL:
+    return 0;
+
+  case T_LIST:
+  case T_LAZYSEQ:
+  case T_ENVIRONMENT:
+  case T_CLASS:
+    return 1 + count(sc, next(sc, coll));
+    
+  case T_STRING:
+  case T_CHAR_ARRAY:
+  case T_FILE:
+  case T_UUID:
+    return utf8_num_codepoints(_strvalue(coll), get_size(coll));
+    
+  case T_VECTOR:
+  case T_ARRAYMAP:
+  case T_SORTED_SET:
+  case T_MAPENTRY:
+  case T_RATIO:
+    return get_size(coll);
+  }
+
+  return 0;
 }
 
 static nanoclj_val_t second(nanoclj_t * sc, nanoclj_cell_t * a) {
@@ -5958,6 +5983,14 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       }
     }    
     Error_0(sc, "No protocol method ICollection.-disjoin defined for type");      
+
+  case OP_COUNT:
+    if (!unpack_args_1(sc, &arg0)) {
+      return false;
+    } else if (is_cell(arg0)) {      
+      s_return(sc, mk_integer(sc, count(sc, decode_pointer(arg0))));
+    }
+    Error_0(sc, "No protocol method ICounted.-count defined for type");
     
   case OP_SUBVEC:
     if (!unpack_args_2_plus(sc, &arg0, &arg1, &arg_next)) {

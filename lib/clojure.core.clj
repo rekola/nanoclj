@@ -123,19 +123,6 @@
 
 (defn identity [x] x)
 
-(def count
-  "Counts the number of elements in coll. For vectors, sets and maps it's O(1), but for
-  lists and sequences it is O(n)"
-  (fn [coll] (if (or (vector? coll) (set? coll) (map? coll))
-               (long coll)
-               (if (empty? coll)
-                 0
-      	         (loop [accum 1 coll (next coll)]
-                   (if coll
-                     (recur (inc accum) (next coll))
-                     accum))))))
-                     
-
 (def some (fn [pred coll] (cond (empty? coll) false
                                 (pred (first coll)) true
 				:else (some pred (rest coll)))))
