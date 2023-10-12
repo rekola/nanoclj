@@ -94,6 +94,10 @@ static inline void canvas_arc(void * canvas, double xc, double yc, double radius
   cairo_arc((cairo_t *)canvas, xc, yc, radius, angle1, angle2);
 }
 
+static inline void canvas_new_path(void * canvas) {
+  cairo_new_path((cairo_t *)canvas);
+}
+
 static inline void canvas_close_path(void * canvas) {
   cairo_close_path((cairo_t *)canvas);
 }

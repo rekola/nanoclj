@@ -6937,6 +6937,18 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 #endif
     s_return(sc, mk_nil());
 
+  case OP_NEW_PATH:
+    if (!unpack_args_0(sc)) {
+      return false;
+    }
+#if NANOCLJ_HAS_CANVAS
+    x = get_out_port(sc);
+    if (is_writer(x) && port_type_unchecked(x) == port_canvas) {
+      canvas_new_path(rep_unchecked(x)->canvas.impl);
+    }
+#endif
+    s_return(sc, mk_nil());
+
   case OP_CLOSE_PATH:
     if (!unpack_args_0(sc)) {
       return false;
@@ -6948,7 +6960,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
 #endif
     s_return(sc, mk_nil());
-
+    
   case OP_STROKE:
     if (!unpack_args_0(sc)) {
       return false;
