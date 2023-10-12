@@ -1724,41 +1724,6 @@ static inline nanoclj_val_t eval(nanoclj_t * sc, nanoclj_cell_t * obj) {
 
 /* Sequence handling */
 
-static inline nanoclj_cell_t * remove_prefix(nanoclj_t * sc, nanoclj_cell_t * str, size_t n) {
-  const char * old_ptr = _strvalue(str);
-  const char * new_ptr = old_ptr;
-  const char * end_ptr = old_ptr + get_size(str);
-  while (n > 0 && new_ptr < end_ptr) {
-    new_ptr = utf8_next(new_ptr);
-    n--;
-  }  
-  size_t new_size = end_ptr - new_ptr;
-  
-  if (_is_small(str)) {
-    return get_string_object(sc, str->type, new_ptr, new_size, 0);
-  } else {
-    size_t new_offset = new_ptr - old_ptr;
-    nanoclj_byte_array_t * s = _str_store_unchecked(str);
-    s->refcnt++;
-    return _get_string_object(sc, str->type, _offset_unchecked(str) + new_offset, new_size, s);
-  }
-}
-
-static inline nanoclj_cell_t * remove_suffix(nanoclj_t * sc, nanoclj_cell_t * str, size_t n) {
-  const char * start = _strvalue(str);
-  const char * end = start + get_size(str);
-  const char * new_ptr = end;
-  while (n > 0 && new_ptr > start) {
-    new_ptr = utf8_prev(new_ptr);
-    n--;
-  }
-  if (_is_small(str)) {
-    return get_string_object(sc, str->type, start, new_ptr - start, 0);
-  } else {
-    return str;
-  }
-}
-
 static inline nanoclj_cell_t * subvec(nanoclj_t * sc, nanoclj_cell_t * vec, size_t offset, size_t len) {
   if (_is_small(vec)) {
     nanoclj_cell_t * new_vec = get_vector_object(sc, vec->type, len);
@@ -1780,6 +1745,51 @@ static inline nanoclj_cell_t * subvec(nanoclj_t * sc, nanoclj_cell_t * vec, size
     s->refcnt++;
     
     return _get_vector_object(sc, vec->type, old_offset + offset, len, s);
+  }
+}
+
+static inline nanoclj_cell_t * remove_prefix(nanoclj_t * sc, nanoclj_cell_t * coll, size_t n) {
+  if (_type(coll) == T_STRING || _type(coll) == T_CHAR_ARRAY ||
+      _type(coll) == T_FILE || _type(coll) == T_UUID) {
+    const char * old_ptr = _strvalue(coll);
+    const char * new_ptr = old_ptr;
+    const char * end_ptr = old_ptr + get_size(coll);
+    while (n > 0 && new_ptr < end_ptr) {
+      new_ptr = utf8_next(new_ptr);
+      n--;
+    }  
+    size_t new_size = end_ptr - new_ptr;
+    
+    if (_is_small(coll)) {
+      return get_string_object(sc, coll->type, new_ptr, new_size, 0);
+    } else {
+      size_t new_offset = new_ptr - old_ptr;
+      nanoclj_byte_array_t * s = _str_store_unchecked(coll);
+      s->refcnt++;
+      return _get_string_object(sc, coll->type, _offset_unchecked(coll) + new_offset, new_size, s);
+    }
+  } else {
+    return subvec(sc, coll, n, get_size(coll) - n);
+  }
+}
+
+static inline nanoclj_cell_t * remove_suffix(nanoclj_t * sc, nanoclj_cell_t * coll, size_t n) {
+  if (_type(coll) == T_STRING || _type(coll) == T_CHAR_ARRAY ||
+      _type(coll) == T_FILE || _type(coll) == T_UUID) {
+    const char * start = _strvalue(coll);
+    const char * end = start + get_size(coll);
+    const char * new_ptr = end;
+    while (n > 0 && new_ptr > start) {
+      new_ptr = utf8_prev(new_ptr);
+      n--;
+    }
+    if (_is_small(coll)) {
+      return get_string_object(sc, coll->type, start, new_ptr - start, 0);
+    } else {
+      return coll;
+    }
+  } else {
+    return subvec(sc, coll, 0, get_size(coll) - 1);
   }
 }
 
@@ -1857,6 +1867,9 @@ static inline nanoclj_cell_t * seq(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_CHAR_ARRAY:
   case T_FILE:
   case T_UUID:
+  case T_VECTOR:
+  case T_ARRAYMAP:
+  case T_SORTED_SET:
     if (get_size(coll) == 0) {
       return NULL;
     } else {
@@ -1865,16 +1878,6 @@ static inline nanoclj_cell_t * seq(nanoclj_t * sc, nanoclj_cell_t * coll) {
       return s;
     }
     break;
-  case T_VECTOR:
-  case T_ARRAYMAP:
-  case T_SORTED_SET:
-    if (get_size(coll) == 0) {
-      return NULL;
-    } else {
-      nanoclj_cell_t * s = subvec(sc, coll, 0, get_size(coll));
-      _set_seq(s);
-      return s;
-    }
   }  
   
   return coll;
@@ -1938,22 +1941,10 @@ static inline nanoclj_cell_t * rest(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_VECTOR:
   case T_ARRAYMAP:
   case T_SORTED_SET:
-    if (get_size(coll) >= 2) {
-      nanoclj_cell_t * s;
-      if (_is_reverse(coll)) {
-	s = subvec(sc, coll, 0, get_size(coll) - 1);
-	_set_rseq(s);
-      } else {
-	s = subvec(sc, coll, 1, get_size(coll) - 1);
-	_set_seq(s);
-      }
-      return s;
-    }
-    break;
   case T_STRING:
   case T_CHAR_ARRAY:
   case T_FILE:
-    if (get_size(coll)) {
+    if (get_size(coll) >= 2) {
       nanoclj_cell_t * s;
       if (_is_reverse(coll)) {
 	s = remove_suffix(sc, coll, 1);
@@ -1962,8 +1953,9 @@ static inline nanoclj_cell_t * rest(nanoclj_t * sc, nanoclj_cell_t * coll) {
 	s = remove_prefix(sc, coll, 1);
 	_set_seq(s);
       }
+      /* In the case of multi-byte utf8 character, the string can be empty */
       return get_size(s) ? s : &(sc->_EMPTY);
-    }  
+    }
     break;
   }
 
