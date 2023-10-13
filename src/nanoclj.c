@@ -32,6 +32,7 @@
 #else /* _WIN32 */
 
 #include <unistd.h>
+#include <pthread.h>
 
 #endif /* _WIN32 */
 
@@ -45,7 +46,6 @@
 #include <stdarg.h>
 #include <assert.h>
 #include <signal.h>
-#include <pthread.h>
 #include <sys/utsname.h>
 #include <sys/stat.h>
 #include <pwd.h>
@@ -4190,11 +4190,11 @@ static nanoclj_val_t get_err_port(nanoclj_t * sc) {
 }
 
 static nanoclj_val_t get_out_port(nanoclj_t * sc) {
-  return slot_value_in_env(find_slot_in_env(sc, sc->envir, sc->OUT, true));
+  return slot_value_in_env(find_slot_in_env(sc, sc->envir, sc->OUT_SYM, true));
 }
 
 static nanoclj_val_t get_in_port(nanoclj_t * sc) {
-  return slot_value_in_env(find_slot_in_env(sc, sc->envir, sc->IN, true));
+  return slot_value_in_env(find_slot_in_env(sc, sc->envir, sc->IN_SYM, true));
 }
 
 /* Too small to turn into function */
@@ -4757,7 +4757,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     
     /* Set up another iteration of REPL */
     sc->save_inport = get_in_port(sc);
-    intern(sc, sc->root_env, sc->IN, vector_peek(sc->load_stack));
+    intern(sc, sc->root_env, sc->IN_SYM, vector_peek(sc->load_stack));
       
     s_save(sc, OP_T0LVL, NULL, sc->EMPTY);
     s_save(sc, OP_T1LVL, NULL, sc->EMPTY);
@@ -4767,7 +4767,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 
   case OP_T1LVL:               /* top level */
     sc->code = sc->value;
-    intern(sc, sc->root_env, sc->IN, sc->save_inport);
+    intern(sc, sc->root_env, sc->IN_SYM, sc->save_inport);
     s_goto(sc, OP_EVAL);
 
   case OP_READ:                /* read */
@@ -7485,8 +7485,8 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
 
   sc->TAG_HOOK = def_symbol(sc, "*default-data-reader-fn*");
   sc->COMPILE_HOOK = def_symbol(sc, "*compile-hook*");
-  sc->IN = def_symbol(sc, "*in*");
-  sc->OUT = def_symbol(sc, "*out*");
+  sc->IN_SYM = def_symbol(sc, "*in*");
+  sc->OUT_SYM = def_symbol(sc, "*out*");
   sc->ERR = def_symbol(sc, "*err*");
   sc->CURRENT_NS = def_symbol(sc, "*ns*");
   sc->ENV = def_symbol(sc, "*env*");
@@ -7611,12 +7611,12 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
 }
 
 void nanoclj_set_input_port_file(nanoclj_t * sc, FILE * fin) {
-  intern(sc, sc->global_env, sc->IN, port_rep_from_file(sc, T_READER, fin, NULL));
+  intern(sc, sc->global_env, sc->IN_SYM, port_rep_from_file(sc, T_READER, fin, NULL));
 }
 
 void nanoclj_set_output_port_file(nanoclj_t * sc, FILE * fout) {
   nanoclj_val_t p = port_rep_from_file(sc, T_WRITER, fout, NULL);
-  intern(sc, sc->root_env, sc->OUT, p);
+  intern(sc, sc->root_env, sc->OUT_SYM, p);
   update_window_info(sc, decode_pointer(p));
 }
 
@@ -7627,7 +7627,7 @@ void nanoclj_set_output_port_callback(nanoclj_t * sc,
 				      void (*image) (nanoclj_image_t *, void *)
 				      ) {
   nanoclj_val_t p = mk_writer_from_callback(sc, text, color, restore, image);
-  intern(sc, sc->root_env, sc->OUT, p);
+  intern(sc, sc->root_env, sc->OUT_SYM, p);
   intern(sc, sc->root_env, sc->WINDOW_SIZE, mk_nil());
 }
 

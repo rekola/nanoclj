@@ -1,7 +1,6 @@
 #ifndef _NANOCLJ_TERM_H_
 #define _NANOCLJ_TERM_H_
 
-#include <termios.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
 
@@ -13,7 +12,11 @@
 #define isatty _isatty
 #define write _write
 
-#endif /* _WIN32 */
+#else
+
+#include <termios.h>
+
+#endif
 
 #include <string.h>
 
