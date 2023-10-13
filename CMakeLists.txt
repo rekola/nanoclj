@@ -33,9 +33,8 @@ set(SOURCE_FILES
 add_executable(nanoclj ${SOURCE_FILES})
 target_link_libraries(nanoclj Threads::Threads)
 
-find_library(MATH_LIBRARY m REQUIRED)
-if(MATH_LIBRARY)
-  target_link_libraries(nanoclj ${MATH_LIBRARY})
+IF (NOT WIN32)
+  target_link_libraries(nanoclj m)
 endif()
 
 find_library(UTF8PROC_LIBRARY utf8proc REQUIRED)
