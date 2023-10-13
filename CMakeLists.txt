@@ -35,16 +35,16 @@ target_link_libraries(nanoclj Threads::Threads)
 
 IF (NOT WIN32)
   target_link_libraries(nanoclj m)
+
+  find_library(CAIRO_LIBRARY cairo REQUIRED)
+  if(CAIRO_LIBRARY)
+    target_link_libraries(nanoclj cairo)
+  endif()
 endif()
 
 find_library(UTF8PROC_LIBRARY utf8proc REQUIRED)
 if(UTF8PROC_LIBRARY)
   target_link_libraries(nanoclj utf8proc)
-endif()
-
-find_library(CAIRO_LIBRARY cairo REQUIRED)
-if(CAIRO_LIBRARY)
-  target_link_libraries(nanoclj cairo)
 endif()
 
 find_library(SIXEL_LIBRARY sixel REQUIRED)
