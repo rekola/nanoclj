@@ -31,7 +31,7 @@
       false
       (let [prev-inport *in*]
         (set! *in* inport)
-        (let ((res (p)))
+        (let [res (p)]
           (.close inport)
           (set! *in* prev-inport)
           res)))))
@@ -42,7 +42,7 @@
       false
       (let [prev-outport *out*]
         (set! *out* outport)
-        (let ((res (p)))
+        (let [res (p)]
           (.close outport)
           (set! *out* prev-outport)
           res)))))

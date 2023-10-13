@@ -201,8 +201,14 @@
                     (pred (first coll)) (recur pred (rest coll))
                     :else coll))
 
-(defn take-last [n coll] (let [cnt (count coll)] (if (< cnt n) coll (drop n coll))))
-(defn drop-last [n coll] (let [cnt (count coll)] (if (< cnt n) '() (take (- cnt n) coll))))
+(defn take-last
+  "Take last n elements from coll"
+  [n coll] (let [cnt (count coll)] (if (< cnt n) coll (drop n coll))))
+
+(defn drop-last
+  "Drop last n elements from coll"
+  ([coll] (drop-last 1 coll))
+  ([n coll] (let [cnt (count coll)] (if (< cnt n) '() (take (- cnt n) coll)))))
 
 (defn ffirst [x] (first (first x)))
 (defn fnext [x] (first (next x)))
