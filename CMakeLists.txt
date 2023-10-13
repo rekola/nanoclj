@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8.12)
+cmake_minimum_required(VERSION 3.4)
 project(nanoclj C)
 
 find_package(Threads REQUIRED)
@@ -35,7 +35,15 @@ set(SOURCE_FILES
 add_executable(nanoclj ${SOURCE_FILES})
 target_link_libraries(nanoclj Threads::Threads)
 
-IF (NOT WIN32)
+IF (WIN32)
+  find_package(unofficial-utf8proc CONFIG REQUIRED)
+  target_link_libraries(main PRIVATE utf8proc)
+else()
+  find_library(UTF8PROC_LIBRARY utf8proc REQUIRED)
+  if(UTF8PROC_LIBRARY)
+    target_link_libraries(nanoclj utf8proc)
+  endif()
+
   target_link_libraries(nanoclj m)
 
   find_library(CAIRO_LIBRARY cairo REQUIRED)
@@ -54,11 +62,6 @@ IF (NOT WIN32)
   if(SHP_LIBRARY)
     target_link_libraries(nanoclj shp)
   endif()
-endif()
-
-find_library(UTF8PROC_LIBRARY utf8proc REQUIRED)
-if(UTF8PROC_LIBRARY)
-  target_link_libraries(nanoclj utf8proc)
 endif()
 
 find_library(PCRE2_LIBRARY pcre2-8 REQUIRED)
