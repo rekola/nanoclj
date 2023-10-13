@@ -96,10 +96,7 @@
                                         ; Draw the plots
                 (set-line-width 3)
                 (run! (fn [p]
-                        (let [x (p 0)
-                              y (p 1)
-                              color (p 2)
-                              ]
+                        (let [ [x y color] p ]
                           (set-color color)
                           (move-to (fit-x (first x)) (fit-y (first y)))
                           (draw-line (rest x) (rest y))
@@ -180,7 +177,7 @@
                                nil
                                (do
                                  (new-path)
-                                 (arc (fit-x (first x)) (fit-y (first y)) 5 0 pi-times-2)
+                                 (arc (fit-x (first x)) (fit-y (first y)) 3 0 pi-times-2)
                                  (stroke)
                                  (recur (rest x) (rest y)))))
          cx (clojure.java.io/writer width height)
@@ -201,10 +198,7 @@
                                         ; Draw the plots
                 (set-line-width 3)
                 (run! (fn [p]
-                        (let [x (p 0)
-                              y (p 1)
-                              color (p 2)
-                              ]
+                        (let [ [x y color] p ]
                           (set-color color)
                           (draw-points x y))) plots)
                 )

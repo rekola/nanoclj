@@ -4343,10 +4343,8 @@ static inline bool destructure(nanoclj_t * sc, nanoclj_cell_t * binding, nanoclj
 	nanoclj_val_t y2 = first(sc, y);
 	if (!is_cell(y2)) {
 	  return false;
-	} else {
-	  if (!destructure(sc, decode_pointer(e), seq(sc, decode_pointer(y2)), 0, false)) {
-	    return false;
-	  }
+	} else if (!destructure(sc, decode_pointer(e), seq(sc, decode_pointer(y2)), 0, false)) {
+	  return false;
 	}
       }
     } else {
@@ -4355,6 +4353,19 @@ static inline bool destructure(nanoclj_t * sc, nanoclj_cell_t * binding, nanoclj
   }
   if (first_level && y) {
     /* Too many arguments */
+    return false;
+  }
+  return true;
+}
+
+static inline bool destructure_value(nanoclj_t * sc, nanoclj_val_t e, nanoclj_val_t arg) {
+  if (e.as_long == sc->UNDERSCORE.as_long) {
+    /* ignore argument */
+  } else if (is_primitive(e)) {
+    new_slot_in_env(sc, e, arg);
+  } else if (!is_cell(arg)) {
+    return false;
+  } else if (!destructure(sc, decode_pointer(e), seq(sc, decode_pointer(arg)), 0, false)) {
     return false;
   }
   return true;
@@ -5280,7 +5291,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_LET1_VEC:{   
     nanoclj_cell_t * vec = decode_pointer(car(sc->code));
     long long i = sc->args ? to_long(_car(sc->args)) : 0;
-    new_slot_in_env(sc, vector_elem(vec, i), sc->value);
+    destructure_value(sc, vector_elem(vec, i), sc->value);
     
     if (i + 2 < get_size(vec)) {
       nanoclj_cell_t * args = sc->args;
