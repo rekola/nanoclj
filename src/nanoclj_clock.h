@@ -1,5 +1,5 @@
-#ifndef _CLOCK_H_
-#define _CLOCK_H_
+#ifndef _NANOCLJ_CLOCK_H_
+#define _NANOCLJ_CLOCK_H_
 
 #include <stdint.h>
 

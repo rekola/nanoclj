@@ -2,8 +2,8 @@
 /* Original Copyright (c) 1999 Alexander Shendi     */
 /* Modifications for NT and dl_* interface: D. Souflis */
 
-#ifndef DYNLOAD_H
-#define DYNLOAD_H
+#ifndef NANOCLJ_DYNLOAD_H
+#define NANOCLJ_DYNLOAD_H
 
 #include "nanoclj-private.h"
 

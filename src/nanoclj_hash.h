@@ -1,5 +1,5 @@
-#ifndef _MURMUR3_H_
-#define _MURMUR3_H_
+#ifndef _NANOCLJ_HASH_H_
+#define _NANOCLJ_HASH_H_
 
 /* MurmurHash3 was written by Austin Appleby, and is placed in the public
    domain. The author hereby disclaims copyright to this source code.
@@ -60,13 +60,13 @@ static inline uint32_t murmur3_hash_long(uint64_t input) {
   return murmur3_finalize(h1, 8);
 }
 
-static inline uint32_t murmur3_hash_combine(uint32_t seed, uint32_t hash) {
+static inline uint32_t hash_combine(uint32_t seed, uint32_t hash) {
   // see https://www.boost.org/doc/libs/1_55_0/doc/html/hash/reference.html#boost.hash_combine
   seed ^= hash + 0x9e3779b9 + (seed << 6) + (seed >> 2);
   return seed;
 }
 
-static inline uint32_t murmur3_hash_string(const char * str, size_t size) {
+static inline uint32_t get_string_hashcode(const char * str, size_t size) {
   int hashcode = 0, m = 1;
   for (int i = (int)size - 1; i >= 0; i--) {
     hashcode += str[i] * m;
@@ -76,8 +76,8 @@ static inline uint32_t murmur3_hash_string(const char * str, size_t size) {
 }
 
 static inline uint32_t murmur3_hash_qualified_string(const char * ns, size_t ns_size, const char * name, size_t name_size) {
-  return murmur3_hash_int(murmur3_hash_combine(murmur3_hash_string(name, name_size),
-					       murmur3_hash_string(ns, ns_size)));
+  return murmur3_hash_int(hash_combine(get_string_hashcode(name, name_size),
+				       get_string_hashcode(ns, ns_size)));
 }
 
 #endif

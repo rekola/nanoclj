@@ -56,10 +56,10 @@
 #include <utf8proc.h>
 #include <sixel.h>
 
-#include "clock.h"
-#include "murmur3.h"
-#include "legal.h"
-#include "term.h"
+#include "nanoclj_clock.h"
+#include "nanoclj_hash.h"
+#include "nanoclj_legal.h"
+#include "nanoclj_term.h"
 #include "nanoclj_utf8.h"
 
 /* Predefined primitive values */
@@ -2601,7 +2601,7 @@ static int32_t hasheq(nanoclj_t * sc, nanoclj_val_t v) {
     case T_FILE:
     case T_UUID:{
       strview_t sv = _to_strview(c);
-      return murmur3_hash_int(murmur3_hash_string(sv.ptr, sv.size));
+      return murmur3_hash_int(get_string_hashcode(sv.ptr, sv.size));
     }
       
     case T_RATIO:
@@ -7389,7 +7389,7 @@ static inline nanoclj_cell_t * mk_properties(nanoclj_t * sc) {
   return mk_collection(sc, T_ARRAYMAP, l);
 }
 
-#include "functions.h"
+#include "nanoclj_functions.h"
  
 bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc free, func_realloc realloc) {
 #if USE_INTERFACE
