@@ -1,6 +1,7 @@
 # nanoclj
 
-[![CI](https://github.com/rekola/nanoclj/workflows/CI/badge.svg)]()
+[![CI](https://github.com/rekola/nanoclj/workflows/Ubuntu-CI/badge.svg)]()
+[![CI](https://github.com/rekola/nanoclj/workflows/VS17-CI/badge.svg)]()
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](http://makeapullrequest.com)
 
 ## A Tiny Clojure Interpreter

@@ -1,0 +1,36 @@
+name: VS17-CI
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: windows-vs17
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {gen: Visual Studio 17 2022, arch: Win32}
+          - {gen: Visual Studio 17 2022, arch: x64}
+    steps:
+      - name: checkout
+        uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
+      - name: Configure
+        run: |
+          mkdir build
+          cd build && cmake -G "${{matrix.gen}}" -A ${{matrix.arch}}  ..
+      - name: Build
+        run: cmake --build build --config Release
+      - name: Run basic tests
+        run: |
+          cd build
+          ctest -C Release --output-on-failure
+      - name: Build Debug
+        run: cmake --build build --config Debug
+      - name: Run basic tests in Debug
+        run: |
+          cd build
+          ctest -C Debug --output-on-failure
