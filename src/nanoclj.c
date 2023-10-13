@@ -4693,7 +4693,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   nanoclj_val_t x, y;  
   nanoclj_cell_t * meta, * z;
   int syn;
-  nanoclj_val_t params0;
   nanoclj_cell_t * params;
   nanoclj_val_t arg0, arg1, arg2, arg3, arg4;
   nanoclj_cell_t * arg_next;
@@ -4925,6 +4924,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	nanoclj_throw(sc, sc->NullPointerException);
 	return false;
       }
+      bool set_recur_point = false;
+      nanoclj_val_t params0;
+      
       switch (_type(code_cell)) {
       case T_VAR:
 	sc->code = slot_value_in_env(code_cell);
@@ -4974,6 +4976,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  Error_0(sc, "No item in collection");
 	}
       case T_CLOSURE:
+	set_recur_point = true;
       case T_MACRO:
       case T_LAZYSEQ:
       case T_DELAY:
@@ -4981,13 +4984,15 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	/* make environment */
 	new_frame_in_env(sc, closure_env(code_cell));
 	x = closure_code(code_cell);
-	
-#ifndef USE_RECUR_REGISTER
-	new_slot_in_env(sc, sc->RECUR, sc->code);
-#else
-	sc->recur = sc->code;
-#endif
 
+	if (set_recur_point) {
+#ifndef USE_RECUR_REGISTER
+	  new_slot_in_env(sc, sc->RECUR, sc->code);
+#else
+	  sc->recur = sc->code;
+#endif
+	}
+	
 	params0 = car(x);
 	params = decode_pointer(params0);
 
@@ -5022,7 +5027,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	    return false;
 	  }
 	} else {
-	  x = car(x);
+	  x = params0;
 	  nanoclj_cell_t * yy = sc->args;
 	  for ( ; is_list(x); x = cdr(x), yy = next(sc, yy)) {
 	    if (!yy) {
@@ -5229,11 +5234,10 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     if (!is_cell(x)) {
       Error_0(sc, "Syntax error");
     }
-    nanoclj_cell_t * input_vec = decode_pointer(car(sc->code));
+    nanoclj_cell_t * input_vec = decode_pointer(x);
     if (_type(input_vec) != T_VECTOR) {
       Error_0(sc, "Syntax error");
     }
-    nanoclj_cell_t * body = decode_pointer(cdr(sc->code));
 
     size_t n = get_size(input_vec) / 2;
 
@@ -5245,8 +5249,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       values = cons(sc, vector_elem(input_vec, 2 * i + 1), values);
     }
 
+    nanoclj_cell_t * body = decode_pointer(cdr(sc->code));
     body = cons(sc, mk_pointer(args), body);
-    body = cons(sc, sc->LAMBDA, body);
+    body = get_cell(sc, T_CLOSURE, 0, mk_pointer(body), sc->envir, NULL);
     
     sc->code = mk_pointer(cons(sc, mk_pointer(body), values));
     sc->args = NULL;
