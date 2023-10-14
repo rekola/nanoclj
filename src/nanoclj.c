@@ -1655,8 +1655,9 @@ static inline nanoclj_val_t mk_ratio_from_double(nanoclj_t * sc, nanoclj_val_t a
   }
   if (a.as_double < 0) numerator *= -1;
 
-  /* TODO: check for overflows and use BigInt if necessary */
-  if (exponent < 0) {
+  if (exponent <= -63 || exponent >= 63) {
+    return mk_nil(); /* TODO: use BigInt */
+  } else if (exponent < 0) {    
     return mk_ratio_long(sc, numerator, 1ULL << -exponent);
   } else {
     return mk_integer(sc, numerator << exponent);
@@ -5522,7 +5523,12 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	nanoclj_throw(sc, mk_arithmetic_exception(sc, "Divide by zero"));
 	return false;
       } else {
-	s_return(sc, mk_ratio_from_double(sc, arg0));
+	x = mk_ratio_from_double(sc, arg0);
+	if (is_nil(x)) {
+	  nanoclj_throw(sc, mk_arithmetic_exception(sc, "Integer overflow"));
+	  return false;
+	}
+	s_return(sc, x);
       }
     } else {
       s_return(sc, arg0);
