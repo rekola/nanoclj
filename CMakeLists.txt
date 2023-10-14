@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.4)
+cmake_minimum_required(VERSION 3.5)
 project(nanoclj C)
 
 find_package(Threads REQUIRED)
@@ -37,16 +37,16 @@ target_link_libraries(nanoclj Threads::Threads)
 
 find_package(CURL REQUIRED)
 if(CURL_FOUND)
-  include_directories(${CURL_INCLUDE_DIR})
-  target_link_libraries(nanoclj ${CURL_LIBRARIES})
+  target_link_libraries(nanoclj CURL::libcurl)
+  include_directories(${CURL_INCLUDE_DIRS})
 endif()
 
 IF (WIN32)
   find_package(pcre2 CONFIG REQUIRED)
-  target_link_libraries(main PRIVATE PCRE2::8BIT)
+  target_link_libraries(nanoclj PCRE2::8BIT)
   
   find_package(utf8proc NAMES unofficial-utf8proc REQUIRED)
-  target_link_libraries(main PRIVATE utf8proc)
+  target_link_libraries(nanoclj utf8proc)
 else()
   find_library(PCRE2_LIBRARY pcre2-8 REQUIRED)
   if(PCRE2_LIBRARY)
