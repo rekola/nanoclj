@@ -35,10 +35,24 @@ set(SOURCE_FILES
 add_executable(nanoclj ${SOURCE_FILES})
 target_link_libraries(nanoclj Threads::Threads)
 
+find_package(CURL REQUIRED)
+if(CURL_FOUND)
+  include_directories(${CURL_INCLUDE_DIR})
+  target_link_libraries(nanoclj ${CURL_LIBRARIES})
+endif()
+
 IF (WIN32)
-  find_package(unofficial-utf8proc CONFIG REQUIRED)
+  find_package(pcre2 CONFIG REQUIRED)
+  target_link_libraries(main PRIVATE PCRE2::8BIT)
+  
+  find_package(utf8proc NAMES unofficial-utf8proc REQUIRED)
   target_link_libraries(main PRIVATE utf8proc)
 else()
+  find_library(PCRE2_LIBRARY pcre2-8 REQUIRED)
+  if(PCRE2_LIBRARY)
+    target_link_libraries(nanoclj pcre2-8)
+  endif()
+
   find_library(UTF8PROC_LIBRARY utf8proc REQUIRED)
   if(UTF8PROC_LIBRARY)
     target_link_libraries(nanoclj utf8proc)
@@ -62,17 +76,6 @@ else()
   if(SHP_LIBRARY)
     target_link_libraries(nanoclj shp)
   endif()
-endif()
-
-find_library(PCRE2_LIBRARY pcre2-8 REQUIRED)
-if(PCRE2_LIBRARY)
-  target_link_libraries(nanoclj pcre2-8)
-endif()
-
-FIND_PACKAGE(CURL REQUIRED)
-if(CURL_FOUND)
-  include_directories(${CURL_INCLUDE_DIR})
-  target_link_libraries(nanoclj ${CURL_LIBRARIES})
 endif()
 
 configure_file(lib/init.clj init.clj @ONLY)
