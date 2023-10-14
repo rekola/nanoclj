@@ -135,7 +135,6 @@ have been tested:
   - make-hierarchy, ancestors, supers, bases
   - bound?
   - random-uuid
-  - bounded-count
   - deftest, set-test, with-test
   - re-groups, re-matcher, re-seq, re-matches
   - hash-ordered-coll, hash-unordered-coll

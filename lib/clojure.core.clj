@@ -666,3 +666,9 @@
 (defn parents
   "Returns a set with the immmediate parents of the provided object"
   [t] (conj #{} (rest t)))
+
+(defn bounded-count
+  "Returns the count if coll is counted? or counts the elements up to n"
+  [n coll] (if (counted? coll)
+             (count coll)
+             (loop [c 0 n n coll coll] (if (or (empty? coll) (<= n 0)) c (recur (inc c) (dec n) (rest coll))))))
