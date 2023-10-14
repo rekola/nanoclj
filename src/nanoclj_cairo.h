@@ -102,6 +102,14 @@ static inline void canvas_close_path(void * canvas) {
   cairo_close_path((cairo_t *)canvas);
 }
 
+static inline void canvas_clip(void * canvas) {
+  cairo_clip((cairo_t *)canvas);
+}
+
+static inline void canvas_reset_clip(void * canvas) {
+  cairo_reset_clip((cairo_t *)canvas);
+}
+
 static inline void canvas_stroke(void * canvas) {
   cairo_stroke((cairo_t *)canvas);
 }
