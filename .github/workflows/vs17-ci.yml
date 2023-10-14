@@ -21,7 +21,6 @@ jobs:
         run: |
           vcpkg install utf8proc
           vcpkg install pcre2
-          vcpkg install curl
           vcpkg install shapelib
           mkdir build
           cd build && cmake -G "${{matrix.gen}}" -A ${{matrix.arch}}  ..
