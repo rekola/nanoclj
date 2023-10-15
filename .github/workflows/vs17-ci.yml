@@ -23,6 +23,6 @@ jobs:
           vcpkg install pcre2
           vcpkg install shapelib
           mkdir build
-          cd build && cmake -G "${{matrix.gen}}" -A ${{matrix.arch}}  ..
+          cd build && cmake -DCMAKE_TOOLCHAIN_FILE="${{github.workspace}}/vcpkg/scripts/buildsystems/vcpkg.cmake" -G "${{matrix.gen}}" -A ${{matrix.arch}}  ..
       - name: Build
         run: cmake --build build
