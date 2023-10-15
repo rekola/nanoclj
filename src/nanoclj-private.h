@@ -25,6 +25,8 @@
 extern "C" {
 #endif
 
+#include <pthread.h>
+
 #include "nanoclj_types.h"
 
   struct pcre2_real_code_8;
@@ -150,17 +152,22 @@ extern "C" {
 #endif
   } dump_stack_frame_t;
 
+  typedef struct {
+    pthread_mutex_t mutex;
+    nanoclj_cell_t *alloc_seg[CELL_NSEGMENT];
+    nanoclj_val_t cell_seg[CELL_NSEGMENT];
+    int last_cell_seg;
+    nanoclj_cell_t * free_cell;      /* pointer to top of free cells */
+    long fcells;                  /* # of free cells */
+    size_t gensym_cnt, gentypeid_cnt;
+    nanoclj_cell_t _sink;
+  } nanoclj_shared_context_t;
+
   struct nanoclj_s {
 /* arrays for segments */
     func_alloc malloc;
     func_dealloc free;
     func_realloc realloc;
-
-    bool tracing;
-
-    nanoclj_cell_t *alloc_seg[CELL_NSEGMENT];
-    nanoclj_val_t cell_seg[CELL_NSEGMENT];
-    int last_cell_seg;
 
 /* We use 5 registers. */
     nanoclj_cell_t * args;               /* register for arguments of function */
@@ -170,13 +177,14 @@ extern "C" {
 #ifdef USE_RECUR_REGISTER    
     nanoclj_val_t recur;		  /* recursion point */
 #endif
+
+    nanoclj_shared_context_t * context;
     
     nanoclj_cell_t * pending_exception;		/* pending exception */
     nanoclj_cell_t * OutOfMemoryError;
     nanoclj_cell_t * NullPointerException;
     nanoclj_cell_t * Throwable;
     
-    nanoclj_cell_t _sink;
     nanoclj_val_t sink;               /* when mem. alloc. fails */
     nanoclj_cell_t _EMPTY;
     nanoclj_val_t EMPTY;              /* special cell representing empty list */
@@ -230,9 +238,6 @@ extern "C" {
     nanoclj_val_t CATCH;
     nanoclj_val_t FINALLY;
     nanoclj_cell_t * EMPTYVEC;
-
-    nanoclj_cell_t * free_cell;      /* pointer to top of free cells */
-    long fcells;                  /* # of free cells */
     
     nanoclj_val_t save_inport;
     nanoclj_vector_t * load_stack;
@@ -247,8 +252,6 @@ extern "C" {
 
     void *ext_data;             /* For the benefit of foreign functions */
     nanoclj_val_t (*object_invoke_callback) (nanoclj_t *, void *, nanoclj_val_t);
-
-    size_t gensym_cnt, gentypeid_cnt;
 
     struct nanoclj_interface *vptr;
     dump_stack_frame_t * dump_base;            /* pointer to base of allocated dump stack */

@@ -114,6 +114,8 @@ static inline void dump_stack_mark(nanoclj_t * sc) {
 
 /* garbage collection. parameter a, b is marked. */
 static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_cell_t * c) {
+  nanoclj_shared_context_t * ctx = sc->context;
+  
 #if GC_VERBOSE
   putstr(sc, "gc...", get_err_port(sc));
 #endif
@@ -163,7 +165,7 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_c
 
   /* garbage collect */
   clrmark(sc->EMPTY);
-  sc->fcells = 0;
+  ctx->fcells = 0;
   nanoclj_cell_t * free_cell = decode_pointer(sc->EMPTY);
 	
   /* free-list is kept sorted by address so as to maintain consecutive
@@ -172,8 +174,8 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_c
      free-list in sorted order.
    */
   
-  for (int_fast32_t i = sc->last_cell_seg; i >= 0; i--) {
-    nanoclj_cell_t * min_p = decode_pointer(sc->cell_seg[i]);
+  for (int_fast32_t i = ctx->last_cell_seg; i >= 0; i--) {
+    nanoclj_cell_t * min_p = decode_pointer(ctx->cell_seg[i]);
     nanoclj_cell_t * p = min_p + CELL_SEGSIZE;
       
     while (--p >= min_p) {      
@@ -188,18 +190,18 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_c
 	  _cons_metadata(p) = NULL;
           _set_car(p, sc->EMPTY);
         }
-        ++sc->fcells;
+        ++ctx->fcells;
 	_set_cdr(p, mk_pointer(free_cell));
         free_cell = p;
       }
     }
   }
     
-  sc->free_cell = free_cell != &(sc->_EMPTY) ? free_cell : NULL;
-
+  ctx->free_cell = free_cell != &(sc->_EMPTY) ? free_cell : NULL;
+  
 #if GC_VERBOSE
   char msg[80];
-  sprintf(msg,80,"done: %ld cells were recovered.\n", sc->fcells);
+  sprintf(msg,80,"done: %ld cells were recovered.\n", ctx->fcells);
   putstr(sc, msg, get_err_port(sc));
 #endif
 }

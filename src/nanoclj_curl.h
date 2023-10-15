@@ -41,7 +41,7 @@ static inline void * http_load(void *ptr) {
   close(d->fd);
   d->free(d);
   
-  return 0;
+  return NULL;
 }
 
 static inline void http_init() {

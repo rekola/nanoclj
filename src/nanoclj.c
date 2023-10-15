@@ -32,7 +32,6 @@
 #else /* _WIN32 */
 
 #include <unistd.h>
-#include <pthread.h>
 
 #endif /* _WIN32 */
 
@@ -850,26 +849,28 @@ static inline int_fast16_t syntaxnum(nanoclj_val_t p) {
 
 /* allocate new cell segment */
 static inline int alloc_cellseg(nanoclj_t * sc, int n) {
+  nanoclj_shared_context_t * context = sc->context;
   nanoclj_val_t p;
+
   for (int k = 0; k < n; k++) {
-    if (sc->last_cell_seg >= CELL_NSEGMENT - 1) {
-      return k;
+    if (context->last_cell_seg >= CELL_NSEGMENT - 1) {
+      return k;         
     }
     nanoclj_cell_t * cp = sc->malloc(CELL_SEGSIZE * sizeof(nanoclj_cell_t));
     if (!cp) {
-      return k;
+      return k;     
     }
-    long i = ++sc->last_cell_seg;
-    sc->alloc_seg[i] = cp;    
+    long i = ++context->last_cell_seg;
+    context->alloc_seg[i] = cp;    
     /* insert new segment in address order */
     nanoclj_val_t newp = mk_pointer(cp);
-    sc->cell_seg[i] = newp;
-    while (i > 0 && sc->cell_seg[i - 1].as_long > sc->cell_seg[i].as_long) {
-      p = sc->cell_seg[i];
-      sc->cell_seg[i] = sc->cell_seg[i - 1];
-      sc->cell_seg[--i] = p;
+    context->cell_seg[i] = newp;
+    while (i > 0 && context->cell_seg[i - 1].as_long > context->cell_seg[i].as_long) {
+      p = context->cell_seg[i];
+      context->cell_seg[i] = context->cell_seg[i - 1];
+      context->cell_seg[--i] = p;
     }
-    sc->fcells += CELL_SEGSIZE;
+    context->fcells += CELL_SEGSIZE;
     nanoclj_val_t last = mk_pointer(decode_pointer(newp) + CELL_SEGSIZE - 1);
     for (p = newp; p.as_long <= last.as_long; p = mk_pointer(decode_pointer(p) + 1)) {
       cell_type(p) = 0;
@@ -878,11 +879,11 @@ static inline int alloc_cellseg(nanoclj_t * sc, int n) {
       set_car(p, sc->EMPTY);
     }
     /* insert new cells in address order on free list */
-    if (!sc->free_cell || decode_pointer(p) < sc->free_cell) {
-      set_cdr(last, sc->free_cell ? mk_pointer(sc->free_cell) : sc->EMPTY);
-      sc->free_cell = decode_pointer(newp);
+    if (!context->free_cell || decode_pointer(p) < context->free_cell) {
+      set_cdr(last, context->free_cell ? mk_pointer(context->free_cell) : sc->EMPTY);
+      context->free_cell = decode_pointer(newp);
     } else {
-      nanoclj_cell_t * p = sc->free_cell;
+      nanoclj_cell_t * p = context->free_cell;
       while (_cdr(p).as_long != sc->EMPTY.as_long && newp.as_long > _cdr(p).as_long)
         p = decode_pointer(_cdr(p));
 
@@ -996,31 +997,34 @@ static inline void finalize_cell(nanoclj_t * sc, nanoclj_cell_t * a) {
 /* get new cell.  parameter a, b is marked by gc. */
 
 static inline nanoclj_cell_t * get_cell_x(nanoclj_t * sc, uint16_t type_id, uint8_t flags, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_cell_t * c) {
-  if (!sc->free_cell) {
-    const int min_to_be_recovered = sc->last_cell_seg * 8;
+  nanoclj_shared_context_t * context = sc->context;
+
+  if (!context->free_cell) {
+    const int min_to_be_recovered = context->last_cell_seg * 8;
     gc(sc, a, b, c);
-    if (!sc->free_cell || sc->fcells < min_to_be_recovered) {
+    if (!context->free_cell || context->fcells < min_to_be_recovered) {
       /* if only a few recovered, get more to avoid fruitless gc's */
       alloc_cellseg(sc, 1);
     }
   }
 
-  if (sc->free_cell) {
-    nanoclj_cell_t * x = sc->free_cell;
-    sc->free_cell = decode_pointer(_cdr(x));
-    if (sc->free_cell == &(sc->_EMPTY)) {
-      sc->free_cell = NULL;
+  nanoclj_cell_t * x = NULL;
+  if (context->free_cell) {
+    x = context->free_cell;
+    context->free_cell = decode_pointer(_cdr(x));
+    if (context->free_cell == &(sc->_EMPTY)) {
+      context->free_cell = NULL;
     }
-    --sc->fcells;
+    --context->fcells;
 
     x->type = type_id;
     x->flags = flags;
     x->hasheq = 0;
-    return x;
+  } else {
+    sc->pending_exception = sc->OutOfMemoryError;
   }
-
-  sc->pending_exception = sc->OutOfMemoryError;
-  return NULL;
+  
+  return x;
 }
 
 /* To retain recent allocs before interpreter knows about them -
@@ -2310,7 +2314,11 @@ static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t
 #include "nanoclj_ggml.h"
 
 /* =================== HTTP ======================== */
+#ifdef WIN32
+#include "nanoclj_winhttp.h"
+#else
 #include "nanoclj_curl.h"
+#endif
 
 /* ========== Environment implementation  ========== */
 
@@ -2989,26 +2997,31 @@ static inline nanoclj_cell_t * mk_meta_from_reader(nanoclj_t * sc, nanoclj_val_t
 static inline nanoclj_val_t gensym(nanoclj_t * sc, const char * prefix, size_t prefix_len) {
   nanoclj_val_t x;
   char name[256];
+  nanoclj_shared_context_t * context = sc->context;
 
-  for (; sc->gensym_cnt < LONG_MAX; sc->gensym_cnt++) {
-    size_t len = snprintf(name, 256, "%.*s%ld", (int)prefix_len, prefix, sc->gensym_cnt);
+  pthread_mutex_lock( &(context->mutex) );
+
+  nanoclj_val_t r = mk_nil();
+  for (; context->gensym_cnt < LONG_MAX; context->gensym_cnt++) {
+    size_t len = snprintf(name, 256, "%.*s%ld", (int)prefix_len, prefix, context->gensym_cnt);
     
     /* first check oblist */
     strview_t ns_sv = { "", 0 };
     strview_t name_sv = { name, len };
     x = oblist_find_item(sc, T_SYMBOL, ns_sv, name_sv);
-    if (!is_nil(x)) {
-      continue;
-    } else {
-      return oblist_add_item(sc, ns_sv, name_sv, mk_symbol(sc, T_SYMBOL, ns_sv, name_sv, 0));
+    if (is_nil(x)) {
+      r = oblist_add_item(sc, ns_sv, name_sv, mk_symbol(sc, T_SYMBOL, ns_sv, name_sv, 0));
+      break;
     }
   }
 
-  return mk_nil();
+  pthread_mutex_unlock( &(context->mutex) );
+    
+  return r;
 }
 
 static inline int gentypeid(nanoclj_t * sc) {
-  return sc->gentypeid_cnt++;
+  return sc->context->gentypeid_cnt++;
 }
 
 /* make symbol or number literal from string */
@@ -4700,6 +4713,40 @@ static inline int get_literal_fn_arity(nanoclj_t * sc, nanoclj_val_t body, bool 
   }
 }
 
+static inline void * thread_main(void *ptr) {
+  nanoclj_t * sc = ptr;
+  Eval_Cycle(sc, OP_EVAL);
+  return NULL;
+}
+
+static inline void start_thread(nanoclj_t * sc, nanoclj_val_t code) {
+  nanoclj_t * child = sc->malloc(sizeof(nanoclj_t));
+  memcpy(child, sc, sizeof(nanoclj_val_t));
+  
+  child->args = NULL;
+  child->code = code;
+#ifdef USE_RECUR_REGISTER    
+  child->recur = mk_nil();
+#endif
+  child->tok = 0;
+
+  dump_stack_initialize(child);
+
+  child->pending_exception = NULL;
+  
+  child->rdbuff = NULL;
+  child->value = mk_nil();
+  child->active_element = mk_nil();
+  child->active_element_target = NULL;
+  child->tensor_ctx = NULL;
+  
+  pthread_t thread;
+  pthread_attr_t attr;
+  pthread_attr_init(&attr);
+  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+  pthread_create(&thread, &attr, thread_main, child);
+}
+
 /* Executes and opcode, and returns true if execution should continue */
 static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   nanoclj_val_t x, y;  
@@ -5222,6 +5269,13 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
     sc->code = car(sc->code);
     s_goto(sc, OP_EVAL);
+
+  case OP_THREAD:
+    if (!is_list(sc->code)) {
+      s_return(sc, sc->code);
+    }
+    start_thread(sc, sc->code);
+    s_return(sc, mk_nil());
 
   case OP_IF0:                 /* if */
     s_save(sc, OP_IF1, NULL, cdr(sc->code));
@@ -6387,7 +6441,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  sc->tok = token(sc, inport);
 	  if (sc->tok == TOK_VEC) {
 	    s_save(sc, OP_RD_QQUOTEVEC, NULL, sc->EMPTY);
-	    sc->tok = TOK_LPAREN; // ?
+	    sc->tok = TOK_LPAREN; /* ? */
 	    s_goto(sc, OP_RD_SEXPR);
 	  } else {
 	    s_save(sc, OP_RD_QQUOTE, NULL, sc->EMPTY);
@@ -6811,7 +6865,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	if (!md) md = mk_arraymap(sc, 0);
 	nanoclj_val_t w;
 	if (get_elem(sc, md, sc->WATCHES, &w)) {
-	  // TODO: append watch
+	  /* TODO: append watch */
 	} else {
 	  md = conjoin(sc, md, mk_mapentry(sc, sc->WATCHES, mk_pointer(cons(sc, arg2, NULL))));
 	}
@@ -6851,9 +6905,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       }
       s_return(sc, mk_string_from_sv(sc, to_strview(arg0)));
     }
-
-  case OP_THREAD:
-    return false;
     
   case OP_TENSOR_SET:
     if (!unpack_args_3(sc, &arg0, &arg1, &arg2)) {
@@ -7121,7 +7172,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 /* kernel of this interpreter */
 static void Eval_Cycle(nanoclj_t * sc, enum nanoclj_opcode op) {
   sc->op = op;
-  for (;;) {    
+  for (;;) {
     ok_to_freely_gc(sc);
     bool r = opexe(sc, sc->op);
     if (sc->pending_exception) {
@@ -7436,16 +7487,26 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
 #if USE_INTERFACE
   sc->vptr = &vtbl;
 #endif
-  sc->gensym_cnt = 0;
-  sc->gentypeid_cnt = T_LAST_SYSTEM_TYPE;
   sc->malloc = malloc;
   sc->free = free;
   sc->realloc = realloc;
-  sc->last_cell_seg = -1;
-  sc->sink = mk_pointer(&sc->_sink);
+
+  sc->context = malloc(sizeof(nanoclj_shared_context_t));
+  
+  pthread_mutex_init(&(sc->context->mutex), 0);
+  sc->context->gensym_cnt = 0;
+  sc->context->gentypeid_cnt = T_LAST_SYSTEM_TYPE;
+  sc->context->fcells = 0;
+  sc->context->free_cell = NULL;
+  sc->context->last_cell_seg = -1;
+  sc->context->_sink.type = T_LIST;
+  sc->context->_sink.flags = MARK;
+  _set_car(&(sc->context->_sink), sc->EMPTY);
+  _set_cdr(&(sc->context->_sink), sc->EMPTY);
+  _cons_metadata(&(sc->context->_sink)) = NULL;
+  
+  sc->sink = mk_pointer(&sc->context->_sink);
   sc->EMPTY = mk_pointer(&sc->_EMPTY);
-  sc->free_cell = NULL;
-  sc->fcells = 0;
   sc->save_inport = mk_nil();
   sc->global_env = sc->root_env = sc->envir = NULL;
 
@@ -7466,7 +7527,6 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
 #ifdef USE_RECUR_REGISTER
   sc->recur = sc->EMPTY;
 #endif
-  sc->tracing = false;
 
   /* init sc->EMPTY */
   sc->_EMPTY.type = T_NIL;
@@ -7475,13 +7535,6 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   _set_cdr(&(sc->_EMPTY), sc->EMPTY);
   _cons_metadata(&(sc->_EMPTY)) = NULL;
   
-  /* init sink */
-  sc->_sink.type = T_LIST;
-  sc->_sink.flags = MARK;
-  _set_car(&(sc->_sink), sc->EMPTY);
-  _set_cdr(&(sc->_sink), sc->EMPTY);
-  _cons_metadata(&(sc->_sink)) = NULL;
-
   sc->oblist = oblist_initial_value(sc);
   
   assign_syntax(sc, "fn", OP_LAMBDA);
@@ -7498,6 +7551,7 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   assign_syntax(sc, "macro", OP_MACRO0);
   assign_syntax(sc, "try", OP_TRY);
   assign_syntax(sc, "loop", OP_LOOP);
+  assign_syntax(sc, "thread", OP_THREAD);
 
   /* initialization of global nanoclj_val_ts to special symbols */
   sc->LAMBDA = def_symbol(sc, "fn");
@@ -7697,10 +7751,11 @@ void nanoclj_deinit(nanoclj_t * sc) {
   sc->load_stack->size = 0;
 
   gc(sc, NULL, NULL, NULL);
-  
-  for (int i = 0; i <= sc->last_cell_seg; i++) {
-    sc->free(sc->alloc_seg[i]);
+
+  for (int i = 0; i <= sc->context->last_cell_seg; i++) {
+    sc->free(sc->context->alloc_seg[i]);
   }
+  sc->context->last_cell_seg = -1;
 }
 
 bool nanoclj_load_named_file(nanoclj_t * sc, const char *filename) {
