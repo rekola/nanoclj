@@ -19,12 +19,5 @@ static inline nanoclj_color_t mk_color(double red, double green, double blue, do
     clamp((int)(alpha * 255), 0, 255) };
 }
 
-static inline void ms_sleep(long long ms) {
-  struct timespec t, t2;
-  t.tv_sec = ms / 1000;
-  t.tv_nsec = (ms % 1000) * 1000000;
-  nanosleep(&t, &t2);
-}
-
 #endif
 

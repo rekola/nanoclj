@@ -195,7 +195,7 @@ static inline bool get_bg_color(FILE * in, FILE * out, double * r, double * g, d
   if (write(fileno(out), "\033]11;?\a", 7) != 7) {
     return false;
   }
-  ms_sleep(100);
+  nanoclj_sleep(100);
     
   // ^[]11;rgb:0000/0000/0000^
   while (i < sizeof(buf)-1) {

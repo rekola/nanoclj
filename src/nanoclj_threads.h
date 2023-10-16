@@ -18,7 +18,12 @@ static inline void nanoclj_mutex_init(nanoclj_mutex_t * m) {
 }
 
 static nanoclj_thread_t * nanoclj_start_thread(void *(*start_routine)(void *), void * arg) {
+  _beginthread(start_routine, 0, arg);
   return NULL;
+}
+
+static inline void nanoclj_sleep(long long ms) {
+  Sleep(ms);
 }
 
 #else
@@ -49,7 +54,14 @@ static nanoclj_thread_t * nanoclj_start_thread(void *(*start_routine)(void *), v
   pthread_create(thread, &attr, start_routine, arg);
   return thread;
 }
- 
+
+static inline void nanoclj_sleep(long long ms) {
+  struct timespec t, t2;
+  t.tv_sec = ms / 1000;
+  t.tv_nsec = (ms % 1000) * 1000000;
+  nanosleep(&t, &t2);
+}
+
 #endif
 
 #endif

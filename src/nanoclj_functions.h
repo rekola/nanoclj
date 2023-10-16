@@ -36,7 +36,7 @@
 static nanoclj_val_t Thread_sleep(nanoclj_t * sc, nanoclj_val_t args) {
   long long ms = to_long(first(sc, decode_pointer(args)));
   if (ms > 0) {
-    ms_sleep(ms);
+    nanoclj_sleep(ms);
   }
   return mk_nil();
 }
