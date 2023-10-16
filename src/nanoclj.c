@@ -2999,7 +2999,7 @@ static inline nanoclj_val_t gensym(nanoclj_t * sc, const char * prefix, size_t p
   char name[256];
   nanoclj_shared_context_t * context = sc->context;
 
-  pthread_mutex_lock( &(context->mutex) );
+  nanoclj_mutex_lock( &(context->mutex) );
 
   nanoclj_val_t r = mk_nil();
   for (; context->gensym_cnt < LONG_MAX; context->gensym_cnt++) {
@@ -3015,7 +3015,7 @@ static inline nanoclj_val_t gensym(nanoclj_t * sc, const char * prefix, size_t p
     }
   }
 
-  pthread_mutex_unlock( &(context->mutex) );
+  nanoclj_mutex_unlock( &(context->mutex) );
     
   return r;
 }
@@ -3237,12 +3237,8 @@ static inline int http_open_thread(nanoclj_t * sc, strview_t sv) {
   if (get_elem(sc, sc->properties, mk_string(sc, "http.maxRedirects"), &v)) {
     d->http_max_redirects = to_int(v);
   }
-  
-  pthread_t thread;
-  pthread_attr_t attr;
-  pthread_attr_init(&attr);
-  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-  pthread_create(&thread, &attr, http_load, d);
+
+  nanoclj_start_thread(http_load, d);
   
   return pipefd[0];
 }
@@ -4740,11 +4736,7 @@ static inline void start_thread(nanoclj_t * sc, nanoclj_val_t code) {
   child->active_element_target = NULL;
   child->tensor_ctx = NULL;
   
-  pthread_t thread;
-  pthread_attr_t attr;
-  pthread_attr_init(&attr);
-  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-  pthread_create(&thread, &attr, thread_main, child);
+  nanoclj_start_thread(thread_main, child);
 }
 
 /* Executes and opcode, and returns true if execution should continue */
@@ -7493,7 +7485,7 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
 
   sc->context = malloc(sizeof(nanoclj_shared_context_t));
   
-  pthread_mutex_init(&(sc->context->mutex), 0);
+  nanoclj_mutex_init(&(sc->context->mutex));
   sc->context->gensym_cnt = 0;
   sc->context->gentypeid_cnt = T_LAST_SYSTEM_TYPE;
   sc->context->fcells = 0;

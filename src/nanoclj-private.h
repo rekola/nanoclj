@@ -25,9 +25,8 @@
 extern "C" {
 #endif
 
-#include <pthread.h>
-
 #include "nanoclj_types.h"
+#include "nanoclj_threads.h"
 
   struct pcre2_real_code_8;
 	
@@ -153,7 +152,7 @@ extern "C" {
   } dump_stack_frame_t;
 
   typedef struct {
-    pthread_mutex_t mutex;
+    nanoclj_mutex_t mutex;
     nanoclj_cell_t *alloc_seg[CELL_NSEGMENT];
     nanoclj_val_t cell_seg[CELL_NSEGMENT];
     int last_cell_seg;
