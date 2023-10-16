@@ -207,8 +207,8 @@
 
 (defn drop-last
   "Drop last n elements from coll"
-  ([coll] (drop-last 1 coll))
-  ([n coll] (let [cnt (count coll)] (if (< cnt n) '() (take (- cnt n) coll)))))
+  ([coll] (if (next coll) (cons (first coll) (lazy-seq (drop-last (next coll)))) '()))
+  ([n coll] (if (gt (bounded-count (inc n) coll) n) (cons (first coll) (lazy-seq (drop-last n (next coll)))) '())))
 
 (defn ffirst [x] (first (first x)))
 (defn fnext [x] (first (next x)))
