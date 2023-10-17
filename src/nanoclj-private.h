@@ -159,7 +159,7 @@ extern "C" {
     nanoclj_cell_t * free_cell;      /* pointer to top of free cells */
     long fcells;                  /* # of free cells */
     size_t gensym_cnt, gentypeid_cnt;
-    nanoclj_cell_t _sink;
+    nanoclj_cell_t * properties;
   } nanoclj_shared_context_t;
 
   struct nanoclj_s {
@@ -184,7 +184,7 @@ extern "C" {
     nanoclj_cell_t * NullPointerException;
     nanoclj_cell_t * Throwable;
     
-    nanoclj_val_t sink;               /* when mem. alloc. fails */
+    nanoclj_cell_t sink;	      /* when mem. alloc. fails */
     nanoclj_cell_t _EMPTY;
     nanoclj_val_t EMPTY;              /* special cell representing empty list */
     nanoclj_cell_t * oblist;         /* pointer to symbol table */
@@ -265,8 +265,6 @@ extern "C" {
     nanoclj_val_t active_element;
     nanoclj_cell_t * active_element_target;
     int active_element_x, active_element_y;
-
-    nanoclj_cell_t * properties;
 
     void * tensor_ctx;
   };

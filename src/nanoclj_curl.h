@@ -9,7 +9,7 @@ static size_t curl_write_data_func(void * buffer, size_t size, size_t nmemb, voi
   return write(context->fd, buffer, s);
 }
 
-static inline void * http_load(void *ptr) {
+static NANOCLJ_THREAD_SIG http_load(void *ptr) {
   http_load_t * d = (http_load_t*)ptr;
   CURL *curl = curl_easy_init();
   
@@ -41,7 +41,7 @@ static inline void * http_load(void *ptr) {
   close(d->fd);
   d->free(d);
   
-  return NULL;
+  return 0;
 }
 
 static inline void http_init() {

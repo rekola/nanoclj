@@ -1034,9 +1034,9 @@ static inline void retain(nanoclj_t * sc, nanoclj_cell_t * recent) {
   nanoclj_cell_t * holder = get_cell_x(sc, T_LIST, 0, recent, NULL, NULL);
   if (holder) {
     _set_car(holder, mk_pointer(recent));
-    _set_cdr(holder, car(sc->sink));
+    _set_cdr(holder, _car(&sc->sink));
     _cons_metadata(holder) = NULL;
-    set_car(sc->sink, mk_pointer(holder));
+    _set_car(&sc->sink, mk_pointer(holder));
   }
 }
 
@@ -2658,7 +2658,7 @@ static int32_t hasheq(nanoclj_t * sc, nanoclj_val_t v) {
 }
 
 static inline void ok_to_freely_gc(nanoclj_t * sc) {
-  set_car(sc->sink, sc->EMPTY);
+  _set_car(&(sc->sink), sc->EMPTY);
 }
 
 /* ========== oblist implementation  ========== */
@@ -3224,17 +3224,19 @@ static inline int http_open_thread(nanoclj_t * sc, strview_t sv) {
   d->free = sc->free;
   d->realloc = sc->realloc;
 
+  nanoclj_cell_t * prop = sc->context->properties;
+  
   nanoclj_val_t v;
-  if (get_elem(sc, sc->properties, mk_string(sc, "http.agent"), &v)) {
+  if (get_elem(sc, prop, mk_string(sc, "http.agent"), &v)) {
     d->useragent = alloc_c_str(sc, to_strview(v));
   }
-  if (get_elem(sc, sc->properties, mk_string(sc, "http.keepalive"), &v)) {
+  if (get_elem(sc, prop, mk_string(sc, "http.keepalive"), &v)) {
     d->http_keepalive = to_int(v);
   }
-  if (get_elem(sc, sc->properties, mk_string(sc, "http.maxConnections"), &v)) {
+  if (get_elem(sc, prop, mk_string(sc, "http.maxConnections"), &v)) {
     d->http_max_connections = to_int(v);
   }
-  if (get_elem(sc, sc->properties, mk_string(sc, "http.maxRedirects"), &v)) {
+  if (get_elem(sc, prop, mk_string(sc, "http.maxRedirects"), &v)) {
     d->http_max_redirects = to_int(v);
   }
 
@@ -4709,15 +4711,15 @@ static inline int get_literal_fn_arity(nanoclj_t * sc, nanoclj_val_t body, bool 
   }
 }
 
-static inline void * thread_main(void *ptr) {
+static NANOCLJ_THREAD_SIG thread_main(void *ptr) {
   nanoclj_t * sc = ptr;
   Eval_Cycle(sc, OP_EVAL);
-  return NULL;
+  return 0;
 }
 
 static inline void start_thread(nanoclj_t * sc, nanoclj_val_t code) {
   nanoclj_t * child = sc->malloc(sizeof(nanoclj_t));
-  memcpy(child, sc, sizeof(nanoclj_val_t));
+  memcpy(child, sc, sizeof(nanoclj_t));
   
   child->args = NULL;
   child->code = code;
@@ -4729,13 +4731,22 @@ static inline void start_thread(nanoclj_t * sc, nanoclj_val_t code) {
   dump_stack_initialize(child);
 
   child->pending_exception = NULL;
-  
+
+  child->save_inport = mk_nil();
+  child->load_stack = NULL;
   child->rdbuff = NULL;
   child->value = mk_nil();
   child->active_element = mk_nil();
   child->active_element_target = NULL;
   child->tensor_ctx = NULL;
-  
+
+  /* init sink */
+  child->sink.type = T_LIST;
+  child->sink.flags = MARK;
+  _set_car(&(child->sink), sc->EMPTY);
+  _set_cdr(&(child->sink), sc->EMPTY);
+  _cons_metadata(&(child->sink)) = NULL;
+
   nanoclj_start_thread(thread_main, child);
 }
 
@@ -7485,19 +7496,14 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
 
   sc->context = malloc(sizeof(nanoclj_shared_context_t));
   
-  nanoclj_mutex_init(&(sc->context->mutex));
+  sc->context->mutex = nanoclj_mutex_create();
   sc->context->gensym_cnt = 0;
   sc->context->gentypeid_cnt = T_LAST_SYSTEM_TYPE;
   sc->context->fcells = 0;
   sc->context->free_cell = NULL;
   sc->context->last_cell_seg = -1;
-  sc->context->_sink.type = T_LIST;
-  sc->context->_sink.flags = MARK;
-  _set_car(&(sc->context->_sink), sc->EMPTY);
-  _set_cdr(&(sc->context->_sink), sc->EMPTY);
-  _cons_metadata(&(sc->context->_sink)) = NULL;
+  sc->context->properties = NULL;
   
-  sc->sink = mk_pointer(&sc->context->_sink);
   sc->EMPTY = mk_pointer(&sc->_EMPTY);
   sc->save_inport = mk_nil();
   sc->global_env = sc->root_env = sc->envir = NULL;
@@ -7520,6 +7526,13 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   sc->recur = sc->EMPTY;
 #endif
 
+  /* init sink */
+  sc->sink.type = T_LIST;
+  sc->sink.flags = MARK;
+  _set_car(&(sc->sink), sc->EMPTY);
+  _set_cdr(&(sc->sink), sc->EMPTY);
+  _cons_metadata(&(sc->sink)) = NULL;
+  
   /* init sc->EMPTY */
   sc->_EMPTY.type = T_NIL;
   sc->_EMPTY.flags = T_GC_ATOM | MARK;
@@ -7680,7 +7693,7 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   
   sc->term_colors = get_term_colortype();
 
-  sc->properties = mk_properties(sc);
+  sc->context->properties = mk_properties(sc);
   sc->tensor_ctx = mk_tensor_context();
   
   return sc->pending_exception == NULL;
@@ -7742,12 +7755,17 @@ void nanoclj_deinit(nanoclj_t * sc) {
   
   sc->load_stack->size = 0;
 
-  gc(sc, NULL, NULL, NULL);
+  gc(sc, NULL, NULL, NULL);  
+}
 
+void nanoclj_deinit_shared(nanoclj_t * sc, nanoclj_shared_context_t * ctx) {
+  nanoclj_mutex_destroy(&(ctx->mutex));
   for (int i = 0; i <= sc->context->last_cell_seg; i++) {
-    sc->free(sc->context->alloc_seg[i]);
+    sc->free(ctx->alloc_seg[i]);
   }
-  sc->context->last_cell_seg = -1;
+  ctx->last_cell_seg = -1;
+  sc->free(ctx);
+  sc->context = NULL;
 }
 
 bool nanoclj_load_named_file(nanoclj_t * sc, const char *filename) {
@@ -7881,6 +7899,7 @@ int main(int argc, const char **argv) {
   }
 
   nanoclj_deinit(&sc);
+  nanoclj_deinit_shared(&sc, sc.context);
 
   return rv;
 }

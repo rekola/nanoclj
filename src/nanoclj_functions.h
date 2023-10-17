@@ -94,13 +94,13 @@ static nanoclj_val_t System_getProperty(nanoclj_t * sc, nanoclj_val_t args0) {
   nanoclj_cell_t * args = decode_pointer(args0);
   if (args) {
     nanoclj_val_t v;
-    if (get_elem(sc, sc->properties, first(sc, args), &v)) {
+    if (get_elem(sc, sc->context->properties, first(sc, args), &v)) {
       return v;
     } else {
       return mk_nil();
     }
   } else {
-    return mk_pointer(sc->properties);
+    return mk_pointer(sc->context->properties);
   }
 }
 

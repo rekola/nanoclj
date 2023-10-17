@@ -112,17 +112,7 @@ static inline void dump_stack_mark(nanoclj_t * sc) {
   }
 }
 
-/* garbage collection. parameter a, b is marked. */
-static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_cell_t * c) {
-  nanoclj_shared_context_t * ctx = sc->context;
-  
-#if GC_VERBOSE
-  putstr(sc, "gc...", get_err_port(sc));
-#endif
-  
-  /* mark system globals */
-  if (sc->oblist) mark(sc->oblist);
-  if (sc->root_env) mark(sc->root_env);
+static void mark_thread(nanoclj_t * sc) {
   if (sc->global_env) mark(sc->global_env);
   
   /* mark current registers */
@@ -143,21 +133,41 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_c
   
   /* Exceptions */
   if (sc->pending_exception) mark(sc->pending_exception);
-  mark(sc->OutOfMemoryError);
-  mark(sc->NullPointerException);
-  
+
   mark_value(sc->active_element);
   if (sc->active_element_target) mark(sc->active_element_target);
   mark(sc->EMPTYVEC);
   
   /* Mark recent objects the interpreter doesn't know about yet. */
-  mark_value(car(sc->sink));
+  mark_value(_car(&(sc->sink)));
+}
+
+/* garbage collection. parameter a, b is marked. */
+static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_cell_t * c) {
+  nanoclj_shared_context_t * ctx = sc->context;
+
+  fprintf(stderr, "gc\n");
+  
+#if GC_VERBOSE
+  putstr(sc, "gc...", get_err_port(sc));
+#endif
+  
+  /* mark system globals */
+  if (sc->oblist) mark(sc->oblist);
+  if (sc->root_env) mark(sc->root_env);
+  
+  if (ctx->properties) mark(ctx->properties);
+
+  mark(sc->OutOfMemoryError);
+  mark(sc->NullPointerException);
 
   /* Mark types */  
   for (size_t i = 0; i < sc->types->size; i++) {
     mark_value(sc->types->data[i]);
   }
-  
+
+  mark_thread(sc);
+    
   /* mark variables a, b, c */
   if (a) mark(a);
   if (b) mark(b);
