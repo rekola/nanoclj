@@ -50,37 +50,6 @@ static inline int32_t decode_utf8(const char *s) {
   return codepoint;
 }
 
-/* Encodes a codepoint to utf8 and returns the encoded size */
-static inline size_t encode_utf8(int32_t c, char *p) {
-  if (c > 0) {
-    if (c < 0x80) {
-      *p++ = c;
-      return 1;
-    } else if (c < 0x800) {
-      *p++ = (c >> 6) | 0xc0;
-      *p++ = (c & 0x3f) | 0x80;
-      return 2;
-    } else if (c < 0x10000) {
-      *p++ = (c >> 12) | 0xe0;
-      *p++ = ((c >> 6) & 0x3f) | 0x80;
-      *p++ = (c & 0x3f) | 0x80;
-      return 3;
-    } else if (c < 0x10ffff) {
-      *p++ = (c >> 18) | 0xf0;
-      *p++ = ((c >> 12) & 0x3f)| 0x80;
-      *p++ = ((c >> 6) & 0x3f) | 0x80;
-      *p++ = (c & 0x3f) | 0x80;
-      return 4;
-    }
-  }
-  // invalid character, store placeholder
-  *p++ = 0xef;  
-  *p++ = 0xbf;
-  *p++ = 0xbd;
-  return 3;
-}
-
-
 /* Returns the number of codepoints in utf8 string */
 static inline long long utf8_num_codepoints(const char *s, size_t size) {
   const char * end = s + size;

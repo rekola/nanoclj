@@ -1520,7 +1520,7 @@ static inline void backchar_raw(uint8_t c, nanoclj_cell_t * p) {
 
 static inline void backchar(int32_t c, nanoclj_cell_t * p) {
   char buff[4];
-  size_t l = encode_utf8(c, &buff[0]);
+  size_t l = utf8proc_encode_char(c, (utf8proc_uint8_t *)&buff[0]);
   for (size_t i = 0; i < l; i++) {
     backchar_raw(buff[i], p);
   }
@@ -2780,7 +2780,7 @@ static inline size_t append_codepoint(nanoclj_t * sc, nanoclj_byte_array_t * s, 
     s->reserved = 2 * (s->size + 4);
     s->data = sc->realloc(s->data, s->reserved);    
   }
-  size_t n = encode_utf8(c, s->data + s->size);
+  size_t n = utf8proc_encode_char(c, (utf8proc_uint8_t *)(s->data + s->size));
   s->size += n;
   return n;
 }
@@ -2824,7 +2824,7 @@ static inline nanoclj_cell_t * conjoin(nanoclj_t * sc, nanoclj_cell_t * coll, na
     int32_t c = decode_integer(new_value);
     size_t size = get_size(coll);
     if (_is_small(coll)) {
-      size_t input_len = encode_utf8(c, sc->strbuff);
+      size_t input_len = utf8proc_encode_char(c, (utf8proc_uint8_t *)sc->strbuff);
       nanoclj_cell_t * new_coll = get_string_object(sc, t, NULL, size + input_len, 0);
       const char * data = _smallstrvalue_unchecked(coll);
       char * new_data;
@@ -3705,7 +3705,7 @@ static inline const char * escape_char(int32_t c, char * buffer, bool in_string)
     if (!in_string) {
       *p++ = '\\';
     }
-    p += encode_utf8(c, p);
+    p += utf8proc_encode_char(c, (utf8proc_uint8_t *)p);
     *p = 0;
   }
   return buffer;
@@ -3862,7 +3862,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
       p = escape_char(decode_integer(l), sc->strbuff, false);
     } else {
       p = sc->strbuff;
-      plen = encode_utf8(decode_integer(l), sc->strbuff);
+      plen = utf8proc_encode_char(decode_integer(l), (utf8proc_uint8_t *)sc->strbuff);
     }
     break;
   case T_BOOLEAN:
