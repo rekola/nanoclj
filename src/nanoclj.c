@@ -272,6 +272,11 @@ static inline symbol_t * decode_symbol(nanoclj_val_t value) {
   return (symbol_t *)(value.as_long & MASK_PAYLOAD);
 }
 
+static inline bool is_type(nanoclj_val_t value) {
+  if (!is_cell(value)) return false;
+  return decode_pointer(value)->flags & T_TYPE;
+}
+
 static inline int_fast16_t expand_type(nanoclj_val_t value, int_fast16_t primitive_type) {
   if (!primitive_type) return _type(decode_pointer(value));
   return primitive_type;
@@ -1396,7 +1401,7 @@ static inline nanoclj_cell_t * mk_class_cast_exception(nanoclj_t * sc, const cha
 static inline nanoclj_cell_t * mk_arity_exception(nanoclj_t * sc, int n_args, nanoclj_val_t ns, nanoclj_val_t fn) {
   nanoclj_val_t msg0;
   if (is_nil(fn)) {
-    msg0 = mk_string(sc, "Invalid arity");
+    msg0 = mk_string_fmt(sc, "Wrong number of args (%d)", n_args);
   } else {
     strview_t sv1 = to_strview(ns), sv2 = to_strview(fn);
     msg0 = mk_string_fmt(sc, "Wrong number of args (%d) passed to %.*s/%.*s", n_args, (int)sv1.size, sv1.ptr, (int)sv2.size, sv2.ptr);
@@ -3853,11 +3858,11 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
     }
     break;
   case T_CODEPOINT:
-    if (!print_flag) {
+    if (print_flag) {
+      p = escape_char(decode_integer(l), sc->strbuff, false);
+    } else {
       p = sc->strbuff;
       plen = encode_utf8(decode_integer(l), sc->strbuff);
-    } else {
-      p = escape_char(decode_integer(l), sc->strbuff, false);
     }
     break;
   case T_BOOLEAN:
@@ -3912,25 +3917,30 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
 	break;
       case T_DATE:{
 	time_t t = _lvalue_unchecked(c) / 1000;
-	int msec = _lvalue_unchecked(c) % 1000;
-	struct tm tm;
-	gmtime_r(&t, &tm);
-	plen = sprintf(sc->strbuff, "#inst \"%04d-%02d-%02dT%02d:%02d:%02d.%03dZ\"",
-		       1900 + tm.tm_year, 1 + tm.tm_mon, tm.tm_mday,
-		       tm.tm_hour, tm.tm_min, tm.tm_sec, msec);
-	p = sc->strbuff;
+	if (print_flag) {	
+	  int msec = _lvalue_unchecked(c) % 1000;
+	  struct tm tm;
+	  gmtime_r(&t, &tm);
+	  plen = sprintf(sc->strbuff, "#inst \"%04d-%02d-%02dT%02d:%02d:%02d.%03dZ\"",
+			 1900 + tm.tm_year, 1 + tm.tm_mon, tm.tm_mday,
+			 tm.tm_hour, tm.tm_min, tm.tm_sec, msec);
+	  p = sc->strbuff;
+	} else {
+	  p = ctime_r(&t, sc->strbuff);
+	  plen = strlen(p) - 1;	  
+	}
       }
 	break;
       case T_STRING:
       case T_UUID:
-	if (!print_flag) {
-	  p = _strvalue(c);
-	  plen = get_size(c);
-	  break;
-	} else {
+	if (print_flag) {
 	  print_slashstring(sc, to_strview(l), out);
 	  return;
+	} else {
+	  p = _strvalue(c);
+	  plen = get_size(c);
 	}
+	break;
       case T_WRITER:{
 	nanoclj_port_rep_t * pr = rep_unchecked(l);
 	switch (_port_type_unchecked(c)) {
@@ -3978,12 +3988,12 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
 	plen = snprintf(sc->strbuff, STRBUFFSIZE, "%lld/%lld", to_long(vector_elem(c, 0)), to_long(vector_elem(c, 1)));
 	break;
       case T_FILE:
-	if (!print_flag) {
-	  p = _strvalue(c);
-	  plen = get_size(c);
-	} else {
+	if (print_flag) {
 	  p = sc->strbuff;
 	  plen = snprintf(sc->strbuff, STRBUFFSIZE, "#<File %.*s>", (int)get_size(c), _strvalue(c));
+	} else {
+	  p = _strvalue(c);
+	  plen = get_size(c);
 	}
 	break;
       case T_TENSOR:
@@ -6237,7 +6247,37 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       }
       s_return(sc, mk_pointer(get_type_object(sc, arg0)));
     }
-    
+
+  case OP_DOT:
+    if (!unpack_args_2_plus(sc, &arg0, &arg1, &arg_next)) {
+      return false;
+    } else if (is_nil(arg0)) {
+      nanoclj_throw(sc, sc->NullPointerException);
+      return false;
+    } else if (!is_symbol(arg1)) {
+      Error_0(sc, "Unknown dot form");
+    } else {
+      nanoclj_cell_t * typ = is_type(arg0) ? decode_pointer(arg0) : get_type_object(sc, arg0);
+      while (typ) {
+	nanoclj_cell_t * var = resolve(sc, typ, arg1);
+	if (var) {
+	  nanoclj_val_t v = slot_value_in_env(var);
+	  if (!is_nil(v) && (type(v) == T_FOREIGN_FUNCTION || type(v) == T_CLOSURE || type(v) == T_PROC)) {
+	    sc->code = v;	    
+	    sc->args = cons(sc, arg0, arg_next);
+	    s_goto(sc, OP_APPLY);
+	  } else {
+	    s_return(sc, v);
+	  }
+	} else {
+	  typ = next(sc, typ);
+	}
+      }
+      strview_t sv = to_strview(arg1);
+      nanoclj_val_t msg = mk_string_fmt(sc, "%.*s is not a function", (int)sv.size, sv.ptr);
+      nanoclj_throw(sc, mk_runtime_exception(sc, msg));
+    }
+
   case OP_INSTANCEP:
     if (!unpack_args_2(sc, &arg0, &arg1)) {
       return false;
@@ -6792,6 +6832,13 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       s_return(sc, mk_nil());
     }
   }
+
+  case OP_TOUPPER:
+    if (!unpack_args_1(sc, &arg0)) {
+      return false;
+    } else {
+      s_return(sc, mk_codepoint(utf8proc_toupper(to_int(arg0))));
+    }      
 
   case OP_META:
     if (!unpack_args_1(sc, &arg0)) {

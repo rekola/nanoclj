@@ -21,6 +21,7 @@
           (recur (rest s))
           false)))
 
+(defn upper-case [s] (apply str (map -toupper s)))
 (defn lower-case [s] (utf8map s (bit-or UTF8PROC_IGNORE UTF8PROC_STRIPCC UTF8PROC_CASEFOLD UTF8PROC_COMPOSE)))
 
 (def join (fn ([coll]           (apply str coll))
@@ -75,6 +76,6 @@
   "Trims trailing newlines and carriage returns from a string"
   [s] (apply str (reverse (drop-while (fn [c] (case c
                                        \newline true
-                                       \return true                                       
+                                       \return true
                                        false
                                        )) (rseq s)))))
