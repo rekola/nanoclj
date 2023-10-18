@@ -3698,7 +3698,17 @@ static inline const char * escape_char(int32_t c, char * buffer, bool in_string)
     case '\b':	return "\\backspace";
     }
   }
-  if (unicode_isspace(c) || unicode_isctrl(c)) {
+  utf8proc_category_t cat = utf8proc_category(c);
+  if (cat == UTF8PROC_CATEGORY_MN ||
+      cat == UTF8PROC_CATEGORY_MC ||
+      cat == UTF8PROC_CATEGORY_ME ||
+      cat == UTF8PROC_CATEGORY_ZS ||
+      cat == UTF8PROC_CATEGORY_ZL ||
+      cat == UTF8PROC_CATEGORY_ZP ||
+      cat == UTF8PROC_CATEGORY_CC ||
+      cat == UTF8PROC_CATEGORY_CF ||
+      cat == UTF8PROC_CATEGORY_CS ||
+      cat == UTF8PROC_CATEGORY_CO) {
     sprintf(buffer, "\\u%04x", c);
   } else {
     char * p = buffer;
