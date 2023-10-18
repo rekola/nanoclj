@@ -428,7 +428,7 @@
                                    (string? x) (print-fn :string x)
                                    (keyword? x) (print-fn :keyword x)
                                    (symbol? x) (print-fn :symbol x)
-                                   (or (closure? x) (macro? x)) (pr-generic print-fn (cons 'fn (car x)))
+                                   (closure? x) (pr-generic print-fn (cons 'fn (car x)))
                                    (image? x) (let [ws *window-size*
                                                     f *window-scale-factor*
                                                     w (x :width)
