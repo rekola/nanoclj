@@ -32,6 +32,9 @@
 #else /* _WIN32 */
 
 #include <unistd.h>
+#include <pwd.h>
+#include <sys/utsname.h>
+#include <sixel.h>
 
 #endif /* _WIN32 */
 
@@ -45,15 +48,12 @@
 #include <stdarg.h>
 #include <assert.h>
 #include <signal.h>
-#include <sys/utsname.h>
 #include <sys/stat.h>
-#include <pwd.h>
 
 #define PCRE2_CODE_UNIT_WIDTH 8
 #include <pcre2.h>
 
 #include <utf8proc.h>
-#include <sixel.h>
 
 #include "nanoclj_clock.h"
 #include "nanoclj_hash.h"
@@ -1102,7 +1102,9 @@ static inline nanoclj_val_t mk_codepoint(int c) {
 }
 
 static inline nanoclj_val_t mk_boolean(bool b) {
-  return (nanoclj_val_t)((SIGNATURE_BOOLEAN << 48) | (b ? (uint32_t)1 : (uint32_t)0));
+  nanoclj_val_t v;
+  v.as_long = b ? kTRUE : kFALSE;
+  return v;
 }
 
 static inline nanoclj_val_t mk_int(int num) {
@@ -3913,7 +3915,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
 	int msec = _lvalue_unchecked(c) % 1000;
 	struct tm tm;
 	gmtime_r(&t, &tm);
-	plen = sprintf(sc->strbuff, "#inst %04d-%02d-%02dT%02d:%02d:%02d.%03dZ",
+	plen = sprintf(sc->strbuff, "#inst \"%04d-%02d-%02dT%02d:%02d:%02d.%03dZ\"",
 		       1900 + tm.tm_year, 1 + tm.tm_mon, tm.tm_mday,
 		       tm.tm_hour, tm.tm_min, tm.tm_sec, msec);
 	p = sc->strbuff;
@@ -4317,7 +4319,7 @@ static inline void dump_stack_free(nanoclj_t * sc) {
   sc->dump_size = 0;
 }
 
-#define s_retbool(tf)    s_return(sc, (tf) ? (nanoclj_val_t)kTRUE : (nanoclj_val_t)kFALSE)
+#define s_retbool(tf)    s_return(sc, mk_boolean(tf))
 
 static inline bool destructure(nanoclj_t * sc, nanoclj_cell_t * binding, nanoclj_cell_t * y, size_t num_args, bool first_level) {
   size_t n = get_size(binding);
@@ -4393,7 +4395,7 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
     return sc->EMPTY;
     
   case T_BOOLEAN:
-    return is_true(first(sc, args)) ? (nanoclj_val_t)kTRUE : (nanoclj_val_t)kFALSE;
+    return mk_boolean(is_true(first(sc, args)));
 
   case T_STRING:
   case T_CHAR_ARRAY:
@@ -5453,7 +5455,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 
   case OP_AND0:                /* and */
     if (sc->code.as_long == sc->EMPTY.as_long) {
-      s_return(sc, (nanoclj_val_t)kTRUE);
+      s_return(sc, mk_boolean(true));
     }
     s_save(sc, OP_AND1, NULL, cdr(sc->code));
     sc->code = car(sc->code);
@@ -7890,11 +7892,13 @@ int main(int argc, const char **argv) {
   if (sc.pending_exception) {
     nanoclj_val_t name_v;
     if (get_elem(&sc, _cons_metadata(get_type_object(&sc, mk_pointer(sc.pending_exception))), sc.NAME, &name_v)) {
-      strview_t sv = to_strview(name_v), sv2 = to_strview(_car(sc.pending_exception));
-      fprintf(stderr, "%.*s: %.*s\n", (int)sv.size, sv.ptr, (int)sv2.size, sv2.ptr);
+      strview_t sv = to_strview(name_v);
+      fprintf(stderr, "%.*s\n", (int)sv.size, sv.ptr);
     } else {
-      fprintf(stderr, "Uncaught exception\n");
+      fprintf(stderr, "Unknown exception\n");
     }
+    strview_t sv = to_strview(_car(sc.pending_exception));
+    fprintf(stderr, "%.*s\n", (int)sv.size, sv.ptr);
     rv = 1;
   }
 

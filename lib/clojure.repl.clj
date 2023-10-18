@@ -34,7 +34,8 @@
                             (catch java.lang.Throwable e
                               (save)
                               (set-color [ 255 0 0 ])
-                              (println (type e) ": " e)
+                              (println (type e))
+                              (println e)
                               (restore)
                               (newline)
                               (recur)))

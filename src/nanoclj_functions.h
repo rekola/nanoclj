@@ -2,18 +2,23 @@
 #define _NANOCLJ_FUNCTIONS_H_
 
 #include <stdint.h>
-#include <unistd.h>
-#include <glob.h>
 #include <shapefil.h>
 
 #include "linenoise.h"
 #include "nanoclj_utils.h"
 
 #ifdef WIN32
+
 #include <direct.h>
 #define getcwd _getcwd
 #define environ _environ
 #define STBIW_WINDOWS_UTF8
+
+#else
+
+#include <glob.h>
+#include <unistd.h>
+
 #endif
 
 #define STB_IMAGE_STATIC
@@ -116,8 +121,9 @@ static nanoclj_val_t System_setProperty(nanoclj_t * sc, nanoclj_val_t args0) {
 
 static inline nanoclj_val_t System_glob(nanoclj_t * sc, nanoclj_val_t args0) {
   nanoclj_cell_t * args = decode_pointer(args0);
-  char * tmp = alloc_c_str(sc, to_strview(first(sc, args)));
 
+#ifndef WIN32
+  char * tmp = alloc_c_str(sc, to_strview(first(sc, args)));
   glob_t gstruct;
   int r = glob(tmp, GLOB_ERR, NULL, &gstruct);
   nanoclj_cell_t * x = NULL;
@@ -130,11 +136,11 @@ static inline nanoclj_val_t System_glob(nanoclj_t * sc, nanoclj_val_t args0) {
   sc->free(tmp);
   globfree(&gstruct);
   
-  if (r != 0 && r != GLOB_NOMATCH) {
-    return mk_nil();
-  } else {
+  if (r == 0 || r == GLOB_NOMATCH) {
     return mk_pointer(x);
   }
+#endif
+  return mk_nil();
 }
 
 /* Math */

@@ -146,8 +146,6 @@ static void mark_thread(nanoclj_t * sc) {
 static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_cell_t * c) {
   nanoclj_shared_context_t * ctx = sc->context;
 
-  fprintf(stderr, "gc\n");
-  
 #if GC_VERBOSE
   putstr(sc, "gc...", get_err_port(sc));
 #endif
