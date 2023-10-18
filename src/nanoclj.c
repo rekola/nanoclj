@@ -3606,7 +3606,7 @@ static inline int token(nanoclj_t * sc, nanoclj_cell_t * inport) {
   case BACKQUOTE: return TOK_BQUOTE;
   case '\\': return TOK_CHAR_CONST;
   
-  case '.':
+  case '$':
     c = inchar(inport);
     if (is_one_of(" \n\t", c)) {
       return TOK_DOT;
