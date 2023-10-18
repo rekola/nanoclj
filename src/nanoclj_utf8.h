@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <utf8proc.h>
 
 static inline size_t utf8_sequence_length(uint8_t lead) {
   if (lead < 0x80) return 1;
@@ -90,13 +91,11 @@ static inline long long utf8_num_codepoints(const char *s, size_t size) {
   return count;
 }
 
-int mk_wcwidth(int32_t ucs);
-
 static inline int utf8_num_cells(const char *p, size_t len) {
   const char * end = p + len;
   int nc = 0;
   while (p < end) {
-    nc += mk_wcwidth(decode_utf8(p));
+    nc += utf8proc_charwidth(decode_utf8(p));
     p = utf8_next(p);
   }
   return nc;

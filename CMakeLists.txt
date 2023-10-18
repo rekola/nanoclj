@@ -27,7 +27,6 @@ endif()
 set(SOURCE_FILES
   src/nanoclj.c
   src/linenoise.c
-  src/wcwidth.c
   src/ggml.c
   src/ggml-alloc.c
   )

@@ -1471,7 +1471,7 @@ static inline void update_cursor(int32_t c, nanoclj_cell_t * p, int line_len) {
       pr->stdio.column = 0;
       break;
     default:
-      pr->stdio.column += mk_wcwidth(c);
+      pr->stdio.column += utf8proc_charwidth(c);
       if (line_len > 0 && pr->stdio.file == stdout) {
 	while (pr->stdio.column >= line_len) {
 	  pr->stdio.column -= line_len;
