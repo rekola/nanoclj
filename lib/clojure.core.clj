@@ -335,9 +335,9 @@
 (defn slurp
   "Reads a file"
   [fn] (let [rdr (clojure.java.io/reader fn)
-             f (fn [s] (let [c (.read rdr)] (if (= c ##Eof) s (recur (conj s c)))))
+             f (fn [s] (let [c (-read rdr)] (if (= c ##Eof) s (recur (conj s c)))))
              r (f "")]
-         (.close rdr)
+         (-close rdr)
          r))
 
 (defn spit
@@ -347,7 +347,7 @@
                     ]
                 (set! *out* w)
                 (print (str content))
-                (.close w)
+                (-close w)
                 (set! *out* prev-out)
                 nil))
 
@@ -526,6 +526,9 @@
   [pred coll] (cond (empty? coll) true
                     (pred (first coll)) false
                     :else (recur pred (rest coll))))
+
+(defn true? [x] (equals? x true))
+(defn false? [x] (equals? x false))
 
 ; Collections
 

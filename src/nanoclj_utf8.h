@@ -70,4 +70,8 @@ static inline int utf8_num_cells(const char *p, size_t len) {
   return nc;
 }
 
+static inline bool unicode_isdigit(int32_t c) {
+  return utf8proc_category(c) == UTF8PROC_CATEGORY_ND;  
+}
+
 #endif

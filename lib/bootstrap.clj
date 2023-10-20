@@ -215,6 +215,7 @@
 
 
 (def-macro (set! symbol value) `(-set ',symbol ,value))
+(def-macro (. instance symbol $ args) `(-dot ,instance ',symbol ,@args))
              
 (defn create-ns [sym] (eval (if (defined? sym) sym (intern *ns* sym (clojure.lang.Namespace *ns* (str sym))))))
 (def-macro (ns name) `((create-ns ',name)))

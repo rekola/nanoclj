@@ -10,7 +10,7 @@
     (if (= inport false)
       false
       (let [res (p inport)]
-        (.close inport)
+        (-close inport)
         res))))
 
 (defn call-with-output-file [s p]
@@ -19,7 +19,7 @@
     (if outport
       (do (set! *out* outport)
           (let [res (p)]
-            (.close outport)
+            (-close outport)
             (set! *out* old-outport)
             res
             ))
@@ -32,7 +32,7 @@
       (let [prev-inport *in*]
         (set! *in* inport)
         (let [res (p)]
-          (.close inport)
+          (-close inport)
           (set! *in* prev-inport)
           res)))))
 
@@ -43,7 +43,7 @@
       (let [prev-outport *out*]
         (set! *out* outport)
         (let [res (p)]
-          (.close outport)
+          (-close outport)
           (set! *out* prev-outport)
           res)))))
 
@@ -52,16 +52,16 @@
         outport (clojure.java.io/writer so)]
     (if (not (and inport outport))
       (do
-        (.close inport)
-        (.close outport)
+        (-close inport)
+        (-close outport)
         false)
       (let [prev-inport *in*
             prev-outport *out*]
         (set! *in* inport)
         (set! *out* outport)
         (let [res (p)]
-          (.close inport)
-          (.close outport)
+          (-close inport)
+          (-close outport)
           (set! *in* prev-inport)
           (set! *out* prev-outport)
           res)))))
@@ -85,9 +85,6 @@
             ([n] (* n (/ (rand-) 2147483647.0)))))
 
 (defn rand-int [n] (mod (rand-) n))
-
-(defn true? [x] (equals? x true))
-(defn false? [x] (equals? x false))
 
 (def nth
   "Returns the nth element of coll"
@@ -120,5 +117,6 @@
 (load-file "java.util.Date.clj")
 (load-file "sparkline.clj")
 (load-file "Plot.clj")
+(load-file "nanoclj.core.Codepoint.clj")
 (load-file "nanoclj.core.Tensor.clj")
 

@@ -7,19 +7,9 @@
 
 (defn blank?
   "Returns true if the argument string is blank"
-  [s] (if (empty? s)
-        true
-        (if (case (first s)
-              \space true
-              \newline true
-              \return true
-              \tab true
-              \formfeed true
-              \backspace true
-              false
-              )
-          (recur (rest s))
-          false)))
+  [s] (cond (empty? s) true
+            (. (first s) isWhitespace) (recur (rest s))
+            :else false))
 
 (defn upper-case [s] (apply str (map -toupper s)))
 (defn lower-case [s] (utf8map s (bit-or UTF8PROC_IGNORE UTF8PROC_STRIPCC UTF8PROC_CASEFOLD UTF8PROC_COMPOSE)))
@@ -46,27 +36,11 @@
 
 (defn triml
   "Trims whitespace from the left side of a string"
-  [s] (apply str (drop-while (fn [c] (case c
-                                       \space true
-                                       \newline true
-                                       \return true
-                                       \tab true
-                                       \formfeed true
-                                       \backspace true
-                                       false
-                                       )) s)))
+  [s] (apply str (drop-while #( . % isWhitespace) s)))
 
 (defn trimr
   "Trims whitespace from the right side of a string"
-  [s] (apply str (reverse (drop-while (fn [c] (case c
-                                       \space true
-                                       \newline true
-                                       \return true
-                                       \tab true
-                                       \formfeed true
-                                       \backspace true
-                                       false
-                                       )) (rseq s)))))
+  [s] (apply str (reverse (drop-while #( . % isWhitespace ) (rseq s)))))
 
 (defn trim
   "Trims whitespace from both sides of a string"

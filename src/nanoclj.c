@@ -44,7 +44,6 @@
 
 #include <math.h>
 #include <limits.h>
-#include <ctype.h>
 #include <stdarg.h>
 #include <assert.h>
 #include <signal.h>
@@ -91,7 +90,7 @@
 #define TOK_RPAREN  	1
 #define TOK_RCURLY  	2
 #define TOK_RSQUARE 	3
-#define TOK_DOT     	4
+#define TOK_OLD_DOT    	4
 #define TOK_PRIMITIVE  	5
 #define TOK_QUOTE   	6
 #define TOK_DEREF   	7
@@ -110,6 +109,7 @@
 #define TOK_REGEX   	20
 #define TOK_IGNORE  	21
 #define TOK_VAR	    	22
+#define TOK_DOT		23
 
 #define BACKQUOTE 	'`'
 #define DELIMITERS  	"()[]{}\";\f\t\v\n\r, "
@@ -206,6 +206,7 @@ typedef struct {
   strview_t ns, name, full_name;
   uint32_t hash;
   nanoclj_val_t ns_sym, name_sym;
+  bool is_amp_qualified;
 } symbol_t;
 
 typedef struct {
@@ -3051,16 +3052,16 @@ static inline nanoclj_val_t mk_primitive(nanoclj_t * sc, char *q) {
       has_dec_point = true;
       c = *p++;
     }
-    if (!isdigit(c)) {
+    if (!unicode_isdigit(c)) {
       return def_symbol_or_keyword(sc, q);
     }
   } else if (c == '.') {
     has_dec_point = true;
     c = *p++;
-    if (!isdigit(c)) {
+    if (!unicode_isdigit(c)) {
       return def_symbol_or_keyword(sc, q);
     }
-  } else if (!isdigit(c)) {
+  } else if (!unicode_isdigit(c)) {
     return def_symbol_or_keyword(sc, q);    
   }
 
@@ -3070,7 +3071,7 @@ static inline nanoclj_val_t mk_primitive(nanoclj_t * sc, char *q) {
 	has_hex_prefix = true;
 	p++;
 	q = p;     
-      } else if (isdigit(*p)) {
+      } else if (unicode_isdigit(*p)) {
 	has_octal_prefix = true;
 	q = p;
       }
@@ -3083,7 +3084,7 @@ static inline nanoclj_val_t mk_primitive(nanoclj_t * sc, char *q) {
 
   for (; (c = *p) != 0; ++p) {
     if (has_hex_prefix) {
-      if (isdigit(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+      if (unicode_isdigit(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
 	continue;
       } else {
 	return mk_nil();
@@ -3100,7 +3101,7 @@ static inline nanoclj_val_t mk_primitive(nanoclj_t * sc, char *q) {
       } else {
 	return mk_nil();
       }      
-    } else if (!isdigit(c)) {
+    } else if (!unicode_isdigit(c)) {
       if (c == '.') {
         if (!has_dec_point) {
           has_dec_point = 1;
@@ -3116,7 +3117,7 @@ static inline nanoclj_val_t mk_primitive(nanoclj_t * sc, char *q) {
           has_fp_exp = true;
           has_dec_point = true;    /* decimal point illegal from now on */
           p++;
-          if ((*p == '-') || (*p == '+') || isdigit(*p)) {
+          if ((*p == '-') || (*p == '+') || unicode_isdigit(*p)) {
             continue;
           }
         }
@@ -3586,12 +3587,16 @@ static inline nanoclj_val_t readstrexp(nanoclj_t * sc, nanoclj_cell_t * inport, 
 
 /* skip white space characters, returns the first non-whitespace character */
 static inline int skipspace(nanoclj_t * sc, nanoclj_cell_t * inport) {
-  int c = 0;
-  do {
-    c = inchar(inport);
-  } while (isspace(c));
-
-  return c;
+  while ( 1 ) {
+    int32_t c = inchar(inport);
+    int cat = utf8proc_category(c);
+    if (cat != UTF8PROC_CATEGORY_ZS &&
+	cat != UTF8PROC_CATEGORY_ZL &&
+	cat != UTF8PROC_CATEGORY_ZP &&
+	cat != UTF8PROC_CATEGORY_CC) {
+      return c;
+    }
+  }
 }
 
 /* get token */
@@ -3614,11 +3619,21 @@ static inline int token(nanoclj_t * sc, nanoclj_cell_t * inport) {
   case '$':
     c = inchar(inport);
     if (is_one_of(" \n\t", c)) {
-      return TOK_DOT;
+      return TOK_OLD_DOT;
     } else {
       backchar(c, inport);
       backchar('.', inport);
       return TOK_PRIMITIVE;
+    }
+
+  case '.':
+    c = inchar(inport);
+    backchar(c, inport);
+    if (is_one_of(" \n\t", c)) {
+      backchar('.', inport);
+      return TOK_PRIMITIVE;
+    } else {
+      return TOK_DOT;
     }
 
   case ';':
@@ -6439,7 +6454,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  sc->tok = token(sc, inport);
 	  if (sc->tok == TOK_RPAREN) {       /* Empty list */
 	    s_return(sc, sc->EMPTY);
-	  } else if (sc->tok == TOK_DOT) {
+	  } else if (sc->tok == TOK_OLD_DOT) {
 	    Error_0(sc, "Illegal dot expression");
 	  } else {
 	    _nesting_unchecked(inport)++;
@@ -6451,7 +6466,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  sc->tok = token(sc, inport);
 	  if (sc->tok == TOK_RSQUARE) {	/* Empty vector */
 	    s_return(sc, mk_pointer(sc->EMPTYVEC));
-	  } else if (sc->tok == TOK_DOT) {
+	  } else if (sc->tok == TOK_OLD_DOT) {
 	    Error_0(sc, "Illegal dot expression");
 	  } else {
 	    _nesting_unchecked(inport)++;
@@ -6469,7 +6484,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  sc->tok = token(sc, inport);
 	  if (sc->tok == TOK_RCURLY) {     /* Empty map or set */
 	    s_return(sc, sc->EMPTY);
-	  } else if (sc->tok == TOK_DOT) {
+	  } else if (sc->tok == TOK_OLD_DOT) {
 	    Error_0(sc, "Illegal dot expression");
 	  } else {
 	    _nesting_unchecked(inport)++;
@@ -6574,6 +6589,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	    return false;
 	  }
 	}
+
+	case TOK_DOT:
+	  Error_0(sc, "Not implemented");	
 	
 	case TOK_IGNORE:
 	  readstr_upto(sc, DELIMITERS, inport, false);
@@ -6611,7 +6629,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	} else if (sc->tok == TOK_RPAREN) {
 	  _nesting_unchecked(inport)--;
 	  s_return(sc, mk_pointer(reverse_in_place(sc, sc->args)));
-	} else if (sc->tok == TOK_DOT) {
+	} else if (sc->tok == TOK_OLD_DOT) {
 	  s_save(sc, OP_RD_DOT, sc->args, sc->EMPTY);
 	  sc->tok = token(sc, inport);
 	  s_goto(sc, OP_RD_SEXPR);
@@ -6848,7 +6866,14 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       return false;
     } else {
       s_return(sc, mk_codepoint(utf8proc_toupper(to_int(arg0))));
-    }      
+    }
+
+  case OP_CATEGORY:
+    if (!unpack_args_1(sc, &arg0)) {
+      return false;
+    } else {
+      s_return(sc, mk_int(utf8proc_category(to_int(arg0))));
+    }    
 
   case OP_META:
     if (!unpack_args_1(sc, &arg0)) {

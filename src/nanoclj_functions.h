@@ -2,6 +2,7 @@
 #define _NANOCLJ_FUNCTIONS_H_
 
 #include <stdint.h>
+#include <ctype.h>
 #include <shapefil.h>
 
 #include "linenoise.h"
