@@ -31,6 +31,11 @@
 (def SURROGATE 28)
 (def PRIVATE_USE 29)
 
+(def MIN_CODE_POINT 0)
+(def MAX_CODE_POINT 0x10ffff)
+
+(def MIN_SUPPLEMENTARY_CODE_POINT 0x100000)
+
 (defn getType
   "Returns the type of the Unicode character"
   [c] (-category c))
@@ -82,6 +87,14 @@
                                CONTROL true
                                false)))
 
+(defn isDigit
+  "returns true if codepoint is a digit"
+  [c] (= (getType c) DECIMAL_DIGIT_NUMBER))
+
+(defn isISOControl
+  "returns true if codepoint is a digit"
+  [c] (= (getType c) CONTROL))
+
 (defn isLowerCase
   "Returns true if codepoint is in lower case"
   [c] (= (getType c) LOWERCASE_LETTER))
@@ -93,4 +106,20 @@
 (defn isTitleCase
   "Returns true if codepoint is in title case"
   [c] (= (getType c) TITLECASE_LETTER))
+
+(defn isDefined
+  "Returns true if the codepoint has been assigned a meaning in Unicode"
+  [c] (not= (getType c) UNASSIGNED))
+
+(defn isValidCodePoint
+  "Returns true if codepoint is valid"
+  [c] (and (>= 0 MIN_CODE_POINT) (<= c MAX_CODE_POINT)))
+
+(defn isSupplementaryCodePoint
+  "Returns true if codepoint is suplementary"
+  [c] (>= c MIN_SUPPLEMENTARY_CODE_POINT))
+
+(defn isBmpCodePoint
+  "Returns true if the codepoint belongs to the Basic Multilingual Plane"
+  [c] (and (>= 0 c) (<= c 0xffff)))
 
