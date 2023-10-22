@@ -3486,15 +3486,62 @@ static inline int digit(int32_t c, int radix) {
   else return -1;
 }
 
+static inline const char * escape_char(int32_t c, char * buffer, bool in_string) {
+  if (in_string) {
+    switch (c) {
+    case 0:	return "\\u0000";
+    case ' ':   return " ";
+    case '"':	return "\\\"";
+    case '\n':	return "\\n";
+    case '\t':	return "\\t";
+    case '\r':	return "\\r";
+    case '\b':	return "\\b";
+    case '\\':	return "\\";
+    }
+  } else {
+    switch (c) {
+    case -1:	return "##Eof";
+    case ' ':	return "\\space";
+    case '\n':	return "\\newline";
+    case '\r':	return "\\return";
+    case '\t':	return "\\tab";
+    case '\f':	return "\\formfeed";
+    case '\b':	return "\\backspace";
+    }
+  }
+  utf8proc_category_t cat = utf8proc_category(c);
+  if (cat == UTF8PROC_CATEGORY_MN ||
+      cat == UTF8PROC_CATEGORY_MC ||
+      cat == UTF8PROC_CATEGORY_ME ||
+      cat == UTF8PROC_CATEGORY_ZS ||
+      cat == UTF8PROC_CATEGORY_ZL ||
+      cat == UTF8PROC_CATEGORY_ZP ||
+      cat == UTF8PROC_CATEGORY_CC ||
+      cat == UTF8PROC_CATEGORY_CF ||
+      cat == UTF8PROC_CATEGORY_CS ||
+      cat == UTF8PROC_CATEGORY_CO) {
+    sprintf(buffer, "\\u%04x", c);
+  } else {
+    char * p = buffer;
+    if (!in_string) {
+      *p++ = '\\';
+    }
+    p += utf8proc_encode_char(c, (utf8proc_uint8_t *)p);
+    *p = 0;
+  }
+  return buffer;
+}
+
 /* read string expression "xxx...xxx" */
 static inline nanoclj_val_t readstrexp(nanoclj_t * sc, nanoclj_cell_t * inport, bool regex_mode) {
   nanoclj_byte_array_t * rdbuff = sc->rdbuff;
   rdbuff->size = 0;
 
   int c1 = 0;
-  enum { st_ok, st_bsl, st_u1, st_u2, st_u3, st_u4, st_oct2, st_oct3, st_fin } state = st_ok;
+  enum { st_ok, st_bsl, st_u1, st_u2, st_u3, st_u4, st_oct2, st_oct3 } state = st_ok;
+  bool fin = false;
 
-  while (state != st_fin) {
+  do {
     int c = inchar(inport);
     if (c == EOF) { 
       return mk_nil();
@@ -3507,7 +3554,7 @@ static inline nanoclj_val_t readstrexp(nanoclj_t * sc, nanoclj_cell_t * inport, 
         state = st_bsl;
         break;
       case '"':
-	state = st_fin;
+	fin = true;
 	break;
       default:
         append_codepoint(sc, rdbuff, c);
@@ -3550,10 +3597,7 @@ static inline nanoclj_val_t readstrexp(nanoclj_t * sc, nanoclj_cell_t * inport, 
 	  state = st_ok;
 	  break;
 	default:
-	  {
-	    int l = utf8proc_encode_char(c, (utf8proc_uint8_t *)&(sc->strbuff[0]));
-	    nanoclj_throw(sc, mk_runtime_exception(sc, mk_string_fmt(sc, "Unsupported escape character: \\%.*s", l, sc->strbuff)));
-	  }
+	  nanoclj_throw(sc, mk_runtime_exception(sc, mk_string_fmt(sc, "Unsupported escape character: \\%s", escape_char(c, sc->strbuff, false))));
 	  return mk_nil();
 	}
       } else {
@@ -3572,26 +3616,25 @@ static inline nanoclj_val_t readstrexp(nanoclj_t * sc, nanoclj_cell_t * inport, 
     case st_u3:
     case st_u4:
       if (c == '"') {
-	state = st_fin;
+	fin = true;
       } else {
 	int d = digit(c, radix);
-	if (d == -1) {
-	  int l = utf8proc_encode_char(c, (utf8proc_uint8_t *)&(sc->strbuff[0]));
-	  nanoclj_throw(sc, mk_runtime_exception(sc, mk_string_fmt(sc, "Invalid digit: %.*s", l, sc->strbuff)));
+	if (d == -1) {	 
+	  nanoclj_throw(sc, mk_runtime_exception(sc, mk_string_fmt(sc, "Invalid digit: %s", escape_char(c, sc->strbuff, false))));
 	  return mk_nil();
 	} else {
 	  c1 = (c1 * radix) + d;
 	}
       }
-      if (state == st_fin || state == st_u4 || state == st_oct3) {
+      if (fin || state == st_u4 || state == st_oct3) {
 	append_codepoint(sc, rdbuff, c1);
-	if (state != st_fin) state = st_ok;
+	state = st_ok;
       } else {
 	state++;
       }
       break;      
     }
-  }
+  } while (!fin);
   
   return mk_pointer(get_string_object(sc, T_STRING, rdbuff->data, rdbuff->size, 0));
 }
@@ -3705,52 +3748,6 @@ static inline int token(nanoclj_t * sc, nanoclj_cell_t * inport) {
 }
 
 /* ========== Routines for Printing ========== */
-
-static inline const char * escape_char(int32_t c, char * buffer, bool in_string) {
-  if (in_string) {
-    switch (c) {
-    case 0:	return "\\u0000";
-    case ' ':   return " ";
-    case '"':	return "\\\"";
-    case '\n':	return "\\n";
-    case '\t':	return "\\t";
-    case '\r':	return "\\r";
-    case '\b':	return "\\b";
-    case '\\':	return "\\";
-    }
-  } else {
-    switch (c) {
-    case -1:	return "##Eof";
-    case ' ':	return "\\space";
-    case '\n':	return "\\newline";
-    case '\r':	return "\\return";
-    case '\t':	return "\\tab";
-    case '\f':	return "\\formfeed";
-    case '\b':	return "\\backspace";
-    }
-  }
-  utf8proc_category_t cat = utf8proc_category(c);
-  if (cat == UTF8PROC_CATEGORY_MN ||
-      cat == UTF8PROC_CATEGORY_MC ||
-      cat == UTF8PROC_CATEGORY_ME ||
-      cat == UTF8PROC_CATEGORY_ZS ||
-      cat == UTF8PROC_CATEGORY_ZL ||
-      cat == UTF8PROC_CATEGORY_ZP ||
-      cat == UTF8PROC_CATEGORY_CC ||
-      cat == UTF8PROC_CATEGORY_CF ||
-      cat == UTF8PROC_CATEGORY_CS ||
-      cat == UTF8PROC_CATEGORY_CO) {
-    sprintf(buffer, "\\u%04x", c);
-  } else {
-    char * p = buffer;
-    if (!in_string) {
-      *p++ = '\\';
-    }
-    p += utf8proc_encode_char(c, (utf8proc_uint8_t *)p);
-    *p = 0;
-  }
-  return buffer;
-}
 
 static inline void print_slashstring(nanoclj_t * sc, strview_t sv, nanoclj_cell_t * out) {
   const char * p = sv.ptr;
