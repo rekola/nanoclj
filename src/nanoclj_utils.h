@@ -19,5 +19,19 @@ static inline nanoclj_color_t mk_color(double red, double green, double blue, do
     clamp((int)(alpha * 255), 0, 255) };
 }
 
+static inline int digit(int32_t c, int radix) {
+  if (c >= '0' && c <= '9') {
+    c -= '0';
+  } else if (c >= 'a' && c <= 'z') {
+    c -= 'a' - 10;
+  } else if (c >= 'A' && c <= 'Z') {
+    c -= 'A' - 10;
+  } else {
+    return -1;
+  }
+  if (c < radix) return c;
+  else return -1;
+}
+
 #endif
 

@@ -176,10 +176,11 @@ enum nanoclj_types {
   T_RUNTIME_EXCEPTION = 38,
   T_ARITY_EXCEPTION = 39,
   T_ILLEGAL_ARG_EXCEPTION = 40,
-  T_ARITHMETIC_EXCEPTION = 41,
-  T_CLASS_CAST_EXCEPTION = 42,
-  T_TENSOR = 43,
-  T_LAST_SYSTEM_TYPE = 44
+  T_NUM_FMT_EXCEPTION = 41,
+  T_ARITHMETIC_EXCEPTION = 42,
+  T_CLASS_CAST_EXCEPTION = 43,
+  T_TENSOR = 44,
+  T_LAST_SYSTEM_TYPE = 45
 };
 
 typedef struct {
@@ -1413,6 +1414,10 @@ static inline nanoclj_cell_t * mk_arity_exception(nanoclj_t * sc, int n_args, na
 
 static inline nanoclj_cell_t * mk_illegal_arg_exception(nanoclj_t * sc, const char * msg) {
   return get_cell(sc, T_ILLEGAL_ARG_EXCEPTION, 0, mk_string(sc, msg), NULL, NULL);
+}
+
+static inline nanoclj_cell_t * mk_number_format_exception(nanoclj_t * sc, nanoclj_val_t msg) {
+  return get_cell(sc, T_NUM_FMT_EXCEPTION, 0, msg, NULL, NULL);
 }
 
 static inline int32_t inchar_raw(nanoclj_cell_t * p) {
@@ -3037,16 +3042,10 @@ static inline int gentypeid(nanoclj_t * sc) {
 
 /* make symbol or number literal from string */
 static inline nanoclj_val_t mk_primitive(nanoclj_t * sc, char *q) {
-  bool has_dec_point = false;
-  bool has_fp_exp = false;
-  bool has_hex_prefix = false;
-  bool has_octal_prefix = false;
-  bool has_binary_prefix = false;
-  char *div = 0;
-  char *p;
-  int sign = 1;
-  
-  p = q;
+  bool has_dec_point = false, has_fp_exp = false;
+  char *div = 0; 
+  int sign = 1, radix = 0;
+  char * p = q;
   char c = *p++;
   if ((c == '+') || (c == '-')) {
     if (c == '-') sign = -1;
@@ -3055,85 +3054,76 @@ static inline nanoclj_val_t mk_primitive(nanoclj_t * sc, char *q) {
       has_dec_point = true;
       c = *p++;
     }
-    if (!unicode_isdigit(c)) {
-      return def_symbol_or_keyword(sc, q);
-    }
   } else if (c == '.') {
     has_dec_point = true;
     c = *p++;
-    if (!unicode_isdigit(c)) {
+  }
+  
+  if (has_dec_point) {
+    if (digit(c, 10) == -1) {
       return def_symbol_or_keyword(sc, q);
     }
-  } else if (!unicode_isdigit(c)) {
-    return def_symbol_or_keyword(sc, q);    
-  }
-
-  if (!has_dec_point) {
-    if (c == '0') {
-      if (*p == 'x') {
-	has_hex_prefix = true;
-	p++;
-	q = p;     
-      } else if (unicode_isdigit(*p)) {
-	has_octal_prefix = true;
-	q = p;
-      }
-    } else if (c == '2' && *p == 'r') {
-      has_binary_prefix = true;
+  } else if (c == '0') {
+    if (*p == 'x') {
+      radix = 16;	
       p++;
+      q = p;     
+    } else if (digit(*p, 8) >= 0) {
+      radix = 8;
       q = p;
+    }
+  } else {
+    int b1 = digit(c, 10);
+    if (b1 == -1) {
+      return def_symbol_or_keyword(sc, q);    
+    } else {
+      if (*p == 'r') {
+	radix = b1;
+	p++;
+	q = p;
+      } else {
+	int b2 = digit(*p, 10);
+	if (b2 != -1 && p[1] == 'r') {
+	  radix = b1 * 10 + b2;
+	  p += 2;
+	  q = p;
+	}	  
+      }
     }
   }
 
+  bool radix_set = true;
+  if (!radix) {
+    radix_set = false;
+    radix = 10;
+    sign = 1;
+  } else if (radix < 2 || radix > 36) {
+    return mk_nil();
+  }
+  
   for (; (c = *p) != 0; ++p) {
-    if (has_hex_prefix) {
-      if (unicode_isdigit(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
-	continue;
-      } else {
-	return mk_nil();
-      }
-    } else if (has_binary_prefix) {
-      if (c == '0' || c == '1') {
-	continue;
-      } else {
-	return mk_nil();
-      }
-    } else if (has_octal_prefix) {
-      if (c >= '0' && c <= '7') {
-	continue;
-      } else {
-	return mk_nil();
-      }      
-    } else if (!unicode_isdigit(c)) {
-      if (c == '.') {
-        if (!has_dec_point) {
-          has_dec_point = 1;
-          continue;
-        }
-      } else if (c == '/') {
-	if (!div) {
+    if (digit(c, radix) == -1) {
+      if (!radix_set) {
+	if (c == '/' && !div && !has_dec_point) {
 	  div = p;
-	  continue;
+	  break; /* check the rest using strtoll */
+	} else if (c == 'e' || c == 'E' || (c == '.' && !has_dec_point)) {
+	  has_dec_point = true;
+	  break; /* check the rest using strtod */
 	}
-      } else if ((c == 'e') || (c == 'E')) {
-        if (!has_fp_exp) {
-          has_fp_exp = true;
-          has_dec_point = true;    /* decimal point illegal from now on */
-          p++;
-          if ((*p == '-') || (*p == '+') || unicode_isdigit(*p)) {
-            continue;
-          }
-        }
       }
-      return def_symbol_or_keyword(sc, q);      
+      return mk_nil();
     }
   }
   
   if (div) {
-    *div = 0;
-    long long num = atoll(q), den = atoll(div + 1);
+    char * end1, * end2;
+    long long num = strtoll(q, &end1, 10), den = strtoll(div + 1, &end2, 10);
+    if (end1 != div || end2 != q + strlen(q)) {
+      return mk_nil();
+    }
     if (den != 0) {
-      num = normalize(atoll(q), atoll(div + 1), &den);
+      num = normalize(num, den, &den);
     } else if (num != 0) {
       num = num < 0 ? -1 : +1;
     }
@@ -3142,20 +3132,17 @@ static inline nanoclj_val_t mk_primitive(nanoclj_t * sc, char *q) {
     } else {
       return mk_ratio_long(sc, num, den);
     }
+  } else {
+    char * end, * actual_end = q + strlen(q);   
+    if (has_dec_point) {
+      double d = strtod(q, &end);
+      if (end == actual_end) return mk_real(d);
+    } else {
+      long long i = strtoll(q, &end, radix);
+      if (end == actual_end) return mk_integer(sc, sign * i);
+    }
+    return mk_nil();   
   }
-  if (has_hex_prefix) {
-    return mk_integer(sc, sign * strtoll(q, (char **)NULL, 16));
-  }
-  if (has_binary_prefix) {
-    return mk_integer(sc, sign * strtoll(q, (char **)NULL, 2));
-  }
-  if (has_octal_prefix) {
-    return mk_integer(sc, sign * strtoll(q, (char **)NULL, 8));
-  }
-  if (has_dec_point) {
-    return mk_real(atof(q));
-  }
-  return mk_integer(sc, atoll(q));
 }
 
 static inline int32_t parse_char_literal(nanoclj_t * sc, const char *name) {
@@ -3474,18 +3461,6 @@ static inline nanoclj_val_t nanoclj_throw(nanoclj_t * sc, nanoclj_cell_t * e) {
   return mk_nil();
 }
 
-static inline int digit(int32_t c, int radix) {
-  if (c >= '0' && c <= '9') {
-    c -= '0';
-  } else if (c >= 'a' && c <= 'z') {
-    c -= 'a' - 10;
-  } else if (c >= 'A' && c <= 'z') {
-    c -= 'A' - 10;
-  }
-  if (c < radix) return c;
-  else return -1;
-}
-
 static inline const char * escape_char(int32_t c, char * buffer, bool in_string) {
   if (in_string) {
     switch (c) {
@@ -3573,7 +3548,7 @@ static inline nanoclj_val_t readstrexp(nanoclj_t * sc, nanoclj_cell_t * inport, 
 	case '6':
 	case '7':
 	  state = st_oct2;
-	  c1 = c - '0';
+	  c1 = digit(c, 8);
 	  break;
 	case 'u':
 	  state = st_u1;
@@ -4449,6 +4424,7 @@ static inline bool destructure_value(nanoclj_t * sc, nanoclj_val_t e, nanoclj_va
 static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoclj_cell_t * args) {
   nanoclj_val_t x, y;
   nanoclj_cell_t * z;
+  int i;
   
   switch (type_id) {
   case T_NIL:
@@ -4521,7 +4497,12 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
     return mk_real(to_double(first(sc, args)));
 
   case T_CODEPOINT:
-    return mk_codepoint(to_int(first(sc, args)));
+    i = to_int(first(sc, args));
+    if (i < 0 || i > 0x10ffff) {
+      return nanoclj_throw(sc, mk_illegal_arg_exception(sc, "Invalid codepoint"));
+    } else {
+      return mk_codepoint(i);
+    }
 
   case T_CLASS:
     return mk_pointer(mk_type(sc, to_int(first(sc, args)), rest(sc, args), NULL));
@@ -5057,7 +5038,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	s_goto(sc, OP_APPLY);
 
       case T_CLASS:
-	s_return(sc, construct_by_type(sc, code_cell->type, sc->args));
+	x = construct_by_type(sc, code_cell->type, sc->args);
+	if (sc->pending_exception) return false;
+	s_return(sc, x);
 	
       case T_FOREIGN_FUNCTION:{
 	/* Keep nested calls from GC'ing the arglist */
@@ -5687,7 +5670,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       }
     }
     }
-    s_return(sc, mk_nil());
+    nanoclj_throw(sc, mk_class_cast_exception(sc, "Argument cannot be cast to java.lang.Number"));
+    return false;
 
   case OP_DEC:
     if (!unpack_args_1(sc, &arg0)) {
@@ -5723,7 +5707,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       }
     }
     }
-    s_return(sc, mk_nil());
+    nanoclj_throw(sc, mk_class_cast_exception(sc, "Argument cannot be cast to java.lang.Number"));
+    return false;
 
   case OP_ADD:                 /* add */
     if (!unpack_args_2(sc, &arg0, &arg1)) {
@@ -6467,6 +6452,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     x = get_in_port(sc);
     if (is_cell(x)) {
       nanoclj_cell_t * inport = decode_pointer(x);
+      char * s;
       if (is_readable(inport)) {
 	switch (sc->tok) {
 	case TOK_EOF:
@@ -6553,9 +6539,11 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  sc->tok = token(sc, inport);
 	  s_goto(sc, OP_RD_SEXPR);
 	case TOK_PRIMITIVE:
-	  x = mk_primitive(sc, readstr_upto(sc, DELIMITERS, inport, false));
+	  s = readstr_upto(sc, DELIMITERS, inport, false);
+	  x = mk_primitive(sc, s);
 	  if (is_nil(x)) {
-	    Error_0(sc, "Invalid number format");
+	    nanoclj_throw(sc, mk_number_format_exception(sc, mk_string_fmt(sc, "Invalid number format [%s]", s)));
+	    return false;
 	  } else {
 	    s_return(sc, x);
 	  }
@@ -7769,6 +7757,7 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   nanoclj_cell_t * Exception = mk_named_type(sc, "java.lang.Exception", gentypeid(sc), sc->Throwable);
   nanoclj_cell_t * RuntimeException = mk_named_type(sc, "java.lang.RuntimeException", T_RUNTIME_EXCEPTION, Exception);
   nanoclj_cell_t * IllegalArgumentException = mk_named_type(sc, "java.lang.IllegalArgumentException", T_ILLEGAL_ARG_EXCEPTION, RuntimeException);
+  nanoclj_cell_t * NumberFormatException = mk_named_type(sc, "java.lang.NumberFormatException", T_NUM_FMT_EXCEPTION, IllegalArgumentException);
   nanoclj_cell_t * OutOfMemoryError = mk_named_type(sc, "java.lang.OutOfMemoryError", gentypeid(sc), sc->Throwable);    
   nanoclj_cell_t * NullPointerException = mk_named_type(sc, "java.lang.NullPointerException", gentypeid(sc), RuntimeException);
   nanoclj_cell_t * ClassCastException = mk_named_type(sc, "java.lang.ClassCastException", T_CLASS_CAST_EXCEPTION, RuntimeException);  
