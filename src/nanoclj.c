@@ -3615,7 +3615,7 @@ static inline nanoclj_val_t readstrexp(nanoclj_t * sc, nanoclj_cell_t * inport, 
 }
 
 /* skip white space characters, returns the first non-whitespace character */
-static inline int skipspace(nanoclj_t * sc, nanoclj_cell_t * inport) {
+static inline int32_t skipspace(nanoclj_t * sc, nanoclj_cell_t * inport) {
   while ( 1 ) {
     int32_t c = inchar(inport);
     int cat = utf8proc_category(c);
@@ -3645,7 +3645,7 @@ static inline int token(nanoclj_t * sc, nanoclj_cell_t * inport) {
   case '\\': return TOK_CHAR_CONST;
   
   case '(':
-    c = inchar(inport);
+    c = skipspace(sc, inport);
     if (c == '.') {
       int c2 = inchar(inport);
       backchar(c2, inport);
