@@ -179,7 +179,7 @@ enum nanoclj_types {
   T_ARITHMETIC_EXCEPTION = 41,
   T_CLASS_CAST_EXCEPTION = 42,
   T_TENSOR = 43,
-  T_LAST_SYSTEM_TYPE=44
+  T_LAST_SYSTEM_TYPE = 44
 };
 
 typedef struct {
@@ -1928,50 +1928,53 @@ static inline bool is_empty(nanoclj_t * sc, nanoclj_cell_t * coll) {
 }
 
 static inline nanoclj_cell_t * rest(nanoclj_t * sc, nanoclj_cell_t * coll) {
-  int typ = _type(coll);
-
-  if (typ == T_LAZYSEQ) {
-    if (!_is_realized(coll)) {
-      nanoclj_cell_t * code = cons(sc, sc->DEREF, cons(sc, mk_pointer(coll), NULL));
-      coll = decode_pointer(eval(sc, code));
-    } else if (is_nil(_car(coll)) && is_nil(_cdr(coll))) {
-      return &(sc->_EMPTY);
+  if (coll) {
+    int typ = _type(coll);
+    
+    if (typ == T_LAZYSEQ) {
+      if (!_is_realized(coll)) {
+	nanoclj_cell_t * code = cons(sc, sc->DEREF, cons(sc, mk_pointer(coll), NULL));
+	coll = decode_pointer(eval(sc, code));
+      } else if (is_nil(_car(coll)) && is_nil(_cdr(coll))) {
+	return &(sc->_EMPTY);
+      }
+    }
+    
+    switch (typ) {
+    case T_NIL:
+      break;    
+    case T_LIST:
+    case T_LAZYSEQ:
+    case T_ENVIRONMENT:
+    case T_CLASS:
+      return decode_pointer(_cdr(coll));    
+    case T_VECTOR:
+    case T_ARRAYMAP:
+    case T_SORTED_SET:
+    case T_STRING:
+    case T_CHAR_ARRAY:
+    case T_FILE:
+      if (get_size(coll) >= 2) {
+	nanoclj_cell_t * s;
+	if (_is_reverse(coll)) {
+	  s = remove_suffix(sc, coll, 1);
+	  _set_rseq(s);
+	} else {
+	  s = remove_prefix(sc, coll, 1);
+	  _set_seq(s);
+	}
+	/* In the case of multi-byte utf8 character, the string can be empty */
+	return get_size(s) ? s : &(sc->_EMPTY);
+      }
+      break;
     }
   }
   
-  switch (typ) {
-  case T_NIL:
-    break;    
-  case T_LIST:
-  case T_LAZYSEQ:
-  case T_ENVIRONMENT:
-  case T_CLASS:
-    return decode_pointer(_cdr(coll));    
-  case T_VECTOR:
-  case T_ARRAYMAP:
-  case T_SORTED_SET:
-  case T_STRING:
-  case T_CHAR_ARRAY:
-  case T_FILE:
-    if (get_size(coll) >= 2) {
-      nanoclj_cell_t * s;
-      if (_is_reverse(coll)) {
-	s = remove_suffix(sc, coll, 1);
-	_set_rseq(s);
-      } else {
-	s = remove_prefix(sc, coll, 1);
-	_set_seq(s);
-      }
-      /* In the case of multi-byte utf8 character, the string can be empty */
-      return get_size(s) ? s : &(sc->_EMPTY);
-    }
-    break;
-  }
-
   return &(sc->_EMPTY);
 }
 
 static inline nanoclj_cell_t * next(nanoclj_t * sc, nanoclj_cell_t * coll) {
+  if (!coll) return NULL;
   nanoclj_cell_t * r = rest(sc, coll);
   if (_type(r) == T_LAZYSEQ) {
     if (!_is_realized(r)) {
@@ -4359,6 +4362,12 @@ static inline void dump_stack_free(nanoclj_t * sc) {
 static inline bool destructure(nanoclj_t * sc, nanoclj_cell_t * binding, nanoclj_cell_t * y, size_t num_args, bool first_level) {
   size_t n = get_size(binding);
   
+  if (n >= 2 && vector_elem(binding, n - 2).as_long == sc->AS.as_long) {
+    nanoclj_val_t as = vector_elem(binding, n - 1);
+    new_slot_in_env(sc, as, mk_pointer(y));
+    n -= 2;
+  }
+  
   if (first_level) {
     bool multi = n >= 2 && vector_elem(binding, n - 2).as_long == sc->AMP.as_long;
     if (!multi && num_args != n) {
@@ -6301,6 +6310,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       strview_t sv = to_strview(arg1);
       nanoclj_val_t msg = mk_string_fmt(sc, "%.*s is not a function", (int)sv.size, sv.ptr);
       nanoclj_throw(sc, mk_runtime_exception(sc, msg));
+      return false;
     }
 
   case OP_INSTANCEP:
@@ -6866,6 +6876,20 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       return false;
     } else {
       s_return(sc, mk_codepoint(utf8proc_toupper(to_int(arg0))));
+    }
+
+  case OP_TOLOWER:
+    if (!unpack_args_1(sc, &arg0)) {
+      return false;
+    } else {
+      s_return(sc, mk_codepoint(utf8proc_tolower(to_int(arg0))));
+    }
+
+  case OP_TOTITLE:
+    if (!unpack_args_1(sc, &arg0)) {
+      return false;
+    } else {
+      s_return(sc, mk_codepoint(utf8proc_totitle(to_int(arg0))));
     }
 
   case OP_CATEGORY:
@@ -7670,6 +7694,7 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   sc->RECUR = def_symbol(sc, "recur");
   sc->AMP = def_symbol(sc, "&");
   sc->UNDERSCORE = def_symbol(sc, "_");
+  sc->AS = def_keyword(sc, "as");
   sc->DOC = def_keyword(sc, "doc");
   sc->WIDTH = def_keyword(sc, "width");
   sc->HEIGHT = def_keyword(sc, "height");

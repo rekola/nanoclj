@@ -123,3 +123,14 @@
   "Returns true if the codepoint belongs to the Basic Multilingual Plane"
   [c] (and (>= 0 c) (<= c 0xffff)))
 
+(defn toTitleCase
+  "Returns the codepoint in title case"
+  [c] (-totitle c))
+
+(defn toUpperCase
+  "Returns the codepoint in upper case"
+  [c] (-toupper c))
+
+(defn toLowerCase
+  "Returns the codepoint in lower case"
+  [c] (-tolower c))

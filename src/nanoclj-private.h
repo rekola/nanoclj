@@ -220,6 +220,7 @@ extern "C" {
     nanoclj_val_t RECUR;		  /* recur */
     nanoclj_val_t AMP;		  /* & */
     nanoclj_val_t UNDERSCORE;         /* _ */
+    nanoclj_val_t AS;		  /* :as */
     nanoclj_val_t DOC;		  /* :doc */
     nanoclj_val_t WIDTH;	  /* :width */
     nanoclj_val_t HEIGHT;	  /* :height */
