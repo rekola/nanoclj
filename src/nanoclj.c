@@ -3469,20 +3469,37 @@ static inline char *readstr_upto(nanoclj_t * sc, char *delim, nanoclj_cell_t * i
   return rdbuff->data;
 }
 
+static inline nanoclj_val_t nanoclj_throw(nanoclj_t * sc, nanoclj_cell_t * e) {
+  sc->pending_exception = e;
+  return mk_nil();
+}
+
+static inline int digit(int32_t c, int radix) {
+  if (c >= '0' && c <= '9') {
+    c -= '0';
+  } else if (c >= 'a' && c <= 'z') {
+    c -= 'a' - 10;
+  } else if (c >= 'A' && c <= 'z') {
+    c -= 'A' - 10;
+  }
+  if (c < radix) return c;
+  else return -1;
+}
+
 /* read string expression "xxx...xxx" */
 static inline nanoclj_val_t readstrexp(nanoclj_t * sc, nanoclj_cell_t * inport, bool regex_mode) {
   nanoclj_byte_array_t * rdbuff = sc->rdbuff;
   rdbuff->size = 0;
 
   int c1 = 0;
-  enum { st_ok, st_bsl, st_u1, st_u2, st_u3, st_u4, st_oct1, st_oct2 } state = st_ok;
+  enum { st_ok, st_bsl, st_u1, st_u2, st_u3, st_u4, st_oct2, st_oct3, st_fin } state = st_ok;
 
-  for (;;) {
+  while (state != st_fin) {
     int c = inchar(inport);
     if (c == EOF) { 
       return mk_nil();
     }
-    
+    int radix = 16;
     switch (state) {
     case st_ok:
       switch (c) {
@@ -3490,7 +3507,8 @@ static inline nanoclj_val_t readstrexp(nanoclj_t * sc, nanoclj_cell_t * inport, 
         state = st_bsl;
         break;
       case '"':
-        return mk_pointer(get_string_object(sc, T_STRING, rdbuff->data, rdbuff->size, 0));
+	state = st_fin;
+	break;
       default:
         append_codepoint(sc, rdbuff, c);
         break;
@@ -3507,7 +3525,7 @@ static inline nanoclj_val_t readstrexp(nanoclj_t * sc, nanoclj_cell_t * inport, 
 	case '5':
 	case '6':
 	case '7':
-	  state = st_oct1;
+	  state = st_oct2;
 	  c1 = c - '0';
 	  break;
 	case 'u':
@@ -3527,13 +3545,16 @@ static inline nanoclj_val_t readstrexp(nanoclj_t * sc, nanoclj_cell_t * inport, 
 	  state = st_ok;
 	  break;
 	case '"':
-	  append_codepoint(sc, rdbuff, '"');
-	  state = st_ok;
-	  break;
-	default:
+	case '\\':
 	  append_codepoint(sc, rdbuff, c);
 	  state = st_ok;
 	  break;
+	default:
+	  {
+	    int l = utf8proc_encode_char(c, (utf8proc_uint8_t *)&(sc->strbuff[0]));
+	    nanoclj_throw(sc, mk_runtime_exception(sc, mk_string_fmt(sc, "Unsupported escape character: \\%.*s", l, sc->strbuff)));
+	  }
+	  return mk_nil();
 	}
       } else {
 	if (c != '"' && c != '\\') {
@@ -3543,49 +3564,36 @@ static inline nanoclj_val_t readstrexp(nanoclj_t * sc, nanoclj_cell_t * inport, 
 	state = st_ok;
       }
       break;
+    case st_oct2:
+    case st_oct3:
+      radix = 8;
     case st_u1:
     case st_u2:
     case st_u3:
     case st_u4:
-      c1 <<= 4;
-      if (c >= '0' && c <= '9') {
-	c1 += c - '0';
-      } else if (c >= 'a' && c <= 'f') {
-	c1 += c - 'a' + 10;
-      } else if (c >= 'A' && c <= 'F') {
-	c1 += c - 'A' + 10;
+      if (c == '"') {
+	state = st_fin;
       } else {
-        return mk_nil();
+	int d = digit(c, radix);
+	if (d == -1) {
+	  int l = utf8proc_encode_char(c, (utf8proc_uint8_t *)&(sc->strbuff[0]));
+	  nanoclj_throw(sc, mk_runtime_exception(sc, mk_string_fmt(sc, "Invalid digit: %.*s", l, sc->strbuff)));
+	  return mk_nil();
+	} else {
+	  c1 = (c1 * radix) + d;
+	}
       }
-      if (state == st_u4) {
+      if (state == st_fin || state == st_u4 || state == st_oct3) {
 	append_codepoint(sc, rdbuff, c1);
-	state = st_ok;
+	if (state != st_fin) state = st_ok;
       } else {
 	state++;
       }
-      break;
-    case st_oct1:
-    case st_oct2:
-      if (c < '0' || c > '7') {
-	append_codepoint(sc, rdbuff, c1);
-        backchar(c, inport);
-        state = st_ok;
-      } else {
-        if (state == st_oct2 && c1 >= 32)
-          return mk_nil();
-
-        c1 = (c1 << 3) + (c - '0');
-
-        if (state == st_oct1) {
-          state = st_oct2;
-	} else {
-          append_codepoint(sc, rdbuff, c1);
-          state = st_ok;
-        }
-      }
-      break;
+      break;      
     }
   }
+  
+  return mk_pointer(get_string_object(sc, T_STRING, rdbuff->data, rdbuff->size, 0));
 }
 
 /* skip white space characters, returns the first non-whitespace character */
@@ -3607,7 +3615,6 @@ static inline int token(nanoclj_t * sc, nanoclj_cell_t * inport) {
   int c;
   switch (c = skipspace(sc, inport)) {
   case EOF: return TOK_EOF;
-  case '(': return TOK_LPAREN;
   case ')': return TOK_RPAREN;
   case ']': return TOK_RSQUARE;
   case '}': return TOK_RCURLY;
@@ -3619,24 +3626,30 @@ static inline int token(nanoclj_t * sc, nanoclj_cell_t * inport) {
   case BACKQUOTE: return TOK_BQUOTE;
   case '\\': return TOK_CHAR_CONST;
   
+  case '(':
+    c = inchar(inport);
+    if (c == '.') {
+      int c2 = inchar(inport);
+      backchar(c2, inport);
+      if (is_one_of(" \n\t", c2)) {
+	backchar(c, inport);
+	return TOK_LPAREN;
+      } else {
+	return TOK_DOT;
+      }
+    } else {
+      backchar(c, inport);
+      return TOK_LPAREN;
+    } 
+
   case '$':
     c = inchar(inport);
     if (is_one_of(" \n\t", c)) {
       return TOK_OLD_DOT;
     } else {
       backchar(c, inport);
-      backchar('.', inport);
+      backchar('$', inport);
       return TOK_PRIMITIVE;
-    }
-
-  case '.':
-    c = inchar(inport);
-    backchar(c, inport);
-    if (is_one_of(" \n\t", c)) {
-      backchar('.', inport);
-      return TOK_PRIMITIVE;
-    } else {
-      return TOK_DOT;
     }
 
   case ';':
@@ -3696,7 +3709,7 @@ static inline int token(nanoclj_t * sc, nanoclj_cell_t * inport) {
 static inline const char * escape_char(int32_t c, char * buffer, bool in_string) {
   if (in_string) {
     switch (c) {
-    case 0:	return "\\0";
+    case 0:	return "\\u0000";
     case ' ':   return " ";
     case '"':	return "\\\"";
     case '\n':	return "\\n";
@@ -4132,7 +4145,7 @@ static inline nanoclj_val_t mk_format(nanoclj_t * sc, strview_t fmt0, nanoclj_ce
   char * fmt = sc->malloc(2 * fmt0.size + 1);
   size_t fmt_size = 0;
   for (size_t i = 0; i < fmt0.size; i++) {
-    if (i + 1 < fmt0.size && fmt0.ptr[i] == '%' && fmt0.ptr[i + 1] == 's') {
+    if (i + 1 < fmt0.size && fmt0.ptr[i] == '%' && (fmt0.ptr[i + 1] == 's' || fmt0.ptr[i + 1] == 'c')) {
       memcpy(fmt + fmt_size, "%.*s", 4);
       fmt_size += 4;
       i++;
@@ -4146,6 +4159,7 @@ static inline nanoclj_val_t mk_format(nanoclj_t * sc, strview_t fmt0, nanoclj_ce
   long long arg0l = 0, arg1l = 0;
   double arg0d = 0.0, arg1d = 0.0;
   strview_t arg0s, arg1s;
+  char * p = sc->strbuff;
   
   for (; args; args = next(sc, args), n_args++, m *= 4) {
     nanoclj_val_t arg = first(sc, args);
@@ -4156,7 +4170,6 @@ static inline nanoclj_val_t mk_format(nanoclj_t * sc, strview_t fmt0, nanoclj_ce
     case T_DATE:
     case T_PROC:
     case T_BOOLEAN:
-    case T_CODEPOINT:
       switch (n_args) {
       case 0: arg0l = to_long(arg); break;
       case 1: arg1l = to_long(arg); break;
@@ -4170,6 +4183,17 @@ static inline nanoclj_val_t mk_format(nanoclj_t * sc, strview_t fmt0, nanoclj_ce
       }
       plan += 2 * m;    
       break;      
+    case T_CODEPOINT:{
+      size_t len = utf8proc_encode_char(decode_integer(arg), (utf8proc_uint8_t *)p);
+      strview_t sv = { p, len };
+      p += len;
+      switch (n_args) {
+      case 0: arg0s = sv; break;
+      case 1: arg1s = sv; break;
+      }
+      plan += 3 * m;
+      break;
+    }
     case T_STRING:
     case T_CHAR_ARRAY:
     case T_FILE:
@@ -4301,11 +4325,6 @@ static inline void s_rewind(nanoclj_t * sc) {
       break;
     }
   }
-}
-
-static inline nanoclj_val_t nanoclj_throw(nanoclj_t * sc, nanoclj_cell_t * e) {
-  sc->pending_exception = e;
-  return mk_nil();
 }
 
 static inline bool _Error_1(nanoclj_t * sc, const char *msg) {
@@ -6545,9 +6564,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  }
 	case TOK_DQUOTE:
 	  x = readstrexp(sc, inport, false);
-	  if (is_nil(x)) {
-	    Error_0(sc, "Invalid string");
-	  }
+	  if (is_nil(x)) return false;
 	  s_return(sc, x);
 	
 	case TOK_REGEX:
@@ -6600,9 +6617,22 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  }
 	}
 
-	case TOK_DOT:
-	  Error_0(sc, "Not implemented");	
-	
+	case TOK_DOT:{
+ 	  nanoclj_val_t m = mk_primitive(sc, readstr_upto(sc, DELIMITERS, inport, false));
+	  strview_t sv = to_strview(m);
+	  s_save(sc, OP_RD_DOT, NULL, m);
+	  sc->tok = token(sc, inport);
+	  if (sc->tok == TOK_RPAREN) {       /* Empty list */
+	    s_return(sc, sc->EMPTY);
+	  } else if (sc->tok == TOK_OLD_DOT) {
+	    Error_0(sc, "Illegal dot expression");
+	  } else {
+	    _nesting_unchecked(inport)++;
+	    s_save(sc, OP_RD_LIST, NULL, sc->EMPTY);
+	    s_goto(sc, OP_RD_SEXPR);
+	  }
+	}
+	  
 	case TOK_IGNORE:
 	  readstr_upto(sc, DELIMITERS, inport, false);
 	  sc->tok = token(sc, inport);
@@ -6640,7 +6670,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  _nesting_unchecked(inport)--;
 	  s_return(sc, mk_pointer(reverse_in_place(sc, sc->args)));
 	} else if (sc->tok == TOK_OLD_DOT) {
-	  s_save(sc, OP_RD_DOT, sc->args, sc->EMPTY);
+	  s_save(sc, OP_RD_OLD_DOT, sc->args, sc->EMPTY);
 	  sc->tok = token(sc, inport);
 	  s_goto(sc, OP_RD_SEXPR);
 	} else {
@@ -6691,7 +6721,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
     Error_0(sc, "Not a reader");
     
-  case OP_RD_DOT:
+  case OP_RD_OLD_DOT:
     x = get_in_port(sc);
     if (is_cell(x)) {
       nanoclj_cell_t * inport = decode_pointer(x);
@@ -6758,6 +6788,13 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     } else {
       s_return(sc, mk_pointer(cons(sc, sc->ARRAY_MAP, decode_pointer(sc->value))));
     }
+
+  case OP_RD_DOT:{
+    nanoclj_val_t method = sc->code;
+    nanoclj_val_t inst = car(sc->value);
+    nanoclj_val_t args = cdr(sc->value);
+    s_return(sc, mk_pointer(cons(sc, sc->DOT, cons(sc, inst, cons(sc, method, decode_pointer(args))))));
+  }
     
   case OP_SEQ:
     if (!unpack_args_1(sc, &arg0)) {
@@ -7709,6 +7746,7 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   
   sc->SORTED_SET = def_symbol(sc, "sorted-set");
   sc->ARRAY_MAP = def_symbol(sc, "array-map");
+  sc->DOT = def_symbol(sc, ".");
   sc->CATCH = def_symbol(sc, "catch");
   sc->FINALLY = def_symbol(sc, "finally");
 

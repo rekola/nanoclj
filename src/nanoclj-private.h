@@ -235,6 +235,7 @@ extern "C" {
     
     nanoclj_val_t SORTED_SET;	  /* sorted-set */
     nanoclj_val_t ARRAY_MAP;	  /* array-map */
+    nanoclj_val_t DOT;		  /* . */
     nanoclj_val_t CATCH;
     nanoclj_val_t FINALLY;
     nanoclj_cell_t * EMPTYVEC;
