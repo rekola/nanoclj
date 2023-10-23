@@ -32,9 +32,9 @@
                               (def *1 r)
                               (recur))
                             (catch java.lang.Throwable e
+                              (def *e e)
                               (save)
-                              (set-color [ 255 0 0 ])
-                              (println (type e))
+                              (set-color [ 0.85 0.31 0.3 ])
                               (println e)
                               (restore)
                               (newline)
