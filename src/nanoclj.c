@@ -818,6 +818,8 @@ static inline strview_t mk_strview(const char * s) {
 
 static inline strview_t _to_strview(nanoclj_cell_t * c) {
   switch (_type(c)) {
+  case T_NIL:
+    return (strview_t){ "()", 2 };
   case T_STRING:
   case T_CHAR_ARRAY:
   case T_FILE:
@@ -867,10 +869,14 @@ static inline int alloc_cellseg(nanoclj_t * sc, int n) {
   nanoclj_shared_context_t * context = sc->context;
   nanoclj_val_t p;
 
+  if (context->last_cell_seg >= context->n_seg_reserved - 1) {
+    int n = context->n_seg_reserved ? context->n_seg_reserved * 2 : 12;
+    context->n_seg_reserved = n;
+    context->alloc_seg = sc->realloc(context->alloc_seg, n * sizeof(nanoclj_cell_t *));
+    context->cell_seg = sc->realloc(context->cell_seg, n * sizeof(nanoclj_val_t));
+  }
+    
   for (int k = 0; k < n; k++) {
-    if (context->last_cell_seg >= CELL_NSEGMENT - 1) {
-      return k;         
-    }
     nanoclj_cell_t * cp = sc->malloc(CELL_SEGSIZE * sizeof(nanoclj_cell_t));
     if (!cp) {
       return k;     
@@ -1303,18 +1309,23 @@ static inline nanoclj_byte_array_t * mk_string_store(nanoclj_t * sc, size_t len,
   return s;
 }
 
-static inline nanoclj_cell_t * _get_string_object(nanoclj_t * sc, int32_t t, size_t offset, size_t len, nanoclj_byte_array_t * store) {
+static inline void initialize_string_object(nanoclj_cell_t * s, size_t offset, size_t size, nanoclj_byte_array_t * store) {
+  if (store) {
+    s->flags &= ~T_SMALL;
+    _str_store_unchecked(s) = store;
+    _size_unchecked(s) = size;
+    _offset_unchecked(s) = offset;
+  } else {
+    s->flags |= T_SMALL;
+    s->so_size = size;
+  }  
+}
+
+static inline nanoclj_cell_t * _get_string_object(nanoclj_t * sc, int32_t t, size_t offset, size_t size, nanoclj_byte_array_t * store) {
   nanoclj_cell_t * x = get_cell_x(sc, t, T_GC_ATOM, NULL, NULL, NULL);
   if (x) {
-    if (store) {
-      _str_store_unchecked(x) = store;
-      _size_unchecked(x) = len;
-      _offset_unchecked(x) = offset;
-    } else {
-      x->flags |= T_SMALL;
-      x->so_size = len;
-    }
-  
+    initialize_string_object(x, offset, size, store);
+    
 #if RETAIN_ALLOCS
     retain(sc, x);
 #endif
@@ -1328,7 +1339,7 @@ static inline nanoclj_cell_t * get_string_object(nanoclj_t * sc, int32_t t, cons
     s = mk_string_store(sc, len, padding);
   }
   nanoclj_cell_t * x = _get_string_object(sc, t, 0, len, s);
-  if (str) {
+  if (x && str) {
     memcpy(_strvalue(x), str, len);
   }  
   return x;
@@ -1344,22 +1355,21 @@ static inline nanoclj_val_t mk_string(nanoclj_t * sc, const char *str) {
 }
 
 static inline nanoclj_val_t mk_string_fmt(nanoclj_t * sc, char *fmt, ...) {
-  /* Determine required size */
+  /* First try printing to a small string, and get the actual size */
+  nanoclj_cell_t * r = get_string_object(sc, T_STRING, NULL, NANOCLJ_SMALL_STR_SIZE, 0);
   va_list ap;
   va_start(ap, fmt);
-  int n = vsnprintf(NULL, 0, fmt, ap);
+  int n = vsnprintf(_strvalue(r), NANOCLJ_SMALL_STR_SIZE, fmt, ap);
   va_end(ap);
 
-  nanoclj_cell_t * r = NULL;
-  if (n >= 0) {
-    /* Reserve 1-byte padding for the 0-marker */
-    r = get_string_object(sc, T_STRING, NULL, n, 1);
-
-    if (n > 0) {
-      va_start(ap, fmt);
-      vsnprintf(_strvalue(r), n + 1, fmt, ap);
-      va_end(ap);
-    }
+  if (n < NANOCLJ_SMALL_STR_SIZE) {
+    r->so_size = n; /* Set the small string size */
+  } else { /* Reserve 1-byte padding for the 0-marker */
+    initialize_string_object(r, 0, n, mk_string_store(sc, n, 1));
+    
+    va_start(ap, fmt);
+    vsnprintf(_strvalue(r), n + 1, fmt, ap);
+    va_end(ap);
   }
   return mk_pointer(r);
 }
@@ -3166,15 +3176,13 @@ static inline int32_t parse_char_literal(nanoclj_t * sc, const char *name) {
   } else if (strcmp(name, "backspace") == 0) {
     return '\b';
   } else if (name[0] == 'u') {
-    unsigned int c;
-    if (sscanf(name + 1, "%x", &c) == 1) {
-      return c;
-    }
+    char * end;
+    int32_t c = strtol(name + 1, &end, 16);
+    if (!*end) return c;    
   } else if (name[0] == 'o') {
-    unsigned int c;
-    if (sscanf(name + 1, "%o", &c) == 1) {
-      return c;
-    }
+    char * end;
+    int32_t c = strtol(name + 1, &end, 8);
+    if (!*end) return c;    
   } else if (*(utf8_next(name)) == 0) {
     return decode_utf8(name);
   }
@@ -3784,6 +3792,9 @@ static int sixel_write(char *data, int size, void *priv) {
   return fwrite(data, 1, size, (FILE *)priv);
 }
 static inline void print_image_sixel(unsigned char * data, int width, int height) {
+  fputs("\033[?8452h", stdout);
+  fflush(stdout);
+    
   sixel_dither_t * dither;
   sixel_dither_new(&dither, -1, NULL);
   sixel_dither_initialize(dither, data, width, height, SIXEL_PIXELFORMAT_RGB888, SIXEL_LARGE_NORM, SIXEL_REP_CENTER_BOX, SIXEL_QUALITY_HIGHCOLOR);
@@ -3907,7 +3918,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
     } else {
       switch (_type(c)) {
       case T_NIL:
-	sv = (strview_t){ "()", 2 };
+	sv = _to_strview(c);
 	break;
       case T_CLASS:
       case T_VAR:{
@@ -4136,7 +4147,7 @@ static inline nanoclj_val_t mk_format(nanoclj_t * sc, strview_t fmt0, nanoclj_ce
   char * fmt = sc->malloc(2 * fmt0.size + 1);
   size_t fmt_size = 0;
   for (size_t i = 0; i < fmt0.size; i++) {
-    if (i + 1 < fmt0.size && fmt0.ptr[i] == '%' && (fmt0.ptr[i + 1] == 's' || fmt0.ptr[i + 1] == 'c')) {
+    if (fmt0.ptr[i] == '%' && i + 1 < fmt0.size && (fmt0.ptr[i + 1] == 's' || fmt0.ptr[i + 1] == 'c')) {
       memcpy(fmt + fmt_size, "%.*s", 4);
       fmt_size += 4;
       i++;
@@ -7361,7 +7372,7 @@ static inline void assign_proc(nanoclj_t * sc, nanoclj_cell_t * ns, enum nanoclj
 }
 
 static inline void update_window_info(nanoclj_t * sc, nanoclj_cell_t * out) {
-  nanoclj_val_t size = mk_nil();
+  nanoclj_val_t size = mk_nil(), cell_size = mk_nil();
 
   sc->window_lines = 0;
   sc->window_columns = 0;
@@ -7371,14 +7382,17 @@ static inline void update_window_info(nanoclj_t * sc, nanoclj_cell_t * out) {
     FILE * fh = pr->stdio.file;
     int lines, cols, width, height;
     if (get_window_size(stdin, fh, &cols, &lines, &width, &height)) {
+      double f = width / cols > 15 ? 2.0 : 1.0;
       sc->window_columns = cols;
       sc->window_lines = lines;
-      sc->window_scale_factor = width / sc->window_columns > 15 ? 2.0 : 1.0;
-      size = mk_vector_2d(sc, width / sc->window_scale_factor, height / sc->window_scale_factor);      
+      sc->window_scale_factor = f;
+      size = mk_vector_2d(sc, width / f, height / f);
+      cell_size = mk_vector_2d(sc, width / cols / f, height / lines / f);
     }
   }
   
   intern(sc, sc->global_env, sc->WINDOW_SIZE, size);
+  intern(sc, sc->global_env, sc->CELL_SIZE, cell_size);
   intern(sc, sc->global_env, sc->WINDOW_SCALE_F, mk_real(sc->window_scale_factor));
 } 
 
@@ -7652,6 +7666,9 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   sc->context->free_cell = NULL;
   sc->context->last_cell_seg = -1;
   sc->context->properties = NULL;
+  sc->context->n_seg_reserved = 0;
+  sc->context->alloc_seg = NULL;
+  sc->context->cell_seg = NULL;
   
   sc->EMPTY = mk_pointer(&sc->_EMPTY);
   sc->save_inport = mk_nil();
@@ -7728,6 +7745,7 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   sc->ERR = def_symbol(sc, "*err*");
   sc->CURRENT_NS = def_symbol(sc, "*ns*");
   sc->ENV = def_symbol(sc, "*env*");
+  sc->CELL_SIZE = def_symbol(sc, "*cell-size*");
   sc->WINDOW_SIZE = def_symbol(sc, "*window-size*");
   sc->WINDOW_SCALE_F = def_symbol(sc, "*window-scale-factor*");
   sc->MOUSE_POS = def_symbol(sc, "*mouse-pos*");

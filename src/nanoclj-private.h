@@ -6,9 +6,6 @@
 #ifndef CELL_SEGSIZE
 #define CELL_SEGSIZE    262144
 #endif
-#ifndef CELL_NSEGMENT
-#define CELL_NSEGMENT   12
-#endif
 
 #define NANOCLJ_SMALL_VEC_SIZE 2
 #define NANOCLJ_SMALL_STR_SIZE 24
@@ -153,8 +150,9 @@ extern "C" {
 
   typedef struct {
     nanoclj_mutex_t mutex;
-    nanoclj_cell_t *alloc_seg[CELL_NSEGMENT];
-    nanoclj_val_t cell_seg[CELL_NSEGMENT];
+    nanoclj_cell_t ** alloc_seg;
+    nanoclj_val_t * cell_seg;
+    int n_seg_reserved;
     int last_cell_seg;
     nanoclj_cell_t * free_cell;      /* pointer to top of free cells */
     long fcells;                  /* # of free cells */
@@ -213,6 +211,7 @@ extern "C" {
     nanoclj_val_t ERR;		  /* *err* */
     nanoclj_val_t CURRENT_NS;	  /* *ns* */
     nanoclj_val_t ENV;	  	  /* *env* */
+    nanoclj_val_t CELL_SIZE;      /* *cell-size* */
     nanoclj_val_t WINDOW_SIZE;    /* *window-size* */
     nanoclj_val_t WINDOW_SCALE_F;   /* *window-scale-factor* */
     nanoclj_val_t MOUSE_POS;      /* *mouse-pos* */
