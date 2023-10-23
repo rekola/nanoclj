@@ -26,8 +26,11 @@ jobs:
           vcpkg install pcre2
           vcpkg install shapelib
           vcpkg install libxml2
+          cd vcpkg
+          bootstrap-vcpkg.bat
+          cd ..
           mkdir build
-          cd build && cmake -DCMAKE_TOOLCHAIN_FILE="./vcpkg/scripts/buildsystems/vcpkg.cmake" -G "${{matrix.gen}}" -A ${{matrix.arch}}  ..
+          cd build && cmake -G "${{matrix.gen}}" -A ${{matrix.arch}}  ..
       - name: Build
         working-directory: ${{github.workspace}}      
         run: cmake --build build
