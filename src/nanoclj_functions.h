@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <ctype.h>
 #include <shapefil.h>
+#include <libxml/tree.h>
+#include <libxml/parser.h>
 
 #include "linenoise.h"
 #include "nanoclj_utils.h"
@@ -810,6 +812,74 @@ static inline nanoclj_val_t Geo_load(nanoclj_t * sc, nanoclj_val_t args) {
   return mk_pointer(r);
 }
 
+static inline nanoclj_val_t create_xml_node(nanoclj_t * sc, xmlNode * input) {
+  nanoclj_cell_t * output = 0;
+  nanoclj_val_t tag = mk_nil();
+  if (input->type == XML_ELEMENT_NODE) {
+    nanoclj_cell_t * content = 0, * attrs = 0;
+    nanoclj_val_t tag = def_keyword(sc, (const char *)input->name);
+    xmlNode * cur_node = input->children;
+    for (; cur_node; cur_node = cur_node->next) {
+      nanoclj_val_t child = create_xml_node(sc, cur_node);
+      if (!is_nil(child)) {
+	if (!content) content = mk_vector(sc, 0);
+	content = conjoin(sc, content, child);
+	retain(sc, content);
+      }     
+    }
+
+    xmlAttr* attribute = input->properties;
+    for (; attribute; attribute = attribute->next) {
+      xmlChar * value = xmlNodeListGetString(input->doc, attribute->children, 1);
+      nanoclj_val_t e = mk_mapentry(sc, def_keyword(sc, (const char *)attribute->name), mk_string(sc, (const char *)value));
+      if (!attrs) {
+	attrs = mk_arraymap(sc, 1);
+	set_vector_elem(attrs, 0, e);
+      } else {
+	attrs = conjoin(sc, attrs, e);
+      }
+      retain(sc, attrs);
+      xmlFree(value); 
+    }
+    
+    output = mk_arraymap(sc, 1 + (content ? 1 : 0) + (attrs ? 1 : 0));
+    retain(sc, output);
+
+    int ni = 0;
+    set_vector_elem(output, ni++, mk_mapentry(sc, def_keyword(sc, "tag"), tag));
+    if (content) {
+      set_vector_elem(output, ni++, mk_mapentry(sc, def_keyword(sc, "content"), mk_pointer(content)));
+    }
+    if (attrs) {
+      set_vector_elem(output, ni++, mk_mapentry(sc, def_keyword(sc, "attrs"), mk_pointer(attrs)));
+    }
+  } else if (input->type == XML_TEXT_NODE) {
+    const char * text = (const char *)input->content;
+    size_t size = strlen(text);
+    for (size_t i = 0; i < size; i++) {
+      if (!isspace(text[i])) {
+	output = get_string_object(sc, T_STRING, text, size, 0);
+	retain(sc, output);
+	break;
+      }
+    }
+  }
+  return mk_pointer(output);
+}
+
+static inline nanoclj_val_t clojure_xml_parse(nanoclj_t * sc, nanoclj_val_t args) {
+  char * filename = alloc_c_str(sc, to_strview(car(args)));
+
+  xmlDoc * doc = xmlReadFile(filename, NULL, 0);
+  sc->free(filename);
+  if (doc == NULL) {
+    return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Could not parse file")));    
+  }
+  nanoclj_val_t xml = create_xml_node(sc, xmlDocGetRootElement(doc));
+  xmlFreeDoc(doc);
+  return xml;
+}
+
 #if NANOCLJ_USE_LINENOISE
 #define MAX_COMPLETION_SYMBOLS 65535
 
@@ -994,6 +1064,7 @@ static inline void register_functions(nanoclj_t * sc) {
   nanoclj_cell_t * Image = def_namespace(sc, "Image", __FILE__);
   nanoclj_cell_t * Audio = def_namespace(sc, "Audio", __FILE__);
   nanoclj_cell_t * Geo = def_namespace(sc, "Geo", __FILE__);
+  nanoclj_cell_t * clojure_xml = def_namespace(sc, "clojure.xml", __FILE__);
   
   intern_foreign_func(sc, Thread, "sleep", Thread_sleep, 1, 1);
   
@@ -1040,7 +1111,9 @@ static inline void register_functions(nanoclj_t * sc) {
   intern_foreign_func(sc, Audio, "lowpass", Audio_lowpass, 1, 1);
 
   intern_foreign_func(sc, Geo, "load", Geo_load, 1, 1);
-  
+
+  intern_foreign_func(sc, clojure_xml, "parse", clojure_xml_parse, 1, 1);
+
 #if NANOCLJ_USE_LINENOISE
   nanoclj_cell_t * linenoise = def_namespace(sc, "linenoise", __FILE__);
   intern_foreign_func(sc, linenoise, "read-line", linenoise_readline, 1, 1);

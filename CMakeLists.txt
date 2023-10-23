@@ -34,7 +34,7 @@ set(SOURCE_FILES
 add_executable(nanoclj ${SOURCE_FILES})
 target_link_libraries(nanoclj Threads::Threads)
 
-IF (WIN32)
+IF (MSVC)
   find_package(pcre2 CONFIG REQUIRED)
   target_link_libraries(nanoclj PCRE2::8BIT)
   
@@ -70,11 +70,13 @@ else()
     target_link_libraries(nanoclj shp)
   endif()
 
+  find_package(LibXml2 REQUIRED)
+  target_link_libraries(nanoclj LibXml2::LibXml2)
+  include_directories(${LIBXML2_INCLUDE_DIR})
+  
   find_package(CURL REQUIRED)
-  if(CURL_FOUND)
-    target_link_libraries(nanoclj CURL::libcurl)
-    include_directories(${CURL_INCLUDE_DIR})
-  endif()
+  target_link_libraries(nanoclj CURL::libcurl)
+  include_directories(${CURL_INCLUDE_DIR})
 endif()
 
 configure_file(lib/init.clj init.clj @ONLY)
