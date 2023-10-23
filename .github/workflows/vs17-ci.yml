@@ -25,7 +25,7 @@ jobs:
           vcpkg install utf8proc
           vcpkg install pcre2
           vcpkg install shapelib
-	  vcpkg install libxml2
+          vcpkg install libxml2
           mkdir build
           cd build && cmake -DCMAKE_TOOLCHAIN_FILE="./vcpkg/scripts/buildsystems/vcpkg.cmake" -G "${{matrix.gen}}" -A ${{matrix.arch}}  ..
       - name: Build
