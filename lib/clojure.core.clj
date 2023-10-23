@@ -373,103 +373,118 @@
               :keyword [ 0.94 0.87 0.69 ]
               })
 
-  
-(defn pr-generic
-  "Prints values to *out* in a format understandable by the Reader"
-  [print-fn & more] (run! (fn [x]
-                            (cond (map-entry? x) (do (-print \[)
-                                                     (pr-generic print-fn (key x))
-                                                     (print \space)
-                                                     (pr-generic print-fn (val x))
-                                                     (-print \]))
-                                  (seq? x) (cond (empty? x) (-print "()")
-                                                 (and *print-length* (<= *print-length* 0)) (-print "(...)")
-                                                 :else (do (-print \()
-                                                           (pr-generic print-fn (first x))
-                                                           (run! (fn [x] (-print \space) (pr-generic print-fn x)) (rest x))
-                                                           (-print \))))
-                                  (vector? x) (do (-print "[")
-                                                  (when (seq x)
-                                                             (if *print-length*
-                                                               (let [p (take *print-length* x)
-                                                                     r (drop *print-length* x)
-                                                                     ]
-                                                                 (if (empty? p)
-                                                                   (-print "...")
-                                                           (do
-                                                             (pr-generic print-fn (first p))
-                                                             (run! (fn [x] (-print \space) (pr-generic print-fn x)) (rest p))
-                                                             (when (seq r)
-                                                               (-print " ...")))))
-                                                       (do
-                                                         (pr-generic print-fn (first x))
-                                                         (run! (fn [x] (-print \space) (pr-generic print-fn x)) (rest x)))))
-                                                   (print \]))
-                                   (set? x) (cond (empty? x) (-print "#{}")
-                                                  (and *print-length* (<= *print-length* 0)) (-print "#{...}")
-                                                  :else (do (-print "#{")
-                                                            (pr-generic print-fn (first x))
-                                                            (run! (fn [x] (-print \space) (pr-generic print-fn x)) (rest x))
-                                                            (-print \})))
-                                   (map? x) (cond (empty? x) (-print "{}")
-                                                  (and *print-length* (<= *print-length* 0)) (-print "{...}")
-                                                  :else (do (-print \{)
-                                                            (pr-generic print-fn (key (first x)))
-                                                            (-print \space)
-                                                            (pr (val (first x)))
-                                                            (run! (fn [x] (-print ", ") (pr-generic print-fn (key x))
-                                                                    (-print \space) (pr-generic print-fn (val x))) (rest x))
-                                                            (-print \})))                
-                                   (ratio? x) (print-fn :scalar x)
-                                   (nil? x) (print-fn :nil x)
-                                   (boolean? x) (print-fn :boolean x)
-                                   (char? x) (print-fn :char x)
-                                   (number? x) (print-fn :scalar x)
-                                   (string? x) (print-fn :string x)
-                                   (keyword? x) (print-fn :keyword x)
-                                   (symbol? x) (print-fn :symbol x)
-                                   (closure? x) (pr-generic print-fn (cons 'fn (car x)))
-                                   (image? x) (let [ws *window-size*
-                                                    f *window-scale-factor*
-                                                    w (x :width)
-                                                    h (x :height)
-                                                    ww (* (ws 0) f)
-                                                    wh (* (ws 1) f)
-                                                    s (/ ww w )
-                                                    ]
-                                                (if (> w wh)
-                                                  (-pr (Image/resize x ww (* s h)))
-                                                  (-pr x)
-                                                  ))
-                                   :else (print-fn nil x))
-                            ) more))
+(defn pr-inline
+  "Prints x to *out* in a format understandable by the Reader"
+  [print-fn x] (cond (map-entry? x) (do (-print \[)
+                                        (pr-inline print-fn (key x))
+                                        (print \space)
+                                        (pr-inline print-fn (val x))
+                                        (-print \]))
+                     (seq? x) (cond (empty? x) (-print "()")
+                                    (and *print-length* (<= *print-length* 0)) (-print "(...)")
+                                    :else (do (-print \()
+                                              (pr-inline print-fn (first x))
+                                              (run! (fn [x] (-print \space) (pr-inline print-fn x)) (rest x))
+                                              (-print \))))
+                     (vector? x) (do (-print "[")
+                                     (when (seq x)
+                                       (if *print-length*
+                                         (let [p (take *print-length* x)
+                                               r (drop *print-length* x)
+                                               ]
+                                           (if (empty? p)
+                                             (-print "...")
+                                             (do
+                                               (pr-inline print-fn (first p))
+                                               (run! (fn [x] (-print \space) (pr-inline print-fn x)) (rest p))
+                                               (when (seq r)
+                                                 (-print " ...")))))
+                                         (do
+                                           (pr-inline print-fn (first x))
+                                           (run! (fn [x] (-print \space) (pr-inline print-fn x)) (rest x)))))
+                                     (print \]))
+                     (set? x) (cond (empty? x) (-print "#{}")
+                                    (and *print-length* (<= *print-length* 0)) (-print "#{...}")
+                                    :else (do (-print "#{")
+                                              (pr-inline print-fn (first x))
+                                              (run! (fn [x] (-print \space) (pr-inline print-fn x)) (rest x))
+                                              (-print \})))
+                     (map? x) (cond (empty? x) (-print "{}")
+                                    (and *print-length* (<= *print-length* 0)) (-print "{...}")
+                                    :else (do (-print \{)
+                                              (pr-inline print-fn (key (first x)))
+                                              (-print \space)
+                                              (pr (val (first x)))
+                                              (run! (fn [x] (-print ", ") (pr-inline print-fn (key x))
+                                                      (-print \space) (pr-inline print-fn (val x))) (rest x))
+                                              (-print \})))                
+                     (ratio? x) (print-fn :scalar x)
+                     (nil? x) (print-fn :nil x)
+                     (boolean? x) (print-fn :boolean x)
+                     (char? x) (print-fn :char x)
+                     (number? x) (print-fn :scalar x)
+                     (string? x) (print-fn :string x)
+                     (keyword? x) (print-fn :keyword x)
+                     (symbol? x) (print-fn :symbol x)
+                     (closure? x) (pr-inline print-fn (cons 'fn (car x)))
+                     (image? x) (let [cs *cell-size*
+                                      f *window-scale-factor*
+                                      w (x :width)
+                                      h (x :height)
+                                      ww (* (cs 0) f)
+                                      wh (* (cs 1) f)
+                                      s (/ wh h )
+                                      ]
+                                  (if (> w wh)
+                                    (-pr (Image/resize x (* s w) wh))
+                                    (-pr x)
+                                    ))
+                     :else (print-fn nil x)))
+
+(defn pr-block
+  [print-fn x] (if (image? x) (let [ws *window-size*
+                                    f *window-scale-factor*
+                                    w (x :width)
+                                    h (x :height)
+                                    ww (* (ws 0) f)
+                                    wh (* (ws 1) f)
+                                    s (/ ww w )
+                                    ]
+                                (if (> w wh)
+                                  (do
+                                    (-pr (Image/resize x ww (* s h)))
+                                    (-print "\n\r")
+                                    (flush *out*))
+                                  (-pr x)
+                                  ))
+                   (pr-inline print-fn x)))
 
 (defn print
   "Prints args into *out* for human reading"
-  [& more] (apply pr-generic (fn [class v] (-print v)) more))
+  [& more] (run! #( pr-block (fn [class v] (-print v)) %1 ) more))
 
 (defn println
   "Prints args into *out* using print followed by a newline"
   [& more] (apply print more) (newline))
 
+(defn pr-with-class
+  [class v] (let [color (get -styles class)]
+              (if color
+                (do
+                  (save)
+                  (set-color color)
+                  (-pr v)
+                  (restore))
+                (-pr v))))
 (defn pr
   "Prints args into *out* for Reader with color"
-  [& more] (apply pr-generic (fn [class v]
-                               (let [color (get -styles class)]
-                                 (if color
-                                   (do
-                                     (save)
-                                     (set-color color)
-                                     (-pr v)
-                                     (restore))
-                                   (-pr v)))) more))
+  ([] nil)
+  ([x] (pr-block pr-with-class x))
+  ([x & more] (pr-block pr-with-class x) (run! (fn [x] (-print \space) (pr-block pr-with-class x)) more)))
 
 (defn prn
   "Prints args into *out* using pr followed by a newline"
   [& more] (apply pr more) (newline))
-
-; Configure *print-hook* so that the REPL can print recursively
-(def *print-hook* prn)
 
 (def-macro (with-out-str body)
    `(let [ prev-out *out*
@@ -488,14 +503,6 @@
        (set! *in* prev-in)
        r
        )))
-
-(def-macro (with-out new-out body)
-  `(let ((prev-out *out*)
-         (tmp ,new-out))
-     (set! *out* tmp)
-     ,body
-     (set! *out* prev-out)
-     tmp))
 
 (defn pr-str [& xs] (with-out-str (apply pr xs)))
 (defn prn-str [& xs] (with-out-str (apply prn xs)))
@@ -604,7 +611,7 @@
                                                (lazy-seq (f (first coll) (rest coll))))))]
                      (f (first coll) (rest coll))))))
 
-; Parsing and printin
+; Parsing and printing
 
 (defn char-escape-string
   "Returns string representation for some control characters or nil"
