@@ -316,17 +316,21 @@ static inline nanoclj_val_t mk_symbol(nanoclj_t * sc, uint16_t t, strview_t ns, 
   char * name_str = sc->malloc(name.size);
   memcpy(name_str, name.ptr, name.size);
 
-  char * full_name_str = sc->malloc(ns.size + name.size + 1);
-  size_t full_name_size;
-  if (ns.size) {
-    memcpy(full_name_str, ns.ptr, ns.size);
-    full_name_str[ns.size] = '/';
-    memcpy(full_name_str + ns.size + 1, name.ptr, name.size);
-    full_name_size = ns.size + 1 + name.size;
-  } else {
-    full_name_str = name_str;
-    full_name_size = name.size;
+  char * full_name_str = sc->malloc((t == T_KEYWORD ? 1 : 0) + ns.size + name.size + 1);
+  char * p = full_name_str;
+  size_t full_name_size = 0;
+  if (t == T_KEYWORD) {
+    *p++ = ':';
+    full_name_size++;
   }
+  if (ns.size) {
+    memcpy(p, ns.ptr, ns.size);
+    p += ns.size;
+    *p++ = '/';
+    full_name_size += ns.size + 1;
+  }
+  memcpy(p, name.ptr, name.size);
+  full_name_size += name.size;
 
   symbol_t * s = sc->malloc(sizeof(symbol_t));
   s->ns = (strview_t){ ns_str, ns.size };
@@ -461,6 +465,8 @@ static inline bool is_seqable_type(int_fast16_t type_id) {
   case T_SORTED_SET:
   case T_CLASS:
   case T_MAPENTRY:
+  case T_CLOSURE:
+  case T_MACRO:
     return true;
   }
   return false;
@@ -806,6 +812,10 @@ static opcode_info dispatch_table[] = {
 
 static void Eval_Cycle(nanoclj_t * sc, enum nanoclj_opcode op);
 
+static inline strview_t mk_strview(const char * s) {
+  return s ? (strview_t){ s, strlen(s) } : (strview_t){ "", 0 };
+}
+
 static inline strview_t _to_strview(nanoclj_cell_t * c) {
   switch (_type(c)) {
   case T_STRING:
@@ -825,7 +835,7 @@ static inline strview_t _to_strview(nanoclj_cell_t * c) {
     }
     break;
   }
-  return (strview_t){ "", 0 };
+  return mk_strview(0);
 }
 
 static inline strview_t to_strview(nanoclj_val_t x) {
@@ -835,16 +845,14 @@ static inline strview_t to_strview(nanoclj_val_t x) {
   case T_SYMBOL:
   case T_KEYWORD:
     return decode_symbol(x)->full_name;
-  case T_PROC:{
-    const char * name = dispatch_table[decode_integer(x)].name;
-    return name ? (strview_t){ name, strlen(name) } : (strview_t){ "", 0 };
-  }
+  case T_PROC:
+    return mk_strview(dispatch_table[decode_integer(x)].name);  
   case T_NIL:{
     nanoclj_cell_t * c = decode_pointer(x);
     if (c) return _to_strview(c);
   }
   }  
-  return (strview_t){ "", 0 };
+  return mk_strview(0);
 }
 
 static inline int_fast16_t syntaxnum(nanoclj_val_t p) {
@@ -2880,19 +2888,19 @@ static inline nanoclj_val_t def_symbol_from_sv(nanoclj_t * sc, uint16_t t, strvi
     x = oblist_add_item(sc, ns, name, mk_symbol(sc, t, ns, name, 0));
     if (ns.size) {
       symbol_t * s = decode_symbol(x);
-      s->ns_sym = def_symbol_from_sv(sc, T_SYMBOL, (strview_t){ "", 0 }, ns);
-      s->name_sym = def_symbol_from_sv(sc, t, (strview_t){ "", 0 }, name);
+      s->ns_sym = def_symbol_from_sv(sc, T_SYMBOL, mk_strview(0), ns);
+      s->name_sym = def_symbol_from_sv(sc, t, mk_strview(0), name);
     }
   }
   return x;
 }
 
 static inline nanoclj_val_t def_keyword(nanoclj_t * sc, const char *name) {
-  return def_symbol_from_sv(sc, T_KEYWORD, (strview_t){ "", 0 }, (strview_t){ name, strlen(name) });
+  return def_symbol_from_sv(sc, T_KEYWORD, mk_strview(0), mk_strview(name));
 }
 
 static inline nanoclj_val_t def_symbol(nanoclj_t * sc, const char *name) {
-  return def_symbol_from_sv(sc, T_SYMBOL, (strview_t){ "", 0 }, (strview_t){ name, strlen(name) });
+  return def_symbol_from_sv(sc, T_SYMBOL, mk_strview(0), mk_strview(name));
 }
 
 static inline nanoclj_val_t intern_with_meta(nanoclj_t * sc, nanoclj_cell_t * envir, nanoclj_val_t symbol, nanoclj_val_t value, nanoclj_cell_t * meta) {
@@ -2956,22 +2964,21 @@ static inline nanoclj_val_t def_symbol_or_keyword(nanoclj_t * sc, const char *na
       t = T_KEYWORD;
       name++;
     }
-    strview_t ns_sv = (strview_t){ "", 0 }, name_sv;
+    strview_t ns_sv = mk_strview(0), name_sv;
     if (t == T_KEYWORD && name[0] == ':') {
       name++;
       nanoclj_val_t ns_name;
       if (get_elem(sc, _cons_metadata(sc->global_env), sc->NAME, &ns_name)) {
 	ns_sv = to_strview(ns_name);
       }
-      name_sv = (strview_t){ name, strlen(name) };      
+      name_sv = mk_strview(name);
     } else {
       const char * p = strchr(name, '/');
       if (p && p > name) {
 	ns_sv = (strview_t){ name, p - name };
-	name_sv = (strview_t){ p + 1, strlen(p + 1) };
-      } else {
-	ns_sv = (strview_t){ "", 0 };
-	name_sv = (strview_t){ name, strlen(name) };
+	name_sv = mk_strview(p + 1);
+      } else {	
+	name_sv = mk_strview(name);
       }
     }
     return def_symbol_from_sv(sc, t, ns_sv, name_sv);
@@ -3022,7 +3029,7 @@ static inline nanoclj_val_t gensym(nanoclj_t * sc, const char * prefix, size_t p
     size_t len = snprintf(name, 256, "%.*s%ld", (int)prefix_len, prefix, context->gensym_cnt);
     
     /* first check oblist */
-    strview_t ns_sv = { "", 0 };
+    strview_t ns_sv = mk_strview(0);
     strview_t name_sv = { name, len };
     x = oblist_find_item(sc, T_SYMBOL, ns_sv, name_sv);
     if (is_nil(x)) {
@@ -3161,6 +3168,11 @@ static inline int32_t parse_char_literal(nanoclj_t * sc, const char *name) {
   } else if (name[0] == 'u') {
     unsigned int c;
     if (sscanf(name + 1, "%x", &c) == 1) {
+      return c;
+    }
+  } else if (name[0] == 'o') {
+    unsigned int c;
+    if (sscanf(name + 1, "%o", &c) == 1) {
       return c;
     }
   } else if (*(utf8_next(name)) == 0) {
@@ -3852,53 +3864,50 @@ static inline bool isa(nanoclj_t * sc, nanoclj_cell_t * t0, nanoclj_val_t v) {
 
 /* Uses internal buffer unless string pointer is already available */
 static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_flag, nanoclj_cell_t * out) {
-  const char *p = 0;
-  int plen = -1;
+  strview_t sv = { 0, 0 };
 
   switch (prim_type(l)) {
   case T_INTEGER:
-    p = sc->strbuff;
-    plen = sprintf(sc->strbuff, "%d", (int)decode_integer(l));
+    sv = (strview_t){
+      sc->strbuff,
+      sprintf(sc->strbuff, "%d", (int)decode_integer(l))
+    };
     break;
   case T_REAL:
     if (isnan(l.as_double)) {
-      p = "##NaN";
+      sv = (strview_t){ "##NaN", 5 };
     } else if (isinf(l.as_double)) {
-      p = l.as_double > 0 ? "##Inf" : "##-Inf";
+      sv = l.as_double > 0 ? (strview_t){ "##Inf", 5 } : (strview_t){ "##-Inf", 6 };
     } else {
-      p = sc->strbuff;
-      plen = sprintf(sc->strbuff, "%.15g", l.as_double);
+      sv = (strview_t){
+	sc->strbuff,
+	sprintf(sc->strbuff, "%.15g", l.as_double)
+      };
     }
     break;
   case T_CODEPOINT:
     if (print_flag) {
-      p = escape_char(decode_integer(l), sc->strbuff, false);
+      sv = mk_strview(escape_char(decode_integer(l), sc->strbuff, false));
     } else {
-      p = sc->strbuff;
-      plen = utf8proc_encode_char(decode_integer(l), (utf8proc_uint8_t *)sc->strbuff);
+      sv = (strview_t){
+	sc->strbuff,
+	utf8proc_encode_char(decode_integer(l), (utf8proc_uint8_t *)sc->strbuff)
+      };
     }
     break;
   case T_BOOLEAN:
-  case T_SYMBOL:{    
-    strview_t sv = to_strview(l);
-    p = sv.ptr;
-    plen = sv.size;
-  }
-    break;
-  case T_KEYWORD:{
-    strview_t sv = to_strview(l);
-    p = sc->strbuff;
-    plen = snprintf(sc->strbuff, STRBUFFSIZE, ":%.*s", (int)sv.size, sv.ptr);
-  }
+  case T_SYMBOL:
+  case T_KEYWORD:
+    sv = to_strview(l);
     break;
   case T_NIL:{
     nanoclj_cell_t * c = decode_pointer(l);
     if (c == NULL) {
-      p = "nil";    
+      sv = (strview_t){ "nil", 3 };
     } else {
       switch (_type(c)) {
       case T_NIL:
-	p = "()";
+	sv = (strview_t){ "()", 2 };
 	break;
       case T_CLASS:
       case T_VAR:{
@@ -3906,27 +3915,28 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
 	get_elem(sc, _cons_metadata(c), sc->NAME, &name_v);
 	get_elem(sc, _cons_metadata(c), sc->NS, &ns_v);
 	if (!is_nil(name_v)) {
-	  strview_t name = to_strview(name_v);
-	  p = sc->strbuff;
+	  sv = to_strview(name_v);
 	  if (!is_nil(ns_v)) {
 	    strview_t ns = to_strview(ns_v);
-	    if (_type(c) == T_VAR) {
-	      plen = sprintf(sc->strbuff, "#'%.*s/%.*s", (int)ns.size, ns.ptr, (int)name.size, name.ptr);
-	    } else {
-	      plen = sprintf(sc->strbuff, "%.*s/%.*s", (int)ns.size, ns.ptr, (int)name.size, name.ptr);
-	    }
+	    const char * fmt = _type(c) == T_VAR ? "#'%.*s/%.*s" : "%.*s/%.*s";
+	    sv = (strview_t) {
+	      sc->strbuff,
+	      snprintf(sc->strbuff, STRBUFFSIZE, fmt, (int)ns.size, ns.ptr, (int)sv.size, sv.ptr)
+	    };	    
 	  } else if (_type(c) == T_VAR) {
-	    plen = sprintf(sc->strbuff, "#'%.*s", (int)name.size, name.ptr);
-	  } else {
-	    p = name.ptr;
-	    plen = name.size;
+	    sv = (strview_t) {
+	      sc->strbuff,
+	      snprintf(sc->strbuff, STRBUFFSIZE, "#'%.*s", (int)sv.size, sv.ptr)
+	    };
 	  }
 	}
       }
 	break;
       case T_LONG:
-	p = sc->strbuff;
-	plen = sprintf(sc->strbuff, "%lld", _lvalue_unchecked(c));
+	sv = (strview_t){
+	  sc->strbuff,
+	  sprintf(sc->strbuff, "%lld", _lvalue_unchecked(c))
+	};
 	break;
       case T_DATE:{
 	time_t t = _lvalue_unchecked(c) / 1000;
@@ -3934,32 +3944,42 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
 	  int msec = _lvalue_unchecked(c) % 1000;
 	  struct tm tm;
 	  gmtime_r(&t, &tm);
-	  plen = sprintf(sc->strbuff, "#inst \"%04d-%02d-%02dT%02d:%02d:%02d.%03dZ\"",
-			 1900 + tm.tm_year, 1 + tm.tm_mon, tm.tm_mday,
-			 tm.tm_hour, tm.tm_min, tm.tm_sec, msec);
-	  p = sc->strbuff;
+	  sv = (strview_t){
+	    sc->strbuff,
+	    sprintf(sc->strbuff, "#inst \"%04d-%02d-%02dT%02d:%02d:%02d.%03dZ\"",
+		    1900 + tm.tm_year, 1 + tm.tm_mon, tm.tm_mday,
+		    tm.tm_hour, tm.tm_min, tm.tm_sec, msec)
+	  };
 	} else {
-	  p = ctime_r(&t, sc->strbuff);
-	  plen = strlen(p) - 1;	  
+	  sv = mk_strview(ctime_r(&t, sc->strbuff));
+	  sv.size--;
 	}
       }
 	break;
-      case T_STRING:
       case T_UUID:
+	sv = _to_strview(c);
 	if (print_flag) {
-	  print_slashstring(sc, to_strview(l), out);
+	  sv = (strview_t){
+	    sc->strbuff,
+	    snprintf(sc->strbuff, STRBUFFSIZE, "#uuid \"%.*s\"", (int)sv.size, sv.ptr)
+	  };	  
+	}
+	break;
+      case T_STRING:
+	sv = _to_strview(c);
+	if (print_flag) {
+	  print_slashstring(sc, sv, out);
 	  return;
-	} else {
-	  p = _strvalue(c);
-	  plen = get_size(c);
 	}
 	break;
       case T_WRITER:{
-	nanoclj_port_rep_t * pr = rep_unchecked(l);
+	nanoclj_port_rep_t * pr = _rep_unchecked(c);
 	switch (_port_type_unchecked(c)) {
 	case port_string:
-	  p = pr->string.data->data;
-	  plen = pr->string.data->size;
+	  sv = (strview_t){
+	    pr->string.data->data,
+	    pr->string.data->size
+	  };
 	  break;
 #if NANOCLJ_HAS_CANVAS
 	case port_canvas:
@@ -3986,27 +4006,30 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
 	break;
       case T_ENVIRONMENT:{
 	nanoclj_val_t name_v;
-	strview_t name;
 	if (get_elem(sc, _cons_metadata(c), sc->NAME, &name_v)) {
-	  name = to_strview(name_v);	  
-	} else {
-	  name = (strview_t){ "", 0 };
+	  sv = to_strview(name_v);	  
 	}
-	p = sc->strbuff;
-	plen = snprintf(sc->strbuff, STRBUFFSIZE, "#<Namespace %.*s>", (int)name.size, name.ptr);
+	if (print_flag) {
+	  sv = (strview_t){
+	    sc->strbuff,
+	    snprintf(sc->strbuff, STRBUFFSIZE, "#<Namespace %.*s>", (int)sv.size, sv.ptr)
+	  };
+	}
       }
 	break;
       case T_RATIO:
-	p = sc->strbuff;
-	plen = snprintf(sc->strbuff, STRBUFFSIZE, "%lld/%lld", to_long(vector_elem(c, 0)), to_long(vector_elem(c, 1)));
+	sv = (strview_t){
+	  sc->strbuff,
+	  snprintf(sc->strbuff, STRBUFFSIZE, "%lld/%lld", to_long(vector_elem(c, 0)), to_long(vector_elem(c, 1)))
+	};
 	break;
       case T_FILE:
+	sv = _to_strview(c);
 	if (print_flag) {
-	  p = sc->strbuff;
-	  plen = snprintf(sc->strbuff, STRBUFFSIZE, "#<File %.*s>", (int)get_size(c), _strvalue(c));
-	} else {
-	  p = _strvalue(c);
-	  plen = get_size(c);
+	  sv = (strview_t){
+	    sc->strbuff,
+	    snprintf(sc->strbuff, STRBUFFSIZE, "#<File %.*s>", (int)sv.size, sv.ptr)
+	  };
 	}
 	break;
       case T_TENSOR:
@@ -4020,29 +4043,25 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
   }
     break;
   }
-  
-  if (!p) {
+
+  if (!sv.ptr) {
     if (isa(sc, sc->Throwable, l)) {
-      strview_t sv = to_strview(car(l));
-      p = sv.ptr;
-      plen = sv.size;
+      sv = to_strview(car(l));
     } else {
       nanoclj_val_t name_v;
       if (get_elem(sc, _cons_metadata(get_type_object(sc, l)), sc->NAME, &name_v)) {
-	strview_t sv = to_strview(name_v);
-	p = sc->strbuff;
-	plen = snprintf(sc->strbuff, STRBUFFSIZE, "#object[%.*s]", (int)sv.size, sv.ptr);
+	sv = to_strview(name_v);
+	sv = (strview_t){
+	  sc->strbuff,
+	  snprintf(sc->strbuff, STRBUFFSIZE, "#object[%.*s]", (int)sv.size, sv.ptr)
+	};
       } else {
-	p = "#object";
+	sv = (strview_t){ "#object", 7 };
       }
     }
   }
   
-  if (plen < 0) {
-    plen = strlen(p);
-  }
-  
-  putchars(sc, p, plen, out);
+  putchars(sc, sv.ptr, sv.size, out);
 }
 
 static inline size_t seq_length(nanoclj_t * sc, nanoclj_cell_t * a) {
@@ -4544,7 +4563,7 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
     if (args) {
       return def_symbol_from_sv(sc, type_id, to_strview(x), to_strview(first(sc, args)));
     } else {
-      return def_symbol_from_sv(sc, type_id, (strview_t){ "", 0 }, to_strview(x));
+      return def_symbol_from_sv(sc, type_id, mk_strview(0), to_strview(x));
     }
     
   case T_LAZYSEQ:
@@ -4557,7 +4576,7 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
   case T_READER:  
   case T_WRITER:
     if (!args) {
-      return port_from_string(sc, (strview_t){ "", 0 }, type_id);
+      return port_from_string(sc, mk_strview(0), type_id);
     } else {
       x = first(sc, args);
       if (is_string(x) || is_file(x)) {
@@ -7322,7 +7341,7 @@ static void Eval_Cycle(nanoclj_t * sc, enum nanoclj_opcode op) {
 /* ========== Initialization of internal keywords ========== */
 
 static inline void assign_syntax(nanoclj_t * sc, const char *name, unsigned int syntax) {
-  strview_t ns_sv = { "", 0 };
+  strview_t ns_sv = mk_strview(0);
   strview_t name_sv = { name, strlen(name) };
   oblist_add_item(sc, ns_sv, name_sv, mk_symbol(sc, T_SYMBOL, ns_sv, name_sv, syntax));
 }
@@ -7904,7 +7923,7 @@ void nanoclj_deinit_shared(nanoclj_t * sc, nanoclj_shared_context_t * ctx) {
 bool nanoclj_load_named_file(nanoclj_t * sc, const char *filename) {
   dump_stack_reset(sc);
 
-  nanoclj_val_t p = port_from_filename(sc, (strview_t){ filename, strlen(filename) }, T_READER);
+  nanoclj_val_t p = port_from_filename(sc, mk_strview(filename), T_READER);
 
   sc->envir = sc->global_env;
   vector_push(sc, sc->load_stack, p);
