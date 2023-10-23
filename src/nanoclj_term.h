@@ -86,6 +86,21 @@ static inline void set_term_bg_color(FILE * fh, double red, double green, double
   }
 }
 
+static inline void set_display_mode(FILE * fh, nanoclj_display_mode_t mode) {
+  if (isatty(fileno(fh))) {
+    switch (mode) {
+    case nanoclj_mode_unknown:
+      break;
+    case nanoclj_mode_inline:
+      fputs("\033[?8452h", stdout);
+      break;
+    case nanoclj_mode_block:
+      fputs("\033[?8452l", stdout);
+      break;
+    }
+  }
+}
+
 static inline struct termios set_raw_mode(int fd) {
   struct termios orig_term;
   tcgetattr(fd, &orig_term);

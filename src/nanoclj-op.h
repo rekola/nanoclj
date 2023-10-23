@@ -146,4 +146,5 @@ _OP_DEF("save", 0, OP_SAVE)
 _OP_DEF("restore", 0, OP_RESTORE)
 _OP_DEF("resize", 0, OP_RESIZE)
 _OP_DEF("flush", 0, OP_FLUSH)
+_OP_DEF("mode", 0, OP_MODE)
 #undef _OP_DEF

@@ -3271,6 +3271,7 @@ static inline nanoclj_val_t port_rep_from_file(nanoclj_t * sc, uint8_t type, FIL
   pr->stdio.filename = filename;
   pr->stdio.line = pr->stdio.column = 0;
   pr->stdio.num_states = 0;
+  pr->stdio.mode = nanoclj_mode_unknown;
   return mk_pointer(p);
 }
 
@@ -3791,10 +3792,7 @@ static void print_tensor(nanoclj_t * sc, void * tensor, nanoclj_cell_t * out) {
 static int sixel_write(char *data, int size, void *priv) {
   return fwrite(data, 1, size, (FILE *)priv);
 }
-static inline void print_image_sixel(unsigned char * data, int width, int height) {
-  fputs("\033[?8452h", stdout);
-  fflush(stdout);
-    
+static inline void print_image_sixel(unsigned char * data, int width, int height) {  
   sixel_dither_t * dither;
   sixel_dither_new(&dither, -1, NULL);
   sixel_dither_initialize(dither, data, width, height, SIXEL_PIXELFORMAT_RGB888, SIXEL_LARGE_NORM, SIXEL_REP_CENTER_BOX, SIXEL_QUALITY_HIGHCOLOR);
@@ -7325,6 +7323,33 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
     s_return(sc, mk_nil());
 
+  case OP_MODE:
+    if (!unpack_args_1(sc, &arg0)) {
+      return false;
+    } else {
+      x = get_out_port(sc);
+      if (is_writer(x)) {
+	nanoclj_port_rep_t * pr = rep_unchecked(x);
+	nanoclj_display_mode_t mode;
+	if (arg0.as_long == sc->INLINE.as_long) {
+	  mode = nanoclj_mode_inline;
+	} else if (arg0.as_long == sc->BLOCK.as_long) {
+	  mode = nanoclj_mode_block;
+	} else {
+	  Error_0(sc, "Invalid mode");
+	}
+	switch (port_type_unchecked(x)) {
+	case port_file:
+	  if (mode != pr->stdio.mode) {
+	    pr->stdio.mode = mode;
+	    set_display_mode(pr->stdio.file, mode);
+	  }
+	  break;
+	}
+      }
+    }
+    s_return(sc, mk_nil());
+
   default:
     snprintf(sc->strbuff, STRBUFFSIZE, "%d: illegal operator", sc->op);
     Error_0(sc, sc->strbuff);
@@ -7765,6 +7790,8 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   sc->COLUMN = def_keyword(sc, "column");
   sc->FILE = def_keyword(sc, "file");
   sc->NS = def_keyword(sc, "ns");
+  sc->INLINE = def_keyword(sc, "inline");
+  sc->BLOCK = def_keyword(sc, "block");
   
   sc->SORTED_SET = def_symbol(sc, "sorted-set");
   sc->ARRAY_MAP = def_symbol(sc, "array-map");

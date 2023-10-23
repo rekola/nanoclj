@@ -34,7 +34,7 @@ extern "C" {
     port_callback = 3,
     port_canvas = 4
   } nanoclj_port_type_t;
-
+  
   /* operator code */
   enum nanoclj_opcode {
 #define _OP_DEF(A,B,OP) OP,
@@ -68,6 +68,7 @@ extern "C" {
       FILE *file;
       char *filename;
       int32_t line, column;
+      nanoclj_display_mode_t mode;
       nanoclj_color_t fg;
       nanoclj_color_t bg;
       int32_t num_states;
@@ -231,6 +232,8 @@ extern "C" {
     nanoclj_val_t COLUMN;	  /* :column */
     nanoclj_val_t FILE;		  /* :file */
     nanoclj_val_t NS;		  /* :ns */
+    nanoclj_val_t INLINE;	  /* :inline */
+    nanoclj_val_t BLOCK;	  /* :block */
     
     nanoclj_val_t SORTED_SET;	  /* sorted-set */
     nanoclj_val_t ARRAY_MAP;	  /* array-map */

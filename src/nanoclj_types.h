@@ -21,4 +21,10 @@ typedef enum {
   nanoclj_colortype_true
 } nanoclj_colortype_t;
 
+typedef enum {
+  nanoclj_mode_unknown = 0,
+  nanoclj_mode_inline,
+  nanoclj_mode_block
+} nanoclj_display_mode_t;
+
 #endif

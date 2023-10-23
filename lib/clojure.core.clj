@@ -436,7 +436,9 @@
                                       s (/ wh h )
                                       ]
                                   (if (> w wh)
-                                    (-pr (Image/resize x (* s w) wh))
+                                    (do
+                                      (mode :inline)
+                                      (-pr (Image/resize x (* s w) wh)))
                                     (-pr x)
                                     ))
                      :else (print-fn nil x)))
@@ -452,9 +454,8 @@
                                     ]
                                 (if (> w wh)
                                   (do
-                                    (-pr (Image/resize x ww (* s h)))
-                                    (-print "\n\r")
-                                    (flush *out*))
+                                    (mode :block)
+                                    (-pr (Image/resize x ww (* s h))))
                                   (-pr x)
                                   ))
                    (pr-inline print-fn x)))
@@ -480,7 +481,9 @@
   "Prints args into *out* for Reader with color"
   ([] nil)
   ([x] (pr-block pr-with-class x))
-  ([x & more] (pr-block pr-with-class x) (run! (fn [x] (-print \space) (pr-block pr-with-class x)) more)))
+  ([x & more] (let [sep (if (image? x) "" " ")]
+                (pr-block pr-with-class x)
+                (run! (fn [x] (-print sep) (pr-block pr-with-class x)) more))))
 
 (defn prn
   "Prints args into *out* using pr followed by a newline"
