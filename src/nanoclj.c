@@ -596,9 +596,9 @@ static inline bool is_number(nanoclj_val_t p) {
 
 static inline char * _strvalue(nanoclj_cell_t * s) {
   if (_is_small(s)) {
-    return _smallstrvalue_unchecked(s);
+    return (char *)_smallstrvalue_unchecked(s);
   } else {
-    return _str_store_unchecked(s)->data + _offset_unchecked(s);
+    return (char *)_str_store_unchecked(s)->data + _offset_unchecked(s);
   }
 }
 
@@ -825,15 +825,15 @@ static inline strview_t _to_strview(nanoclj_cell_t * c) {
   case T_FILE:
   case T_UUID:
     if (_is_small(c)) {
-      return (strview_t){ _smallstrvalue_unchecked(c), _sosize_unchecked(c) };
+      return (strview_t){ (char *)_smallstrvalue_unchecked(c), _sosize_unchecked(c) };
     } else {
-      return (strview_t){ _str_store_unchecked(c)->data + _offset_unchecked(c), _size_unchecked(c) };
+      return (strview_t){ (char *)_str_store_unchecked(c)->data + _offset_unchecked(c), _size_unchecked(c) };
     }
   case T_READER:
   case T_WRITER:
     if (_port_type_unchecked(c) == port_string) {
       nanoclj_port_rep_t * pr = _rep_unchecked(c);
-      return (strview_t){ pr->string.data->data, pr->string.data->size };
+      return (strview_t){ (char *)pr->string.data->data, pr->string.data->size };
     }
     break;
   }
@@ -1171,11 +1171,11 @@ static inline nanoclj_val_t mk_integer(nanoclj_t * sc, long long num) {
 }
 
 static inline nanoclj_val_t mk_image(nanoclj_t * sc, int32_t width, int32_t height,
-				     int32_t channels, unsigned char * data) {
+				     int32_t channels, uint8_t * data) {
   nanoclj_cell_t * x = get_cell_x(sc, T_IMAGE, T_GC_ATOM, NULL, NULL, NULL);
   if (x) {
     size_t size = width * height * channels;
-    unsigned char * r_data = sc->malloc(size);
+    uint8_t * r_data = sc->malloc(size);
     if (r_data) {
       if (data) memcpy(r_data, data, size);
 
@@ -1392,7 +1392,7 @@ static inline nanoclj_val_t vector_peek(nanoclj_vector_t * vec) {
 
 static inline nanoclj_val_t add_exception_source(nanoclj_t * sc, strview_t msg) {
   int line = 0;
-  char * file = "NO_SOURCE_FILE";
+  const char * file = "NO_SOURCE_FILE";
   nanoclj_val_t p0 = vector_peek(sc->load_stack);
   if (is_cell(p0)) {
     nanoclj_cell_t * p = decode_pointer(p0);
@@ -1543,8 +1543,8 @@ static inline void backchar_raw(uint8_t c, nanoclj_cell_t * p) {
 }
 
 static inline void backchar(int32_t c, nanoclj_cell_t * p) {
-  char buff[4];
-  size_t l = utf8proc_encode_char(c, (utf8proc_uint8_t *)&buff[0]);
+  utf8proc_uint8_t buff[4];
+  size_t l = utf8proc_encode_char(c, &buff[0]);
   for (size_t i = 0; i < l; i++) {
     backchar_raw(buff[i], p);
   }
@@ -2792,10 +2792,10 @@ static inline void vector_pop(nanoclj_vector_t * vec) {
   if (vec->size) vec->size--;  
 }
 
-static inline size_t append_bytes(nanoclj_t * sc, nanoclj_byte_array_t * s, const char * ptr, size_t n) {
+static inline size_t append_bytes(nanoclj_t * sc, nanoclj_byte_array_t * s, const uint8_t * ptr, size_t n) {
   if (s->size + n > s->reserved) {
     s->reserved = 2 * (s->size + n);
-    s->data = sc->realloc(s->data, s->reserved);    
+    s->data = sc->realloc(s->data, s->reserved);
   }
   memcpy(s->data + s->size, ptr, n);
   s->size += n;
@@ -2853,15 +2853,15 @@ static inline nanoclj_cell_t * conjoin(nanoclj_t * sc, nanoclj_cell_t * coll, na
     if (_is_small(coll)) {
       size_t input_len = utf8proc_encode_char(c, (utf8proc_uint8_t *)sc->strbuff);
       nanoclj_cell_t * new_coll = get_string_object(sc, t, NULL, size + input_len, 0);
-      const char * data = _smallstrvalue_unchecked(coll);
-      char * new_data;
+      const uint8_t * data = _smallstrvalue_unchecked(coll);
+      uint8_t * new_data;
       if (_is_small(new_coll)) {
 	new_data = _smallstrvalue_unchecked(new_coll);
       } else {
 	new_data = _str_store_unchecked(new_coll)->data;
       }
-      memcpy(new_data, data, size * sizeof(char));
-      memcpy(new_data + size, sc->strbuff, input_len);
+      memcpy(new_data, data, size * sizeof(uint8_t));
+      memcpy(new_data + size, sc->strbuff, input_len * sizeof(uint8_t));
       return new_coll;
     } else {
       nanoclj_byte_array_t * s = _str_store_unchecked(coll);
@@ -3058,11 +3058,11 @@ static inline int gentypeid(nanoclj_t * sc) {
 }
 
 /* make symbol or number literal from string */
-static inline nanoclj_val_t mk_primitive(nanoclj_t * sc, char *q) {
+static inline nanoclj_val_t mk_primitive(nanoclj_t * sc, const char *q) {
   bool has_dec_point = false, has_fp_exp = false;
-  char *div = 0; 
   int sign = 1, radix = 0;
-  char * p = q;
+  const char * p = q, * div = 0; 
+
   char c = *p++;
   if ((c == '+') || (c == '-')) {
     if (c == '-') sign = -1;
@@ -3150,7 +3150,8 @@ static inline nanoclj_val_t mk_primitive(nanoclj_t * sc, char *q) {
       return mk_ratio_long(sc, num, den);
     }
   } else {
-    char * end, * actual_end = q + strlen(q);   
+    char * end;
+    const char * actual_end = q + strlen(q);   
     if (has_dec_point) {
       double d = strtod(q, &end);
       if (end == actual_end) return mk_real(d);
@@ -3370,7 +3371,7 @@ static inline void putchars(nanoclj_t * sc, const char *s, size_t len, nanoclj_c
     pr->callback.text(s, len, sc->ext_data);
     break;
   case port_string:
-    append_bytes(sc, pr->string.data, s, len);
+    append_bytes(sc, pr->string.data, (const uint8_t *)s, len);
     break;
 #if NANOCLJ_HAS_CANVAS
   case port_canvas:  
@@ -3474,7 +3475,7 @@ static inline char *readstr_upto(nanoclj_t * sc, char *delim, nanoclj_cell_t * i
   }
 
   rdbuff->data[rdbuff->size] = 0;
-  return rdbuff->data;
+  return (char *)rdbuff->data;
 }
 
 static inline nanoclj_val_t nanoclj_throw(nanoclj_t * sc, nanoclj_cell_t * e) {
@@ -3518,11 +3519,11 @@ static inline const char * escape_char(int32_t c, char * buffer, bool in_string)
       cat == UTF8PROC_CATEGORY_CO) {
     sprintf(buffer, "\\u%04x", c);
   } else {
-    char * p = buffer;
+    utf8proc_uint8_t * p = (utf8proc_uint8_t *)buffer;
     if (!in_string) {
       *p++ = '\\';
     }
-    p += utf8proc_encode_char(c, (utf8proc_uint8_t *)p);
+    p += utf8proc_encode_char(c, p);
     *p = 0;
   }
   return buffer;
@@ -3632,7 +3633,7 @@ static inline nanoclj_val_t readstrexp(nanoclj_t * sc, nanoclj_cell_t * inport, 
     }
   } while (!fin);
   
-  return mk_pointer(get_string_object(sc, T_STRING, rdbuff->data, rdbuff->size, 0));
+  return mk_pointer(get_string_object(sc, T_STRING, (char *)rdbuff->data, rdbuff->size, 0));
 }
 
 /* skip white space characters, returns the first non-whitespace character */
@@ -3792,7 +3793,7 @@ static void print_tensor(nanoclj_t * sc, void * tensor, nanoclj_cell_t * out) {
 static int sixel_write(char *data, int size, void *priv) {
   return fwrite(data, 1, size, (FILE *)priv);
 }
-static inline void print_image_sixel(unsigned char * data, int width, int height) {  
+static inline void print_image_sixel(uint8_t * data, int width, int height) {  
   sixel_dither_t * dither;
   sixel_dither_new(&dither, -1, NULL);
   sixel_dither_initialize(dither, data, width, height, SIXEL_PIXELFORMAT_RGB888, SIXEL_LARGE_NORM, SIXEL_REP_CENTER_BOX, SIXEL_QUALITY_HIGHCOLOR);
@@ -3827,7 +3828,7 @@ static inline void print_image(nanoclj_t * sc, nanoclj_image_t * img, nanoclj_ce
   } else if (sc->sixel_term && _port_type_unchecked(out) == port_file && pr->stdio.file == stdout) {      
 #if NANOCLJ_SIXEL
     if (img->channels == 4) {
-      unsigned char * tmp = sc->malloc(3 * img->width * img->height);
+      uint8_t * tmp = sc->malloc(3 * img->width * img->height);
       for (unsigned int i = 0; i < img->width * img->height; i++) {
 	tmp[3 * i + 0] = img->data[4 * i + 0];
 	tmp[3 * i + 1] = img->data[4 * i + 1];
@@ -3843,9 +3844,8 @@ static inline void print_image(nanoclj_t * sc, nanoclj_image_t * img, nanoclj_ce
 #endif      
   }
   
-  char * p = sc->strbuff;
   size_t len = snprintf(sc->strbuff, STRBUFFSIZE, "#<Image %d %d %d>", img->width, img->height, img->channels);
-  putchars(sc, p, len, out);
+  putchars(sc, sc->strbuff, len, out);
 }
 
 static inline nanoclj_cell_t * get_type_object(nanoclj_t * sc, nanoclj_val_t v) {
@@ -3986,7 +3986,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
 	switch (_port_type_unchecked(c)) {
 	case port_string:
 	  sv = (strview_t){
-	    pr->string.data->data,
+	    (char *)pr->string.data->data,
 	    pr->string.data->size
 	  };
 	  break;
@@ -6907,7 +6907,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     nanoclj_val_t options = arg1;
     utf8proc_uint8_t * dest = NULL;
     strview_t sv = to_strview(input);
-    utf8proc_ssize_t s = utf8proc_map((const unsigned char *)sv.ptr,
+    utf8proc_ssize_t s = utf8proc_map((const utf8proc_uint8_t *)sv.ptr,
 				      (utf8proc_ssize_t)sv.size,
 				      &dest,
 				      (utf8proc_option_t)to_long(options)

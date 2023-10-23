@@ -43,7 +43,7 @@ extern "C" {
   };
   
   typedef struct nanoclj_byte_array_t {
-    char *data;
+    uint8_t *data;
     size_t size, reserved, refcnt;
   } nanoclj_byte_array_t;
 
@@ -97,7 +97,7 @@ extern "C" {
     uint8_t so_size;    
     union {
       struct {
-	char data[NANOCLJ_SMALL_STR_SIZE];
+	uint8_t data[NANOCLJ_SMALL_STR_SIZE];
       } _small_byte_array;      
       struct {
 	size_t offset, size;
@@ -246,7 +246,6 @@ extern "C" {
     nanoclj_vector_t * load_stack;
     
     char strbuff[STRBUFFSIZE];
-    char errbuff[STRBUFFSIZE];
     nanoclj_byte_array_t * rdbuff;
 
     int tok;

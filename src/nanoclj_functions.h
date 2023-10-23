@@ -325,7 +325,7 @@ static inline nanoclj_val_t Image_load(nanoclj_t * sc, nanoclj_val_t args) {
   char * filename = alloc_c_str(sc, filename0);
 	    
   int w, h, channels;
-  unsigned char * data = stbi_load(filename, &w, &h, &channels, 0);
+  uint8_t * data = stbi_load(filename, &w, &h, &channels, 0);
   sc->free(filename);
   if (!data) { /* FIXME: stbi_failure_reason() is not thread-safe */
     return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string_fmt(sc, "%s [%.*s]", stbi_failure_reason(), (int)filename0.size, filename0.ptr)));
@@ -351,7 +351,7 @@ static inline nanoclj_val_t Image_resize(nanoclj_t * sc, nanoclj_val_t args) {
   
   size_t target_size = target_width * target_height * image->channels;
 
-  unsigned char * tmp = (unsigned char *)sc->malloc(target_size);
+  uint8_t * tmp = sc->malloc(target_size);
   
   stbir_resize_uint8(image->data, image->width, image->height, 0, tmp, target_width, target_height, 0, image->channels);
 
@@ -371,7 +371,7 @@ static inline nanoclj_val_t Image_transpose(nanoclj_t * sc, nanoclj_val_t args) 
   nanoclj_image_t * image = _image_unchecked(image0);
   int w = image->width, h = image->height, channels = image->channels;
   
-  unsigned char * tmp = (unsigned char *)sc->malloc(w * h * channels);
+  uint8_t * tmp = sc->malloc(w * h * channels);
 
   if (channels == 4) {
     for (int y = 0; y < h; y++) {
@@ -408,7 +408,7 @@ static inline nanoclj_val_t Image_save(nanoclj_t * sc, nanoclj_val_t args) {
   char * filename = alloc_c_str(sc, to_strview(filename0));
 
   int w = image->width, h = image->height, channels = image->channels;
-  unsigned char * data = image->data;
+  uint8_t * data = image->data;
   
   char * ext = strrchr(filename, '.');
   if (!ext) {
@@ -500,8 +500,8 @@ nanoclj_val_t Image_gaussian_blur(nanoclj_t * sc, nanoclj_val_t args) {
     for (int i = 0; i < vsize; i++) vtotal += vkernel[i];    
   }
   
-  unsigned char * output_data = (unsigned char *)sc->malloc(w * h * channels);
-  unsigned char * tmp = (unsigned char *)sc->malloc(w * h * channels);
+  uint8_t * output_data = sc->malloc(w * h * channels);
+  uint8_t * tmp = sc->malloc(w * h * channels);
 
   if (channels == 4) {
     if (hsize) {
@@ -510,17 +510,17 @@ nanoclj_val_t Image_gaussian_blur(nanoclj_t * sc, nanoclj_val_t args) {
         for (int col = 0; col < w; col++) {
           int c0 = 0, c1 = 0, c2 = 0, c3 = 0;
           for (int i = 0; i < hsize; i++) {
-	    const unsigned char * ptr = image->data + (row * w + clamp(col + i - vsize / 2, 0, w - 1)) * 4;
+	    const uint8_t * ptr = image->data + (row * w + clamp(col + i - vsize / 2, 0, w - 1)) * 4;
             c0 += *ptr++ * hkernel[i];
             c1 += *ptr++ * hkernel[i];
             c2 += *ptr++ * hkernel[i];
             c3 += *ptr++ * hkernel[i];
           }
-	  unsigned char * ptr = tmp + (row * w + col) * 4;
-          *ptr++ = (unsigned char)(c0 / htotal);
-          *ptr++ = (unsigned char)(c1 / htotal);
-          *ptr++ = (unsigned char)(c2 / htotal);
-          *ptr++ = (unsigned char)(c3 / htotal);
+	  uint8_t * ptr = tmp + (row * w + col) * 4;
+          *ptr++ = (uint8_t)(c0 / htotal);
+          *ptr++ = (uint8_t)(c1 / htotal);
+          *ptr++ = (uint8_t)(c2 / htotal);
+          *ptr++ = (uint8_t)(c3 / htotal);
         }
       }
     } else {
@@ -532,17 +532,17 @@ nanoclj_val_t Image_gaussian_blur(nanoclj_t * sc, nanoclj_val_t args) {
         for (int row = 0; row < h; row++) {
           int c0 = 0, c1 = 0, c2 = 0, c3 = 0;
           for (int i = 0; i < vsize; i++) {
-            const unsigned char * ptr = tmp + (clamp(row + i - vsize / 2, 0, h - 1) * w + col) * 4;
+            const uint8_t * ptr = tmp + (clamp(row + i - vsize / 2, 0, h - 1) * w + col) * 4;
             c0 += *ptr++ * vkernel[i];
             c1 += *ptr++ * vkernel[i];
             c2 += *ptr++ * vkernel[i];
             c3 += *ptr++ * vkernel[i];
           }
-	  unsigned char * ptr = output_data + (row * w + col) * 4;
-          *ptr++ = (unsigned char)(c0 / vtotal);
-          *ptr++ = (unsigned char)(c1 / vtotal);
-          *ptr++ = (unsigned char)(c2 / vtotal);
-          *ptr++ = (unsigned char)(c3 / vtotal);
+	  uint8_t * ptr = output_data + (row * w + col) * 4;
+          *ptr++ = (uint8_t)(c0 / vtotal);
+          *ptr++ = (uint8_t)(c1 / vtotal);
+          *ptr++ = (uint8_t)(c2 / vtotal);
+          *ptr++ = (uint8_t)(c3 / vtotal);
         }
       }
     } else {
@@ -555,11 +555,11 @@ nanoclj_val_t Image_gaussian_blur(nanoclj_t * sc, nanoclj_val_t args) {
         for (int col = 0; col < w; col++) {
           int c0 = 0;
           for (int i = 0; i < hsize; i++) {
-            const unsigned char * ptr = image->data + (row * w + clamp(col + i - vsize / 2, 0, w - 1));
+            const uint8_t * ptr = image->data + (row * w + clamp(col + i - vsize / 2, 0, w - 1));
             c0 += *ptr * hkernel[i];
           }
-          unsigned char * ptr = tmp + row * w + col;
-          *ptr = (unsigned char)(c0 / htotal);
+          uint8_t * ptr = tmp + row * w + col;
+          *ptr = (uint8_t)(c0 / htotal);
         }
       }
     } else {
@@ -571,11 +571,11 @@ nanoclj_val_t Image_gaussian_blur(nanoclj_t * sc, nanoclj_val_t args) {
         for (int row = 0; row < h; row++) {
           int c0 = 0;
           for (int i = 0; i < vsize; i++) {
-            const unsigned char * ptr = tmp + (clamp(row + i - vsize / 2, 0, h - 1) * w + col);
+            const uint8_t * ptr = tmp + (clamp(row + i - vsize / 2, 0, h - 1) * w + col);
             c0 += *ptr * vkernel[i];
           }
-          unsigned char * ptr = output_data + row * w + col;
-          *ptr = (unsigned char)(c0 / vtotal);
+          uint8_t * ptr = output_data + row * w + col;
+          *ptr = (uint8_t)(c0 / vtotal);
         }
       }
     } else {
