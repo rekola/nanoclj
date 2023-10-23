@@ -319,13 +319,14 @@ static inline nanoclj_val_t browse_url(nanoclj_t * sc, nanoclj_val_t args) {
 }
 
 static inline nanoclj_val_t Image_load(nanoclj_t * sc, nanoclj_val_t args) {
-  char * filename = alloc_c_str(sc, to_strview(car(args)));
+  strview_t filename0 = to_strview(car(args));
+  char * filename = alloc_c_str(sc, filename0);
 	    
   int w, h, channels;
   unsigned char * data = stbi_load(filename, &w, &h, &channels, 0);
   sc->free(filename);
-  if (!data) {
-    return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Failed to load Image")));
+  if (!data) { /* FIXME: stbi_failure_reason() is not thread-safe */
+    return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string_fmt(sc, "%s [%.*s]", stbi_failure_reason(), (int)filename0.size, filename0.ptr)));
   }
   
   nanoclj_val_t image = mk_image(sc, w, h, channels, data);
