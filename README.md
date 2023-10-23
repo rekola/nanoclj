@@ -98,7 +98,7 @@ have been tested:
 - Refs, Agents, Atoms, Validators
 - Queues, Arrays
 - Reader Conditionals
-- BigInts, BigDecimals and Exotic numeric literals (e.g. NrXXX, 3N, 0.1M, hexadecimal floats)
+- BigInts, BigDecimals and Exotic numeric literals (e.g. 3N, 0.1M, hexadecimal floats)
 - Persistent data structures
 - Transient data structures
 - Unchecked operations
@@ -113,7 +113,8 @@ have been tested:
 - Pre and post conditions for functions
 - Readers, Writers, spit and slurp do not accept options such as :encoding or :append
 - spit and slurp do not accept Writers or Readers
-- `*print-length*`, `*print-level*`, `*file*`, `*flush-on-newline*`, `*clojure-version*`, `*load-tests*`
+- Associative destructuring
+- `*e`, `*print-length*`, `*print-level*`, `*file*`, `*flush-on-newline*`, `*clojure-version*`, `*load-tests*`
 - Missing core functions and macros
   - doseq, for, dotimes
   - bit-and-not
@@ -141,6 +142,8 @@ have been tested:
   - assert-args
   - make-parents
   - with-open
+- clojure.core.async
+  - thread-call
 - clojure.core.reducers
 - clojure.main
   - load-script
@@ -149,6 +152,8 @@ have been tested:
   - capitalize
   - split
   - replace, replace-first
+- clojure.repl
+  - dir
 - clojure.set
 - clojure.data
 - clojure.xml
