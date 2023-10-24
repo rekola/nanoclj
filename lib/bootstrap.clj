@@ -63,7 +63,7 @@
 
 (def var?
   "Returns true if argument is a var"
-  (fn [x] (instance? clolojure.lang.Var x)))
+  (fn [x] (instance? clojure.lang.Var x)))
 
 (def char?
   "Returns true if argument is a character (actually a utf8 codepoint)"
