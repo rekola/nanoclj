@@ -4614,7 +4614,9 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
       return mk_image(sc, 0, 0, 0, NULL);      
     } else {
       x = first(sc, args);
-      if (is_writer(x) && port_type_unchecked(x) == port_canvas) {
+      if (is_image(x)) {
+	return x;
+      } else if (is_writer(x) && port_type_unchecked(x) == port_canvas) {
 #if NANOCLJ_HAS_CANVAS
 	return canvas_create_image(sc, rep_unchecked(x)->canvas.impl);
 #endif
@@ -4972,7 +4974,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  
 	case T_VECTOR:{
 	  if (get_size(code_cell) > 0) {
-	    s_save(sc, OP_E0VEC, NULL, sc->code);
+	    s_save(sc, OP_E0VEC, NULL, mk_pointer(copy_vector(sc, decode_pointer(sc->code))));
 	    sc->code = vector_elem(code_cell, 0);
 	    s_goto(sc, OP_EVAL);
 	  }
