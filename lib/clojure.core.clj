@@ -66,6 +66,8 @@
 
 (defn run! [proc coll] (if (empty? coll) nil (do (proc (first coll)) (run! proc (rest coll)))))
 
+(def image nanoclj.core.Image )
+
 ; Utilities for math.
 
 (defn even?
@@ -371,6 +373,8 @@
               :string [ 0.8 0.58 0.58 ]
               :symbol [ 0.94 0.87 0.69 ]
               :keyword [ 0.94 0.87 0.69 ]
+              :var [ 0.94 0.87 0.69 ]
+              :class [ 0.55 0.82 0.83 ]
               })
 
 (defn pr-inline
@@ -426,6 +430,8 @@
                      (string? x) (print-fn :string x)
                      (keyword? x) (print-fn :keyword x)
                      (symbol? x) (print-fn :symbol x)
+                     (var? x) (print-fn :var x)
+                     (class? x) (print-fn :class x)
                      (closure? x) (pr-inline print-fn (cons 'fn (car x)))
                      (image? x) (let [cs *cell-size*
                                       f *window-scale-factor*
