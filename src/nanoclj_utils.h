@@ -11,12 +11,20 @@ static inline int clamp(int v, int min, int max) {
   return v;
 }
 
-static inline nanoclj_color_t mk_color(double red, double green, double blue, double alpha) {
+static inline nanoclj_color_t mk_color4d(double red, double green, double blue, double alpha) {
   return (nanoclj_color_t){
     clamp((int)(red * 255), 0, 255),
     clamp((int)(green * 255), 0, 255),
     clamp((int)(blue * 255), 0, 255),
     clamp((int)(alpha * 255), 0, 255) };
+}
+
+static inline nanoclj_color_t mk_color3i(int red, int green, int blue) {
+  return (nanoclj_color_t){
+    clamp(red, 0, 255),
+    clamp(green, 0, 255),
+    clamp(blue, 0, 255),
+    255 };
 }
 
 static inline int digit(int32_t c, int radix) {

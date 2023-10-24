@@ -233,7 +233,7 @@ typedef struct {
 #define MARK           128      /* 10000000 */
 #define UNMARK         127      /* 01111111 */
 
-static int_fast16_t prim_type(nanoclj_val_t value) {
+static uint_fast16_t prim_type(nanoclj_val_t value) {
   uint64_t signature = value.as_long >> 48;   
   if (signature == SIGNATURE_CELL) {
     return T_NIL;
@@ -260,7 +260,7 @@ static inline bool is_keyword(nanoclj_val_t v) {
 }
 
 /* returns the type of a, a must not be NULL */
-static inline int_fast16_t _type(nanoclj_cell_t * a) {
+static inline uint_fast16_t _type(nanoclj_cell_t * a) {
   if (a->flags & T_TYPE) return T_CLASS;
   return a->type;
 }
@@ -278,13 +278,13 @@ static inline bool is_type(nanoclj_val_t value) {
   return decode_pointer(value)->flags & T_TYPE;
 }
 
-static inline int_fast16_t expand_type(nanoclj_val_t value, int_fast16_t primitive_type) {
+static inline uint_fast16_t expand_type(nanoclj_val_t value, uint_fast16_t primitive_type) {
   if (!primitive_type) return _type(decode_pointer(value));
   return primitive_type;
 }
 
-static inline int_fast16_t type(nanoclj_val_t value) {
-  int_fast16_t type = prim_type(value);
+static inline uint_fast16_t type(nanoclj_val_t value) {
+  uint_fast16_t type = prim_type(value);
   if (!type) {
     nanoclj_cell_t * c = decode_pointer(value);
     return _type(c);
@@ -452,7 +452,7 @@ static inline bool is_image(nanoclj_val_t p) {
   return c && _type(c) == T_IMAGE;
 }
 
-static inline bool is_seqable_type(int_fast16_t type_id) {
+static inline bool is_seqable_type(uint_fast16_t type_id) {
   switch (type_id) {
   case T_NIL:
   case T_LIST:
@@ -472,7 +472,7 @@ static inline bool is_seqable_type(int_fast16_t type_id) {
   return false;
 }
 
-static inline bool is_coll_type(int_fast16_t type_id) {
+static inline bool is_coll_type(uint_fast16_t type_id) {
   switch (type_id) {
   case T_NIL: /* Empty list */
   case T_LIST:
@@ -571,7 +571,7 @@ static inline void set_metadata(nanoclj_cell_t * c, nanoclj_cell_t * meta) {
   }
 }
 
-static inline bool is_integral_type(int_fast16_t type) {
+static inline bool is_integral_type(uint_fast16_t type) {
   switch (type) {
   case T_BOOLEAN:
   case T_LONG:
@@ -627,18 +627,20 @@ static inline long long to_long_w_def(nanoclj_val_t p, long long def) {
   case T_NIL:
     {
       nanoclj_cell_t * c = decode_pointer(p);
-      switch (_type(c)) {
-      case T_LONG:
-      case T_DATE:
-	return _lvalue_unchecked(c);
-      case T_RATIO:
-	return to_long_w_def(vector_elem(c, 0), 0) / to_long_w_def(vector_elem(c, 1), 1);
-      case T_VECTOR:
-      case T_SORTED_SET:
-      case T_ARRAYMAP:
-	return get_size(c);
-      case T_CLASS:
-	return c->type;
+      if (c) {
+	switch (_type(c)) {
+	case T_LONG:
+	case T_DATE:
+	  return _lvalue_unchecked(c);
+	case T_RATIO:
+	  return to_long_w_def(vector_elem(c, 0), 0) / to_long_w_def(vector_elem(c, 1), 1);
+	case T_VECTOR:
+	case T_SORTED_SET:
+	case T_ARRAYMAP:
+	  return get_size(c);
+	case T_CLASS:
+	  return c->type;
+	}
       }
     }
   }
@@ -697,6 +699,25 @@ static inline double to_double(nanoclj_val_t p) {
   return NAN;
 }
 
+static inline nanoclj_color_t to_color(nanoclj_val_t p) {
+  double red = 0, green = 0, blue = 0, alpha = 0;
+  uint_fast16_t t = type(p);
+  if (t == T_VECTOR) {
+    nanoclj_cell_t * c = decode_pointer(p);
+    if (get_size(c) >= 3) {
+      red = to_double(vector_elem(c, 0));
+      green = to_double(vector_elem(c, 1));
+      blue = to_double(vector_elem(c, 2));
+      if (get_size(c) >= 4) {
+	alpha = to_double(vector_elem(c, 3));
+      } else {
+	alpha = 1;
+      }
+    }
+  }
+  return mk_color4d(red, green, blue, alpha);
+}
+  
 static inline void * to_tensor(nanoclj_t * sc, nanoclj_val_t p) {
   switch (prim_type(p)) {
   case T_NIL:{
@@ -3389,34 +3410,26 @@ static inline void putstr(nanoclj_t * sc, const char *s, nanoclj_cell_t * out) {
   putchars(sc, s, strlen(s), out);
 }
 
-static inline void set_color(nanoclj_t * sc, nanoclj_cell_t * vec, nanoclj_val_t out) {
+static inline void set_color(nanoclj_t * sc, nanoclj_color_t color, nanoclj_val_t out) {
   nanoclj_port_rep_t * pr = rep_unchecked(out);
   switch (port_type_unchecked(out)) {
   case port_file:
 #ifndef WIN32    
-    set_term_fg_color(pr->stdio.file,
-		      to_double(vector_elem(vec, 0)),
-		      to_double(vector_elem(vec, 1)),
-		      to_double(vector_elem(vec, 2)),
-		      sc->term_colors
-		      );
+    set_term_fg_color(pr->stdio.file, color, sc->term_colors);
 #endif
     break;
   case port_callback:
     if (pr->callback.color) {
-      pr->callback.color(to_double(vector_elem(vec, 0)),
-			 to_double(vector_elem(vec, 1)),
-			 to_double(vector_elem(vec, 2)),
+      pr->callback.color(color.red / 255.0,
+			 color.green / 255.0,
+			 color.blue / 255.0,
 			 sc->ext_data
 			 );
     }
     break;
 #if NANOCLJ_HAS_CANVAS
   case port_canvas:
-    canvas_set_color(pr->canvas.impl,
-		     to_double(vector_elem(vec, 0)),
-		     to_double(vector_elem(vec, 1)),
-		     to_double(vector_elem(vec, 2)));
+    canvas_set_color(pr->canvas.impl, color);
     break;
 #endif    
   }
@@ -3435,17 +3448,12 @@ static inline void set_linear_gradient(nanoclj_t * sc, nanoclj_cell_t * p0, nano
   }  
 }
 
-static inline void set_bg_color(nanoclj_t * sc, nanoclj_cell_t * vec, nanoclj_val_t out) {
+static inline void set_bg_color(nanoclj_t * sc, nanoclj_color_t color, nanoclj_val_t out) {
   nanoclj_port_rep_t * pr = rep_unchecked(out);
   switch (port_type_unchecked(out)) {
   case port_file:
 #ifndef WIN32    
-    set_term_bg_color(pr->stdio.file,
-		      to_double(vector_elem(vec, 0)),
-		      to_double(vector_elem(vec, 1)),
-		      to_double(vector_elem(vec, 2)),
-		      sc->term_colors
-		      );
+    set_term_bg_color(pr->stdio.file, color, sc->term_colors);
 #endif
     break;
   }
@@ -3834,8 +3842,8 @@ static inline void print_image(nanoclj_t * sc, nanoclj_image_t * img, nanoclj_ce
     int f = 0;
     switch (img->channels) {
     case 1: f = SIXEL_PIXELFORMAT_G8; break;
-    case 3: f = SIXEL_PIXELFORMAT_RGB888; break;
-    case 4: f = SIXEL_PIXELFORMAT_RGBA8888; break;
+    case 3: f = SIXEL_PIXELFORMAT_BGR888; break;
+    case 4: f = SIXEL_PIXELFORMAT_BGRA8888; break;
     }
     if (f) {
       print_image_sixel(img->data, img->width, img->height, f);
@@ -4597,11 +4605,18 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
 	args = next(sc, args);
 	if (args && type_id == T_WRITER) {
 	  y = first(sc, args);
+	  args = next(sc, args);
+	  nanoclj_color_t fill_color = sc->bg_color;
+	  if (args) {
+	    fill_color = to_color(first(sc, args));
+	  }
 #if NANOCLJ_HAS_CANVAS
 	  nanoclj_cell_t * port = get_port_object(sc, type_id, port_canvas);
 	  _rep_unchecked(port)->canvas.impl = mk_canvas(sc,
 							(int)(to_double(x) * sc->window_scale_factor),
-							(int)(to_double(y) * sc->window_scale_factor));
+							(int)(to_double(y) * sc->window_scale_factor),
+							sc->fg_color,
+							fill_color);
 	  return mk_pointer(port);
 #endif
 	}	
@@ -7066,8 +7081,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_SET_COLOR:
     if (!unpack_args_1(sc, &arg0)) {
       return false;
-    } else if (is_vector(arg0)) {
-      set_color(sc, decode_pointer(arg0), get_out_port(sc));
+    } else {
+      set_color(sc, to_color(arg0), get_out_port(sc));
     }
     s_return(sc, mk_nil());
 
@@ -7084,8 +7099,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_SET_BG_COLOR:
     if (!unpack_args_1(sc, &arg0)) {
       return false;
-    } else if (is_vector(arg0)) {
-      set_bg_color(sc, decode_pointer(arg0), get_out_port(sc));
+    } else {
+      set_bg_color(sc, to_color(arg0), get_out_port(sc));
     }
     s_return(sc, mk_nil());
     
@@ -7282,7 +7297,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     if (is_writer(x) && port_type_unchecked(x) == port_canvas) {
       rep_unchecked(x)->canvas.impl = mk_canvas(sc,
 						(int)(to_double(arg0) * sc->window_scale_factor),
-						(int)(to_double(arg1) * sc->window_scale_factor));
+						(int)(to_double(arg1) * sc->window_scale_factor),
+						sc->fg_color, sc->bg_color);
     }
 #endif
     s_return(sc, mk_nil());    
@@ -7396,6 +7412,8 @@ static inline void update_window_info(nanoclj_t * sc, nanoclj_cell_t * out) {
       size = mk_vector_2d(sc, width / f, height / f);
       cell_size = mk_vector_2d(sc, width / cols / f, height / lines / f);
     }
+
+    get_current_colors(stdin, stdout, &(sc->fg_color), &(sc->bg_color));
   }
   
   intern(sc, sc->global_env, sc->WINDOW_SIZE, size);
@@ -7869,9 +7887,11 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   sc->sixel_term = has_sixels();
   sc->window_scale_factor = 1.0;
   sc->window_lines = sc->window_columns = 0;
-  
-  sc->term_colors = get_term_colortype();
 
+  sc->term_colors = get_term_colortype();
+  sc->fg_color = mk_color3i(255, 255, 255);
+  sc->bg_color = mk_color3i(0, 0, 0);
+  
   sc->context->properties = mk_properties(sc);
   sc->tensor_ctx = mk_tensor_context();
   
@@ -8022,7 +8042,7 @@ int main(int argc, const char **argv) {
     legal();
     return 1;
   }
-
+  
   http_init();
 
   nanoclj_t sc;

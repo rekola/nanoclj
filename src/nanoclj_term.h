@@ -53,9 +53,8 @@ static inline int convert_to_256color(nanoclj_color_t color) {
   }
 }
 
-static inline void set_term_fg_color(FILE * fh, double red, double green, double blue, nanoclj_colortype_t colors) {
+static inline void set_term_fg_color(FILE * fh, nanoclj_color_t color, nanoclj_colortype_t colors) {
   if (isatty(fileno(fh))) {
-    nanoclj_color_t color = mk_color(red, green, blue, 1.0);
     switch (colors) {
     case nanoclj_colortype_16:
       break;
@@ -69,10 +68,8 @@ static inline void set_term_fg_color(FILE * fh, double red, double green, double
   }
 }
 
-static inline void set_term_bg_color(FILE * fh, double red, double green, double blue, nanoclj_colortype_t colors) {
+static inline void set_term_bg_color(FILE * fh, nanoclj_color_t color, nanoclj_colortype_t colors) {
   if (isatty(fileno(fh))) {
-    nanoclj_color_t color = mk_color(red, green, blue, 1.0);
-
     switch (colors) {
     case nanoclj_colortype_16:
       break;
@@ -113,7 +110,8 @@ static inline struct termios set_raw_mode(int fd) {
   raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
   raw.c_cc[VMIN] = 1;
   raw.c_cc[VTIME] = 0;
-  
+  tcsetattr(fd, TCSANOW, &raw);
+
   return orig_term;
 }
 
@@ -197,36 +195,53 @@ static bool get_cursor_position(FILE * in, FILE * out, int * x, int * y) {
   }
 }
 
-static inline bool get_bg_color(FILE * in, FILE * out, double * r, double * g, double * b) {
-  if (!isatty(fileno(out))) {
-    return false;
-  }
-
-  char buf[32];
-  unsigned int i = 0;
-  
-  struct termios orig_term = set_raw_mode(fileno(in));
-  
-  if (write(fileno(out), "\033]11;?\a", 7) != 7) {
-    return false;
-  }
-  nanoclj_sleep(100);
-    
-  // ^[]11;rgb:0000/0000/0000^
-  while (i < sizeof(buf)-1) {
-    if (read(fileno(in), buf+i, 1) != 1) {
+static inline bool read_until(int fd, char * buf, size_t n, char delim) {
+  size_t i = 0;
+  while (i < n - 1) {
+    if (read(fd, buf + i, 1) != 1) {
       break;
     }
-    if (buf[i] == '\\') {
-      break;
+    if (buf[i] == delim) {
+      buf[i] = '\0';
+      return true;
     }
     i++;
   }
-  buf[i] = '\0';
-  tcsetattr(STDIN_FILENO, TCSADRAIN, &orig_term);
-  
-  fprintf(stderr, "color = %s, i = %d\n", buf, i);
   return false;
+}
+
+static inline bool get_current_colors(FILE * in, FILE * out, nanoclj_color_t * fg, nanoclj_color_t * bg) {
+  if (!isatty(fileno(out))) {
+    return false;
+  }
+  char buf[32];
+    
+  struct termios orig_term = set_raw_mode(fileno(in));
+
+  bool is_dark;
+  int r, g, b;
+  if (write(fileno(out), "\033]11;?\a", 7) == 7 &&
+      read_until(fileno(in), buf, sizeof(buf), '\a') &&
+      sscanf(buf, "\033]11;rgb:%x/%x/%x", &r, &g, &b) == 3) {
+    *bg = mk_color3i(r, g, b);
+    is_dark = r < 128 && g < 128 && b < 128;
+  } else {
+    return false;
+  }
+
+  if (write(fileno(out), "\033]10;?\a", 7) == 7 &&
+      read_until(fileno(in), buf, sizeof(buf), '\a') &&
+      sscanf(buf, "\033]10;rgb:%x/%x/%x", &r, &g, &b)) {
+    *fg = mk_color3i(255, 255, 255);
+  } else if (is_dark) { /* Make a guess. */
+    *fg = mk_color3i(255, 255, 255);
+  } else {
+    *fg = mk_color3i(0, 0, 0);
+  }
+
+  tcsetattr(STDIN_FILENO, TCSADRAIN, &orig_term);
+
+  return true;
 }
 
 static inline nanoclj_colortype_t get_term_colortype() {

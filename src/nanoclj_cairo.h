@@ -9,11 +9,19 @@ static void finalize_canvas(nanoclj_t * sc, void * canvas) {
   if (canvas) cairo_destroy((cairo_t *)canvas);
 }
 
-static inline void * mk_canvas(nanoclj_t * sc, int width, int height) {
+static inline void * mk_canvas(nanoclj_t * sc, int width, int height, nanoclj_color_t fg, nanoclj_color_t bg) {
   cairo_surface_t * surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, width, height);
   cairo_t * cr = cairo_create(surface);
   cairo_surface_destroy(surface);
-  
+
+  if (bg.alpha > 0 && width > 0 && height > 0) {
+    cairo_set_source_rgba(cr, bg.red / 255.0, bg.green / 255.0, bg.blue / 255.0, bg.alpha / 255.0);
+    cairo_rectangle(cr, 0, 0, width, height);
+    cairo_fill(cr);
+  }
+
+  cairo_set_source_rgba(cr, fg.red / 255.0, fg.green / 255.0, fg.blue / 255.0, fg.alpha / 255.0);
+
   cairo_font_options_t * options = cairo_font_options_create();
   cairo_font_options_set_antialias(options,
 #if 1
@@ -47,8 +55,8 @@ static inline void canvas_flush(void * canvas) {
   cairo_surface_flush(cairo_get_target((cairo_t *)canvas));
 }
 
-static inline void canvas_set_color(void * canvas, double r, double g, double b) {
-  cairo_set_source_rgb((cairo_t *)canvas, r, g, b);
+static inline void canvas_set_color(void * canvas, nanoclj_color_t color) {
+  cairo_set_source_rgba((cairo_t *)canvas, color.red / 255.0, color.green / 255.0, color.blue / 255.0, color.alpha / 255.0);
 }
 
 static inline void canvas_set_linear_gradient(void * canvas, nanoclj_cell_t * p0, nanoclj_cell_t * p1, nanoclj_cell_t * colormap) {
