@@ -3793,10 +3793,10 @@ static void print_tensor(nanoclj_t * sc, void * tensor, nanoclj_cell_t * out) {
 static int sixel_write(char *data, int size, void *priv) {
   return fwrite(data, 1, size, (FILE *)priv);
 }
-static inline void print_image_sixel(uint8_t * data, int width, int height) {  
+static inline void print_image_sixel(uint8_t * data, int width, int height, int pixelformat) {  
   sixel_dither_t * dither;
   sixel_dither_new(&dither, -1, NULL);
-  sixel_dither_initialize(dither, data, width, height, SIXEL_PIXELFORMAT_RGB888, SIXEL_LARGE_NORM, SIXEL_REP_CENTER_BOX, SIXEL_QUALITY_HIGHCOLOR);
+  sixel_dither_initialize(dither, data, width, height, pixelformat, SIXEL_LARGE_NORM, SIXEL_REP_CENTER_BOX, SIXEL_QUALITY_HIGHCOLOR);
   
   sixel_output_t * output = NULL;
   sixel_output_new(&output, sixel_write, stdout, NULL);
@@ -3827,20 +3827,16 @@ static inline void print_image(nanoclj_t * sc, nanoclj_image_t * img, nanoclj_ce
     }
   } else if (sc->sixel_term && _port_type_unchecked(out) == port_file && pr->stdio.file == stdout) {      
 #if NANOCLJ_SIXEL
-    if (img->channels == 4) {
-      uint8_t * tmp = sc->malloc(3 * img->width * img->height);
-      for (unsigned int i = 0; i < img->width * img->height; i++) {
-	tmp[3 * i + 0] = img->data[4 * i + 0];
-	tmp[3 * i + 1] = img->data[4 * i + 1];
-	tmp[3 * i + 2] = img->data[4 * i + 2];
-      }
-      print_image_sixel(tmp, img->width, img->height);
-      sc->free(tmp);
-      return;
-    } else if (img->channels == 3) {
-      print_image_sixel(img->data, img->width, img->height);
-      return;
+    int f = 0;
+    switch (img->channels) {
+    case 1: f = SIXEL_PIXELFORMAT_G8; break;
+    case 3: f = SIXEL_PIXELFORMAT_RGB888; break;
+    case 4: f = SIXEL_PIXELFORMAT_RGBA8888; break;
     }
+    if (f) {
+      print_image_sixel(img->data, img->width, img->height, f);
+      return;
+    }    
 #endif      
   }
   
