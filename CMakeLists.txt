@@ -35,6 +35,7 @@ add_executable(nanoclj ${SOURCE_FILES})
 target_link_libraries(nanoclj Threads::Threads)
 
 IF (MSVC)
+  set(VCPKG_TARGET_TRIPLET "x64-windows")
   set(VCPKG_ROOT "vcpkg")
   set(CMAKE_TOOLCHAIN_FILE "${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" CACHE STRING "")
   
