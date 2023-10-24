@@ -7,6 +7,14 @@
                              [0.6350 0.0780 0.1840]
                              ))
 
+(def-macro (with-out new-out body)
+  `(let ((prev-out *out*)
+         (tmp ,new-out))
+     (set! *out* tmp)
+     ,body
+     (set! *out* prev-out)
+     tmp))
+
 (defn linspace
   "Creates an evenly spaced vector from a to b with n points"
   ([a b] (linspace a b 100))
