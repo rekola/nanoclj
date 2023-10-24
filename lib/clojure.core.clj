@@ -416,7 +416,7 @@
                                     :else (do (-print \{)
                                               (pr-inline print-fn (key (first x)))
                                               (-print \space)
-                                              (pr (val (first x)))
+                                              (pr-inline print-fn (val (first x)))
                                               (run! (fn [x] (-print ", ") (pr-inline print-fn (key x))
                                                       (-print \space) (pr-inline print-fn (val x))) (rest x))
                                               (-print \})))                
