@@ -38,7 +38,7 @@ have been tested:
 | GNOME Terminal | True color works, but sixel support is not enabled. | | |
 
 ![Plotting from nanoclj](https://user-images.githubusercontent.com/6755525/277504459-737b498e-005b-49ad-92b2-0917a1a10b7e.jpg "Plotting from nanoclj")
-*The plot function returns an image which can then be saved with Image/save or modified using other functions in the Image namespace.*
+*The plot function returns a canvas, which can be converted to an image, and then saved with Image/save or modified using other functions in the Image namespace.*
 
 As well as printing images in block mode like the plot function does, they can also be printed in inline mode which is shown in the following example:
 
@@ -153,8 +153,6 @@ As well as printing images in block mode like the plot function does, they can a
 - clojure.main
   - load-script
 - clojure.string
-  - upper-case
-  - capitalize
   - split
   - replace, replace-first
 - clojure.repl

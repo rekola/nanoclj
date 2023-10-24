@@ -11,8 +11,17 @@
             (. (first s) isWhitespace) (recur (rest s))
             :else false))
 
-(defn upper-case [s] (apply str (map -toupper s)))
-(defn lower-case [s] (utf8map s (bit-or UTF8PROC_IGNORE UTF8PROC_STRIPCC UTF8PROC_CASEFOLD UTF8PROC_COMPOSE)))
+(defn upper-case
+  "Converts all letters to upper-case"
+  [s] (apply str (map -toupper s)))
+
+(defn lower-case
+  "Converts all letters to lower-case"
+  [s] (utf8map s (bit-or UTF8PROC_IGNORE UTF8PROC_STRIPCC UTF8PROC_CASEFOLD UTF8PROC_COMPOSE)))
+
+(defn capitalize
+  "Capitalizes the first letter and puts the rest in lower-case"
+  [s] (str (.toTitleCase (first s)) (lower-case (rest s))))
 
 (def join (fn ([coll]           (apply str coll))
               ([separator coll] (if (empty? coll) "" (if (empty? (rest coll)) (first coll) (str (first coll) separator (join separator (rest coll))))))))
