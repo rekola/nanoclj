@@ -310,7 +310,8 @@ static inline nanoclj_val_t browse_url(nanoclj_t * sc, nanoclj_val_t args) {
 }
 
 static inline nanoclj_val_t Image_load(nanoclj_t * sc, nanoclj_val_t args) {
-  strview_t filename0 = to_strview(car(args));
+  nanoclj_val_t filename00 = car(args);
+  strview_t filename0 = to_strview(filename00);
   char * filename = alloc_c_str(sc, filename0);
 	    
   int w, h, channels;
@@ -319,8 +320,13 @@ static inline nanoclj_val_t Image_load(nanoclj_t * sc, nanoclj_val_t args) {
   if (!data) { /* FIXME: stbi_failure_reason() is not thread-safe */
     return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string_fmt(sc, "%s [%.*s]", stbi_failure_reason(), (int)filename0.size, filename0.ptr)));
   }
+
+  nanoclj_cell_t * meta = mk_arraymap(sc, 3);
+  set_vector_elem(meta, 0, mk_mapentry(sc, sc->WIDTH, mk_int(w)));
+  set_vector_elem(meta, 1, mk_mapentry(sc, sc->HEIGHT, mk_int(h)));
+  set_vector_elem(meta, 2, mk_mapentry(sc, sc->FILE, filename00));
   
-  nanoclj_val_t image = mk_image(sc, w, h, channels, data);
+  nanoclj_val_t image = mk_image(sc, w, h, channels, data, meta);
   
   stbi_image_free(data);
 
@@ -329,22 +335,22 @@ static inline nanoclj_val_t Image_load(nanoclj_t * sc, nanoclj_val_t args) {
 
 static inline nanoclj_val_t Image_resize(nanoclj_t * sc, nanoclj_val_t args) {
   nanoclj_val_t image00 = car(args);
-  nanoclj_val_t target_width0 = cadr(args), target_height0 = caddr(args);
-  if (!is_image(image00) || !is_number(target_width0) || !is_number(target_height0)) {
+  nanoclj_val_t target_w0 = cadr(args), target_h0 = caddr(args);
+  if (!is_image(image00) || !is_number(target_w0) || !is_number(target_h0)) {
     return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Invalid type")));
   }
   
-  int target_width = to_int(target_width0), target_height = to_int(target_height0);  
+  int target_w = to_int(target_w0), target_h = to_int(target_h0);
   nanoclj_cell_t * image0 = decode_pointer(image00);
   nanoclj_image_t * image = _image_unchecked(image0);
   
-  size_t target_size = target_width * target_height * image->channels;
+  size_t target_size = target_w * target_h * image->channels;
 
   uint8_t * tmp = sc->malloc(target_size);
   
-  stbir_resize_uint8(image->data, image->width, image->height, 0, tmp, target_width, target_height, 0, image->channels);
+  stbir_resize_uint8(image->data, image->width, image->height, 0, tmp, target_w, target_h, 0, image->channels);
 
-  nanoclj_val_t target_image = mk_image(sc, target_width, target_height, image->channels, tmp);
+  nanoclj_val_t target_image = mk_image(sc, target_w, target_h, image->channels, tmp, NULL);
 
   sc->free(tmp);
   
@@ -376,7 +382,7 @@ static inline nanoclj_val_t Image_transpose(nanoclj_t * sc, nanoclj_val_t args) 
     return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Unsupported number of channels")));
   }
   
-  nanoclj_val_t new_image = mk_image(sc, h, w, channels, tmp);
+  nanoclj_val_t new_image = mk_image(sc, h, w, channels, tmp, NULL);
 
   sc->free(tmp);
 
@@ -576,7 +582,7 @@ nanoclj_val_t Image_gaussian_blur(nanoclj_t * sc, nanoclj_val_t args) {
   sc->free(hkernel);
   
   sc->free(tmp);
-  nanoclj_val_t r = mk_image(sc, w, h, channels, output_data);
+  nanoclj_val_t r = mk_image(sc, w, h, channels, output_data, NULL);
   sc->free(output_data);
   return r;
 }

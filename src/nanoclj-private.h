@@ -120,7 +120,10 @@ extern "C" {
 	int nesting;
 	uint8_t type, flags;
       } _port;
-      nanoclj_image_t * _image;
+      struct {
+	nanoclj_image_t * rep;
+	struct nanoclj_cell_t * meta;
+      } _image;
       nanoclj_audio_t * _audio;
       struct {
 	int min_arity, max_arity;

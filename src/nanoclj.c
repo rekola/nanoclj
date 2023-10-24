@@ -117,7 +117,7 @@
 
 #define PORT_SAW_EOF	1
 
-#define banner "nanoclj 0.2.0"
+#define NANOCLJ_VERSION "0.2.0"
 
 #include <string.h>
 #include <stdlib.h>
@@ -359,6 +359,7 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define _so_vector_metadata(p)	  ((p)->_object._small_collection.meta)
 #define _cons_metadata(p)	  ((p)->_object._cons.meta)
 #define _ff_metadata(p)		  ((p)->_object._ff.meta)
+#define _image_metadata(p)	  ((p)->_object._image.meta)
 
 #define _is_realized(p)           (p->flags & T_REALIZED)
 #define _set_realized(p)          (p->flags |= T_REALIZED)
@@ -384,7 +385,7 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define _port_flags_unchecked(p)  ((p)->_object._port.flags)
 #define _nesting_unchecked(p)     ((p)->_object._port.nesting)
 
-#define _image_unchecked(p)	  ((p)->_object._image)
+#define _image_unchecked(p)	  ((p)->_object._image.rep)
 #define _audio_unchecked(p)	  ((p)->_object._audio)
 #define _tensor_unchecked(p)	  ((p)->_object._tensor.impl)
 #define _lvalue_unchecked(p)      ((p)->_object._lvalue)
@@ -538,6 +539,8 @@ static inline nanoclj_cell_t * get_metadata(nanoclj_cell_t * c) {
     return _cons_metadata(c);
   case T_FOREIGN_FUNCTION:
     return _ff_metadata(c);
+  case T_IMAGE:
+    return _image_metadata(c);
   }
   return NULL;
 }
@@ -561,6 +564,9 @@ static inline void set_metadata(nanoclj_cell_t * c, nanoclj_cell_t * meta) {
     break;
   case T_FOREIGN_FUNCTION:
     _ff_metadata(c) = meta;
+    break;
+  case T_IMAGE:
+    _image_metadata(c) = meta;
     break;
   }
 }
@@ -1169,8 +1175,8 @@ static inline nanoclj_val_t mk_integer(nanoclj_t * sc, long long num) {
 }
 
 static inline nanoclj_val_t mk_image(nanoclj_t * sc, int32_t width, int32_t height,
-				     int32_t channels, uint8_t * data) {
-  nanoclj_cell_t * x = get_cell_x(sc, T_IMAGE, T_GC_ATOM, NULL, NULL, NULL);
+				     int32_t channels, uint8_t * data, nanoclj_cell_t * meta) {
+  nanoclj_cell_t * x = get_cell_x(sc, T_IMAGE, T_GC_ATOM, NULL, NULL, meta);
   if (x) {
     size_t size = width * height * channels;
     uint8_t * r_data = sc->malloc(size);
@@ -1187,7 +1193,8 @@ static inline nanoclj_val_t mk_image(nanoclj_t * sc, int32_t width, int32_t heig
 	image->channels = channels;
 
 	_image_unchecked(x) = image;
-
+	_image_metadata(x) = meta;
+	
 #if RETAIN_ALLOCS
 	retain(sc, x);
 #endif
@@ -3790,12 +3797,12 @@ static void print_tensor(nanoclj_t * sc, void * tensor, nanoclj_cell_t * out) {
 static int sixel_write(char *data, int size, void *priv) {
   return fwrite(data, 1, size, (FILE *)priv);
 }
-static inline void print_image_sixel(uint8_t * data, int width, int height, int pixelformat) {  
+static inline void print_image_sixel(uint8_t * data, int width, int height, int pixelformat) {
   sixel_dither_t * dither;
   sixel_dither_new(&dither, -1, NULL);
   sixel_dither_initialize(dither, data, width, height, pixelformat, SIXEL_LARGE_NORM, SIXEL_REP_CENTER_BOX, SIXEL_QUALITY_HIGHCOLOR);
   
-  sixel_output_t * output = NULL;
+  sixel_output_t * output;
   sixel_output_new(&output, sixel_write, stdout, NULL);
   
   /* convert pixels into sixel format and write it to output context */
@@ -3833,7 +3840,7 @@ static inline void print_image(nanoclj_t * sc, nanoclj_image_t * img, nanoclj_ce
     if (f) {
       print_image_sixel(img->data, img->width, img->height, f);
       return;
-    }    
+    }
 #endif      
   }
   
@@ -4605,7 +4612,7 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
 
   case T_IMAGE:
     if (!args) {
-      return mk_image(sc, 0, 0, 0, NULL);      
+      return mk_image(sc, 0, 0, 0, NULL, NULL);
     } else {
       x = first(sc, args);
       if (is_image(x)) {
@@ -7273,7 +7280,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     x = get_out_port(sc);
 #if NANOCLJ_HAS_CANVAS
     if (is_writer(x) && port_type_unchecked(x) == port_canvas) {
-      rep_unchecked(x)->canvas.impl = mk_canvas(sc, to_int(arg0), to_int(arg1));
+      rep_unchecked(x)->canvas.impl = mk_canvas(sc,
+						(int)(to_double(arg0) * sc->window_scale_factor),
+						(int)(to_double(arg1) * sc->window_scale_factor));
     }
 #endif
     s_return(sc, mk_nil());    
@@ -7604,7 +7613,7 @@ static inline nanoclj_cell_t * mk_properties(nanoclj_t * sc) {
   const char * line_separator = "\n";
 #endif
 
-  nanoclj_val_t ua = mk_string(sc, banner);
+  nanoclj_val_t ua = mk_string_fmt(sc, "nanoclj %s", NANOCLJ_VERSION);
 
   nanoclj_cell_t * l = NULL;
   l = cons(sc, mk_string(sc, user_name), l);
@@ -7629,7 +7638,7 @@ static inline nanoclj_cell_t * mk_properties(nanoclj_t * sc) {
   l = cons(sc, mk_string(sc, "java.class.path"), l);
   l = cons(sc, mk_string(sc, term), l);
   l = cons(sc, mk_string(sc, "term"), l);
-  l = cons(sc, mk_string(sc, banner), l);
+  l = cons(sc, mk_string(sc, NANOCLJ_VERSION), l);
   l = cons(sc, mk_string(sc, "nanoclj.version"), l);
   l = cons(sc, ua, l);
   l = cons(sc, mk_string(sc, "http.agent"), l);
@@ -8004,10 +8013,8 @@ nanoclj_val_t nanoclj_eval(nanoclj_t * sc, nanoclj_val_t obj) {
 #if NANOCLJ_STANDALONE
 
 int main(int argc, const char **argv) {
-  if (argc == 1) {
-    printf("%s\n", banner);
-  }
   if (argc == 2 && strcmp(argv[1], "--help") == 0) {
+    printf("nanoclj %s\n", NANOCLJ_VERSION);
     printf("Usage: %s [switches] [--] [programfile] [arguments]\n", argv[0]);
     return 1;
   }
