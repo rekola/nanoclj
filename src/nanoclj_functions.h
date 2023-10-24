@@ -320,6 +320,15 @@ static inline nanoclj_val_t Image_load(nanoclj_t * sc, nanoclj_val_t args) {
   if (!data) { /* FIXME: stbi_failure_reason() is not thread-safe */
     return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string_fmt(sc, "%s [%.*s]", stbi_failure_reason(), (int)filename0.size, filename0.ptr)));
   }
+  
+  if (channels >= 3) {
+    uint8_t * ptr = data, * end = data + w * h * channels;
+    for ( ; ptr < end; ptr += channels) {
+      uint8_t tmp = ptr[2];
+      ptr[2] = ptr[0];
+      ptr[0] = tmp;
+    }
+  }
 
   nanoclj_cell_t * meta = mk_arraymap(sc, 3);
   set_vector_elem(meta, 0, mk_mapentry(sc, sc->WIDTH, mk_int(w)));
@@ -999,7 +1008,9 @@ static inline void init_linenoise(nanoclj_t * sc) {
   linenoiseSetCompletionCallback(completion);
   linenoiseSetHintsCallback(hints);
   linenoiseSetFreeHintsCallback(free_hints);
+#if 0
   linenoiseSetMouseMotionCallback(on_mouse_motion);
+#endif
   linenoiseSetWindowSizeCallback(on_window_size);
   linenoiseHistorySetMaxLen(10000);
 }
@@ -1035,9 +1046,10 @@ static inline nanoclj_val_t linenoise_history_load(nanoclj_t * sc, nanoclj_val_t
 }
 
 static inline nanoclj_val_t linenoise_history_save(nanoclj_t * sc, nanoclj_val_t args) {
-  char * fn = alloc_c_str(sc, to_strview(car(args)));
-  linenoiseHistorySave(fn);
+  char * fn = alloc_c_str(sc, to_strview(car(args))), * line = alloc_c_str(sc, to_strview(cadr(args)));
+  linenoiseHistorySave(fn, line);
   sc->free(fn);
+  sc->free(line);
   return mk_nil();
 }
 
@@ -1113,7 +1125,7 @@ static inline void register_functions(nanoclj_t * sc) {
   nanoclj_cell_t * linenoise = def_namespace(sc, "linenoise", __FILE__);
   intern_foreign_func(sc, linenoise, "read-line", linenoise_readline, 1, 1);
   intern_foreign_func(sc, linenoise, "history-load", linenoise_history_load, 1, 1);
-  intern_foreign_func(sc, linenoise, "history-save", linenoise_history_save, 1, 1);
+  intern_foreign_func(sc, linenoise, "history-save", linenoise_history_save, 2, 2);
   intern_foreign_func(sc, linenoise, "history-add", linenoise_history_add, 1, 1);
 
   init_linenoise(sc);  

@@ -114,6 +114,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/ioctl.h>
+#include <sys/file.h>
 #include <unistd.h>
 #include <signal.h>
 #include "linenoise.h"
@@ -1458,19 +1459,19 @@ int linenoiseHistorySetMaxLen(int len) {
     return 1;
 }
 
-/* Save the history in the specified file. On success 0 is returned
+/* Saves single line to the specified file. On success 0 is returned
  * otherwise -1 is returned. */
-int linenoiseHistorySave(const char *filename) {
+int linenoiseHistorySave(const char *filename, const char *line) {
     mode_t old_umask = umask(S_IXUSR|S_IRWXG|S_IRWXO);
     FILE *fp;
     int j;
 
-    fp = fopen(filename,"w");
+    fp = fopen(filename,"a");
     umask(old_umask);
     if (fp == NULL) return -1;
+    flock(fileno(fp), LOCK_EX);
     chmod(filename,S_IRUSR|S_IWUSR);
-    for (j = 0; j < history_len; j++)
-        fprintf(fp,"%s\n",history[j]);
+    fprintf(fp,"%s\n",line);
     fclose(fp);
     return 0;
 }
@@ -1485,6 +1486,7 @@ int linenoiseHistoryLoad(const char *filename) {
     char buf[LINENOISE_MAX_LINE];
 
     if (fp == NULL) return -1;
+    flock(fileno(fp), LOCK_SH);
 
     while (fgets(buf,LINENOISE_MAX_LINE,fp) != NULL) {
         char *p;

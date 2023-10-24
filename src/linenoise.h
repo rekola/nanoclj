@@ -114,7 +114,7 @@ void linenoiseSetHighlightCancelCallback(linenoiseHighlightCancelCallback *);
 /* History API. */
 int linenoiseHistoryAdd(const char *line);
 int linenoiseHistorySetMaxLen(int len);
-int linenoiseHistorySave(const char *filename);
+int linenoiseHistorySave(const char *filename, const char *line);
 int linenoiseHistoryLoad(const char *filename);
 
 /* Other utilities. */
