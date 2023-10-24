@@ -77,7 +77,7 @@
 #define SIGNATURE_CELL		(MASK_EXPONENT | MASK_QUIET | MASK_SIGN)
 #define SIGNATURE_NAN		(MASK_EXPONENT | MASK_QUIET | 0)
 #define SIGNATURE_BOOLEAN	(MASK_EXPONENT | MASK_QUIET | 1)
-#define SIGNATURE_INTEGER	(MASK_EXPONENT | MASK_QUIET | 2)
+#define SIGNATURE_LONG		(MASK_EXPONENT | MASK_QUIET | 2)
 #define SIGNATURE_CODEPOINT	(MASK_EXPONENT | MASK_QUIET | 3)
 #define SIGNATURE_PROC		(MASK_EXPONENT | MASK_QUIET | 4)
 #define SIGNATURE_KEYWORD	(MASK_EXPONENT | MASK_QUIET | 5)
@@ -138,7 +138,7 @@ enum nanoclj_types {
   T_NIL = 0,
   T_REAL = 1,
   T_BOOLEAN = 2,
-  T_INTEGER = 3,
+  T_LONG = 3,
   T_CODEPOINT = 4,
   T_PROC = 5,
   T_KEYWORD = 6,
@@ -146,41 +146,40 @@ enum nanoclj_types {
   /* unassigned = 8 */
   T_LIST = 9,
   T_STRING = 10,
-  T_LONG = 11,
+  T_CHAR_ARRAY = 11,
   T_CLOSURE = 12,
   T_RATIO = 13,
   T_FOREIGN_FUNCTION = 14,
   T_READER = 15,
   T_WRITER = 16,
-  T_VECTOR = 17,
-  T_MACRO = 18,
-  T_LAZYSEQ = 19,
-  T_ENVIRONMENT = 20,
-  T_CLASS = 21,
-  T_MAPENTRY = 22,
-  T_ARRAYMAP = 23,
-  T_SORTED_SET = 24,
-  T_VAR = 25,
-  T_FOREIGN_OBJECT = 26,
-  T_BIGINT = 27,
-  T_CHAR_ARRAY = 28,
-  T_INPUT_STREAM = 29,
-  T_OUTPUT_STREAM = 30,
-  T_REGEX = 31,
-  T_DELAY = 32,
-  T_IMAGE = 33,
-  T_AUDIO = 34,
-  T_FILE = 35,
-  T_DATE = 36,
-  T_UUID = 37,
-  T_RUNTIME_EXCEPTION = 38,
-  T_ARITY_EXCEPTION = 39,
-  T_ILLEGAL_ARG_EXCEPTION = 40,
-  T_NUM_FMT_EXCEPTION = 41,
-  T_ARITHMETIC_EXCEPTION = 42,
-  T_CLASS_CAST_EXCEPTION = 43,
-  T_TENSOR = 44,
-  T_LAST_SYSTEM_TYPE = 45
+  T_INPUT_STREAM = 17,
+  T_OUTPUT_STREAM = 18,
+  T_VECTOR = 19,
+  T_MACRO = 20,
+  T_LAZYSEQ = 21,
+  T_ENVIRONMENT = 22,
+  T_CLASS = 23,
+  T_MAPENTRY = 24,
+  T_ARRAYMAP = 25,
+  T_SORTED_SET = 26,
+  T_VAR = 27,
+  T_FOREIGN_OBJECT = 28,
+  T_BIGINT = 29,
+  T_REGEX = 30,
+  T_DELAY = 31,
+  T_IMAGE = 32,
+  T_AUDIO = 33,
+  T_FILE = 34,
+  T_DATE = 35,
+  T_UUID = 36,
+  T_RUNTIME_EXCEPTION = 37,
+  T_ARITY_EXCEPTION = 38,
+  T_ILLEGAL_ARG_EXCEPTION = 39,
+  T_NUM_FMT_EXCEPTION = 40,
+  T_ARITHMETIC_EXCEPTION = 41,
+  T_CLASS_CAST_EXCEPTION = 42,
+  T_TENSOR = 43,
+  T_LAST_SYSTEM_TYPE = 44
 };
 
 typedef struct {
@@ -569,7 +568,7 @@ static inline void set_metadata(nanoclj_cell_t * c, nanoclj_cell_t * meta) {
 static inline bool is_integral_type(int_fast16_t type) {
   switch (type) {
   case T_BOOLEAN:
-  case T_INTEGER:
+  case T_LONG:
   case T_CODEPOINT:
   case T_PROC:
     return true;
@@ -579,9 +578,8 @@ static inline bool is_integral_type(int_fast16_t type) {
 
 static inline bool is_numeric_type(uint16_t t) {
   switch (t) {
-  case T_INTEGER:
-  case T_REAL:
   case T_LONG:
+  case T_REAL:
   case T_RATIO:
   case T_BIGINT:
     return true;
@@ -614,7 +612,7 @@ static inline const char * strvalue(nanoclj_val_t p) {
 
 static inline long long to_long_w_def(nanoclj_val_t p, long long def) {
   switch (prim_type(p)) {
-  case T_INTEGER:
+  case T_LONG:
   case T_PROC:
   case T_CODEPOINT:
     return decode_integer(p);
@@ -650,7 +648,7 @@ static inline int32_t to_int(nanoclj_val_t p) {
   switch (prim_type(p)) {
   case T_CODEPOINT:
   case T_PROC:
-  case T_INTEGER:
+  case T_LONG:
     return decode_integer(p);
   case T_REAL:
     return (int32_t)p.as_double;
@@ -677,7 +675,7 @@ static inline int32_t to_int(nanoclj_val_t p) {
 
 static inline double to_double(nanoclj_val_t p) {
   switch (prim_type(p)) {
-  case T_INTEGER:
+  case T_LONG:
     return (double)decode_integer(p);
   case T_REAL:
     return p.as_double;
@@ -1129,7 +1127,7 @@ static inline nanoclj_val_t mk_boolean(bool b) {
 }
 
 static inline nanoclj_val_t mk_int(int num) {
-  return (nanoclj_val_t)((SIGNATURE_INTEGER << 48) | (uint32_t)num);
+  return (nanoclj_val_t)((SIGNATURE_LONG << 48) | (uint32_t)num);
 }
 
 static inline nanoclj_val_t mk_proc(enum nanoclj_opcode op) {
@@ -1269,7 +1267,7 @@ static inline long long normalize(long long num, long long den, long long * outp
 
 static inline long long get_ratio(nanoclj_val_t n, long long * den) {
   switch (prim_type(n)) {
-  case T_INTEGER:
+  case T_LONG:
     *den = 1;
     return decode_integer(n);
   case T_NIL:{
@@ -2494,11 +2492,7 @@ static inline int compare(nanoclj_val_t a, nanoclj_val_t b) {
       nanoclj_cell_t * a2 = decode_pointer(a), * b2 = decode_pointer(b);
       type_a = _type(a2);
       type_b = _type(b2);
-      if (type_a == T_NIL) {
-	return -1;
-      } else if (type_b == T_NIL) {
-	return +1;
-      } else if (type_a == type_b) {
+      if (type_a == type_b) {
 	switch (type_a) {
 	case T_STRING:
 	case T_CHAR_ARRAY:
@@ -2572,6 +2566,10 @@ static inline int compare(nanoclj_val_t a, nanoclj_val_t b) {
 	    return compare(_cdr(a2), _cdr(b2));
 	  }
 	}
+      } else if (type_a == T_NIL) {
+	return -1;
+      } else if (type_b == T_NIL) {
+	return +1;
       }
     } else {
       type_a = expand_type(a, type_a);
@@ -2616,8 +2614,7 @@ static int32_t hasheq(nanoclj_t * sc, nanoclj_val_t v) {
   case T_BOOLEAN:
     return v.as_long == kFALSE ? 1237 : 1231;
     
-  case T_INTEGER:
-    /* Use long hash for integers so that (hash 1) matches Clojure */
+  case T_LONG:
     return murmur3_hash_long(decode_integer(v));
 
   case T_REAL:
@@ -3872,10 +3869,10 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
   strview_t sv = { 0, 0 };
 
   switch (prim_type(l)) {
-  case T_INTEGER:
+  case T_LONG:
     sv = (strview_t){
       sc->strbuff,
-      sprintf(sc->strbuff, "%d", (int)decode_integer(l))
+      sprintf(sc->strbuff, "%d", decode_integer(l))
     };
     break;
   case T_REAL:
@@ -4159,9 +4156,13 @@ static inline nanoclj_val_t mk_format(nanoclj_t * sc, strview_t fmt0, nanoclj_ce
   
   for (; args; args = next(sc, args), n_args++, m *= 4) {
     nanoclj_val_t arg = first(sc, args);
+    if (is_nil(arg)) {
+      nanoclj_throw(sc, sc->NullPointerException);
+      sc->free(fmt);
+      return mk_nil();
+    }
     
     switch (type(arg)) {
-    case T_INTEGER:
     case T_LONG:
     case T_DATE:
     case T_PROC:
@@ -4479,9 +4480,6 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
     /* make closure. first is code. second is environment */
     return mk_pointer(get_cell(sc, T_CLOSURE, 0, x, z, NULL));
     
-  case T_INTEGER:
-    return mk_int(to_int(first(sc, args)));
-
   case T_LONG:
     /* Casts the argument to long (or int if it is sufficient) */
     return mk_integer(sc, to_long(first(sc, args)));
@@ -5670,7 +5668,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       return false;
     }
     switch (prim_type(arg0)) {
-    case T_INTEGER: s_return(sc, mk_integer(sc, decode_integer(arg0) + 1));
+    case T_LONG: s_return(sc, mk_integer(sc, decode_integer(arg0) + 1));
     case T_REAL: s_return(sc, mk_real(arg0.as_double + 1.0));
     case T_NIL: {
       nanoclj_cell_t * c = decode_pointer(arg0);
@@ -5707,7 +5705,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       return false;
     }
     switch (prim_type(arg0)) {
-    case T_INTEGER: s_return(sc, mk_integer(sc, decode_integer(arg0) - 1));
+    case T_LONG: s_return(sc, mk_integer(sc, decode_integer(arg0) - 1));
     case T_REAL: s_return(sc, mk_real(arg0.as_double - 1.0));
     case T_NIL: {
       nanoclj_cell_t * c = decode_pointer(arg0);
@@ -5751,8 +5749,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	s_return(sc, tensor_add(sc, to_tensor(sc, arg0), to_tensor(sc, arg1)));
       } else if (tx == T_REAL || ty == T_REAL) {
 	s_return(sc, mk_real(to_double(arg0) + to_double(arg1)));
-      } else if (tx == T_INTEGER && ty == T_INTEGER) {
-	s_return(sc, mk_integer(sc, (long long)decode_integer(arg0) + (long long)decode_integer(arg1)));
       } else if (tx == T_RATIO || ty == T_RATIO) {
 	long long den_x, den_y, den;
 	long long num_x = get_ratio(arg0, &den_x);
@@ -5788,8 +5784,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	return false;
       } else if (tx == T_REAL || ty == T_REAL) {
 	s_return(sc, mk_real(to_double(arg0) - to_double(arg1)));
-      } else if (tx == T_INTEGER && ty == T_INTEGER) {
-	s_return(sc, mk_integer(sc, (long long)decode_integer(arg0) - (long long)decode_integer(arg1)));
       } else if (tx == T_RATIO || ty == T_RATIO) {
 	long long den_x, den_y, den;
 	long long num_x = get_ratio(arg0, &den_x);
@@ -5825,8 +5819,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	return false;
       } else if (tx == T_REAL || ty == T_REAL) {
 	s_return(sc, mk_real(to_double(arg0) * to_double(arg1)));
-      } else if (tx == T_INTEGER && ty == T_INTEGER) {
-	s_return(sc, mk_integer(sc, (long long)decode_integer(arg0) * (long long)decode_integer(arg1)));
       } else if (tx == T_RATIO || ty == T_RATIO) {
 	long long den_x, den_y;
 	long long num_x = get_ratio(arg0, &den_x);
@@ -5868,21 +5860,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	return false;
       } else if (tx == T_REAL || ty == T_REAL) {
 	s_return(sc, mk_real(to_double(arg0) / to_double(arg1)));
-      } else if (tx == T_INTEGER && ty == T_INTEGER) {
-	int divisor = decode_integer(arg1);
-	if (divisor == 0) {
-	  nanoclj_throw(sc, mk_arithmetic_exception(sc, "Divide by zero"));
-	  return false;
-	} else {
-	  int dividend = decode_integer(arg0);
-	  if (dividend % divisor == 0) {
-	    s_return(sc, mk_integer(sc, dividend / divisor));
-	  } else {
-	    long long den;
-	    long long num = normalize(dividend, divisor, &den);
-	    s_return(sc, mk_ratio_long(sc, num, den));
-	  }
-	}
       } else if (tx == T_RATIO || ty == T_RATIO) {
 	long long den_x, den_y;
 	long long num_x = get_ratio(arg0, &den_x);
@@ -5907,19 +5884,17 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  return false;
 	} else {
 	  long long dividend = to_long(arg0);
-	  if (dividend % divisor == 0) {
-	    if (dividend == LLONG_MIN && divisor == -1) {
-	      nanoclj_throw(sc, mk_arithmetic_exception(sc, "Integer overflow"));
-	      return false;
-	    } else {
-	      s_return(sc, mk_integer(sc, dividend / divisor));
-	    }
+	  if (dividend == LLONG_MIN && divisor == -1) {
+	    nanoclj_throw(sc, mk_arithmetic_exception(sc, "Integer overflow"));
+	    return false;
+	  } else if (dividend % divisor == 0) {
+	    s_return(sc, mk_integer(sc, dividend / divisor));
 	  } else {
 	    long long den;
 	    long long num = normalize(dividend, divisor, &den);
 	    s_return(sc, mk_ratio_long(sc, num, den));
 	  }
-	}       
+	}
       }
     }
     
@@ -7828,7 +7803,7 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   mk_named_type(sc, "java.lang.Class", T_CLASS, AFn); /* non-standard parent */
   mk_named_type(sc, "java.lang.String", T_STRING, Object);
   mk_named_type(sc, "java.lang.Boolean", T_BOOLEAN, Object);
-  mk_named_type(sc, "java.lang.Integer", T_INTEGER, Number);
+  mk_named_type(sc, "java.math.BigInteger", T_BIGINT, Number);
   mk_named_type(sc, "java.lang.Double", T_REAL, Number);
   mk_named_type(sc, "java.lang.Long", T_LONG, Number);
   mk_named_type(sc, "java.io.Reader", T_READER, Object);

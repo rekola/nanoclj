@@ -41,16 +41,14 @@
 
 (def keyword clojure.lang.Keyword)
 (def char nanoclj.core.Codepoint)
-(def short java.lang.Integer)
 (def double java.lang.Double)
 (def float java.lang.Double)
 
 (def resolve ns-resolve)
 
-; Casts argument to int
-(def int java.lang.Integer)
-
-; Casts argument to long (or int if sufficient)
+; Casts argument to Long
+(def short java.lang.Long)
+(def int java.lang.Long)
 (def long java.lang.Long)
 
 (defn inst-ms

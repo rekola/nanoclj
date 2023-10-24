@@ -252,49 +252,38 @@ static nanoclj_val_t numeric_tower_expt(nanoclj_t * sc, nanoclj_val_t args) {
   nanoclj_val_t x = car(args);
   nanoclj_val_t y = cadr(args);
 
-  int tx = prim_type(x), ty = prim_type(y);
+  if (is_nil(x) || is_nil(y)) {
+    return nanoclj_throw(sc, sc->NullPointerException);
+  }
+  
+  int tx = type(x), ty = type(y);
 
-  if (tx == T_INTEGER && ty == T_INTEGER) {
-    int base = decode_integer(x), exp = decode_integer(y);
+  if (tx == T_RATIO && ty == T_LONG) {
+    long exp = to_long(y);
+    if (exp > -256 && exp < 256) {
+      long long den;
+      long long num = get_ratio(x, &den);
+      if (exp < 0) {
+	exp = -exp;
+	long long tmp = den;
+	den = num;
+	num = tmp;
+      }
+      long long num2, den2;
+      if (!ipow_overflow(num, exp, &num2) && !ipow_overflow(den, exp, &den2)) {
+	if (den2 == 1) return mk_integer(sc, num2);
+	else return mk_ratio_long(sc, num2, den2);
+      }
+    }
+  } else if (tx == T_LONG && ty == T_LONG) {
+    long long base = to_long(x), exp = to_long(y);
     long long res;
     if (base == 0 || base == 1) {
-      return mk_int(base);
+      return mk_integer(sc, base);
     } else if (exp >= 0 && exp < 256 && !ipow_overflow(base, exp, &res)) {
       return mk_integer(sc, res);
     } else if (exp > -256 && exp < 0 && !ipow_overflow(base, -exp, &res)) {
       return mk_ratio_long(sc, 1, res);
-    }
-  } else if (tx != T_REAL && ty != T_REAL) {
-    tx = expand_type(x, tx);
-    ty = expand_type(y, ty);
-
-    if (tx == T_RATIO && (ty == T_INTEGER || ty == T_LONG)) {
-      long exp = to_long(y);
-      if (exp > -256 && exp < 256) {
-	long long den;
-	long long num = get_ratio(x, &den);
-	if (exp < 0) {
-	  exp = -exp;
-	  long long tmp = den;
-	  den = num;
-	  num = tmp;
-	}
-	long long num2, den2;
-	if (!ipow_overflow(num, exp, &num2) && !ipow_overflow(den, exp, &den2)) {
-	  if (den2 == 1) return mk_integer(sc, num2);
-	  else return mk_ratio_long(sc, num2, den2);
-	}
-      }
-    } else if (tx != T_RATIO && ty != T_RATIO) {
-      long long base = to_long(x), exp = to_long(y);
-      long long res;
-      if (base == 0 || base == 1) {
-	return mk_integer(sc, base);
-      } else if (exp >= 0 && exp < 256 && !ipow_overflow(base, exp, &res)) {
-	return mk_integer(sc, res);
-      } else if (exp > -256 && exp < 0 && !ipow_overflow(base, -exp, &res)) {
-	return mk_ratio_long(sc, 1, res);
-      }
     }
   }
 
