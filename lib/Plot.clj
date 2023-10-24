@@ -86,7 +86,7 @@
                                (do
                                  (line-to (fit-x (first x)) (fit-y (first y)))
                                  (recur (rest x) (rest y)))))
-         cx (clojure.java.io/writer width height)
+         cx (clojure.java.io/writer width height [ 1 1 1 ])
          draw (fn []
                 (set-font-size 10)
                 (set-color box-color)
@@ -188,7 +188,7 @@
                                  (arc (fit-x (first x)) (fit-y (first y)) 3 0 pi-times-2)
                                  (stroke)
                                  (recur (rest x) (rest y)))))
-         cx (clojure.java.io/writer width height)
+         cx (clojure.java.io/writer width height [ 1 1 1 ])
          draw (fn []
                 (set-font-size 10)
                 (set-color box-color)
