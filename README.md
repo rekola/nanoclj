@@ -37,8 +37,12 @@ have been tested:
 | Black Box | OK | ? | On HiDPI system the images are upscaled, and the terminal and the flatpak system use too much CPU time when idling. |
 | GNOME Terminal | True color works, but sixel support is not enabled. | | |
 
-![Plotting from nanoclj](https://user-images.githubusercontent.com/6755525/262003070-b5eac109-f1cc-4071-ad7b-a1e5d107a1d9.jpeg "Plotting from nanoclj")
+![Plotting from nanoclj](https://user-images.githubusercontent.com/6755525/277504459-737b498e-005b-49ad-92b2-0917a1a10b7e.jpg "Plotting from nanoclj")
 *The plot function returns an image which can then be saved with Image/save or modified using other functions in the Image namespace.*
+
+As well as printing images in block mode like the plot function does, they can also be printed in inline mode which is shown in the following example:
+
+![Inline images](https://user-images.githubusercontent.com/6755525/277514315-6b5f26a0-a1ab-4f66-95b7-4c976f288ff3.jpg "Inline images")
 
 ## Differences to Clojure:
 
@@ -85,6 +89,7 @@ have been tested:
 - stb_image, stb_image_resize, stb_image_write (included)
 - dr_wav (included)
 - ggml (included, experimental)
+- libxml2
 - pcre2
 - cairo
 - libsixel
@@ -114,7 +119,7 @@ have been tested:
 - Readers, Writers, spit and slurp do not accept options such as :encoding or :append
 - spit and slurp do not accept Writers or Readers
 - Associative destructuring
-- `*e`, `*print-length*`, `*print-level*`, `*file*`, `*flush-on-newline*`, `*clojure-version*`, `*load-tests*`
+- `*print-length*`, `*print-level*`, `*file*`, `*flush-on-newline*`, `*clojure-version*`, `*load-tests*`
 - Missing core functions and macros
   - doseq, for, dotimes
   - bit-and-not
@@ -156,7 +161,6 @@ have been tested:
   - dir
 - clojure.set
 - clojure.data
-- clojure.xml
 - clojure.walk
 - clojure.zip
 - clojure.pprint
