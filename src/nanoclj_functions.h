@@ -89,7 +89,7 @@ static nanoclj_val_t System_getenv(nanoclj_t * sc, nanoclj_val_t args0) {
       for (; p[j] != '=' && p[j] != 0; j++) {
 	
       }
-      nanoclj_val_t key = mk_counted_string(sc, p, j);
+      nanoclj_val_t key = mk_string_from_sv(sc, (strview_t){ p, j });
       nanoclj_val_t val = p[j] == '=' ? mk_string(sc, p + j + 1) : mk_nil();
       set_vector_elem(map, i, mk_mapentry(sc, key, val));
     }

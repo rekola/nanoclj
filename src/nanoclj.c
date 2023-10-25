@@ -179,7 +179,8 @@ enum nanoclj_types {
   T_ARITHMETIC_EXCEPTION = 41,
   T_CLASS_CAST_EXCEPTION = 42,
   T_TENSOR = 43,
-  T_LAST_SYSTEM_TYPE = 44
+  T_GRAPH = 44,
+  T_LAST_SYSTEM_TYPE = 45
 };
 
 typedef struct {
@@ -6908,8 +6909,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 				      (utf8proc_option_t)to_long(options)
 				      );
     if (s >= 0) {
-      nanoclj_val_t r = mk_pointer(get_string_object(sc, T_STRING, (char *)dest, s, 0));
-      free(dest);
+      nanoclj_val_t r = mk_string_from_sv(sc, (strview_t){ (char *)dest, s });
+      free(dest); /* dest is reserved with standard malloc */
       s_return(sc, r);
     } else {
       s_return(sc, mk_nil());
@@ -7510,10 +7511,6 @@ nanoclj_val_t nanoclj_mk_vector(nanoclj_t * sc, size_t size) {
   return mk_pointer(mk_vector(sc, size));
 }
 
-static inline nanoclj_val_t mk_counted_string(nanoclj_t * sc, const char *str, size_t len) {
-  return mk_pointer(get_string_object(sc, T_STRING, str, len, 0));
-}
-
 static struct nanoclj_interface vtbl = {
   nanoclj_intern,
   cons_checked,
@@ -7521,7 +7518,6 @@ static struct nanoclj_interface vtbl = {
   mk_real,
   def_symbol,
   mk_string,
-  mk_counted_string,
   mk_codepoint,
   nanoclj_mk_vector,
   mk_foreign_func,
@@ -7631,7 +7627,7 @@ static inline nanoclj_cell_t * mk_properties(nanoclj_t * sc) {
   const char * line_separator = "\n";
 #endif
 
-  nanoclj_val_t ua = mk_string_fmt(sc, "nanoclj %s", NANOCLJ_VERSION);
+  nanoclj_val_t ua = mk_string_fmt(sc, "nanoclj/%s", NANOCLJ_VERSION);
 
   nanoclj_cell_t * l = NULL;
   l = cons(sc, mk_string(sc, user_name), l);
@@ -7876,6 +7872,7 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   mk_named_type(sc, "nanoclj.core.Audio", T_AUDIO, Object);
   mk_named_type(sc, "nanoclj.core.Tensor", T_TENSOR, Object);
   mk_named_type(sc, "nanoclj.core.EmptyList", T_NIL, Object);
+  mk_named_type(sc, "nanoclj.core.Graph", T_GRAPH, Object);
 
   sc->OutOfMemoryError = mk_exception(sc, OutOfMemoryError, "Out of memory");
   sc->NullPointerException = mk_exception(sc, NullPointerException, "Null pointer exception");
@@ -8017,11 +8014,6 @@ void nanoclj_register_foreign_func_list(nanoclj_t * sc,
     nanoclj_register_foreign_func(sc, list + i);
   }
 }
-
-nanoclj_val_t nanoclj_apply0(nanoclj_t * sc, const char *procname) {
-  return nanoclj_eval(sc, mk_pointer(cons(sc, def_symbol(sc, procname), NULL)));
-}
-
 #endif
 
 nanoclj_val_t nanoclj_eval(nanoclj_t * sc, nanoclj_val_t obj) {
