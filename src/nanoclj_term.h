@@ -23,6 +23,43 @@
 #include "nanoclj_utils.h"
 #include "nanoclj_types.h"
 
+#if NANOCLJ_SIXEL
+#include <sixel.h>
+
+static int sixel_write(char *data, int size, void *priv) {
+  return fwrite(data, 1, size, (FILE *)priv);
+}
+static inline bool print_image_sixel(uint8_t * data, int width, int height, int channels) {
+  int pf = 0;
+  switch (channels) {
+  case 1: pf = SIXEL_PIXELFORMAT_G8; break;
+  case 3: pf = SIXEL_PIXELFORMAT_BGR888; break;
+  case 4: pf = SIXEL_PIXELFORMAT_BGRA8888; break;
+  default: return false;
+  }
+
+  sixel_dither_t * dither;
+  sixel_dither_new(&dither, -1, NULL);
+  sixel_dither_initialize(dither, data, width, height, pf, SIXEL_LARGE_NORM, SIXEL_REP_CENTER_BOX, SIXEL_QUALITY_HIGHCOLOR);
+  
+  sixel_output_t * output;
+  sixel_output_new(&output, sixel_write, stdout, NULL);
+  
+  /* convert pixels into sixel format and write it to output context */
+  sixel_encode(data,
+	       width,
+	       height,
+	       8,
+	       dither,
+	       output);
+
+  sixel_output_destroy(output);
+  sixel_dither_destroy(dither);
+
+  return true;
+}
+#endif
+
 static inline void reset_color(FILE * fh) {
   if (isatty(fileno(fh))) {
     fputs("\033[00m", fh);

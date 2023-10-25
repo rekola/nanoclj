@@ -208,6 +208,7 @@ extern "C" {
     nanoclj_val_t QQUOTE;             /* pointer to symbol quasiquote */
     nanoclj_val_t UNQUOTE;            /* pointer to symbol unquote */
     nanoclj_val_t UNQUOTESP;          /* pointer to symbol unquote-splicing */
+    
     nanoclj_val_t TAG_HOOK;           /* *default-data-reader-fn* */
     nanoclj_val_t COMPILE_HOOK;       /* *compile-hook* */
     nanoclj_val_t IN_SYM;	  /* *in* */
@@ -219,6 +220,7 @@ extern "C" {
     nanoclj_val_t WINDOW_SIZE;    /* *window-size* */
     nanoclj_val_t WINDOW_SCALE_F;   /* *window-scale-factor* */
     nanoclj_val_t MOUSE_POS;      /* *mouse-pos* */
+    nanoclj_val_t THEME;	  /* *theme* */
     
     nanoclj_val_t RECUR;		  /* recur */
     nanoclj_val_t AMP;		  /* & */

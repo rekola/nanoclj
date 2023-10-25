@@ -21,7 +21,11 @@ extern "C" {
 #endif
 
 #ifndef NANOCLJ_SIXEL
+#ifdef WIN32  
+#define NANOCLJ_SIXEL 0
+#else
 #define NANOCLJ_SIXEL NANOCLJ_STANDALONE
+#endif
 #endif
 
 #ifndef _MSC_VER
@@ -40,14 +44,6 @@ extern "C" {
 
 #ifndef NANOCLJ_USE_LINENOISE
 #define NANOCLJ_USE_LINENOISE 0
-#endif
-  
-#ifndef USE_TRACING
-#define USE_TRACING 0
-#endif
-
-#ifndef STDIO_ADDS_CR           /* Define if DOS/Windows */
-#define STDIO_ADDS_CR 0
 #endif
 
 #ifndef USE_INTERFACE

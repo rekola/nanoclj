@@ -34,7 +34,6 @@
 #include <unistd.h>
 #include <pwd.h>
 #include <sys/utsname.h>
-#include <sixel.h>
 
 #endif /* _WIN32 */
 
@@ -110,6 +109,7 @@
 #define TOK_IGNORE  	21
 #define TOK_VAR	    	22
 #define TOK_DOT		23
+#define TOK_META	24
 
 #define BACKQUOTE 	'`'
 #define DELIMITERS  	"()[]{}\";\f\t\v\n\r, "
@@ -700,25 +700,6 @@ static inline double to_double(nanoclj_val_t p) {
   return NAN;
 }
 
-static inline nanoclj_color_t to_color(nanoclj_val_t p) {
-  double red = 0, green = 0, blue = 0, alpha = 0;
-  uint_fast16_t t = type(p);
-  if (t == T_VECTOR) {
-    nanoclj_cell_t * c = decode_pointer(p);
-    if (get_size(c) >= 3) {
-      red = to_double(vector_elem(c, 0));
-      green = to_double(vector_elem(c, 1));
-      blue = to_double(vector_elem(c, 2));
-      if (get_size(c) >= 4) {
-	alpha = to_double(vector_elem(c, 3));
-      } else {
-	alpha = 1;
-      }
-    }
-  }
-  return mk_color4d(red, green, blue, alpha);
-}
-  
 static inline void * to_tensor(nanoclj_t * sc, nanoclj_val_t p) {
   switch (prim_type(p)) {
   case T_NIL:{
@@ -881,6 +862,39 @@ static inline strview_t to_strview(nanoclj_val_t x) {
   }
   }  
   return mk_strview(0);
+}
+
+static inline nanoclj_color_t to_color(nanoclj_val_t p) {
+  switch (type(p)) {
+  case T_STRING:{
+    strview_t sv = _to_strview(decode_pointer(p));
+    int red, green, blue;
+    if (sv.size == 7 && sscanf(sv.ptr, "#%2x%2x%2x", &red, &green, &blue) == 3) {
+      return mk_color3i(red, green, blue);
+    } else if (sv.size == 4 && sscanf(sv.ptr, "#%1x%1x%1x", &red, &green, &blue) == 3) {
+      return mk_color3i((red << 4) | red, (green << 4) | green, (blue << 4) | blue);
+    }
+  }
+    break;
+    
+  case T_LONG:
+  case T_REAL:{
+    double a = to_double(p);
+    return mk_color4d(a, a, a, 1.0);
+  }
+    
+  case T_VECTOR:{
+    nanoclj_cell_t * c = decode_pointer(p);
+    if (get_size(c) >= 3) {
+      return mk_color4d( to_double(vector_elem(c, 0)),
+			 to_double(vector_elem(c, 1)),
+			 to_double(vector_elem(c, 2)),
+			 get_size(c) >= 4 ? to_double(vector_elem(c, 3)) : 1.0);
+    }
+  }
+  }
+  
+  return mk_color4d(0, 0, 0, 0);
 }
 
 static inline int_fast16_t syntaxnum(nanoclj_val_t p) {
@@ -3209,8 +3223,8 @@ static inline int32_t parse_char_literal(nanoclj_t * sc, const char *name) {
   } else if (name[0] == 'o') {
     char * end;
     int32_t c = strtol(name + 1, &end, 8);
-    if (!*end) return c;    
-  } else if (*(utf8_next(name)) == 0) {
+    if (!*end) return c;
+  } else if (name[0] != 0 && name[0] != ' ' && name[0] != '\n' && *(utf8_next(name)) == 0) {
     return decode_utf8(name);
   }
   return -1;
@@ -3678,6 +3692,7 @@ static inline int token(nanoclj_t * sc, nanoclj_cell_t * inport) {
   case '@': return TOK_DEREF;
   case BACKQUOTE: return TOK_BQUOTE;
   case '\\': return TOK_CHAR_CONST;
+  case '^': return TOK_META;
   
   case '(':
     c = skipspace(sc, inport);
@@ -3802,31 +3817,6 @@ static void print_tensor(nanoclj_t * sc, void * tensor, nanoclj_cell_t * out) {
   }
 }
 
-#if NANOCLJ_SIXEL
-static int sixel_write(char *data, int size, void *priv) {
-  return fwrite(data, 1, size, (FILE *)priv);
-}
-static inline void print_image_sixel(uint8_t * data, int width, int height, int pixelformat) {
-  sixel_dither_t * dither;
-  sixel_dither_new(&dither, -1, NULL);
-  sixel_dither_initialize(dither, data, width, height, pixelformat, SIXEL_LARGE_NORM, SIXEL_REP_CENTER_BOX, SIXEL_QUALITY_HIGHCOLOR);
-  
-  sixel_output_t * output;
-  sixel_output_new(&output, sixel_write, stdout, NULL);
-  
-  /* convert pixels into sixel format and write it to output context */
-  sixel_encode(data,
-	       width,
-	       height,
-	       8,
-	       dither,
-	       output);
-
-  sixel_output_destroy(output);
-  sixel_dither_destroy(dither);
-}
-#endif
-
 static inline void print_image(nanoclj_t * sc, nanoclj_image_t * img, nanoclj_cell_t * out) {
   if (!is_writable(out)) {
     return;
@@ -3840,14 +3830,7 @@ static inline void print_image(nanoclj_t * sc, nanoclj_image_t * img, nanoclj_ce
     }
   } else if (sc->sixel_term && _port_type_unchecked(out) == port_file && pr->stdio.file == stdout) {      
 #if NANOCLJ_SIXEL
-    int f = 0;
-    switch (img->channels) {
-    case 1: f = SIXEL_PIXELFORMAT_G8; break;
-    case 3: f = SIXEL_PIXELFORMAT_BGR888; break;
-    case 4: f = SIXEL_PIXELFORMAT_BGRA8888; break;
-    }
-    if (f) {
-      print_image_sixel(img->data, img->width, img->height, f);
+    if (print_image_sixel(img->data, img->width, img->height, img->channels)) {
       return;
     }
 #endif      
@@ -4609,7 +4592,8 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
 	  args = next(sc, args);
 	  nanoclj_color_t fill_color = sc->bg_color;
 	  if (args) {
-	    fill_color = to_color(first(sc, args));
+	    nanoclj_val_t c = first(sc, args);
+	    if (!is_nil(c)) fill_color = to_color(c);
 	  }
 #if NANOCLJ_HAS_CANVAS
 	  nanoclj_cell_t * port = get_port_object(sc, type_id, port_canvas);
@@ -5300,11 +5284,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     
   case OP_DEF0:{                /* define */    
     nanoclj_cell_t * code = decode_pointer(sc->code);
-    nanoclj_val_t metaval = mk_nil();
-    if (prim_type(_car(code)) == T_KEYWORD) {
-      metaval = _car(code);
-      code = next(sc, code);
-    }
     x = _car(code);
     if (!is_symbol(x)) {
       Error_0(sc, "Variable is not a symbol");
@@ -5315,10 +5294,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     nanoclj_val_t ns_name;
     if (get_elem(sc, _cons_metadata(sc->global_env), sc->NAME, &ns_name)) {
       meta = conjoin(sc, meta, mk_mapentry(sc, sc->NS, ns_name));
-    }
-
-    if (!is_nil(metaval)) {
-      meta = conjoin(sc, meta, mk_mapentry(sc, metaval, mk_boolean(true)));
     }
       
     if (_caddr(code).as_long != sc->EMPTY.as_long) {
@@ -6641,9 +6616,10 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	    s_goto(sc, OP_RD_SEXPR);
 	  }
 	}
-	  
+
+	case TOK_META:
 	case TOK_IGNORE:
-	  readstr_upto(sc, DELIMITERS, inport, false);
+	  s_save(sc, OP_RD_IGNORE, NULL, sc->EMPTY);
 	  sc->tok = token(sc, inport);
 	  if (sc->tok == TOK_EOF) {
 	    s_return(sc, mk_codepoint(EOF));
@@ -6804,7 +6780,19 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     nanoclj_val_t args = cdr(sc->value);
     s_return(sc, mk_pointer(cons(sc, sc->DOT, cons(sc, inst, cons(sc, method, decode_pointer(args))))));
   }
-    
+
+  case OP_RD_IGNORE:
+    x = get_in_port(sc);
+    if (is_cell(x)) {
+      nanoclj_cell_t * inport = decode_pointer(x);
+      sc->tok = token(sc, inport);
+      if (sc->tok == TOK_EOF) {
+	s_return(sc, mk_codepoint(EOF));
+      }
+      s_goto(sc, OP_RD_SEXPR);
+    }
+    Error_0(sc, "Not a reader");
+	
   case OP_SEQ:
     if (!unpack_args_1(sc, &arg0)) {
       return false;
@@ -7082,8 +7070,20 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_SET_COLOR:
     if (!unpack_args_1(sc, &arg0)) {
       return false;
+    } else if (is_nil(arg0)) {
+      nanoclj_throw(sc, sc->NullPointerException);
     } else {
       set_color(sc, to_color(arg0), get_out_port(sc));
+    }
+    s_return(sc, mk_nil());
+
+  case OP_SET_BG_COLOR:
+    if (!unpack_args_1(sc, &arg0)) {
+      return false;
+    } else if (is_nil(arg0)) {
+      nanoclj_throw(sc, sc->NullPointerException);
+    } else {
+      set_bg_color(sc, to_color(arg0), get_out_port(sc));
     }
     s_return(sc, mk_nil());
 
@@ -7096,15 +7096,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
     nanoclj_throw(sc, mk_illegal_arg_exception(sc, "Invalid argument types"));
     return false;
-    
-  case OP_SET_BG_COLOR:
-    if (!unpack_args_1(sc, &arg0)) {
-      return false;
-    } else {
-      set_bg_color(sc, to_color(arg0), get_out_port(sc));
-    }
-    s_return(sc, mk_nil());
-    
+        
   case OP_SET_FONT_SIZE:
     if (!unpack_args_1(sc, &arg0)) {
       return false;
@@ -7770,6 +7762,7 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   sc->WINDOW_SIZE = def_symbol(sc, "*window-size*");
   sc->WINDOW_SCALE_F = def_symbol(sc, "*window-scale-factor*");
   sc->MOUSE_POS = def_symbol(sc, "*mouse-pos*");
+  sc->THEME = def_symbol(sc, "*theme*");
 
   sc->RECUR = def_symbol(sc, "recur");
   sc->AMP = def_symbol(sc, "&");
@@ -7892,6 +7885,12 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   sc->context->properties = mk_properties(sc);
   sc->tensor_ctx = mk_tensor_context();
   
+  if (sc->bg_color.red < 128 && sc->bg_color.green < 128 && sc->bg_color.blue < 128) {
+    intern(sc, sc->global_env, sc->THEME, def_keyword(sc, "dark"));
+  } else {
+    intern(sc, sc->global_env, sc->THEME, def_keyword(sc, "bright"));
+  }
+     
   return sc->pending_exception == NULL;
 }
 
