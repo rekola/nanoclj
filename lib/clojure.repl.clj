@@ -50,8 +50,7 @@
                        line (linenoise/read-line prompt)]
                    (if line
                      (do
-                       (linenoise/history-add line)
-                       (linenoise/history-save hfn line)
+                       (linenoise/history-append line hfn)
                        (try (let [r (load-string line)]
                               (prn r)
                               (when (defined? '*2) (def *3 *2))

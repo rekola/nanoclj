@@ -1045,17 +1045,15 @@ static inline nanoclj_val_t linenoise_history_load(nanoclj_t * sc, nanoclj_val_t
   return mk_nil();
 }
 
-static inline nanoclj_val_t linenoise_history_save(nanoclj_t * sc, nanoclj_val_t args) {
-  char * fn = alloc_c_str(sc, to_strview(car(args))), * line = alloc_c_str(sc, to_strview(cadr(args)));
-  linenoiseHistorySave(fn, line);
-  sc->free(fn);
-  sc->free(line);
-  return mk_nil();
-}
-
-static inline nanoclj_val_t linenoise_history_add(nanoclj_t * sc, nanoclj_val_t args) {
+static inline nanoclj_val_t linenoise_history_append(nanoclj_t * sc, nanoclj_val_t args) {
   char * line = alloc_c_str(sc, to_strview(car(args)));
   linenoiseHistoryAdd(line);
+  args = cdr(args);
+  if (!is_nil(args)) {
+    char * fn = alloc_c_str(sc, to_strview(car(args)));
+    linenoiseHistorySave(fn, line);
+    sc->free(fn);
+  }
   sc->free(line);
   return mk_nil();
 }
@@ -1125,8 +1123,7 @@ static inline void register_functions(nanoclj_t * sc) {
   nanoclj_cell_t * linenoise = def_namespace(sc, "linenoise", __FILE__);
   intern_foreign_func(sc, linenoise, "read-line", linenoise_readline, 1, 1);
   intern_foreign_func(sc, linenoise, "history-load", linenoise_history_load, 1, 1);
-  intern_foreign_func(sc, linenoise, "history-save", linenoise_history_save, 2, 2);
-  intern_foreign_func(sc, linenoise, "history-add", linenoise_history_add, 1, 1);
+  intern_foreign_func(sc, linenoise, "history-append", linenoise_history_append, 1, 2);
 
   init_linenoise(sc);  
 #endif  
