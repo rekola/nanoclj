@@ -31,11 +31,11 @@ have been tested:
 | Terminal | Graphics | Mouse | Notes |
 | - | - | - | - |
 | foot | OK | OK | Wayland only |
-| wezterm | OK | OK | Buggy (as of 20230712) |
-| mlterm | OK | ? | Output flickers when updated. |
-| xterm | Sixels work, but no True color | OK | |
-| Black Box | OK | ? | On HiDPI system the images are upscaled, and the terminal and the flatpak system use too much CPU time when idling. |
-| GNOME Terminal | True color works, but sixel support is not enabled. | | |
+| wezterm | Cannot get background color | OK | Buggy (as of 20230712) |
+| xterm | No true color, inline image layout doesn't work | OK | |
+| mlterm | Cannot get background color, inline image layout doesn't work | ? | Output flickers when updated |
+| Black Box | Inline image layout doesn't work | ? | On HiDPI system the images are upscaled, and the terminal and the flatpak system use too much CPU time when idling. |
+| GNOME Terminal | Sixels are not enabled by default | | |
 
 ![Plotting from nanoclj](https://user-images.githubusercontent.com/6755525/277504459-737b498e-005b-49ad-92b2-0917a1a10b7e.jpg "Plotting from nanoclj")
 *The plot function returns a canvas, which can be converted to an image, and then saved with Image/save or modified using other functions in the Image namespace.*
@@ -47,7 +47,7 @@ As well as printing images in block mode like the plot function does, they can a
 ## Differences to Clojure:
 
 - Characters are 32 bit and strings and char arrays are UTF-8 (count is O(n))
-- Strings are compared and sorted by the sequences of their UTF-32 codepoints.
+- Strings are sequences, and they are compared and sorted as such.
 - By default 32 bit integers are used, since 64 bit integers don't fit in the NaN boxing.
 - List count has complexity of O(n)
 - Vectors support O(1) append, but update is O(n)
@@ -113,13 +113,13 @@ As well as printing images in block mode like the plot function does, they can a
 - Locals cleaning
 - Multithreading, transactions and STM
 - monitor-enter, monitor-exit, and locking
-- Threading macros (->, -->, some-> and some->>)
+- Metadata reader macro, Threading macros (->, -->, some-> and some->>)
 - Homogenous vectors (vector-of)
 - Pre and post conditions for functions
 - Readers, Writers, spit and slurp do not accept options such as :encoding or :append
 - spit and slurp do not accept Writers or Readers
 - Associative destructuring
-- `*print-length*`, `*print-level*`, `*file*`, `*flush-on-newline*`, `*clojure-version*`, `*load-tests*`
+- `*print-length*`, `*print-level*`, `*file*`, `*flush-on-newline*`, `*clojure-version*`, `*load-tests*`, `*print-meta*`
 - Missing core functions and macros
   - doseq, for, dotimes
   - bit-and-not
@@ -141,12 +141,12 @@ As well as printing images in block mode like the plot function does, they can a
   - make-hierarchy, ancestors, supers, bases
   - bound?
   - random-uuid
-  - deftest, set-test, with-test
   - re-groups, re-matcher, re-seq, re-matches
   - hash-ordered-coll, hash-unordered-coll
   - assert-args
   - make-parents
   - with-open
+  - with-meta, vary-meta, alter-meta!, reset-meta!
 - clojure.core.async
   - thread-call
 - clojure.core.reducers
@@ -157,11 +157,12 @@ As well as printing images in block mode like the plot function does, they can a
   - replace, replace-first
 - clojure.repl
   - dir
+- clojure.test
+  - deftest, set-test, with-test
 - clojure.set
 - clojure.data
 - clojure.walk
 - clojure.zip
 - clojure.pprint
 - clojure.spec
-- clojure.test
 - ...and lots more...
