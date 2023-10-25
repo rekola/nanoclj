@@ -1,15 +1,12 @@
 cmake_minimum_required(VERSION 3.5)
 project(nanoclj C)
 
-find_package(Threads REQUIRED)
-
-if(NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE Release)
-endif()
-
-add_definitions(-DNANOCLJ_STANDALONE -DNANOCLJ_USE_LINENOISE)
-
-if (NOT MSVC)
+IF (MSVC)
+  set(VCPKG_TARGET_TRIPLET "x64-windows")
+  set(VCPKG_ROOT "vcpkg")
+  # set(CMAKE_TOOLCHAIN_FILE "${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" CACHE STRING "")
+  include("${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake")
+else()
   # The math optimizations are not necessary, but they do not cause harm. Since NaNs are needed -ffast-math or -ffinite-math-only cannot be used.
   add_compile_options(-std=gnu99 -Wall -O3 -march=native -funsafe-math-optimizations -fno-math-errno -fno-rounding-math -fno-signaling-nans -fcx-limited-range -ffp-contract=fast -Wno-unused-value -Wno-unused-variable -Wno-unused-function -Werror=implicit-function-declaration -Wno-unused-but-set-variable -Werror=return-type)
 
@@ -17,6 +14,14 @@ if (NOT MSVC)
     add_compile_options(-Werror)
   endif()
 endif()
+
+find_package(Threads REQUIRED)
+
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release)
+endif()
+
+add_definitions(-DNANOCLJ_STANDALONE -DNANOCLJ_USE_LINENOISE)
 
 # Data types, macros and functions related to controlling CPU affinity
 # are available on Linux through GNU extensions in libc
@@ -34,11 +39,7 @@ set(SOURCE_FILES
 add_executable(nanoclj ${SOURCE_FILES})
 target_link_libraries(nanoclj Threads::Threads)
 
-IF (MSVC)
-  set(VCPKG_TARGET_TRIPLET "x64-windows")
-  set(VCPKG_ROOT "vcpkg")
-  set(CMAKE_TOOLCHAIN_FILE "${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" CACHE STRING "")
-  
+IF (MSVC) 
   find_package(pcre2 CONFIG REQUIRED)
   target_link_libraries(nanoclj PCRE2::8BIT)
   

@@ -25,7 +25,7 @@ jobs:
           vcpkg install utf8proc
           vcpkg install pcre2
           vcpkg install shapelib
-          vcpkg install libxml2
+          # vcpkg install libxml2
           cd vcpkg
           bootstrap-vcpkg.bat
           cd ..
