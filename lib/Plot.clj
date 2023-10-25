@@ -1,4 +1,4 @@
-(def :private plot-colors- '([0 0.4470 0.7410]
+(def ^:private plot-colors '([0 0.4470 0.7410]
                              [0.8500 0.3250 0.0980]
                              [0.9290 0.6940 0.1250]
                              [0.4940 0.1840 0.5560]
@@ -7,11 +7,11 @@
                              [0.6350 0.0780 0.1840]
                              ))
 
-(def-macro (with-out new-out body)
+(def-macro (with-out new-out $ body)
   `(let ((prev-out *out*)
          (tmp ,new-out))
      (set! *out* tmp)
-     ,body
+     ,@body
      (set! *out* prev-out)
      tmp))
 
@@ -36,7 +36,7 @@
    (let [width (*window-size* 0)
          height (int (/ width 3))
          box-color [ 0.0 0.0 0.0 ]
-         plots (map #( conj (vec %1) %2 ) (partition 2 args) plot-colors-)
+         plots (map #( conj (vec %1) %2 ) (partition 2 args) plot-colors)
          margin-top 15
          margin-bottom 25
          margin-left 50
@@ -112,22 +112,21 @@
                 )
          ]
      (with-out cx
-       (do
-         (draw)
+       (draw)
          
-         (add-watch (var *window-size*) 0
-                    (fn [key ref old-ws ws]
-                      (with-out cx
-                        (resize)
-                        (flush)
+       (add-watch (var *window-size*) 0
+                  (fn [key ref old-ws ws]
+                    (with-out cx
+                      (resize)
+                      (flush)
                       )))
-         
-         (add-watch (var *mouse-pos*) 0
-                    (fn [key ref old-pos pos]
-                      nil
-                      ))
-
-         )))))
+       
+       (add-watch (var *mouse-pos*) 0
+                  (fn [key ref old-pos pos]
+                    nil
+                    ))
+       
+       ))))
 
 (defn scatter
   "Draws a scatter plot. Matlab style."
@@ -135,7 +134,7 @@
    (let [width (*window-size* 0)
          height (int (/ width 3))
          box-color [ 0.0 0.0 0.0 ]
-         plots (map #( conj (vec %1) %2 ) (partition 2 args) plot-colors-)
+         plots (map #( conj (vec %1) %2 ) (partition 2 args) plot-colors)
          margin-top 15
          margin-bottom 25
          margin-left 50
