@@ -16,7 +16,8 @@ typedef struct {
 } nanoclj_color_t;
 
 typedef enum {
-  nanoclj_colortype_16 = 0,
+  nanoclj_colortype_none = 0,
+  nanoclj_colortype_16,
   nanoclj_colortype_256,
   nanoclj_colortype_true
 } nanoclj_colortype_t;

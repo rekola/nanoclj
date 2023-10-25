@@ -7874,11 +7874,11 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
 
   register_functions(sc);
 
-  sc->sixel_term = has_sixels();
+  sc->sixel_term = has_sixels(stdin, stdout);
   sc->window_scale_factor = 1.0;
   sc->window_lines = sc->window_columns = 0;
 
-  sc->term_colors = get_term_colortype();
+  sc->term_colors = get_term_colortype(stdout);
   sc->fg_color = mk_color3i(255, 255, 255);
   sc->bg_color = mk_color3i(0, 0, 0);
   

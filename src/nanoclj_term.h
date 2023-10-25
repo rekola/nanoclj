@@ -93,6 +93,7 @@ static inline int convert_to_256color(nanoclj_color_t color) {
 static inline void set_term_fg_color(FILE * fh, nanoclj_color_t color, nanoclj_colortype_t colors) {
   if (isatty(fileno(fh))) {
     switch (colors) {
+    case nanoclj_colortype_none:
     case nanoclj_colortype_16:
       break;
     case nanoclj_colortype_256:
@@ -108,6 +109,7 @@ static inline void set_term_fg_color(FILE * fh, nanoclj_color_t color, nanoclj_c
 static inline void set_term_bg_color(FILE * fh, nanoclj_color_t color, nanoclj_colortype_t colors) {
   if (isatty(fileno(fh))) {
     switch (colors) {
+    case nanoclj_colortype_none:
     case nanoclj_colortype_16:
       break;
     case nanoclj_colortype_256:
@@ -273,19 +275,44 @@ static inline bool get_current_colors(FILE * in, FILE * out, nanoclj_color_t * f
   return has_bg;
 }
 
-static inline nanoclj_colortype_t get_term_colortype() {
+static inline nanoclj_colortype_t get_term_colortype(FILE * stdout) {
 #ifdef _WIN32
   return nanoclj_colortype_16;
 #else
-  const char * colorterm = getenv("COLORTERM");
-  const char * mlterm = getenv("MLTERM");
-  if (mlterm ||
-      (colorterm && (strcmp(colorterm, "truecolor") == 0 || strcmp(colorterm, "24bit") == 0))) {
-    return nanoclj_colortype_true;
+  if (!isatty(fileno(stdout))) {
+    return nanoclj_colortype_none;
   } else {
-    const char * term = getenv("TERM");
-    if (term && strcmp(term, "xterm-256color") == 0) {
+    const char * colorterm = getenv("COLORTERM");
+    if ((colorterm &&
+	 (strcmp(colorterm, "truecolor") == 0 || strcmp(colorterm, "24bit") == 0)) ||
+	getenv("MLTERM")) {
+      return nanoclj_colortype_true;
+    }
+    
+    const char * term_program = getenv("TERM_PROGRAM");
+    if (term_program && (strcmp(term_program, "iTerm.app") == 0 ||
+			 strcmp(term_program, "HyperTerm") == 0 ||
+			 strcmp(term_program, "Hyper") == 0 ||
+			 strcmp(term_program, "MacTerm") == 0)) {
+      return nanoclj_colortype_true;
+    } else if (term_program && strcmp(term_program, "Apple_Terminal") == 0) {
       return nanoclj_colortype_256;
+    }
+    
+    const char * term = getenv("TERM");
+    if (!term || strcmp(term, "dumb") == 0) {
+      return nanoclj_colortype_none;
+    } else if (strstr(term, "256color") || getenv("TMUX")) {
+      return nanoclj_colortype_256;
+    }
+
+    /* CI platforms */
+    if (getenv("CI") || getenv("TEAMCITY_VERSION")) {
+      if (getenv("TRAVIS")) {
+	return nanoclj_colortype_256;
+      } else {
+	return nanoclj_colortype_none;
+      }
     } else {
       return nanoclj_colortype_16;
     }
@@ -293,11 +320,11 @@ static inline nanoclj_colortype_t get_term_colortype() {
 #endif
 }
 
-static inline bool has_sixels() {
+static inline bool has_sixels(FILE * in, FILE * out) {
 #ifdef _WIN32
   return false;
 #else
-  return true;
+  return isatty(fileno(out));
 #endif
 }
 
