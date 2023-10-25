@@ -149,35 +149,35 @@ static inline nanoclj_val_t System_glob(nanoclj_t * sc, nanoclj_val_t args0) {
 /* Math */
 
 static nanoclj_val_t Math_sin(nanoclj_t * sc, nanoclj_val_t args) {
-  return mk_real(sin(to_double(car(args))));
+  return mk_real(sin(to_double(first(sc, decode_pointer(args)))));
 }
 
 static nanoclj_val_t Math_cos(nanoclj_t * sc, nanoclj_val_t args) {
-  return mk_real(cos(to_double(car(args))));
+  return mk_real(cos(to_double(first(sc, decode_pointer(args)))));
 }
 
 static nanoclj_val_t Math_exp(nanoclj_t * sc, nanoclj_val_t args) {
-  return mk_real(exp(to_double(car(args))));
+  return mk_real(exp(to_double(first(sc, decode_pointer(args)))));
 }
 
 static nanoclj_val_t Math_log(nanoclj_t * sc, nanoclj_val_t args) {
-  return mk_real(log(to_double(car(args))));
+  return mk_real(log(to_double(first(sc, decode_pointer(args)))));
 }
 
 static nanoclj_val_t Math_log10(nanoclj_t * sc, nanoclj_val_t args) {
-  return mk_real(log10(to_double(car(args))));
+  return mk_real(log10(to_double(first(sc, decode_pointer(args)))));
 }
 
 static nanoclj_val_t Math_tan(nanoclj_t * sc, nanoclj_val_t args) {
-  return mk_real(tan(to_double(car(args))));
+  return mk_real(tan(to_double(first(sc, decode_pointer(args)))));
 }
 
 static nanoclj_val_t Math_asin(nanoclj_t * sc, nanoclj_val_t args) {
-  return mk_real(asin(to_double(car(args))));
+  return mk_real(asin(to_double(first(sc, decode_pointer(args)))));
 }
 
 static nanoclj_val_t Math_acos(nanoclj_t * sc, nanoclj_val_t args) {
-  return mk_real(acos(to_double(car(args))));
+  return mk_real(acos(to_double(first(sc, decode_pointer(args)))));
 }
 
 static nanoclj_val_t Math_atan(nanoclj_t * sc, nanoclj_val_t args0) {
@@ -193,27 +193,28 @@ static nanoclj_val_t Math_atan(nanoclj_t * sc, nanoclj_val_t args0) {
 }
 
 static nanoclj_val_t Math_sqrt(nanoclj_t * sc, nanoclj_val_t args) {
-  return mk_real(sqrt(to_double(car(args))));
+  return mk_real(sqrt(to_double(first(sc, decode_pointer(args)))));
 }
 
 static nanoclj_val_t Math_cbrt(nanoclj_t * sc, nanoclj_val_t args) {
-  return mk_real(cbrt(to_double(car(args))));
+  return mk_real(cbrt(to_double(first(sc, decode_pointer(args)))));
 }
 
-static nanoclj_val_t Math_pow(nanoclj_t * sc, nanoclj_val_t args) {
-  return mk_real(pow(to_double(car(args)), to_double(cadr(args))));
+static nanoclj_val_t Math_pow(nanoclj_t * sc, nanoclj_val_t args0) {
+  nanoclj_cell_t * args = decode_pointer(args0);
+  return mk_real(pow(to_double(first(sc, args)), to_double(second(sc, args))));
 }
 
 static nanoclj_val_t Math_floor(nanoclj_t * sc, nanoclj_val_t args) {
-  return mk_real(floor(to_double(car(args))));
+  return mk_real(floor(to_double(first(sc, decode_pointer(args)))));
 }
 
 static nanoclj_val_t Math_ceil(nanoclj_t * sc, nanoclj_val_t args) {
-  return mk_real(ceil(to_double(car(args))));
+  return mk_real(ceil(to_double(first(sc, decode_pointer(args)))));
 }
 
 static nanoclj_val_t Math_round(nanoclj_t * sc, nanoclj_val_t args) {
-  return mk_real(round(to_double(car(args))));
+  return mk_real(round(to_double(first(sc, decode_pointer(args)))));
 }
 
 /* clojure.math.numeric-tower */
@@ -248,9 +249,10 @@ static inline bool ipow_overflow(long long base, int_fast8_t exp, long long * re
   return false;
 }
 
-static nanoclj_val_t numeric_tower_expt(nanoclj_t * sc, nanoclj_val_t args) {
-  nanoclj_val_t x = car(args);
-  nanoclj_val_t y = cadr(args);
+static nanoclj_val_t numeric_tower_expt(nanoclj_t * sc, nanoclj_val_t args0) {
+  nanoclj_cell_t * args = decode_pointer(args0);
+  nanoclj_val_t x = first(sc, args);
+  nanoclj_val_t y = second(sc, args);
 
   if (is_nil(x) || is_nil(y)) {
     return nanoclj_throw(sc, sc->NullPointerException);
@@ -290,16 +292,17 @@ static nanoclj_val_t numeric_tower_expt(nanoclj_t * sc, nanoclj_val_t args) {
   return mk_real(pow(to_double(x), to_double(y)));
 }
 
-static inline nanoclj_val_t browse_url(nanoclj_t * sc, nanoclj_val_t args) {  
+static inline nanoclj_val_t browse_url(nanoclj_t * sc, nanoclj_val_t args0) {
+  nanoclj_cell_t * args = decode_pointer(args0);
 #ifdef WIN32
-  char * url = alloc_c_str(sc, to_strview(car(args)));
+  char * url = alloc_c_str(sc, to_strview(first(sc, args)));
   ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
   sc->free(url);
   return (nanoclj_val_t)kTRUE;
 #else
   pid_t r = fork();
   if (r == 0) {
-    char * url = alloc_c_str(sc, to_strview(car(args)));
+    char * url = alloc_c_str(sc, to_strview(first(sc, args)));
     const char * cmd = "xdg-open";
     execlp(cmd, cmd, url, NULL);
     exit(1);
@@ -309,8 +312,9 @@ static inline nanoclj_val_t browse_url(nanoclj_t * sc, nanoclj_val_t args) {
 #endif
 }
 
-static inline nanoclj_val_t Image_load(nanoclj_t * sc, nanoclj_val_t args) {
-  nanoclj_val_t filename00 = car(args);
+static inline nanoclj_val_t Image_load(nanoclj_t * sc, nanoclj_val_t args0) {
+  nanoclj_cell_t * args = decode_pointer(args0);
+  nanoclj_val_t filename00 = first(sc, args);
   strview_t filename0 = to_strview(filename00);
   char * filename = alloc_c_str(sc, filename0);
 	    
@@ -342,9 +346,10 @@ static inline nanoclj_val_t Image_load(nanoclj_t * sc, nanoclj_val_t args) {
   return image;
 }
 
-static inline nanoclj_val_t Image_resize(nanoclj_t * sc, nanoclj_val_t args) {
-  nanoclj_val_t image00 = car(args);
-  nanoclj_val_t target_w0 = cadr(args), target_h0 = caddr(args);
+static inline nanoclj_val_t Image_resize(nanoclj_t * sc, nanoclj_val_t args0) {
+  nanoclj_cell_t * args = decode_pointer(args0);
+  nanoclj_val_t image00 = first(sc, args);
+  nanoclj_val_t target_w0 = second(sc, args), target_h0 = third(sc, args);
   if (!is_image(image00) || !is_number(target_w0) || !is_number(target_h0)) {
     return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Invalid type")));
   }
@@ -366,8 +371,9 @@ static inline nanoclj_val_t Image_resize(nanoclj_t * sc, nanoclj_val_t args) {
   return target_image;
 }
 
-static inline nanoclj_val_t Image_transpose(nanoclj_t * sc, nanoclj_val_t args) {
-  nanoclj_val_t image00 = car(args);
+static inline nanoclj_val_t Image_transpose(nanoclj_t * sc, nanoclj_val_t args0) {
+  nanoclj_cell_t * args = decode_pointer(args0);
+  nanoclj_val_t image00 = first(sc, args);
   if (!is_image(image00)) {
     return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Not an Image")));
   }
@@ -398,8 +404,9 @@ static inline nanoclj_val_t Image_transpose(nanoclj_t * sc, nanoclj_val_t args) 
   return new_image;
 }
 
-static inline nanoclj_val_t Image_save(nanoclj_t * sc, nanoclj_val_t args) {
-  nanoclj_val_t image00 = car(args), filename0 = cadr(args);
+static inline nanoclj_val_t Image_save(nanoclj_t * sc, nanoclj_val_t args0) {
+  nanoclj_cell_t * args = decode_pointer(args0);
+  nanoclj_val_t image00 = first(sc, args), filename0 = second(sc, args);
   if (!is_image(image00)) {
     return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Not an Image")));
   }
@@ -472,8 +479,9 @@ static inline int * mk_kernel(nanoclj_t * sc, float radius, int * size) {
   return kernel;
 }
 
-nanoclj_val_t Image_gaussian_blur(nanoclj_t * sc, nanoclj_val_t args) {
-  nanoclj_val_t image00 = car(args), h_radius = cadr(args), v_radius = caddr(args);
+nanoclj_val_t Image_gaussian_blur(nanoclj_t * sc, nanoclj_val_t args0) {
+  nanoclj_cell_t * args = decode_pointer(args0);
+  nanoclj_val_t image00 = first(sc, args), h_radius = second(sc, args), v_radius = third(sc, args);
   if (!is_image(image00)) {
     return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Not an Image")));
   }
@@ -596,8 +604,9 @@ nanoclj_val_t Image_gaussian_blur(nanoclj_t * sc, nanoclj_val_t args) {
   return r;
 }
 
-static inline nanoclj_val_t Audio_load(nanoclj_t * sc, nanoclj_val_t args) {
-  char * filename = alloc_c_str(sc, to_strview(car(args)));
+static inline nanoclj_val_t Audio_load(nanoclj_t * sc, nanoclj_val_t args0) {
+  nanoclj_cell_t * args = decode_pointer(args0);
+  char * filename = alloc_c_str(sc, to_strview(first(sc, args)));
   drwav wav;
   if (!drwav_init_file(&wav, filename, NULL)) {
     return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Failed to load Audio")));
@@ -620,8 +629,9 @@ static inline nanoclj_val_t Audio_lowpass(nanoclj_t * sc, nanoclj_val_t args) {
   return mk_nil();
 }
 
-static inline nanoclj_val_t Geo_load(nanoclj_t * sc, nanoclj_val_t args) {
-  char * filename = alloc_c_str(sc, to_strview(car(args)));
+static inline nanoclj_val_t Geo_load(nanoclj_t * sc, nanoclj_val_t args0) {
+  nanoclj_cell_t * args = decode_pointer(args0);
+  char * filename = alloc_c_str(sc, to_strview(first(sc, args)));
 
   SHPHandle shp = SHPOpen(filename, "rb");
   if (!shp) return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Failed to open file")));
@@ -871,8 +881,9 @@ static inline nanoclj_val_t create_xml_node(nanoclj_t * sc, xmlNode * input) {
   return mk_pointer(output);
 }
 
-static inline nanoclj_val_t clojure_xml_parse(nanoclj_t * sc, nanoclj_val_t args) {
-  char * filename = alloc_c_str(sc, to_strview(car(args)));
+static inline nanoclj_val_t clojure_xml_parse(nanoclj_t * sc, nanoclj_val_t args0) {
+  nanoclj_cell_t * args = decode_pointer(args0);
+  char * filename = alloc_c_str(sc, to_strview(first(sc, args)));
 
   xmlDoc * doc = xmlReadFile(filename, NULL, 0);
   sc->free(filename);
@@ -882,6 +893,12 @@ static inline nanoclj_val_t clojure_xml_parse(nanoclj_t * sc, nanoclj_val_t args
   nanoclj_val_t xml = create_xml_node(sc, xmlDocGetRootElement(doc));
   xmlFreeDoc(doc);
   return xml;
+}
+
+static inline nanoclj_val_t clojure_data_csv_read_csv(nanoclj_t * sc, nanoclj_val_t args0) {
+  nanoclj_cell_t * args = decode_pointer(args0);
+  nanoclj_val_t reader = first(sc, args);
+  return mk_nil();
 }
 
 #if NANOCLJ_USE_LINENOISE
@@ -1015,8 +1032,9 @@ static inline void init_linenoise(nanoclj_t * sc) {
   linenoiseHistorySetMaxLen(10000);
 }
 
-static inline nanoclj_val_t linenoise_readline(nanoclj_t * sc, nanoclj_val_t args) {
-  strview_t prompt = to_strview(car(args));
+static inline nanoclj_val_t linenoise_readline(nanoclj_t * sc, nanoclj_val_t args0) {
+  nanoclj_cell_t * args = decode_pointer(args0);
+  strview_t prompt = to_strview(first(sc, args));
   char * line = linenoise(prompt.ptr, prompt.size);
   if (line == NULL) return mk_nil();
   
@@ -1038,19 +1056,21 @@ static inline nanoclj_val_t linenoise_readline(nanoclj_t * sc, nanoclj_val_t arg
   return r;
 }
 
-static inline nanoclj_val_t linenoise_history_load(nanoclj_t * sc, nanoclj_val_t args) {
-  char * fn = alloc_c_str(sc, to_strview(car(args)));
+static inline nanoclj_val_t linenoise_history_load(nanoclj_t * sc, nanoclj_val_t args0) {
+  nanoclj_cell_t * args = decode_pointer(args0);
+  char * fn = alloc_c_str(sc, to_strview(first(sc, args)));
   linenoiseHistoryLoad(fn);
   sc->free(fn);
   return mk_nil();
 }
 
-static inline nanoclj_val_t linenoise_history_append(nanoclj_t * sc, nanoclj_val_t args) {
-  char * line = alloc_c_str(sc, to_strview(car(args)));
+static inline nanoclj_val_t linenoise_history_append(nanoclj_t * sc, nanoclj_val_t args0) {
+  nanoclj_cell_t * args = decode_pointer(args0);
+  char * line = alloc_c_str(sc, to_strview(first(sc, args)));
   linenoiseHistoryAdd(line);
-  args = cdr(args);
-  if (!is_nil(args)) {
-    char * fn = alloc_c_str(sc, to_strview(car(args)));
+  args = next(sc, args);
+  if (args) {
+    char * fn = alloc_c_str(sc, to_strview(first(sc, args)));
     linenoiseHistorySave(fn, line);
     sc->free(fn);
   }
@@ -1070,6 +1090,7 @@ static inline void register_functions(nanoclj_t * sc) {
   nanoclj_cell_t * Audio = def_namespace(sc, "Audio", __FILE__);
   nanoclj_cell_t * Geo = def_namespace(sc, "Geo", __FILE__);
   nanoclj_cell_t * clojure_xml = def_namespace(sc, "clojure.xml", __FILE__);
+  nanoclj_cell_t * clojure_data_csv = def_namespace(sc, "clojure.data.csv", __FILE__);
   
   intern_foreign_func(sc, Thread, "sleep", Thread_sleep, 1, 1);
   
@@ -1118,6 +1139,8 @@ static inline void register_functions(nanoclj_t * sc) {
   intern_foreign_func(sc, Geo, "load", Geo_load, 1, 1);
 
   intern_foreign_func(sc, clojure_xml, "parse", clojure_xml_parse, 1, 1);
+
+  intern_foreign_func(sc, clojure_data_csv, "read-csv", clojure_data_csv_read_csv, 1, 1);
 
 #if NANOCLJ_USE_LINENOISE
   nanoclj_cell_t * linenoise = def_namespace(sc, "linenoise", __FILE__);
