@@ -23,26 +23,19 @@
         h-margin 0
         [cell-width cell-height] *cell-size*
         cx (clojure.java.io/writer 0 0)]
-    (pr (image (with-out cx
-                 (do
-                   (set-font-size (* 1.5 cell-height))
-                   (let [[ label-w label-h ] (get-text-extents label)
-                         y-pos (* 1.3 cell-height)]
-                     (resize (* 2 (+ h-margin label-w)) (* 2 cell-height))
-                     (mode :block)
-                     (set-font-size (* 1.5 cell-height))
-                     (move-to h-margin y-pos)
-                     (set-color [ 0.8 0.8 0.8 ])
-                     (print label)
-                     (move-to (- h-margin 0.5) (+ y-pos 0.5))
-                     (set-color [ 0.5 0.5 0.5 ])
-                     (print label)
-                     (set-font-size (* 0.6 cell-height))
-                     (move-to (+ h-margin label-w 5) y-pos)
-                     (set-color [ 0.9 0.9 0.9 ])
-                     (print (System/getProperty "nanoclj.version"))
-                     (flush)
-                     )))))
+    (mode :block)                   
+    (pr (with-out cx
+          (set-font-size (* 1.5 cell-height))
+          (let [[ label-w label-h ] (get-text-extents label)
+                y-pos (* 1.3 cell-height)]
+            (resize (* 2 (+ h-margin label-w)) (* 2 cell-height))
+            (set-font-size (* 1.5 cell-height))
+            (move-to h-margin y-pos)
+            (print label)
+            (set-font-size (* 0.6 cell-height))
+            (print (System/getProperty "nanoclj.version"))
+            (flush)
+            )))
     (newline))
 
   (let [hfn (clojure.java.io/file (System/getProperty "user.home") "/.nanoclj_history")
