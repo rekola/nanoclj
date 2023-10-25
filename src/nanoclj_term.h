@@ -115,6 +115,22 @@ static inline struct termios set_raw_mode(int fd) {
   return orig_term;
 }
 
+static inline bool term_read_upto(int fd, char * buf, size_t n, char delim) {
+  size_t i = 0;
+  while (i < n - 1) {
+    if (read(fd, buf + i, 1) != 1) {
+      break;
+    }
+    if (buf[i] == delim) {
+      buf[i] = '\0';
+      return true;
+    }
+    i++;
+  }
+  return false;
+}
+
+
 static inline bool get_window_size(FILE * in, FILE * out, int * cols, int * rows, int * width, int * height) {
   if (!isatty(fileno(out))) {
     return false;
@@ -136,28 +152,15 @@ static inline bool get_window_size(FILE * in, FILE * out, int * cols, int * rows
   
   if (!*width || !*height) {
     char buf[32];
-    unsigned int i = 0;
-    
     struct termios orig_term = set_raw_mode(fileno(in));
     
     if (write(fileno(out), "\033[14t", 5) != 5) {
       return false;
     }
-    
-    while (i < sizeof(buf)-1) {
-      if (read(fileno(in), buf+i, 1) != 1) {
-	break;
-      }
-      if (buf[i] == 't') {
-	break;
-      }
-      i++;
-    }
-    buf[i] = '\0';
-    
-    if (buf[0] == 27 && buf[1] == '[' && buf[2] == '4' && buf[3] == ';' &&
-	sscanf(buf + 4, "%d;%dt", height, width) == 2) {
 
+    if (term_read_upto(fileno(in), buf, sizeof(buf), 't') &&
+	sscanf(buf, "\033[4;%d;%dt", height, width) == 2) {
+      /* success */
     }
     
     tcsetattr(STDIN_FILENO, TCSADRAIN, &orig_term);
@@ -173,18 +176,11 @@ static bool get_cursor_position(FILE * in, FILE * out, int * x, int * y) {
     if (write(fileno(out), "\x1b[6n", 4) != 4) {
       return false;
     }
-    
+
     char buf[32];
-    unsigned int i = 0;
-    while (i < sizeof(buf)-1) {
-      if (read(fileno(in), buf+i, 1) != 1) break;
-      if (buf[i] == 'R') break;
-      i++;
-    }
-    buf[i] = 0;
-    
     bool r = false;
-    if (buf[0] == 0x27 && buf[1] == '[' && sscanf(buf+2, "%d;%d", y, x) == 2) {
+    if (term_read_upto(fileno(in), buf, sizeof(buf), 'R') &&
+	sscanf(buf, "\033[%d;%d", y, x) == 2) {
       r = true;
     }
     
@@ -195,53 +191,49 @@ static bool get_cursor_position(FILE * in, FILE * out, int * x, int * y) {
   }
 }
 
-static inline bool read_until(int fd, char * buf, size_t n, char delim) {
-  size_t i = 0;
-  while (i < n - 1) {
-    if (read(fd, buf + i, 1) != 1) {
-      break;
-    }
-    if (buf[i] == delim) {
-      buf[i] = '\0';
-      return true;
-    }
-    i++;
-  }
-  return false;
-}
-
+/* Gets the current therminal fg and bg colors, or guesses them. */
 static inline bool get_current_colors(FILE * in, FILE * out, nanoclj_color_t * fg, nanoclj_color_t * bg) {
   if (!isatty(fileno(out))) {
     return false;
   }
-  char buf[32];
-    
   struct termios orig_term = set_raw_mode(fileno(in));
 
-  bool is_dark;
-  int r, g, b;
-  if (write(fileno(out), "\033]11;?\a", 7) == 7 &&
-      read_until(fileno(in), buf, sizeof(buf), '\a') &&
-      sscanf(buf, "\033]11;rgb:%x/%x/%x", &r, &g, &b) == 3) {
-    *bg = mk_color3i(r, g, b);
-    is_dark = r < 128 && g < 128 && b < 128;
-  } else {
-    return false;
+  char buf[32];   
+  bool has_bg = false;
+  uint32_t r, g, b;
+  if (write(fileno(out), "\033]11;?\a", 7) == 7 && term_read_upto(fileno(in), buf, sizeof(buf), '\a')) {
+    if (sscanf(buf, "\033]11;rgb:%2x/%2x/%2x", &r, &g, &b) == 3) {
+      *bg = mk_color3i(r, g, b);
+      has_bg = true;
+    } else if (sscanf(buf, "\033]11;rgb:%x/%x/%x", &r, &g, &b) == 3) {
+      *bg = mk_color3i(r >> 8, g >> 8, b >> 8);
+      has_bg = true;
+    }
   }
 
-  if (write(fileno(out), "\033]10;?\a", 7) == 7 &&
-      read_until(fileno(in), buf, sizeof(buf), '\a') &&
-      sscanf(buf, "\033]10;rgb:%x/%x/%x", &r, &g, &b)) {
-    *fg = mk_color3i(255, 255, 255);
-  } else if (is_dark) { /* Make a guess. */
-    *fg = mk_color3i(255, 255, 255);
-  } else {
-    *fg = mk_color3i(0, 0, 0);
+  if (has_bg) {
+    bool has_fg = false;
+    if (write(fileno(out), "\033]10;?\a", 7) == 7 && term_read_upto(fileno(in), buf, sizeof(buf), '\a')) {
+      if (sscanf(buf, "\033]10;rgb:%2x/%2x/%2x", &r, &g, &b) == 3) {
+	*fg = mk_color3i(r, g, b);
+	has_fg = true;
+      } else if (sscanf(buf, "\033]10;rgb:%x/%x/%x", &r, &g, &b) == 3) {
+	*fg = mk_color3i(r >> 8, g >> 8, b >> 8);
+	has_fg = true;
+      }
+    }
+    if (!has_fg) {
+      if (bg->red < 128 && bg->green < 128 && bg->blue < 128) {
+	*fg = mk_color3i(255, 255, 255);
+      } else {
+	*fg = mk_color3i(0, 0, 0);
+      }
+    }
   }
-
+  
   tcsetattr(STDIN_FILENO, TCSADRAIN, &orig_term);
 
-  return true;
+  return has_bg;
 }
 
 static inline nanoclj_colortype_t get_term_colortype() {
