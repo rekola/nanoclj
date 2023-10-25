@@ -36,10 +36,10 @@
 (def list? (fn [x] (instance? clojure.lang.Cons x)))
 (def zero? (fn [n] (equiv? n 0)))
 
-(def :private is-any-of? (fn [x & args]
-                           (cond (empty? args) false
-                                 (equals? x (first args)) true
-                                 :else (apply* is-any-of? (cons x (rest args))))))
+(def ^:private is-any-of? (fn [x & args]
+                            (cond (empty? args) false
+                                  (equals? x (first args)) true
+                                  :else (apply* is-any-of? (cons x (rest args))))))
 
 (def int?
   "Returns true if the argument is fixed-precision integer"
@@ -208,8 +208,8 @@
                                 `(def ,name ,(car args) (fn ,(cadr args) ,@(cddr args)))
                                 `(def ,name (fn ,(car args) ,@(cdr args)))))
 (def-macro (defn- name $ args) (if (string? (car args))
-                                 `(def :private ,name ,(car args) (fn ,(cadr args) ,@(cddr args)))
-                                 `(def :private ,name (fn ,(car args) ,@(cdr args)))))
+                                 `(def ^:private ,name ,(car args) (fn ,(cadr args) ,@(cddr args)))
+                                 `(def ^:private ,name (fn ,(car args) ,@(cdr args)))))
 ; (def-macro (my-cond $ form) (if (empty? form) '() `(if ,(car form) ,(cadr form) nil)))
 ; (macro (my-cond form) (if (empty? (cdr form)) '() (cons 'if (cons (cadr form) (cons (caddr form) (my-cond (cdddr form)))))))
 

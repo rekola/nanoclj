@@ -363,19 +363,18 @@
 
 (def *print-length* nil)
 
-(def -styles {
-              :scalar [ 0.5 0.62 0.5 ]
-              :boolean [ 0.86 0.55 0.76 ]
-              :nil [ 0.86 0.55 0.76 ]
-              :char [ 0.8 0.58 0.58 ]
-              :string [ 0.8 0.58 0.58 ]
-              :symbol [ 0.94 0.87 0.69 ]
-              :keyword [ 0.94 0.87 0.69 ]
-              :var [ 0.94 0.87 0.69 ]
-              :class [ 0.55 0.82 0.83 ]
-              })
+(def ^:private print-styles {:scalar [ 0.5 0.62 0.5 ]
+                             :boolean [ 0.86 0.55 0.76 ]
+                             :nil [ 0.86 0.55 0.76 ]
+                             :char [ 0.8 0.58 0.58 ]
+                             :string [ 0.8 0.58 0.58 ]
+                             :symbol [ 0.94 0.87 0.69 ]
+                             :keyword [ 0.94 0.87 0.69 ]
+                             :var [ 0.94 0.87 0.69 ]
+                             :class [ 0.55 0.82 0.83 ]
+                             })
 
-(defn pr-inline
+(defn ^:private pr-inline
   "Prints x to *out* in a format understandable by the Reader"
   [print-fn x] (cond (map-entry? x) (do (-print \[)
                                         (pr-inline print-fn (key x))
@@ -419,7 +418,7 @@
                                               (pr-inline print-fn (val (first x)))
                                               (run! (fn [x] (-print ", ") (pr-inline print-fn (key x))
                                                       (-print \space) (pr-inline print-fn (val x))) (rest x))
-                                              (-print \})))                
+                                              (-print \})))
                      (ratio? x) (print-fn :scalar x)
                      (nil? x) (print-fn :nil x)
                      (boolean? x) (print-fn :boolean x)
@@ -447,7 +446,7 @@
                                     ))
                      :else (print-fn nil x)))
 
-(defn pr-block
+(defn ^:private pr-block
   [print-fn x] (if (image? x) (let [ws *window-size*
                                     f *window-scale-factor*
                                     w (x :width)
@@ -472,8 +471,8 @@
   "Prints args into *out* using print followed by a newline"
   [& more] (apply print more) (newline))
 
-(defn pr-with-class
-  [class v] (let [color (get -styles class)]
+(defn ^:private pr-with-class
+  [class v] (let [color (get print-styles class)]
               (if color
                 (do
                   (save)
