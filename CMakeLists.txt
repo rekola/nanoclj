@@ -40,28 +40,22 @@ add_executable(nanoclj ${SOURCE_FILES})
 target_link_libraries(nanoclj Threads::Threads)
 
 IF (MSVC) 
-  find_package(pcre2 CONFIG REQUIRED)
-  target_link_libraries(nanoclj PCRE2::8BIT)
-  
   find_package(utf8proc NAMES unofficial-utf8proc REQUIRED)
   target_link_libraries(nanoclj utf8proc)
-else()
-  find_library(PCRE2_LIBRARY pcre2-8 REQUIRED)
-  if(PCRE2_LIBRARY)
-    target_link_libraries(nanoclj pcre2-8)
-  endif()
 
+  find_package(pcre2 CONFIG REQUIRED)
+  target_link_libraries(nanoclj PCRE2::8BIT)
+else()
   find_library(UTF8PROC_LIBRARY utf8proc REQUIRED)
-  if(UTF8PROC_LIBRARY)
-    target_link_libraries(nanoclj utf8proc)
-  endif()
+  target_link_libraries(nanoclj utf8proc)
+
+  find_library(PCRE2_LIBRARY pcre2-8 REQUIRED)
+  target_link_libraries(nanoclj pcre2-8)
 
   target_link_libraries(nanoclj m)
 
   find_library(CAIRO_LIBRARY cairo REQUIRED)
-  if(CAIRO_LIBRARY)
-    target_link_libraries(nanoclj cairo)
-  endif()
+  target_link_libraries(nanoclj cairo)
 
   find_library(SIXEL_LIBRARY sixel REQUIRED)
   if(SIXEL_LIBRARY) 
@@ -71,8 +65,14 @@ else()
   endif()
 
   find_library(SHP_LIBRARY shp REQUIRED)
-  if(SHP_LIBRARY)
-    target_link_libraries(nanoclj shp)
+  target_link_libraries(nanoclj shp)
+      
+  if(false)
+    find_library(ZLIB z REQUIRED)
+    target_link_libraries(nanoclj z)
+    
+    find_library(LIBZIP zip REQUIRED)
+    target_link_libraries(nanoclj zip)
   endif()
 
   find_package(LibXml2 REQUIRED)
