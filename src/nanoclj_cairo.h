@@ -31,22 +31,19 @@ static inline void * mk_canvas(nanoclj_t * sc, int width, int height, int channe
   cairo_t * cr = cairo_create(surface);
   cairo_surface_destroy(surface);
 
-  if (bg.alpha > 0 && width > 0 && height > 0) {
+  if (channels >= 3 && bg.alpha > 0 && width > 0 && height > 0) {
     cairo_set_source_rgba(cr, bg.red / 255.0, bg.green / 255.0, bg.blue / 255.0, bg.alpha / 255.0);
     cairo_rectangle(cr, 0, 0, width, height);
     cairo_fill(cr);
   }
-
   cairo_set_source_rgba(cr, fg.red / 255.0, fg.green / 255.0, fg.blue / 255.0, fg.alpha / 255.0);
 
   cairo_font_options_t * options = cairo_font_options_create();
-  cairo_font_options_set_antialias(options,
-#if 1
-				   CAIRO_ANTIALIAS_SUBPIXEL
-#else
-				   CAIRO_ANTIALIAS_GRAY
-#endif
-				   );
+  if (channels >= 3) {
+    cairo_font_options_set_antialias(options, CAIRO_ANTIALIAS_SUBPIXEL);
+  } else {
+    cairo_font_options_set_antialias(options, CAIRO_ANTIALIAS_GRAY);
+  }
   cairo_font_options_set_hint_style(options, CAIRO_HINT_STYLE_FULL);
   cairo_font_options_set_hint_metrics(options, CAIRO_HINT_METRICS_ON);
   cairo_set_font_options(cr, options);
@@ -81,6 +78,11 @@ static inline imageview_t canvas_get_imageview(void * canvas) {
   int channels = get_channels_for_format(cairo_image_surface_get_format(surface));
   
   return (imageview_t){ data, width, height, channels };
+}
+
+static inline int canvas_get_chan(void * canvas) {
+  cairo_surface_t * surface = cairo_get_target((cairo_t *)canvas);
+  return get_channels_for_format(cairo_image_surface_get_format(surface));
 }
 
 static inline void canvas_flush(void * canvas) {

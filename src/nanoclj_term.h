@@ -30,7 +30,7 @@ static int sixel_write(char *data, int size, void *priv) {
   return fwrite(data, 1, size, (FILE *)priv);
 }
 
-static inline bool print_image_sixel(imageview_t iv) {
+static inline bool print_image_sixel(imageview_t iv, nanoclj_color_t fg, nanoclj_color_t bg) {
   int pf = 0;
   switch (iv.channels) {
   case 1: pf = SIXEL_PIXELFORMAT_G8; break;
@@ -40,8 +40,21 @@ static inline bool print_image_sixel(imageview_t iv) {
   }
 
   sixel_dither_t * dither;
-  sixel_dither_new(&dither, -1, NULL);
-  sixel_dither_initialize(dither, (uint8_t*)iv.ptr, iv.width, iv.height, pf, SIXEL_LARGE_NORM, SIXEL_REP_CENTER_BOX, SIXEL_QUALITY_HIGHCOLOR);
+  if (iv.channels == 1) {
+    uint8_t pal[3 * 256];
+    for (size_t i = 0; i < 256; i++) {
+      nanoclj_color_t c = mix(bg, fg, i / 255.0f);
+      pal[3 * i + 0] = c.red;
+      pal[3 * i + 1] = c.green;
+      pal[3 * i + 2] = c.blue;
+    }
+    sixel_dither_new(&dither, 256, NULL);
+    sixel_dither_set_palette(dither, pal);
+    sixel_dither_set_pixelformat(dither, SIXEL_PIXELFORMAT_PAL8);
+  } else {
+    sixel_dither_new(&dither, -1, NULL);
+    sixel_dither_initialize(dither, (uint8_t*)iv.ptr, iv.width, iv.height, pf, SIXEL_LARGE_NORM, SIXEL_REP_CENTER_BOX, SIXEL_QUALITY_HIGHCOLOR);
+  }
   
   sixel_output_t * output;
   sixel_output_new(&output, sixel_write, stdout, NULL);
@@ -241,7 +254,7 @@ static inline bool get_current_colors(FILE * in, FILE * out, nanoclj_color_t * f
   char buf[32];   
   bool has_bg = false;
   uint32_t r, g, b;
-  if (write(fileno(out), "\033]11;?\a", 7) == 7 && term_read_upto(fileno(in), buf, sizeof(buf), '\a')) {
+  if (write(fileno(out), "\033]11;?\033\\", 8) == 8 && term_read_upto(fileno(in), buf, sizeof(buf), '\\')) {
     if (sscanf(buf, "\033]11;rgb:%2x/%2x/%2x", &r, &g, &b) == 3) {
       *bg = mk_color3i(r, g, b);
       has_bg = true;
@@ -251,23 +264,22 @@ static inline bool get_current_colors(FILE * in, FILE * out, nanoclj_color_t * f
     }
   }
 
-  if (has_bg) {
-    bool has_fg = false;
-    if (write(fileno(out), "\033]10;?\a", 7) == 7 && term_read_upto(fileno(in), buf, sizeof(buf), '\a')) {
-      if (sscanf(buf, "\033]10;rgb:%2x/%2x/%2x", &r, &g, &b) == 3) {
-	*fg = mk_color3i(r, g, b);
-	has_fg = true;
-      } else if (sscanf(buf, "\033]10;rgb:%x/%x/%x", &r, &g, &b) == 3) {
-	*fg = mk_color3i(r >> 8, g >> 8, b >> 8);
-	has_fg = true;
-      }
+  bool has_fg = false;
+  if (has_bg && write(fileno(out), "\033]10;?\033\\", 8) == 8 && term_read_upto(fileno(in), buf, sizeof(buf), '\\')) {
+    if (sscanf(buf, "\033]10;rgb:%2x/%2x/%2x", &r, &g, &b) == 3) {
+      *fg = mk_color3i(r, g, b);
+      has_fg = true;
+    } else if (sscanf(buf, "\033]10;rgb:%x/%x/%x", &r, &g, &b) == 3) {
+      *fg = mk_color3i(r >> 8, g >> 8, b >> 8);
+      has_fg = true;
     }
-    if (!has_fg) {
-      if (bg->red < 128 && bg->green < 128 && bg->blue < 128) {
-	*fg = mk_color3i(255, 255, 255);
-      } else {
-	*fg = mk_color3i(0, 0, 0);
-      }
+  }
+  
+  if (!has_fg) {
+    if (bg->red < 128 && bg->green < 128 && bg->blue < 128) {
+      *fg = mk_color3i(255, 255, 255);
+    } else {
+      *fg = mk_color3i(0, 0, 0);
     }
   }
   

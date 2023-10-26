@@ -13,31 +13,34 @@
 (defn apropos
   "Returns a list of functions whose name contains str"
   [pattern] (filter (fn [s] (clojure.string/includes? (str s) pattern)) (ns-interns root)))
+
+(defn banner
+  [] (let [label "nanoclj"
+           v-margin 5
+           h-margin 0
+           [cell-width cell-height] *cell-size*
+           cx (clojure.java.io/writer 0 0 :gray)]
+       (with-out cx
+         (set-font-size (* 1.5 cell-height))
+         (let [[ label-w label-h ] (get-text-extents label)
+               y-pos (* 1.3 cell-height)]
+           (resize (* 2 (+ h-margin label-w)) (* 2 cell-height))
+           (set-font-size (* 1.5 cell-height))
+           (move-to h-margin y-pos)
+           (print label)
+           (set-font-size (* 0.6 cell-height))
+           (print (System/getProperty "nanoclj.version"))
+           (flush)
+           ))))
     
 (defn repl
   "Starts the REPL"
   []
                                         ; (in-ns 'user)
-  (let [label "nanoclj"
-        v-margin 5
-        h-margin 0
-        [cell-width cell-height] *cell-size*
-        cx (clojure.java.io/writer 0 0)]
-    (mode :block)                   
-    (pr (with-out cx
-          (set-font-size (* 1.5 cell-height))
-          (let [[ label-w label-h ] (get-text-extents label)
-                y-pos (* 1.3 cell-height)]
-            (resize (* 2 (+ h-margin label-w)) (* 2 cell-height))
-            (set-font-size (* 1.5 cell-height))
-            (move-to h-margin y-pos)
-            (print label)
-            (set-font-size (* 0.6 cell-height))
-            (print (System/getProperty "nanoclj.version"))
-            (flush)
-            )))
-    (newline))
-
+  (mode :block)                   
+  (pr (banner))
+  (newline)
+  
   (let [hfn (clojure.java.io/file (System/getProperty "user.home") "/.nanoclj_history")
         f (fn [] (let [prompt (str (:name (meta *ns*)) "=> ")
                        line (linenoise/read-line prompt)]

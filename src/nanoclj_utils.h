@@ -25,6 +25,22 @@ static inline nanoclj_color_t mk_color3i(int red, int green, int blue) {
     255 };
 }
 
+static inline nanoclj_color_t mk_color4i(int red, int green, int blue, int alpha) {
+  return (nanoclj_color_t){
+    clamp(red, 0, 255),
+    clamp(green, 0, 255),
+    clamp(blue, 0, 255),
+    clamp(alpha, 0, 255) };
+}
+
+static inline nanoclj_color_t mix(nanoclj_color_t x, nanoclj_color_t y, float a) {
+  return mk_color4i(x.red * (1 - a) + y.red * a,
+		    x.green * (1 - a) + y.green * a,
+		    x.blue * (1 - a) + y.blue * a,
+		    x.alpha * (1 - a) + y.alpha * a
+		    );
+}
+
 static inline int digit(int32_t c, int radix) {
   if (c >= '0' && c <= '9') {
     c -= '0';
