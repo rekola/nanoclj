@@ -9,7 +9,15 @@
 This is a small Clojure language implementation written in C
 language. It is based on TinyScheme which was based on MiniScheme.
 
-## 2D Graphics
+## Features
+
+- Image and audio loading
+- 2D canvas
+- REPL output is colored by type
+- Callback ports have been added for printing into a GUI instead of stdout
+- Type names try to imitate Java and Clojure types when possible `(type 1) ;=> java.lang.Long`
+
+### 2D Graphics
 
 Since Clojure has no standard way for 2D drawing, a new system has
 been created for nanoclj. The principle of minimality suggests that
@@ -22,7 +30,7 @@ Tektronix terminal, or move-to could set the cursor position in a text
 mode program. The canvas interface has been modeled after Cairo.
 
 In GUI program the resulting canvas can be displayed in a REPL using
-the GUI callbacks for output Writer. In terminal program sixels are
+the GUI callbacks for output Writer. In terminal program *sixels* are
 used to print the results of a function call when the function returns
 a canvas or image. The terminal must, of course, has to support sixel
 graphics and sixel support must be enabled. The following terminals
@@ -35,7 +43,7 @@ have been tested:
 | xterm | No true color, inline image layout doesn't work | OK | |
 | mlterm | Cannot get background color, inline image layout doesn't work | ? | Output flickers when updated |
 | Black Box | Inline image layout doesn't work | ? | On HiDPI system the images are upscaled, and the terminal and the flatpak system use too much CPU time when idling. |
-| GNOME Terminal | Sixels are not enabled by default | | |
+| GNOME Terminal | ? | ? | Sixels are not enabled by default |
 
 ![Plotting from nanoclj](https://user-images.githubusercontent.com/6755525/277504459-737b498e-005b-49ad-92b2-0917a1a10b7e.jpg "Plotting from nanoclj")
 *The plot function returns a canvas, which can be converted to an image, and then saved with Image/save or modified using other functions in the Image namespace.*
@@ -60,28 +68,7 @@ As well as printing images in block mode like the plot function does, they can a
 - Primitives such as doubles and 32 bit integers are passed by value, and are in effect, interned
 - Strings are not interned (identical? "abc" "abc") ;=> false
 - `rationalize` is exact and Ratios use the smallest suitable integer type for numerator and denominator
-- No chunked lazy sequences
-
-## Differences to (Tiny)Scheme:
-
-- Ports have been renamed to Readers and Writers, environments to namespaces, promises to delays
-- Literals and function names have been changed
-- Lambdas changed from (lambda (x) x) to (fn [x] x)
-- nil is false and not the same as empty list
-- Callback ports have been added for printing into a GUI instead of stdout
-- Metadata has been added
-- Vector data is stored as an array of primitive values, not as an array of cells
-- Lists can be built from sequences: (cons 1 "Hello")
-- NaN-boxing has been added
-- REPL output is colored by type
-- Lazy sequences can be printed by the REPL and used with apply
-- Integer overflows and underflows are detected
-- Unnecessary functionality has been removed: continuations, Plists, type checks
-
-## Types
-
-- Types are first class values and can be invoked to construct new values
-- Type names try to imitate Java and Clojure types when possible (type \a) ;=> java.lang.Character
+- No chunked or buffered lazy sequences
 
 ## Dependencies
 
@@ -95,6 +82,10 @@ As well as printing images in block mode like the plot function does, they can a
 - libsixel
 - utf8proc
 - shapelib
+
+## Windows Support
+
+Windows support is in progress.
 
 ## Missing functionality
 
