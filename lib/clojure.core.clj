@@ -117,6 +117,8 @@
 
 ; Miscellaneous
 
+(defn ns-interns [ns] (doall (map first (reduce concat '() (car ns)))))
+
 (defn new [t & args]
   "Creates an object"
   (apply* t args))
@@ -500,12 +502,12 @@
            (set! *out* prev-out)
            (java.lang.String w)))
 
-(def-macro (with-in-str s body)
+(def-macro (with-in-str s $ body)
   `(let ((prev-in *in*)
          (rdr (clojure.java.io/reader (char-array ,s)))
          )
      (set! *in* rdr)
-     (let ((r ,body))
+     (let ((r ,@body))
        (set! *in* prev-in)
        r
        )))
@@ -544,6 +546,22 @@
 (defn false? [x] (equals? x false))
 
 ; Collections
+
+(def nth
+  "Returns the nth element of coll"
+  (fn
+    ([coll index]
+     (cond (vector? coll) (coll index)
+     	   (string? coll) (recur (seq coll) index)
+     	   (or (< index 0) (empty? coll)) (throw "ERROR - Index out of bounds")
+           (if (zero? index) (first coll) (recur (next coll) (dec index)))))
+    ([coll index not-found]
+     (cond (vector? coll) (coll index not-found)
+     	   (string? coll) (recur (seq coll) index not-found)
+     	   (or (< index 0) (empty? coll)) not-found
+     	   :else (if (zero? index) (first coll) (recur (next coll) (dec index) not-found))))))
+
+(defn third [coll] (first (next (next coll))))
 
 (defn nthrest
   "Returns the nth rest of coll"
@@ -688,3 +706,30 @@
   [n coll] (if (counted? coll)
              (count coll)
              (loop [c 0 n n coll coll] (if (or (empty? coll) (<= n 0)) c (recur (inc c) (dec n) (rest coll))))))
+
+; Random numbers
+
+; Random number generator (maximum cycle)
+(def ^:private *seed* 1)
+(defn ^:private rand- []
+  (let [a 16807
+        m 2147483647
+        q (quot m a)
+        r (mod m a)]
+    (set! *seed*
+          (-   (* a (- *seed*
+                       (* (quot *seed* q) q)))
+               (* (quot *seed* q) r)))
+    (if (< *seed* 0) (set! *seed* (+ *seed* m)))
+    *seed*))
+
+(defn rand
+  "Returns a random double in [0, 1["
+  ([] (rand 1))
+  ([n] (* n (/ (rand-) 2147483647.0))))
+
+(defn rand-int
+  "Returns a random integer in [0, n["
+  [n] (mod (rand-) n))
+
+(defn rand-nth [coll] (nth coll (rand-int (count coll))))
