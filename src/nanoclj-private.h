@@ -183,6 +183,11 @@ extern "C" {
     nanoclj_shared_context_t * context;
     
     nanoclj_cell_t * pending_exception;		/* pending exception */
+
+    nanoclj_cell_t * Object;
+    nanoclj_cell_t * Audio;
+    nanoclj_cell_t * Image;
+    nanoclj_cell_t * Graph;
     nanoclj_cell_t * OutOfMemoryError;
     nanoclj_cell_t * NullPointerException;
     nanoclj_cell_t * Throwable;

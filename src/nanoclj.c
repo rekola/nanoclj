@@ -2983,23 +2983,36 @@ static inline nanoclj_val_t intern_foreign_func(nanoclj_t * sc, nanoclj_cell_t *
   return fn;
 }
 
-static inline nanoclj_cell_t * mk_type(nanoclj_t * sc, int type_id, nanoclj_cell_t * parent_type, nanoclj_cell_t * meta) {
+static inline nanoclj_cell_t * mk_class_with_meta(nanoclj_t * sc, nanoclj_val_t sym, int type_id, nanoclj_cell_t * parent_type, nanoclj_cell_t * md) {
+  nanoclj_cell_t * vec = mk_vector(sc, 727);
+  fill_vector(vec, mk_nil());
+  nanoclj_cell_t * t = get_cell(sc, type_id, T_TYPE, mk_pointer(vec), parent_type, md);
+  
   while (sc->types->size <= (size_t)type_id) {
     vector_push(sc, sc->types, mk_nil());
   }
-  nanoclj_cell_t * vec = mk_vector(sc, 727);
-  fill_vector(vec, mk_nil());
-  nanoclj_cell_t * t = get_cell(sc, type_id, T_TYPE, mk_pointer(vec), parent_type, meta);
   sc->types->data[type_id] = mk_pointer(t);
+  intern_with_meta(sc, sc->global_env, sym, mk_pointer(t), md);
+
   return t;
 }
 
-static inline nanoclj_cell_t * mk_named_type(nanoclj_t * sc, const char * name, int type_id, nanoclj_cell_t * parent_type) {
-  nanoclj_cell_t * md = mk_arraymap(sc, 1);
-  set_vector_elem(md, 0, mk_mapentry(sc, sc->NAME, def_symbol(sc, name)));
-  nanoclj_cell_t * t = mk_type(sc, type_id, parent_type, md);
-  intern_with_meta(sc, sc->global_env, def_symbol(sc, name), mk_pointer(t), md);
+static inline nanoclj_cell_t * mk_class_with_fn(nanoclj_t * sc, const char * name, int type_id, nanoclj_cell_t * parent_type, const char * fn) {
+  nanoclj_val_t sym = def_symbol_from_sv(sc, T_SYMBOL, mk_strview(0), mk_strview(name));
+  nanoclj_cell_t * md = mk_arraymap(sc, 2);
+  set_vector_elem(md, 0, mk_mapentry(sc, sc->NAME, sym));
+  set_vector_elem(md, 1, mk_mapentry(sc, sc->FILE, mk_string(sc, fn)));
+  nanoclj_cell_t * t = mk_class_with_meta(sc, sym, type_id, parent_type, md);
+
+  char * p = strrchr(name, '.');
+  if (p && p[1]) {
+    intern_with_meta(sc, sc->global_env, def_symbol(sc, p + 1), mk_pointer(t), md);
+  }
   return t;
+}
+
+static inline nanoclj_cell_t * mk_class(nanoclj_t * sc, const char * name, int type_id, nanoclj_cell_t * parent_type) {
+  return mk_class_with_fn(sc, name, type_id, parent_type, __FILE__);
 }
 
 /* get new symbol or keyword. % is aliased to %1 */
@@ -4537,9 +4550,13 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
     } else {
       return mk_codepoint(i);
     }
-
-  case T_CLASS:
-    return mk_pointer(mk_type(sc, to_int(first(sc, args)), rest(sc, args), NULL));
+    
+  case T_CLASS:{
+    nanoclj_val_t name = first(sc, args);
+    nanoclj_val_t parent = second(sc, args);
+    nanoclj_cell_t * meta = mk_meta_from_reader(sc, vector_peek(sc->load_stack));
+    return mk_pointer(mk_class_with_meta(sc, name, gentypeid(sc), decode_pointer(parent), meta));
+  }
 
   case T_ENVIRONMENT:{
     nanoclj_cell_t * parent = NULL;
@@ -7819,68 +7836,68 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
 
   /* Java types */
 
-  nanoclj_cell_t * Object = mk_named_type(sc, "java.lang.Object", gentypeid(sc), sc->global_env);
-  nanoclj_cell_t * Number = mk_named_type(sc, "java.lang.Number", gentypeid(sc), Object);
-  sc->Throwable = mk_named_type(sc, "java.lang.Throwable", gentypeid(sc), Object);
-  nanoclj_cell_t * Exception = mk_named_type(sc, "java.lang.Exception", gentypeid(sc), sc->Throwable);
-  nanoclj_cell_t * RuntimeException = mk_named_type(sc, "java.lang.RuntimeException", T_RUNTIME_EXCEPTION, Exception);
-  nanoclj_cell_t * IllegalArgumentException = mk_named_type(sc, "java.lang.IllegalArgumentException", T_ILLEGAL_ARG_EXCEPTION, RuntimeException);
-  nanoclj_cell_t * NumberFormatException = mk_named_type(sc, "java.lang.NumberFormatException", T_NUM_FMT_EXCEPTION, IllegalArgumentException);
-  nanoclj_cell_t * OutOfMemoryError = mk_named_type(sc, "java.lang.OutOfMemoryError", gentypeid(sc), sc->Throwable);    
-  nanoclj_cell_t * NullPointerException = mk_named_type(sc, "java.lang.NullPointerException", gentypeid(sc), RuntimeException);
-  nanoclj_cell_t * ClassCastException = mk_named_type(sc, "java.lang.ClassCastException", T_CLASS_CAST_EXCEPTION, RuntimeException);  
-  nanoclj_cell_t * AFn = mk_named_type(sc, "clojure.lang.AFn", gentypeid(sc), Object);  
+  sc->Object = mk_class(sc, "java.lang.Object", gentypeid(sc), sc->global_env);
+  nanoclj_cell_t * Number = mk_class(sc, "java.lang.Number", gentypeid(sc), sc->Object);
+  sc->Throwable = mk_class(sc, "java.lang.Throwable", gentypeid(sc), sc->Object);
+  nanoclj_cell_t * Exception = mk_class(sc, "java.lang.Exception", gentypeid(sc), sc->Throwable);
+  nanoclj_cell_t * RuntimeException = mk_class(sc, "java.lang.RuntimeException", T_RUNTIME_EXCEPTION, Exception);
+  nanoclj_cell_t * IllegalArgumentException = mk_class(sc, "java.lang.IllegalArgumentException", T_ILLEGAL_ARG_EXCEPTION, RuntimeException);
+  nanoclj_cell_t * NumberFormatException = mk_class(sc, "java.lang.NumberFormatException", T_NUM_FMT_EXCEPTION, IllegalArgumentException);
+  nanoclj_cell_t * OutOfMemoryError = mk_class(sc, "java.lang.OutOfMemoryError", gentypeid(sc), sc->Throwable);    
+  nanoclj_cell_t * NullPointerException = mk_class(sc, "java.lang.NullPointerException", gentypeid(sc), RuntimeException);
+  nanoclj_cell_t * ClassCastException = mk_class(sc, "java.lang.ClassCastException", T_CLASS_CAST_EXCEPTION, RuntimeException);  
+  nanoclj_cell_t * AFn = mk_class(sc, "clojure.lang.AFn", gentypeid(sc), sc->Object);  
     
-  mk_named_type(sc, "java.lang.Class", T_CLASS, AFn); /* non-standard parent */
-  mk_named_type(sc, "java.lang.String", T_STRING, Object);
-  mk_named_type(sc, "java.lang.Boolean", T_BOOLEAN, Object);
-  mk_named_type(sc, "java.math.BigInteger", T_BIGINT, Number);
-  mk_named_type(sc, "java.lang.Double", T_REAL, Number);
-  mk_named_type(sc, "java.lang.Long", T_LONG, Number);
-  mk_named_type(sc, "java.io.Reader", T_READER, Object);
-  mk_named_type(sc, "java.io.Writer", T_WRITER, Object);
-  mk_named_type(sc, "java.io.InputStream", T_INPUT_STREAM, Object);
-  mk_named_type(sc, "java.io.OutputStream", T_OUTPUT_STREAM, Object);
-  mk_named_type(sc, "java.io.File", T_FILE, Object);
-  mk_named_type(sc, "java.util.Date", T_DATE, Object);
-  mk_named_type(sc, "java.util.UUID", T_UUID, Object);
-  mk_named_type(sc, "java.util.regex.Pattern", T_REGEX, Object);
-  mk_named_type(sc, "java.lang.ArithmeticException", T_ARITHMETIC_EXCEPTION, RuntimeException);
+  mk_class(sc, "java.lang.Class", T_CLASS, AFn); /* non-standard parent */
+  mk_class(sc, "java.lang.String", T_STRING, sc->Object);
+  mk_class(sc, "java.lang.Boolean", T_BOOLEAN, sc->Object);
+  mk_class(sc, "java.math.BigInteger", T_BIGINT, Number);
+  mk_class(sc, "java.lang.Double", T_REAL, Number);
+  mk_class(sc, "java.lang.Long", T_LONG, Number);
+  mk_class(sc, "java.io.Reader", T_READER, sc->Object);
+  mk_class(sc, "java.io.Writer", T_WRITER, sc->Object);
+  mk_class(sc, "java.io.InputStream", T_INPUT_STREAM, sc->Object);
+  mk_class(sc, "java.io.OutputStream", T_OUTPUT_STREAM, sc->Object);
+  mk_class(sc, "java.io.File", T_FILE, sc->Object);
+  mk_class(sc, "java.util.Date", T_DATE, sc->Object);
+  mk_class(sc, "java.util.UUID", T_UUID, sc->Object);
+  mk_class(sc, "java.util.regex.Pattern", T_REGEX, sc->Object);
+  mk_class(sc, "java.lang.ArithmeticException", T_ARITHMETIC_EXCEPTION, RuntimeException);
   		
   /* Clojure types */
-  nanoclj_cell_t * AReference = mk_named_type(sc, "clojure.lang.AReference", gentypeid(sc), Object);
-  nanoclj_cell_t * Obj = mk_named_type(sc, "clojure.lang.Obj", gentypeid(sc), Object);
-  nanoclj_cell_t * ASeq = mk_named_type(sc, "clojure.lang.ASeq", gentypeid(sc), Obj);
-  nanoclj_cell_t * PersistentVector = mk_named_type(sc, "clojure.lang.PersistentVector", T_VECTOR, AFn);
+  nanoclj_cell_t * AReference = mk_class(sc, "clojure.lang.AReference", gentypeid(sc), sc->Object);
+  nanoclj_cell_t * Obj = mk_class(sc, "clojure.lang.Obj", gentypeid(sc), sc->Object);
+  nanoclj_cell_t * ASeq = mk_class(sc, "clojure.lang.ASeq", gentypeid(sc), Obj);
+  nanoclj_cell_t * PersistentVector = mk_class(sc, "clojure.lang.PersistentVector", T_VECTOR, AFn);
     
-  mk_named_type(sc, "clojure.lang.PersistentTreeSet", T_SORTED_SET, AFn);
-  mk_named_type(sc, "clojure.lang.PersistentArrayMap", T_ARRAYMAP, AFn);
-  mk_named_type(sc, "clojure.lang.Symbol", T_SYMBOL, AFn);  
-  mk_named_type(sc, "clojure.lang.Keyword", T_KEYWORD, AFn); /* non-standard parent */
-  mk_named_type(sc, "clojure.lang.BigInt", T_BIGINT, Number);
-  mk_named_type(sc, "clojure.lang.Ratio", T_RATIO, Number);
-  mk_named_type(sc, "clojure.lang.Delay", T_DELAY, Object);
-  mk_named_type(sc, "clojure.lang.LazySeq", T_LAZYSEQ, Obj);
-  mk_named_type(sc, "clojure.lang.Cons", T_LIST, ASeq);
-  mk_named_type(sc, "clojure.lang.Namespace", T_ENVIRONMENT, AReference);
-  mk_named_type(sc, "clojure.lang.Var", T_VAR, AReference);
-  mk_named_type(sc, "clojure.lang.MapEntry", T_MAPENTRY, PersistentVector);
-  mk_named_type(sc, "clojure.lang.ArityException", T_ARITY_EXCEPTION, Exception);
+  mk_class(sc, "clojure.lang.PersistentTreeSet", T_SORTED_SET, AFn);
+  mk_class(sc, "clojure.lang.PersistentArrayMap", T_ARRAYMAP, AFn);
+  mk_class(sc, "clojure.lang.Symbol", T_SYMBOL, AFn);  
+  mk_class(sc, "clojure.lang.Keyword", T_KEYWORD, AFn); /* non-standard parent */
+  mk_class(sc, "clojure.lang.BigInt", T_BIGINT, Number);
+  mk_class(sc, "clojure.lang.Ratio", T_RATIO, Number);
+  mk_class(sc, "clojure.lang.Delay", T_DELAY, sc->Object);
+  mk_class(sc, "clojure.lang.LazySeq", T_LAZYSEQ, Obj);
+  mk_class(sc, "clojure.lang.Cons", T_LIST, ASeq);
+  mk_class(sc, "clojure.lang.Namespace", T_ENVIRONMENT, AReference);
+  mk_class(sc, "clojure.lang.Var", T_VAR, AReference);
+  mk_class(sc, "clojure.lang.MapEntry", T_MAPENTRY, PersistentVector);
+  mk_class(sc, "clojure.lang.ArityException", T_ARITY_EXCEPTION, Exception);
   
   /* nanoclj types */
-  nanoclj_cell_t * Closure = mk_named_type(sc, "nanoclj.core.Closure", T_CLOSURE, AFn);
-  mk_named_type(sc, "nanoclj.core.Procedure", T_PROC, AFn);
-  mk_named_type(sc, "nanoclj.core.Macro", T_MACRO, Closure);
-  mk_named_type(sc, "nanoclj.core.ForeignFunction", T_FOREIGN_FUNCTION, AFn);
-  mk_named_type(sc, "nanoclj.core.ForeignObject", T_FOREIGN_OBJECT, AFn);
+  nanoclj_cell_t * Closure = mk_class(sc, "nanoclj.core.Closure", T_CLOSURE, AFn);
+  mk_class(sc, "nanoclj.core.Procedure", T_PROC, AFn);
+  mk_class(sc, "nanoclj.core.Macro", T_MACRO, Closure);
+  mk_class(sc, "nanoclj.core.ForeignFunction", T_FOREIGN_FUNCTION, AFn);
+  mk_class(sc, "nanoclj.core.ForeignObject", T_FOREIGN_OBJECT, AFn);
 
-  mk_named_type(sc, "nanoclj.core.Codepoint", T_CODEPOINT, Object);
-  mk_named_type(sc, "nanoclj.core.CharArray", T_CHAR_ARRAY, Object);
-  mk_named_type(sc, "nanoclj.core.Image", T_IMAGE, Object);
-  mk_named_type(sc, "nanoclj.core.Audio", T_AUDIO, Object);
-  mk_named_type(sc, "nanoclj.core.Tensor", T_TENSOR, Object);
-  mk_named_type(sc, "nanoclj.core.EmptyList", T_NIL, Object);
-  mk_named_type(sc, "nanoclj.core.Graph", T_GRAPH, Object);
+  mk_class(sc, "nanoclj.core.Codepoint", T_CODEPOINT, sc->Object);
+  mk_class(sc, "nanoclj.core.CharArray", T_CHAR_ARRAY, sc->Object);
+  sc->Image = mk_class(sc, "nanoclj.core.Image", T_IMAGE, sc->Object);
+  sc->Audio = mk_class(sc, "nanoclj.core.Audio", T_AUDIO, sc->Object);
+  mk_class(sc, "nanoclj.core.Tensor", T_TENSOR, sc->Object);
+  mk_class(sc, "nanoclj.core.EmptyList", T_NIL, sc->Object);
+  sc->Graph = mk_class(sc, "nanoclj.core.Graph", T_GRAPH, sc->Object);
 
   sc->OutOfMemoryError = mk_exception(sc, OutOfMemoryError, "Out of memory");
   sc->NullPointerException = mk_exception(sc, NullPointerException, "Null pointer exception");

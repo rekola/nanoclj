@@ -813,6 +813,22 @@ static inline nanoclj_val_t Geo_load(nanoclj_t * sc, nanoclj_val_t args0) {
   return mk_pointer(r);
 }
 
+static inline nanoclj_val_t Graph_load(nanoclj_t * sc, nanoclj_val_t args0) {
+  nanoclj_cell_t * args = decode_pointer(args0);
+  char * filename = alloc_c_str(sc, to_strview(first(sc, args)));
+
+  xmlDoc * doc = xmlReadFile(filename, NULL, 0);
+  sc->free(filename);
+  if (doc == NULL) {
+    return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Could not parse file")));    
+  }
+  xmlNode * root = xmlDocGetRootElement(doc);
+  
+  
+  xmlFreeDoc(doc);
+  return mk_nil();
+}
+
 static inline nanoclj_val_t create_xml_node(nanoclj_t * sc, xmlNode * input) {
   nanoclj_cell_t * output = 0;
   nanoclj_val_t tag = mk_nil();
@@ -1068,17 +1084,17 @@ static inline nanoclj_val_t linenoise_history_append(nanoclj_t * sc, nanoclj_val
 #endif
 
 static inline void register_functions(nanoclj_t * sc) {
-  nanoclj_cell_t * Thread = def_namespace(sc, "Thread", __FILE__);
-  nanoclj_cell_t * System = def_namespace(sc, "System", __FILE__);
-  nanoclj_cell_t * Math = def_namespace(sc, "Math", __FILE__);
-  nanoclj_cell_t * numeric_tower = def_namespace(sc, "clojure.math.numeric-tower", __FILE__);
-  nanoclj_cell_t * clojure_java_browse = def_namespace(sc, "clojure.java.browse", __FILE__);
-  nanoclj_cell_t * Image = def_namespace(sc, "Image", __FILE__);
-  nanoclj_cell_t * Audio = def_namespace(sc, "Audio", __FILE__);
-  nanoclj_cell_t * Geo = def_namespace(sc, "Geo", __FILE__);
-  nanoclj_cell_t * clojure_xml = def_namespace(sc, "clojure.xml", __FILE__);
-  nanoclj_cell_t * clojure_data_csv = def_namespace(sc, "clojure.data.csv", __FILE__);
+  nanoclj_cell_t * Thread = mk_class_with_fn(sc, "java.lang.Thread", gentypeid(sc), sc->Object, __FILE__);
+  nanoclj_cell_t * System = mk_class_with_fn(sc, "java.lang.System", gentypeid(sc), sc->Object, __FILE__);
+  nanoclj_cell_t * Math = mk_class_with_fn(sc, "java.lang.Math", gentypeid(sc), sc->Object, __FILE__);
   
+  nanoclj_cell_t * numeric_tower = def_namespace(sc, "clojure.math.numeric-tower", __FILE__);
+  nanoclj_cell_t * browse = def_namespace(sc, "clojure.java.browse", __FILE__);
+  
+  nanoclj_cell_t * Geo = def_namespace(sc, "Geo", __FILE__);
+  nanoclj_cell_t * xml = def_namespace(sc, "clojure.xml", __FILE__);
+  nanoclj_cell_t * csv = def_namespace(sc, "clojure.data.csv", __FILE__);
+    
   intern_foreign_func(sc, Thread, "sleep", Thread_sleep, 1, 1);
   
   intern_foreign_func(sc, System, "exit", System_exit, 1, 1);
@@ -1111,23 +1127,22 @@ static inline void register_functions(nanoclj_t * sc) {
 
   intern_foreign_func(sc, numeric_tower, "expt", numeric_tower_expt, 2, 2);
 
-  intern_foreign_func(sc, clojure_java_browse, "browse-url", browse_url, 1, 1);
+  intern_foreign_func(sc, browse, "browse-url", browse_url, 1, 1);
 
-  intern_foreign_func(sc, Image, "load", Image_load, 1, 1);
-  intern_foreign_func(sc, Image, "resize", Image_resize, 3, 3);
-  intern_foreign_func(sc, Image, "transpose", Image_transpose, 1, 1);
-  intern_foreign_func(sc, Image, "save", Image_save, 2, 2);
-  intern_foreign_func(sc, Image, "blur", Image_gaussian_blur, 2, 2);
-  intern_foreign_func(sc, Image, "gaussian-blur", Image_gaussian_blur, 2, 2);
+  intern_foreign_func(sc, sc->Image, "load", Image_load, 1, 1);
+  intern_foreign_func(sc, sc->Image, "resize", Image_resize, 3, 3);
+  intern_foreign_func(sc, sc->Image, "transpose", Image_transpose, 1, 1);
+  intern_foreign_func(sc, sc->Image, "save", Image_save, 2, 2);
+  intern_foreign_func(sc, sc->Image, "blur", Image_gaussian_blur, 2, 2);
+  intern_foreign_func(sc, sc->Image, "gaussian-blur", Image_gaussian_blur, 2, 2);
 
-  intern_foreign_func(sc, Audio, "load", Audio_load, 1, 1);
-  intern_foreign_func(sc, Audio, "lowpass", Audio_lowpass, 1, 1);
+  intern_foreign_func(sc, sc->Audio, "load", Audio_load, 1, 1);
+  intern_foreign_func(sc, sc->Audio, "lowpass", Audio_lowpass, 1, 1);
 
   intern_foreign_func(sc, Geo, "load", Geo_load, 1, 1);
-
-  intern_foreign_func(sc, clojure_xml, "parse", clojure_xml_parse, 1, 1);
-
-  intern_foreign_func(sc, clojure_data_csv, "read-csv", clojure_data_csv_read_csv, 1, 1);
+  intern_foreign_func(sc, sc->Graph, "load", Graph_load, 1, 1);
+  intern_foreign_func(sc, xml, "parse", clojure_xml_parse, 1, 1);
+  intern_foreign_func(sc, csv, "read-csv", clojure_data_csv_read_csv, 1, 1);
 
 #if NANOCLJ_USE_LINENOISE
   nanoclj_cell_t * linenoise = def_namespace(sc, "linenoise", __FILE__);
