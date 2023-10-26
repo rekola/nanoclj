@@ -184,25 +184,6 @@ enum nanoclj_types {
 };
 
 typedef struct {
-  const char * ptr;
-  size_t size;
-} strview_t;
-
-static inline bool strview_eq(strview_t a, strview_t b) {
-  return a.size == b.size && memcmp(a.ptr, b.ptr, a.size) == 0;
-}
-
-static inline int strview_cmp(strview_t a, strview_t b) {
-  if (a.size < b.size) {
-    return -1;
-  } else if (a.size > b.size) {
-    return +1;
-  } else {
-    return memcmp(a.ptr, b.ptr, a.size);
-  }
-}
-
-typedef struct {
   int_fast16_t syntax;
   strview_t ns, name, full_name;
   uint32_t hash;
@@ -485,12 +466,6 @@ static inline bool is_coll_type(uint_fast16_t type_id) {
     return true;
   }
   return false;
-}
-
-static inline bool is_coll(nanoclj_val_t p) {
-  if (!is_cell(p)) return false;
-  nanoclj_cell_t * c = decode_pointer(p);
-  return c && is_coll_type(_type(c));  
 }
 
 static inline nanoclj_val_t vector_elem(nanoclj_cell_t * vec, size_t ielem) {
@@ -862,6 +837,25 @@ static inline strview_t to_strview(nanoclj_val_t x) {
   }
   }  
   return mk_strview(0);
+}
+
+static inline imageview_t to_imageview(nanoclj_val_t p) {
+  switch (type(p)) {
+  case T_IMAGE:{
+    nanoclj_image_t * img = image_unchecked(p);
+    return (imageview_t){ img->data, img->width, img->height, img->channels };
+  }
+  case T_WRITER:
+#if NANOCLJ_HAS_CANVAS
+    {
+      nanoclj_port_rep_t * pr = rep_unchecked(out);
+      switch (port_type_unchecked(out)) {
+      case port_canvas: return canvas_get_imageview(pr->canvas.impl);
+      }
+    }
+#endif
+  }
+  return (imageview_t){ 0, 0, 0 };  
 }
 
 static inline nanoclj_color_t to_color(nanoclj_val_t p) {
@@ -3370,7 +3364,7 @@ static inline nanoclj_val_t mk_writer_from_callback(nanoclj_t * sc,
 						    void (*text) (const char *, size_t, void *),
 						    void (*color) (double, double, double, void *),
 						    void (*restore) (void *),
-						    void (*image) (nanoclj_image_t*, void*)) {
+						    void (*image) (imageview_t, void*)) {
   nanoclj_cell_t * p = get_port_object(sc, T_WRITER, port_callback);
   nanoclj_port_rep_t * pr = _rep_unchecked(p);
   pr->callback.text = text;
@@ -3817,27 +3811,29 @@ static void print_tensor(nanoclj_t * sc, void * tensor, nanoclj_cell_t * out) {
   }
 }
 
-static inline void print_image(nanoclj_t * sc, nanoclj_image_t * img, nanoclj_cell_t * out) {
+static inline bool print_imageview(nanoclj_t * sc, imageview_t iv, nanoclj_cell_t * out) {
   if (!is_writable(out)) {
-    return;
+    return false;
   }
 
   nanoclj_port_rep_t * pr = _rep_unchecked(out);
-  if (_port_type_unchecked(out) == port_callback) {
+  switch (_port_type_unchecked(out)) {
+  case port_callback:
     if (pr->callback.image) {
-      pr->callback.image(img, sc->ext_data);
-      return;
+      pr->callback.image(iv, sc->ext_data);
+      return true;
     }
-  } else if (sc->sixel_term && _port_type_unchecked(out) == port_file && pr->stdio.file == stdout) {      
+  case port_file:
+    if (sc->sixel_term && pr->stdio.file == stdout) {      
 #if NANOCLJ_SIXEL
-    if (print_image_sixel(img->data, img->width, img->height, img->channels)) {
-      return;
-    }
+      if (print_image_sixel(iv)) {
+	return true;
+      }
 #endif      
+    }
   }
-  
-  size_t len = snprintf(sc->strbuff, STRBUFFSIZE, "#<Image %d %d %d>", img->width, img->height, img->channels);
-  putchars(sc, sc->strbuff, len, out);
+
+  return false;  
 }
 
 static inline nanoclj_cell_t * get_type_object(nanoclj_t * sc, nanoclj_val_t v) {
@@ -3984,7 +3980,6 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
 	  break;
 #if NANOCLJ_HAS_CANVAS
 	case port_canvas:
-	  nanoclj_val_t image = canvas_create_image(sc, pr->canvas.impl);
 	  if (_port_type_unchecked(out) == port_file) {
 	    FILE * fh = _rep_unchecked(out)->stdio.file;
 	    int x, y;
@@ -3999,8 +3994,10 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
 	      sc->active_element = mk_nil();
 	    }
 	  }
-	  print_image(sc, image_unchecked(image), out);
-	  return;	
+
+	  if (print_imageview(sc, canvas_get_imageview(pr->canvas.impl), out)) {
+	    return;
+	  }
 #endif
 	}
       }
@@ -4037,8 +4034,16 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
 	print_tensor(sc, _tensor_unchecked(c), out);
 	return;
       case T_IMAGE:
-	print_image(sc, _image_unchecked(c), out);
-	return;
+	if (print_imageview(sc, to_imageview(l), out)) {
+	  return;
+	} else {
+	  nanoclj_image_t * img = _image_unchecked(c);
+	  sv = (strview_t){
+	    sc->strbuff,
+	    snprintf(sc->strbuff, STRBUFFSIZE, "#<Image %d %d %d>", img->width, img->height, img->channels)
+	  };
+	}
+	break;
       }
     }
   }
@@ -4600,8 +4605,8 @@ static inline nanoclj_val_t construct_by_type(nanoclj_t * sc, int type_id, nanoc
 	  _rep_unchecked(port)->canvas.impl = mk_canvas(sc,
 							(int)(to_double(x) * sc->window_scale_factor),
 							(int)(to_double(y) * sc->window_scale_factor),
-							sc->fg_color,
-							fill_color);
+							4,
+							sc->fg_color, fill_color);
 	  return mk_pointer(port);
 #endif
 	}	
@@ -5104,6 +5109,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       case T_SORTED_SET:
       case T_IMAGE:
       case T_AUDIO:
+      case T_STRING:
+      case T_CHAR_ARRAY:
 	if (!unpack_args_1_plus(sc, &arg0, &arg_next)) {
 	  return false;
 	} else if (get_elem(sc, decode_pointer(sc->code), arg0, &x)) {
@@ -7291,6 +7298,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       rep_unchecked(x)->canvas.impl = mk_canvas(sc,
 						(int)(to_double(arg0) * sc->window_scale_factor),
 						(int)(to_double(arg1) * sc->window_scale_factor),
+						4,
 						sc->fg_color, sc->bg_color);
     }
 #endif
@@ -7908,7 +7916,7 @@ void nanoclj_set_output_port_callback(nanoclj_t * sc,
 				      void (*text) (const char *, size_t, void *),
 				      void (*color) (double, double, double, void *),
 				      void (*restore) (void *),
-				      void (*image) (nanoclj_image_t *, void *)
+				      void (*image) (imageview_t, void *)
 				      ) {
   nanoclj_val_t p = mk_writer_from_callback(sc, text, color, restore, image);
   intern(sc, sc->root_env, sc->OUT_SYM, p);

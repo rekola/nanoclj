@@ -28,4 +28,14 @@ typedef enum {
   nanoclj_mode_block
 } nanoclj_display_mode_t;
 
+typedef struct {
+  const uint8_t * ptr;
+  uint32_t width, height, channels;
+} imageview_t;
+
+typedef struct {
+  const char * ptr;
+  size_t size;
+} strview_t;
+
 #endif

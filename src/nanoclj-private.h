@@ -59,6 +59,7 @@ extern "C" {
   } nanoclj_float_array_t;
   
   typedef struct {
+    nanoclj_display_mode_t mode;
     nanoclj_color_t fg;
     nanoclj_color_t bg;
   } nanoclj_term_state_t;
@@ -82,7 +83,7 @@ extern "C" {
       void (*text) (const char *, size_t, void*);
       void (*color) (double r, double g, double b, void*);
       void (*restore) (void*);
-      void (*image) (nanoclj_image_t*, void*);
+      void (*image) (imageview_t, void*);
     } callback;
     struct {
       void * impl;

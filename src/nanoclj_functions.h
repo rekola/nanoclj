@@ -348,23 +348,19 @@ static inline nanoclj_val_t Image_load(nanoclj_t * sc, nanoclj_val_t args0) {
 
 static inline nanoclj_val_t Image_resize(nanoclj_t * sc, nanoclj_val_t args0) {
   nanoclj_cell_t * args = decode_pointer(args0);
-  nanoclj_val_t image00 = first(sc, args);
+  imageview_t iv = to_imageview(first(sc, args));
   nanoclj_val_t target_w0 = second(sc, args), target_h0 = third(sc, args);
-  if (!is_image(image00) || !is_number(target_w0) || !is_number(target_h0)) {
+  if (!iv.ptr || !is_number(target_w0) || !is_number(target_h0)) {
     return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Invalid type")));
   }
   
   int target_w = to_int(target_w0), target_h = to_int(target_h0);
-  nanoclj_cell_t * image0 = decode_pointer(image00);
-  nanoclj_image_t * image = _image_unchecked(image0);
-  
-  size_t target_size = target_w * target_h * image->channels;
-
+  size_t target_size = target_w * target_h * iv.channels;
   uint8_t * tmp = sc->malloc(target_size);
   
-  stbir_resize_uint8(image->data, image->width, image->height, 0, tmp, target_w, target_h, 0, image->channels);
+  stbir_resize_uint8(iv.ptr, iv.width, iv.height, 0, tmp, target_w, target_h, 0, iv.channels);
 
-  nanoclj_val_t target_image = mk_image(sc, target_w, target_h, image->channels, tmp, NULL);
+  nanoclj_val_t target_image = mk_image(sc, target_w, target_h, iv.channels, tmp, NULL);
 
   sc->free(tmp);
   
@@ -373,23 +369,20 @@ static inline nanoclj_val_t Image_resize(nanoclj_t * sc, nanoclj_val_t args0) {
 
 static inline nanoclj_val_t Image_transpose(nanoclj_t * sc, nanoclj_val_t args0) {
   nanoclj_cell_t * args = decode_pointer(args0);
-  nanoclj_val_t image00 = first(sc, args);
-  if (!is_image(image00)) {
+  imageview_t iv = to_imageview(first(sc, args));
+  if (!iv.ptr) {
     return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Not an Image")));
   }
-  nanoclj_cell_t * image0 = decode_pointer(image00);
-  nanoclj_image_t * image = _image_unchecked(image0);
-  int w = image->width, h = image->height, channels = image->channels;
-  
+  int w = iv.width, h = iv.height, channels = iv.channels;
   uint8_t * tmp = sc->malloc(w * h * channels);
 
   if (channels == 4) {
     for (int y = 0; y < h; y++) {
       for (int x = 0; x < w; x++) {
-	tmp[4 * (x * h + y) + 0] = image->data[4 * (y * w + x) + 0];
-	tmp[4 * (x * h + y) + 1] = image->data[4 * (y * w + x) + 1];
-	tmp[4 * (x * h + y) + 2] = image->data[4 * (y * w + x) + 2];     
-	tmp[4 * (x * h + y) + 3] = image->data[4 * (y * w + x) + 3];     
+	tmp[4 * (x * h + y) + 0] = iv.ptr[4 * (y * w + x) + 0];
+	tmp[4 * (x * h + y) + 1] = iv.ptr[4 * (y * w + x) + 1];
+	tmp[4 * (x * h + y) + 2] = iv.ptr[4 * (y * w + x) + 2];     
+	tmp[4 * (x * h + y) + 3] = iv.ptr[4 * (y * w + x) + 3];     
       }
     }
   } else {
@@ -398,7 +391,6 @@ static inline nanoclj_val_t Image_transpose(nanoclj_t * sc, nanoclj_val_t args0)
   }
   
   nanoclj_val_t new_image = mk_image(sc, h, w, channels, tmp, NULL);
-
   sc->free(tmp);
 
   return new_image;
@@ -406,20 +398,18 @@ static inline nanoclj_val_t Image_transpose(nanoclj_t * sc, nanoclj_val_t args0)
 
 static inline nanoclj_val_t Image_save(nanoclj_t * sc, nanoclj_val_t args0) {
   nanoclj_cell_t * args = decode_pointer(args0);
-  nanoclj_val_t image00 = first(sc, args), filename0 = second(sc, args);
-  if (!is_image(image00)) {
+  imageview_t iv = to_imageview(first(sc, args));
+  nanoclj_val_t filename0 = second(sc, args);
+  if (!iv.ptr) {
     return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Not an Image")));
   }
   if (!is_string(filename0)) {
     return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Not a string")));
   }
-  nanoclj_cell_t * image0 = decode_pointer(image00);
-  nanoclj_image_t * image = _image_unchecked(image0);
-
   char * filename = alloc_c_str(sc, to_strview(filename0));
 
-  int w = image->width, h = image->height, channels = image->channels;
-  uint8_t * data = image->data;
+  int w = iv.width, h = iv.height, channels = iv.channels;
+  const uint8_t * data = iv.ptr;
   
   char * ext = strrchr(filename, '.');
   if (!ext) {
@@ -428,8 +418,6 @@ static inline nanoclj_val_t Image_save(nanoclj_t * sc, nanoclj_val_t args0) {
   } else {
     int success = 0;
     if (strcmp(ext, ".png") == 0) {
-      fprintf(stderr, "saving png: %d %d %d\n", w, h, channels);
-      
       success = stbi_write_png(filename, w, h, channels, data, w);
     } else if (strcmp(ext, ".bmp") == 0) {
       success = stbi_write_bmp(filename, w, h, channels, data);
@@ -438,6 +426,7 @@ static inline nanoclj_val_t Image_save(nanoclj_t * sc, nanoclj_val_t args0) {
     } else if (strcmp(ext, ".jpg") == 0) {
       success = stbi_write_jpg(filename, w, h, channels, data, 95);
     } else {
+      sc->free(filename);
       return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Unsupported file format")));
     }
 
@@ -481,8 +470,9 @@ static inline int * mk_kernel(nanoclj_t * sc, float radius, int * size) {
 
 nanoclj_val_t Image_gaussian_blur(nanoclj_t * sc, nanoclj_val_t args0) {
   nanoclj_cell_t * args = decode_pointer(args0);
-  nanoclj_val_t image00 = first(sc, args), h_radius = second(sc, args), v_radius = third(sc, args);
-  if (!is_image(image00)) {
+  imageview_t iv = to_imageview(first(sc, args));
+  nanoclj_val_t h_radius = second(sc, args), v_radius = third(sc, args);
+  if (!iv.ptr) {
     return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Not an Image")));
   }
   if (!is_number(h_radius)) {
@@ -491,10 +481,7 @@ nanoclj_val_t Image_gaussian_blur(nanoclj_t * sc, nanoclj_val_t args0) {
   if (!is_nil(v_radius) && v_radius.as_long != sc->EMPTY.as_long && !is_number(v_radius)) {
     return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Not a number or nil")));
   }
-
-  nanoclj_cell_t * image0 = decode_pointer(image00);
-  nanoclj_image_t * image = _image_unchecked(image0);
-  int w = image->width, h = image->height, channels = image->channels;
+  int w = iv.width, h = iv.height, channels = iv.channels;
   
   int hsize, vsize;
   int * hkernel = mk_kernel(sc, to_double(h_radius), &hsize);
@@ -522,7 +509,7 @@ nanoclj_val_t Image_gaussian_blur(nanoclj_t * sc, nanoclj_val_t args0) {
         for (int col = 0; col < w; col++) {
           int c0 = 0, c1 = 0, c2 = 0, c3 = 0;
           for (int i = 0; i < hsize; i++) {
-	    const uint8_t * ptr = image->data + (row * w + clamp(col + i - vsize / 2, 0, w - 1)) * 4;
+	    const uint8_t * ptr = iv.ptr + (row * w + clamp(col + i - vsize / 2, 0, w - 1)) * 4;
             c0 += *ptr++ * hkernel[i];
             c1 += *ptr++ * hkernel[i];
             c2 += *ptr++ * hkernel[i];
@@ -536,7 +523,7 @@ nanoclj_val_t Image_gaussian_blur(nanoclj_t * sc, nanoclj_val_t args0) {
         }
       }
     } else {
-      memcpy(tmp, image->data, w * h * 4);
+      memcpy(tmp, iv.ptr, w * h * 4);
     }
     if (vsize) {      
       memset(output_data, 0, w * h * channels);
@@ -567,7 +554,7 @@ nanoclj_val_t Image_gaussian_blur(nanoclj_t * sc, nanoclj_val_t args0) {
         for (int col = 0; col < w; col++) {
           int c0 = 0;
           for (int i = 0; i < hsize; i++) {
-            const uint8_t * ptr = image->data + (row * w + clamp(col + i - vsize / 2, 0, w - 1));
+            const uint8_t * ptr = iv.ptr + (row * w + clamp(col + i - vsize / 2, 0, w - 1));
             c0 += *ptr * hkernel[i];
           }
           uint8_t * ptr = tmp + row * w + col;
@@ -575,7 +562,7 @@ nanoclj_val_t Image_gaussian_blur(nanoclj_t * sc, nanoclj_val_t args0) {
         }
       }
     } else {
-      memcpy(tmp, image->data, w * h);
+      memcpy(tmp, iv.ptr, w * h);
     }
     if (vsize) {
       memset(output_data, 0, w * h * channels);

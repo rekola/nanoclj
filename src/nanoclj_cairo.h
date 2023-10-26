@@ -9,8 +9,25 @@ static void finalize_canvas(nanoclj_t * sc, void * canvas) {
   if (canvas) cairo_destroy((cairo_t *)canvas);
 }
 
-static inline void * mk_canvas(nanoclj_t * sc, int width, int height, nanoclj_color_t fg, nanoclj_color_t bg) {
-  cairo_surface_t * surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, width, height);
+static inline int get_channels_for_format(cairo_format_t f) {
+  switch (f) {
+  case CAIRO_FORMAT_A8: return 1;
+  case CAIRO_FORMAT_RGB24: return 3;
+  case CAIRO_FORMAT_ARGB32: return 4;
+  default: return 0;
+  }
+}
+
+static inline void * mk_canvas(nanoclj_t * sc, int width, int height, int channels, nanoclj_color_t fg, nanoclj_color_t bg) {
+  cairo_format_t f;
+  switch (channels) {
+  case 1: f = CAIRO_FORMAT_A8; break;
+  case 3: f = CAIRO_FORMAT_RGB24; break;
+  case 4: f = CAIRO_FORMAT_ARGB32; break;
+  default: return NULL;
+  }
+    
+  cairo_surface_t * surface = cairo_image_surface_create(f, width, height);
   cairo_t * cr = cairo_create(surface);
   cairo_surface_destroy(surface);
 
@@ -44,11 +61,26 @@ static inline nanoclj_val_t canvas_create_image(nanoclj_t * sc, void * canvas) {
 
   cairo_surface_flush(surface);
   
-  unsigned char * data = cairo_image_surface_get_data(surface);
+  uint8_t * data = cairo_image_surface_get_data(surface);
   int width = cairo_image_surface_get_width(surface);
   int height = cairo_image_surface_get_height(surface);
+  int channels = get_channels_for_format(cairo_image_surface_get_format(surface));
   
-  return mk_image(sc, width, height, 4, data, NULL);
+  return mk_image(sc, width, height, channels, data, NULL);
+}
+
+static inline imageview_t canvas_get_imageview(void * canvas) {
+  cairo_t * cr = (cairo_t *)canvas;
+  cairo_surface_t * surface = cairo_get_target(cr);
+
+  cairo_surface_flush(surface);
+  
+  uint8_t * data = cairo_image_surface_get_data(surface);
+  int width = cairo_image_surface_get_width(surface);
+  int height = cairo_image_surface_get_height(surface);
+  int channels = get_channels_for_format(cairo_image_surface_get_format(surface));
+  
+  return (imageview_t){ data, width, height, channels };
 }
 
 static inline void canvas_flush(void * canvas) {

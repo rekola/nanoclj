@@ -29,9 +29,10 @@
 static int sixel_write(char *data, int size, void *priv) {
   return fwrite(data, 1, size, (FILE *)priv);
 }
-static inline bool print_image_sixel(uint8_t * data, int width, int height, int channels) {
+
+static inline bool print_image_sixel(imageview_t iv) {
   int pf = 0;
-  switch (channels) {
+  switch (iv.channels) {
   case 1: pf = SIXEL_PIXELFORMAT_G8; break;
   case 3: pf = SIXEL_PIXELFORMAT_BGR888; break;
   case 4: pf = SIXEL_PIXELFORMAT_BGRA8888; break;
@@ -40,15 +41,15 @@ static inline bool print_image_sixel(uint8_t * data, int width, int height, int 
 
   sixel_dither_t * dither;
   sixel_dither_new(&dither, -1, NULL);
-  sixel_dither_initialize(dither, data, width, height, pf, SIXEL_LARGE_NORM, SIXEL_REP_CENTER_BOX, SIXEL_QUALITY_HIGHCOLOR);
+  sixel_dither_initialize(dither, (uint8_t*)iv.ptr, iv.width, iv.height, pf, SIXEL_LARGE_NORM, SIXEL_REP_CENTER_BOX, SIXEL_QUALITY_HIGHCOLOR);
   
   sixel_output_t * output;
   sixel_output_new(&output, sixel_write, stdout, NULL);
   
   /* convert pixels into sixel format and write it to output context */
-  sixel_encode(data,
-	       width,
-	       height,
+  sixel_encode((uint8_t*)iv.ptr,
+	       iv.width,
+	       iv.height,
 	       8,
 	       dither,
 	       output);

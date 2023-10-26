@@ -1,8 +1,6 @@
 #ifndef _NANOCLJ_UTILS_H_
 #define _NANOCLJ_UTILS_H_
 
-#include <time.h>
-
 #include "nanoclj_types.h"
 
 static inline int clamp(int v, int min, int max) {
@@ -43,6 +41,20 @@ static inline int digit(int32_t c, int radix) {
   }
   if (c < radix) return c;
   else return -1;
+}
+
+static inline bool strview_eq(strview_t a, strview_t b) {
+  return a.size == b.size && memcmp(a.ptr, b.ptr, a.size) == 0;
+}
+
+static inline int strview_cmp(strview_t a, strview_t b) {
+  if (a.size < b.size) {
+    return -1;
+  } else if (a.size > b.size) {
+    return +1;
+  } else {
+    return memcmp(a.ptr, b.ptr, a.size);
+  }
 }
 
 #endif
