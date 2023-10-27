@@ -23,6 +23,12 @@ typedef enum {
 } nanoclj_colortype_t;
 
 typedef enum {
+  nanoclj_no_gfx = 0,
+  nanoclj_sixel,
+  nanoclj_kitty
+} nanoclj_graphics_t;
+
+typedef enum {
   nanoclj_mode_unknown = 0,
   nanoclj_mode_inline,
   nanoclj_mode_block
@@ -30,7 +36,7 @@ typedef enum {
 
 typedef struct {
   const uint8_t * ptr;
-  uint32_t width, height, channels;
+  uint32_t width, height, stride, channels;
 } imageview_t;
 
 typedef struct {

@@ -26,6 +26,10 @@ static inline void * mk_canvas(nanoclj_t * sc, int width, int height, int channe
   case 4: f = CAIRO_FORMAT_ARGB32; break;
   default: return NULL;
   }
+
+  if (channels == 1 && (width % 4) != 0) {
+    width += 4 - (width % 4);
+  }
     
   cairo_surface_t * surface = cairo_image_surface_create(f, width, height);
   cairo_t * cr = cairo_create(surface);
@@ -75,9 +79,10 @@ static inline imageview_t canvas_get_imageview(void * canvas) {
   uint8_t * data = cairo_image_surface_get_data(surface);
   int width = cairo_image_surface_get_width(surface);
   int height = cairo_image_surface_get_height(surface);
+  int stride = cairo_image_surface_get_stride(surface);
   int channels = get_channels_for_format(cairo_image_surface_get_format(surface));
   
-  return (imageview_t){ data, width, height, channels };
+  return (imageview_t){ data, width, height, stride, channels };
 }
 
 static inline int canvas_get_chan(void * canvas) {

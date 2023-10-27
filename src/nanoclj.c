@@ -841,7 +841,7 @@ static inline imageview_t _to_imageview(nanoclj_cell_t * c) {
   switch (_type(c)) {
   case T_IMAGE:{
     nanoclj_image_t * img = _image_unchecked(c);
-    return (imageview_t){ img->data, img->width, img->height, img->channels };
+    return (imageview_t){ img->data, img->width, img->height, img->width, img->channels };
   }
   case T_WRITER:
 #if NANOCLJ_HAS_CANVAS
@@ -853,14 +853,14 @@ static inline imageview_t _to_imageview(nanoclj_cell_t * c) {
     }
 #endif
   }
-  return (imageview_t){ 0, 0, 0 };  
+  return (imageview_t){ 0 };  
 }
 
 static inline imageview_t to_imageview(nanoclj_val_t p) {
   if (is_cell(p)) {
     return _to_imageview(decode_pointer(p));
   } else {
-    return (imageview_t){ 0, 0, 0 };  
+    return (imageview_t){ 0 };  
   }
 }
 
@@ -3866,12 +3866,22 @@ static inline bool print_imageview(nanoclj_t * sc, imageview_t iv, nanoclj_cell_
       return true;
     }
   case port_file:
-    if (sc->sixel_term && pr->stdio.file == stdout) {      
+    if (pr->stdio.file == stdout) {
+      switch (sc->term_graphics) {	
+      case nanoclj_no_gfx: break;
 #if NANOCLJ_SIXEL
-      if (print_image_sixel(iv, pr->stdio.fg, pr->stdio.bg)) {
-	return true;
+      case nanoclj_sixel:
+	if (print_image_sixel(iv, pr->stdio.fg, pr->stdio.bg)) {
+	  return true;
+	}
+	break;
+#endif
+      case nanoclj_kitty:
+	if (print_image_kitty(iv, pr->stdio.fg, pr->stdio.bg)) {
+	  return true;
+	}
+	break;
       }
-#endif      
     }
   }
 
@@ -7617,8 +7627,11 @@ static inline nanoclj_cell_t * mk_properties(nanoclj_t * sc) {
   const char * term = "Windows";
 #else
   const char * term = getenv("TERM_PROGRAM");
-  if (!term && getenv("MLTERM")) term = "mlterm";
-  else if (!term && getenv("XTERM_VERSION")) term = "XTerm";
+  if (!term) {
+    if (getenv("MLTERM")) term = "mlterm";
+    else if (getenv("XTERM_VERSION")) term = "XTerm";
+    else if (getenv("KONSOLE_VERSION")) term = "Konsole";
+  }
 #endif
   
   const char *user_home = NULL, *user_name = NULL;
@@ -7912,10 +7925,10 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
 
   register_functions(sc);
 
-  sc->sixel_term = has_sixels(stdin, stdout);
   sc->window_scale_factor = 1.0;
   sc->window_lines = sc->window_columns = 0;
 
+  sc->term_graphics = get_term_graphics(stdin, stdout);
   sc->term_colors = get_term_colortype(stdout);
   sc->fg_color = mk_color3i(255, 255, 255);
   sc->bg_color = mk_color3i(0, 0, 0);

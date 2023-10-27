@@ -22,6 +22,7 @@
 
 #include "nanoclj_utils.h"
 #include "nanoclj_types.h"
+#include "nanoclj_base64.h"
 
 #if NANOCLJ_SIXEL
 #include <sixel.h>
@@ -73,6 +74,41 @@ static inline bool print_image_sixel(imageview_t iv, nanoclj_color_t fg, nanoclj
   return true;
 }
 #endif
+
+static inline void write_kitty(const uint8_t * ptr, int width, int height, int channels) {
+  uint8_t * base64;
+  size_t base64_len = base64_encode(ptr, width * height * channels, &base64);
+  for (size_t i = 0; i < base64_len; i += 4096) {
+    int m = i + 4096 < base64_len ? 1 : 0;
+    if (i == 0) printf("\033_Ga=T,f=%d,s=%d,v=%d,m=%d;", channels * 8, width, height, m);
+    else printf("\033_Gm=%d;", m);
+    fwrite(base64 + i, i + 4096 < base64_len ? 4096 : base64_len - i, 1, stdout);
+    printf("\033\\");
+  }
+  fflush(stdout);
+  free(base64);
+}
+
+static inline bool print_image_kitty(imageview_t iv, nanoclj_color_t fg, nanoclj_color_t bg) {
+  switch (iv.channels) {
+  case 1:{
+    uint8_t * ptr = malloc(3 * iv.width * iv.height);
+    for (size_t i = 0; i < iv.width * iv.height; i++) {
+      nanoclj_color_t c = mix(bg, fg, iv.ptr[i] / 255.0f);
+      ptr[3 * i + 0] = c.red;
+      ptr[3 * i + 1] = c.green;
+      ptr[3 * i + 2] = c.blue;
+    }
+    write_kitty(ptr, iv.width, iv.height, 3);
+    free(ptr);
+    return true;
+  }
+
+  default:
+    write_kitty(iv.ptr, iv.width, iv.height, iv.channels);
+    return true;
+  }
+}
 
 static inline void reset_color(FILE * fh) {
   if (isatty(fileno(fh))) {
@@ -312,7 +348,7 @@ static inline nanoclj_colortype_t get_term_colortype(FILE * stdout) {
       return nanoclj_colortype_256;
     }
     
-    const char * term = getenv("TERM");
+    const char * term = getenv("TERM");    
     if (!term || strcmp(term, "dumb") == 0) {
       return nanoclj_colortype_none;
     } else if (strstr(term, "256color") || getenv("TMUX")) {
@@ -333,12 +369,22 @@ static inline nanoclj_colortype_t get_term_colortype(FILE * stdout) {
 #endif
 }
 
-static inline bool has_sixels(FILE * in, FILE * out) {
-#ifdef _WIN32
-  return false;
-#else
-  return isatty(fileno(out));
+static inline nanoclj_graphics_t get_term_graphics(FILE * in, FILE * out) {
+#ifndef _WIN32
+  if (isatty(fileno(out))) {
+    const char * term = getenv("TERM");    
+    if (term && strcmp(term, "xterm-kitty") == 0) {
+      return nanoclj_kitty;
+    } else if (getenv("KONSOLE_VERSION")) {
+      return nanoclj_kitty;
+    } else {
+#if NANOCLJ_SIXEL
+      return nanoclj_sixel;
 #endif
+    }
+  }
+#endif
+  return nanoclj_no_gfx;
 }
 
 #endif

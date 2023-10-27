@@ -271,7 +271,7 @@ extern "C" {
     dump_stack_frame_t * dump_base;            /* pointer to base of allocated dump stack */
     size_t dump_size;              /* number of frames allocated for dump stack */
         
-    bool sixel_term;
+    nanoclj_graphics_t term_graphics;
     nanoclj_colortype_t term_colors;
     int window_lines, window_columns;
     double window_scale_factor;
