@@ -9,7 +9,8 @@
 static inline size_t base64_encode(const uint8_t * input, size_t len, uint8_t ** out_buffer) {
   static const uint8_t alphabet[65] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-  uint8_t *in = input, * out = *out_buffer = malloc(len * 4 / 3 + 4);
+  const uint8_t *in = input;
+  uint8_t * out = *out_buffer = malloc(len * 4 / 3 + 4);
   if (!out) return 0;
   
   for (; len >= 3; in += 3, len -= 3) {

@@ -324,23 +324,20 @@ static inline nanoclj_val_t Image_load(nanoclj_t * sc, nanoclj_val_t args0) {
   if (!data) { /* FIXME: stbi_failure_reason() is not thread-safe */
     return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string_fmt(sc, "%s [%.*s]", stbi_failure_reason(), (int)filename0.size, filename0.ptr)));
   }
-  
-  if (channels >= 3) {
-    uint8_t * ptr = data, * end = data + w * h * channels;
-    for ( ; ptr < end; ptr += channels) {
-      uint8_t tmp = ptr[2];
-      ptr[2] = ptr[0];
-      ptr[0] = tmp;
-    }
-  }
 
   nanoclj_cell_t * meta = mk_arraymap(sc, 3);
   set_vector_elem(meta, 0, mk_mapentry(sc, sc->WIDTH, mk_int(w)));
   set_vector_elem(meta, 1, mk_mapentry(sc, sc->HEIGHT, mk_int(h)));
   set_vector_elem(meta, 2, mk_mapentry(sc, sc->FILE, filename00));
-  
-  nanoclj_val_t image = mk_image(sc, w, h, channels, data, meta);
-  
+
+  nanoclj_val_t image = mk_image(sc, w, h, channels, NULL, meta);
+
+  if (channels >= 3) {
+    transpose_red_blue(data, image_unchecked(image)->data, w, h, channels);
+  } else {
+    memcpy(image_unchecked(image)->data, data, w * h * channels);
+  }
+    
   stbi_image_free(data);
 
   return image;
@@ -356,14 +353,14 @@ static inline nanoclj_val_t Image_resize(nanoclj_t * sc, nanoclj_val_t args0) {
   
   int target_w = to_int(target_w0), target_h = to_int(target_h0);
   size_t target_size = target_w * target_h * iv.channels;
-  uint8_t * tmp = sc->malloc(target_size);
-  
-  stbir_resize_uint8(iv.ptr, iv.width, iv.height, 0, tmp, target_w, target_h, 0, iv.channels);
 
-  nanoclj_val_t target_image = mk_image(sc, target_w, target_h, iv.channels, tmp, NULL);
+  nanoclj_val_t target_image = mk_image(sc, target_w, target_h, iv.channels, NULL, NULL);
 
-  sc->free(tmp);
+  nanoclj_image_t * img = image_unchecked(target_image);
+  uint8_t * target_ptr = img->data;
   
+  stbir_resize_uint8_generic(iv.ptr, iv.width, iv.height, 0, target_ptr, target_w, target_h, 0, iv.channels, 0, STBIR_FLAG_ALPHA_PREMULTIPLIED, STBIR_EDGE_CLAMP, STBIR_FILTER_DEFAULT, STBIR_COLORSPACE_LINEAR, NULL);
+    
   return target_image;
 }
 
@@ -372,27 +369,27 @@ static inline nanoclj_val_t Image_transpose(nanoclj_t * sc, nanoclj_val_t args0)
   imageview_t iv = to_imageview(first(sc, args));
   if (!iv.ptr) {
     return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Not an Image")));
-  }
-  int w = iv.width, h = iv.height, channels = iv.channels;
-  uint8_t * tmp = sc->malloc(w * h * channels);
-
-  if (channels == 4) {
-    for (int y = 0; y < h; y++) {
-      for (int x = 0; x < w; x++) {
-	tmp[4 * (x * h + y) + 0] = iv.ptr[4 * (y * w + x) + 0];
-	tmp[4 * (x * h + y) + 1] = iv.ptr[4 * (y * w + x) + 1];
-	tmp[4 * (x * h + y) + 2] = iv.ptr[4 * (y * w + x) + 2];     
-	tmp[4 * (x * h + y) + 3] = iv.ptr[4 * (y * w + x) + 3];     
-      }
-    }
-  } else {
-    sc->free(tmp);
+  } else if (iv.channels != 4) {
     return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Unsupported number of channels")));
   }
   
-  nanoclj_val_t new_image = mk_image(sc, h, w, channels, tmp, NULL);
-  sc->free(tmp);
+  int w = iv.width, h = iv.height, channels = iv.channels;
+  nanoclj_val_t new_image = mk_image(sc, h, w, channels, NULL, NULL);
+  uint8_t * data = image_unchecked(new_image)->data;
 
+  switch (channels) {
+  case 4:
+    for (int y = 0; y < h; y++) {
+      for (int x = 0; x < w; x++) {
+	data[4 * (x * h + y) + 0] = iv.ptr[4 * (y * w + x) + 0];
+	data[4 * (x * h + y) + 1] = iv.ptr[4 * (y * w + x) + 1];
+	data[4 * (x * h + y) + 2] = iv.ptr[4 * (y * w + x) + 2];     
+	data[4 * (x * h + y) + 3] = iv.ptr[4 * (y * w + x) + 3];     
+      }
+    }
+    break;
+  }
+  
   return new_image;
 }
 
@@ -499,7 +496,8 @@ nanoclj_val_t Image_gaussian_blur(nanoclj_t * sc, nanoclj_val_t args0) {
     for (int i = 0; i < vsize; i++) vtotal += vkernel[i];    
   }
   
-  uint8_t * output_data = sc->malloc(w * h * channels);
+  nanoclj_val_t r = mk_image(sc, w, h, channels, NULL, NULL);
+  uint8_t * output_data = image_unchecked(r)->data;
   uint8_t * tmp = sc->malloc(w * h * channels);
 
   if (channels == 4) {
@@ -584,10 +582,7 @@ nanoclj_val_t Image_gaussian_blur(nanoclj_t * sc, nanoclj_val_t args0) {
 
   if (vkernel != hkernel) sc->free(vkernel);
   sc->free(hkernel);
-  
   sc->free(tmp);
-  nanoclj_val_t r = mk_image(sc, w, h, channels, output_data, NULL);
-  sc->free(output_data);
   return r;
 }
 
@@ -600,12 +595,14 @@ static inline nanoclj_val_t Audio_load(nanoclj_t * sc, nanoclj_val_t args0) {
   }
   sc->free(filename);
 
+  nanoclj_val_t audio = mk_audio(sc, wav.totalPCMFrameCount, wav.channels, wav.sampleRate);
+  nanoclj_audio_t * a = audio_unchecked(audio);
+  float * data = a->data;
+  
   /* Read interleaved frames */
-  float * data = (float *)sc->malloc(wav.totalPCMFrameCount * wav.channels * sizeof(float));
   size_t samples_decoded = drwav_read_pcm_frames_f32(&wav, wav.totalPCMFrameCount, data);
 
-  nanoclj_val_t audio = mk_audio(sc, samples_decoded, wav.channels, wav.sampleRate, data);
-  sc->free(data);
+  /* TODO: do something if partial read */
   
   drwav_uninit(&wav);
   
@@ -1035,9 +1032,14 @@ static inline void init_linenoise(nanoclj_t * sc) {
   linenoiseHistorySetMaxLen(10000);
 }
 
-static inline nanoclj_val_t linenoise_readline(nanoclj_t * sc, nanoclj_val_t args0) {
-  nanoclj_cell_t * args = decode_pointer(args0);
-  strview_t prompt = to_strview(first(sc, args));
+static inline nanoclj_val_t linenoise_readline(nanoclj_t * sc, nanoclj_val_t args) {
+  nanoclj_val_t out = get_out_port(sc);
+  if (is_cell(out)) {
+    nanoclj_cell_t * o = decode_pointer(out);
+    if (is_writable(o)) _line_unchecked(o)++;
+  }
+  
+  strview_t prompt = to_strview(first(sc, decode_pointer(args)));
   char * line = linenoise(prompt.ptr, prompt.size);
   if (line == NULL) return mk_nil();
   

@@ -393,6 +393,9 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define port_flags_unchecked(p)	  _port_flags_unchecked(decode_pointer(p))
 #define nesting_unchecked(p)      _nesting_unchecked(decode_pointer(p))
 
+#define image_unchecked(p)	  _image_unchecked(decode_pointer(p))
+#define audio_unchecked(p)	  _audio_unchecked(decode_pointer(p))
+
 static inline int32_t decode_integer(nanoclj_val_t value) {
   return (uint32_t)value.as_long;
 }
@@ -1240,20 +1243,17 @@ static inline nanoclj_val_t mk_image(nanoclj_t * sc, int32_t width, int32_t heig
   return mk_nil();
 }
 
-static inline nanoclj_val_t mk_audio(nanoclj_t * sc, size_t frames, int32_t channels,
-				     int32_t sample_rate, float * data) {
+static inline nanoclj_val_t mk_audio(nanoclj_t * sc, size_t frames, int32_t channels, int32_t sample_rate) {
   nanoclj_cell_t * x = get_cell_x(sc, T_AUDIO, T_GC_ATOM, NULL, NULL, NULL);
   if (x) {
     size_t size = frames * channels * sizeof(float);
-    float * r_data = sc->malloc(size);
-    if (r_data) {
-      if (data) memcpy(r_data, data, size);
-
+    float * data = sc->malloc(size);
+    if (data) {
       nanoclj_audio_t * audio = sc->malloc(sizeof(nanoclj_audio_t));
       if (!audio) {
-	sc->free(r_data);
+	sc->free(data);
       } else {
-	audio->data = r_data;
+	audio->data = data;
 	audio->frames = frames;
 	audio->channels = channels;
 	audio->sample_rate = sample_rate;

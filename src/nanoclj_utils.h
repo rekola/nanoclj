@@ -73,5 +73,14 @@ static inline int strview_cmp(strview_t a, strview_t b) {
   }
 }
 
+static inline void transpose_red_blue(const uint8_t * input, uint8_t * output, size_t w, size_t h, size_t c) {
+  for (size_t i = 0; i < w * h; i++) {
+    output[c * i + 0] = input[c * i + 2];
+    output[c * i + 1] = input[c * i + 1];
+    output[c * i + 2] = input[c * i + 0];
+    if (c == 4) output[c * i + 3] = input[c * i + 3];
+  }
+}
+
 #endif
 

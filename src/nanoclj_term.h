@@ -90,10 +90,11 @@ static inline void write_kitty(const uint8_t * ptr, int width, int height, int c
 }
 
 static inline bool print_image_kitty(imageview_t iv, nanoclj_color_t fg, nanoclj_color_t bg) {
+  size_t n = iv.width * iv.height;
   switch (iv.channels) {
   case 1:{
-    uint8_t * ptr = malloc(3 * iv.width * iv.height);
-    for (size_t i = 0; i < iv.width * iv.height; i++) {
+    uint8_t * ptr = malloc(3 * n);
+    for (size_t i = 0; i < n; i++) {
       nanoclj_color_t c = mix(bg, fg, iv.ptr[i] / 255.0f);
       ptr[3 * i + 0] = c.red;
       ptr[3 * i + 1] = c.green;
@@ -104,10 +105,16 @@ static inline bool print_image_kitty(imageview_t iv, nanoclj_color_t fg, nanoclj
     return true;
   }
 
-  default:
-    write_kitty(iv.ptr, iv.width, iv.height, iv.channels);
+  case 3:
+  case 4:{
+    uint8_t * transposed = malloc(n * iv.channels);
+    transpose_red_blue(iv.ptr, transposed, iv.width, iv.height, iv.channels);
+    write_kitty(transposed, iv.width, iv.height, iv.channels);
+    free(transposed);
+  }
     return true;
   }
+  return false;
 }
 
 static inline void reset_color(FILE * fh) {
