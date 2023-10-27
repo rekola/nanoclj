@@ -134,8 +134,6 @@ static void mark_thread(nanoclj_t * sc) {
   /* Exceptions */
   if (sc->pending_exception) mark(sc->pending_exception);
 
-  mark_value(sc->active_element);
-  if (sc->active_element_target) mark(sc->active_element_target);
   mark(sc->EMPTYVEC);
   
   /* Mark recent objects the interpreter doesn't know about yet. */

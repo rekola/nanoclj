@@ -68,7 +68,6 @@ extern "C" {
     struct {
       FILE *file;
       char *filename;
-      int32_t line, column;
       nanoclj_display_mode_t mode;
       nanoclj_color_t fg;
       nanoclj_color_t bg;
@@ -119,7 +118,8 @@ extern "C" {
       struct {
 	nanoclj_port_rep_t * rep;
 	int nesting;
-	uint8_t type, flags;
+	uint8_t type, flags;	
+	int32_t line, column;
       } _port;
       struct {
 	nanoclj_image_t * rep;
@@ -277,11 +277,6 @@ extern "C" {
     double window_scale_factor;
     nanoclj_color_t fg_color, bg_color;
     
-    /* Dynamic printing */
-    nanoclj_val_t active_element;
-    nanoclj_cell_t * active_element_target;
-    int active_element_x, active_element_y;
-
     void * tensor_ctx;
   };
 
