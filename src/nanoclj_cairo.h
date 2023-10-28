@@ -56,20 +56,6 @@ static inline void * mk_canvas(nanoclj_t * sc, int width, int height, int channe
   return cr;
 }
 
-static inline nanoclj_val_t canvas_create_image(nanoclj_t * sc, void * canvas) {
-  cairo_t * cr = (cairo_t *)canvas;
-  cairo_surface_t * surface = cairo_get_target(cr);
-
-  cairo_surface_flush(surface);
-  
-  uint8_t * data = cairo_image_surface_get_data(surface);
-  int width = cairo_image_surface_get_width(surface);
-  int height = cairo_image_surface_get_height(surface);
-  int channels = get_channels_for_format(cairo_image_surface_get_format(surface));
-  
-  return mk_image(sc, width, height, channels, data, NULL);
-}
-
 static inline imageview_t canvas_get_imageview(void * canvas) {
   cairo_t * cr = (cairo_t *)canvas;
   cairo_surface_t * surface = cairo_get_target(cr);

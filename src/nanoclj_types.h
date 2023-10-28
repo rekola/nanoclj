@@ -1,8 +1,18 @@
 #ifndef _NANOCLJ_TYPES_H_
 #define _NANOCLJ_TYPES_H_
 
+typedef enum {
+  nanoclj_r8 = 1,
+  nanoclj_rgb8,
+  nanoclj_rgba8,
+
+  /* Cairo internal formats */
+  nanoclj_argb8,
+  nanoclj_rgb8_32 
+} nanoclj_internal_format_t;
+
 typedef struct {
-  int32_t width, height, channels;
+  int32_t width, height, stride, channels;
   unsigned char * data;
 } nanoclj_image_t;
 

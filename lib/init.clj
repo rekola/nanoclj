@@ -15,4 +15,4 @@
 (load-file "Plot.clj")
 (load-file "nanoclj.core.Codepoint.clj")
 (load-file "nanoclj.core.Tensor.clj")
-
+(load-file "nanoclj.image.clj")

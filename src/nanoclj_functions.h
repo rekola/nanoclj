@@ -330,7 +330,7 @@ static inline nanoclj_val_t Image_load(nanoclj_t * sc, nanoclj_val_t args0) {
   set_vector_elem(meta, 1, mk_mapentry(sc, sc->HEIGHT, mk_int(h)));
   set_vector_elem(meta, 2, mk_mapentry(sc, sc->FILE, filename00));
 
-  nanoclj_val_t image = mk_image(sc, w, h, channels, NULL, meta);
+  nanoclj_val_t image = mk_image(sc, w, h, w, channels, meta);
 
   if (channels >= 3) {
     transpose_red_blue(data, image_unchecked(image)->data, w, h, channels);
@@ -354,7 +354,7 @@ static inline nanoclj_val_t Image_resize(nanoclj_t * sc, nanoclj_val_t args0) {
   int target_w = to_int(target_w0), target_h = to_int(target_h0);
   size_t target_size = target_w * target_h * iv.channels;
 
-  nanoclj_val_t target_image = mk_image(sc, target_w, target_h, iv.channels, NULL, NULL);
+  nanoclj_val_t target_image = mk_image(sc, target_w, target_h, target_w, iv.channels, NULL);
 
   nanoclj_image_t * img = image_unchecked(target_image);
   uint8_t * target_ptr = img->data;
@@ -374,20 +374,15 @@ static inline nanoclj_val_t Image_transpose(nanoclj_t * sc, nanoclj_val_t args0)
   }
   
   int w = iv.width, h = iv.height, channels = iv.channels;
-  nanoclj_val_t new_image = mk_image(sc, h, w, channels, NULL, NULL);
+  nanoclj_val_t new_image = mk_image(sc, h, w, h, channels, NULL);
   uint8_t * data = image_unchecked(new_image)->data;
 
-  switch (channels) {
-  case 4:
-    for (int y = 0; y < h; y++) {
-      for (int x = 0; x < w; x++) {
-	data[4 * (x * h + y) + 0] = iv.ptr[4 * (y * w + x) + 0];
-	data[4 * (x * h + y) + 1] = iv.ptr[4 * (y * w + x) + 1];
-	data[4 * (x * h + y) + 2] = iv.ptr[4 * (y * w + x) + 2];     
-	data[4 * (x * h + y) + 3] = iv.ptr[4 * (y * w + x) + 3];     
+  for (int y = 0; y < h; y++) {
+    for (int x = 0; x < w; x++) {
+      for (int c = 0; c < channels; c++) {
+	data[channels * (x * h + y) + c] = iv.ptr[channels * (y * w + x) + c];
       }
     }
-    break;
   }
   
   return new_image;
@@ -465,124 +460,79 @@ static inline int * mk_kernel(nanoclj_t * sc, float radius, int * size) {
   return kernel;
 }
 
-nanoclj_val_t Image_gaussian_blur(nanoclj_t * sc, nanoclj_val_t args0) {
+/* Horizontal gaussian blur */
+nanoclj_val_t Image_horizontalGaussianBlur(nanoclj_t * sc, nanoclj_val_t args0) {
   nanoclj_cell_t * args = decode_pointer(args0);
-  imageview_t iv = to_imageview(first(sc, args));
-  nanoclj_val_t h_radius = second(sc, args), v_radius = third(sc, args);
+  nanoclj_val_t radius = first(sc, args);
+  imageview_t iv = to_imageview(second(sc, args));
   if (!iv.ptr) {
     return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Not an Image")));
   }
-  if (!is_number(h_radius)) {
+  if (!is_number(radius)) {
     return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Not a number")));
-  }
-  if (!is_nil(v_radius) && v_radius.as_long != sc->EMPTY.as_long && !is_number(v_radius)) {
-    return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Not a number or nil")));
   }
   int w = iv.width, h = iv.height, channels = iv.channels;
   
-  int hsize, vsize;
-  int * hkernel = mk_kernel(sc, to_double(h_radius), &hsize);
+  int kernel_size;
+  int * kernel = mk_kernel(sc, to_double(radius), &kernel_size);
 
-  int htotal = 0, vtotal = 0;
-  for (int i = 0; i < hsize; i++) htotal += hkernel[i];
-
-  int * vkernel;
-  if (v_radius.as_long == sc->EMPTY.as_long || is_nil(v_radius)) {
-    vsize = hsize;
-    vkernel = hkernel;
-    vtotal = htotal;
-  } else {
-    vkernel = mk_kernel(sc, to_double(v_radius), &vsize);
-    for (int i = 0; i < vsize; i++) vtotal += vkernel[i];    
-  }
+  int total = 0;
+  for (int i = 0; i < kernel_size; i++) total += kernel[i];
   
-  nanoclj_val_t r = mk_image(sc, w, h, channels, NULL, NULL);
+  nanoclj_val_t r = mk_image(sc, w, h, w, channels, NULL);
   uint8_t * output_data = image_unchecked(r)->data;
-  uint8_t * tmp = sc->malloc(w * h * channels);
-
-  if (channels == 4) {
-    if (hsize) {
-      memset(tmp, 0, w * h * channels);
-      for (int row = 0; row < h; row++) {
-        for (int col = 0; col < w; col++) {
-          int c0 = 0, c1 = 0, c2 = 0, c3 = 0;
-          for (int i = 0; i < hsize; i++) {
-	    const uint8_t * ptr = iv.ptr + (row * w + clamp(col + i - vsize / 2, 0, w - 1)) * 4;
-            c0 += *ptr++ * hkernel[i];
-            c1 += *ptr++ * hkernel[i];
-            c2 += *ptr++ * hkernel[i];
-            c3 += *ptr++ * hkernel[i];
-          }
-	  uint8_t * ptr = tmp + (row * w + col) * 4;
-          *ptr++ = (uint8_t)(c0 / htotal);
-          *ptr++ = (uint8_t)(c1 / htotal);
-          *ptr++ = (uint8_t)(c2 / htotal);
-          *ptr++ = (uint8_t)(c3 / htotal);
-        }
-      }
-    } else {
-      memcpy(tmp, iv.ptr, w * h * 4);
-    }
-    if (vsize) {      
-      memset(output_data, 0, w * h * channels);
+  
+  switch (channels) {
+  case 4:
+    for (int row = 0; row < h; row++) {
       for (int col = 0; col < w; col++) {
-        for (int row = 0; row < h; row++) {
-          int c0 = 0, c1 = 0, c2 = 0, c3 = 0;
-          for (int i = 0; i < vsize; i++) {
-            const uint8_t * ptr = tmp + (clamp(row + i - vsize / 2, 0, h - 1) * w + col) * 4;
-            c0 += *ptr++ * vkernel[i];
-            c1 += *ptr++ * vkernel[i];
-            c2 += *ptr++ * vkernel[i];
-            c3 += *ptr++ * vkernel[i];
-          }
-	  uint8_t * ptr = output_data + (row * w + col) * 4;
-          *ptr++ = (uint8_t)(c0 / vtotal);
-          *ptr++ = (uint8_t)(c1 / vtotal);
-          *ptr++ = (uint8_t)(c2 / vtotal);
-          *ptr++ = (uint8_t)(c3 / vtotal);
-        }
+	int c0 = 0, c1 = 0, c2 = 0, c3 = 0;
+	for (int i = 0; i < kernel_size; i++) {
+	  const uint8_t * ptr = iv.ptr + (row * w + clamp(col + i - kernel_size / 2, 0, w - 1)) * 4;
+	  c0 += *ptr++ * kernel[i];
+	  c1 += *ptr++ * kernel[i];
+	  c2 += *ptr++ * kernel[i];
+	  c3 += *ptr++ * kernel[i];
+	}
+	uint8_t * ptr = output_data + (row * w + col) * 4;
+	*ptr++ = (uint8_t)(c0 / total);
+	*ptr++ = (uint8_t)(c1 / total);
+	*ptr++ = (uint8_t)(c2 / total);
+	*ptr++ = (uint8_t)(c3 / total);
       }
-    } else {
-      memcpy(output_data, tmp, w * h * 4);
     }
-  } else if (channels == 1) {
-    if (hsize) {
-      memset(tmp, 0, w * h * channels);
-      for (int row = 0; row < h; row++) {
-        for (int col = 0; col < w; col++) {
-          int c0 = 0;
-          for (int i = 0; i < hsize; i++) {
-            const uint8_t * ptr = iv.ptr + (row * w + clamp(col + i - vsize / 2, 0, w - 1));
-            c0 += *ptr * hkernel[i];
-          }
-          uint8_t * ptr = tmp + row * w + col;
-          *ptr = (uint8_t)(c0 / htotal);
-        }
-      }
-    } else {
-      memcpy(tmp, iv.ptr, w * h);
-    }
-    if (vsize) {
-      memset(output_data, 0, w * h * channels);
+    break;
+  case 3:
+    for (int row = 0; row < h; row++) {
       for (int col = 0; col < w; col++) {
-        for (int row = 0; row < h; row++) {
-          int c0 = 0;
-          for (int i = 0; i < vsize; i++) {
-            const uint8_t * ptr = tmp + (clamp(row + i - vsize / 2, 0, h - 1) * w + col);
-            c0 += *ptr * vkernel[i];
-          }
-          uint8_t * ptr = output_data + row * w + col;
-          *ptr = (uint8_t)(c0 / vtotal);
-        }
+	int c0 = 0, c1 = 0, c2 = 0, c3 = 0;
+	for (int i = 0; i < kernel_size; i++) {
+	  const uint8_t * ptr = iv.ptr + (row * w + clamp(col + i - kernel_size / 2, 0, w - 1)) * 3;
+	  c0 += *ptr++ * kernel[i];
+	  c1 += *ptr++ * kernel[i];
+	  c2 += *ptr++ * kernel[i];
+	}
+	uint8_t * ptr = output_data + (row * w + col) * 4;
+	*ptr++ = (uint8_t)(c0 / total);
+	*ptr++ = (uint8_t)(c1 / total);
+	*ptr++ = (uint8_t)(c2 / total);
       }
-    } else {
-      memcpy(output_data, tmp, w * h);
+    }
+    break;
+  case 1:      
+    for (int row = 0; row < h; row++) {
+      for (int col = 0; col < w; col++) {
+	int c0 = 0;
+	for (int i = 0; i < kernel_size; i++) {
+	  const uint8_t * ptr = iv.ptr + (row * w + clamp(col + i - kernel_size / 2, 0, w - 1));
+	  c0 += *ptr * kernel[i];
+	}
+	uint8_t * ptr = output_data + row * w + col;
+	*ptr = (uint8_t)(c0 / total);
+      }
     }
   }
-
-  if (vkernel != hkernel) sc->free(vkernel);
-  sc->free(hkernel);
-  sc->free(tmp);
+  sc->free(kernel);
   return r;
 }
 
@@ -1135,8 +1085,7 @@ static inline void register_functions(nanoclj_t * sc) {
   intern_foreign_func(sc, sc->Image, "resize", Image_resize, 3, 3);
   intern_foreign_func(sc, sc->Image, "transpose", Image_transpose, 1, 1);
   intern_foreign_func(sc, sc->Image, "save", Image_save, 2, 2);
-  intern_foreign_func(sc, sc->Image, "blur", Image_gaussian_blur, 2, 2);
-  intern_foreign_func(sc, sc->Image, "gaussian-blur", Image_gaussian_blur, 2, 2);
+  intern_foreign_func(sc, sc->Image, "horizontalGaussianBlur", Image_horizontalGaussianBlur, 2, 2);
 
   intern_foreign_func(sc, sc->Audio, "load", Audio_load, 1, 1);
   intern_foreign_func(sc, sc->Audio, "lowpass", Audio_lowpass, 1, 1);

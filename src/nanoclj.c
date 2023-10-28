@@ -844,7 +844,7 @@ static inline imageview_t _to_imageview(nanoclj_cell_t * c) {
   switch (_type(c)) {
   case T_IMAGE:{
     nanoclj_image_t * img = _image_unchecked(c);
-    return (imageview_t){ img->data, img->width, img->height, img->width, img->channels };
+    return (imageview_t){ img->data, img->width, img->height, img->stride, img->channels };
   }
   case T_WRITER:
 #if NANOCLJ_HAS_CANVAS
@@ -1212,22 +1212,21 @@ static inline nanoclj_val_t mk_integer(nanoclj_t * sc, long long num) {
 }
 
 static inline nanoclj_val_t mk_image(nanoclj_t * sc, int32_t width, int32_t height,
-				     int32_t channels, uint8_t * data, nanoclj_cell_t * meta) {
+				     int32_t stride, int32_t chan, nanoclj_cell_t * meta) {
   nanoclj_cell_t * x = get_cell_x(sc, T_IMAGE, T_GC_ATOM, NULL, NULL, meta);
   if (x) {
-    size_t size = width * height * channels;
-    uint8_t * r_data = sc->malloc(size);
-    if (r_data) {
-      if (data) memcpy(r_data, data, size);
-
+    size_t size = width * height * chan;
+    uint8_t * data = sc->malloc(size);
+    if (data) {
       nanoclj_image_t * image = sc->malloc(sizeof(nanoclj_image_t));
       if (!image) {
-	sc->free(r_data);
+	sc->free(data);
       } else {
-	image->data = r_data;
+	image->data = data;
 	image->width = width;
 	image->height = height;
-	image->channels = channels;
+	image->stride = stride;
+	image->channels = chan;
 
 	_image_unchecked(x) = image;
 	_image_metadata(x) = meta;
@@ -4669,14 +4668,16 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
 
   case T_IMAGE:
     if (!args) {
-      return mk_image(sc, 0, 0, 0, NULL, NULL);
+      return mk_image(sc, 0, 0, 0, 0, NULL);
     } else {
       x = first(sc, args);
       if (is_image(x)) {
 	return x;
       } else if (is_writer(x) && port_type_unchecked(x) == port_canvas) {
 #if NANOCLJ_HAS_CANVAS
-	return canvas_create_image(sc, rep_unchecked(x)->canvas.impl);
+	imageview_t iv = canvas_get_imageview(rep_unchecked(x)->canvas.impl);
+	nanoclj_val_t img = mk_image(sc, iv.width, iv.height, iv.stride, iv.channels, NULL);
+	memcpy(image_unchecked(img)->data, iv.ptr, iv.width * iv.height * iv.channels);
 #endif
       }
     }
