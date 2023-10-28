@@ -61,8 +61,8 @@ static inline imageview_t canvas_get_imageview(void * canvas) {
   nanoclj_internal_format_t f;
   switch (cairo_image_surface_get_format(surface)) {
   case CAIRO_FORMAT_A8: f = nanoclj_r8; break;
-  case CAIRO_FORMAT_RGB24: f = nanoclj_rgb8_32; break;
-  case CAIRO_FORMAT_ARGB32: f = nanoclj_argb8; break;
+  case CAIRO_FORMAT_RGB24: f = nanoclj_bgr8_32; break;
+  case CAIRO_FORMAT_ARGB32: f = nanoclj_bgra8; break;
   default: return (imageview_t){0};
   }
   

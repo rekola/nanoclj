@@ -2,11 +2,10 @@
 
 (defn gaussian-blur
   "Applies gaussian blur to image"
-  [radius image]
+  [i radius]
   (.transpose
-   (.horizontalGaussianBlur radius
-                            (.transpose
-                             (.horizontalGaussianBlur radius image)))))
+   (.horizontalGaussianBlur (.transpose
+                             (.horizontalGaussianBlur (image i) radius)) radius)))
 
 (defn load
   "Loads an image"
@@ -14,8 +13,8 @@
 
 (defn save
   "Saves an image"
-  [image fn] (.save image fn))
+  [i fn] (.save (image i) fn))
 
 (defn transpose
   "Transposes an image"
-  [image] (.transpose image))
+  [i] (.transpose (image i)))

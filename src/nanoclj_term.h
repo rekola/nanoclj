@@ -70,20 +70,19 @@ static inline bool print_image_sixel(imageview_t iv, nanoclj_color_t fg, nanoclj
       pal[3 * i + 2] = c.blue;
     }
     return write_sixel(SIXEL_PIXELFORMAT_PAL8, pal, iv.ptr, iv.width, iv.height);
+  case nanoclj_ra8:
+    return write_sixel(SIXEL_PIXELFORMAT_GA88, pal, iv.ptr, iv.width, iv.height);
   case nanoclj_rgb8:
     return write_sixel(SIXEL_PIXELFORMAT_RGB888, NULL, iv.ptr, iv.width, iv.height);
   case nanoclj_rgba8:
     return write_sixel(SIXEL_PIXELFORMAT_RGBA8888, NULL, iv.ptr, iv.width, iv.height);
-  case nanoclj_argb8:
+  case nanoclj_bgra8:
     return write_sixel(SIXEL_PIXELFORMAT_BGRA8888, NULL, iv.ptr, iv.width, iv.height);
-  case nanoclj_rgb8_32:{
-    uint8_t * tmp = malloc(iv.width * iv.height * 3);
-    for (size_t i = 0; i < iv.width * iv.height; i++) {
-      tmp[3 * i + 0] = iv.ptr[4 * i + 0];
-      tmp[3 * i + 1] = iv.ptr[4 * i + 1];
-      tmp[3 * i + 2] = iv.ptr[4 * i + 2];
-    }
-    bool r = write_sixel(SIXEL_PIXELFORMAT_BGR888, NULL, tmp, iv.width, iv.height);
+  case nanoclj_rgb565:
+    return write_sixel(SIXEL_PIXELFORMAT_RGB565, NULL, iv.ptr, iv.width, iv.height);
+  case nanoclj_bgr8_32:{
+    uint8_t * tmp = convert_imagedata(iv.ptr, iv.width, iv.height, iv.format, nanoclj_rgb8);
+    bool r = write_sixel(SIXEL_PIXELFORMAT_RGB888, NULL, tmp, iv.width, iv.height);
     free(tmp);
     return r;
   }
@@ -92,7 +91,7 @@ static inline bool print_image_sixel(imageview_t iv, nanoclj_color_t fg, nanoclj
 }
 #endif
 
-static inline void write_kitty(const uint8_t * ptr, int width, int height, int channels) {
+static inline bool write_kitty(const uint8_t * ptr, int width, int height, int channels) {
   uint8_t * base64;
   size_t base64_len = base64_encode(ptr, width * height * channels, &base64);
   for (size_t i = 0; i < base64_len; i += 4096) {
@@ -104,6 +103,7 @@ static inline void write_kitty(const uint8_t * ptr, int width, int height, int c
   }
   fflush(stdout);
   free(base64);
+  return true;
 }
 
 static inline bool print_image_kitty(imageview_t iv, nanoclj_color_t fg, nanoclj_color_t bg) {
@@ -122,15 +122,23 @@ static inline bool print_image_kitty(imageview_t iv, nanoclj_color_t fg, nanoclj
     return true;
   }
 
+  case nanoclj_ra8:
   case nanoclj_rgb8:
-  case nanoclj_rgba8:{
-    int channels = get_format_channels(iv.format);
-    uint8_t * transposed = malloc(n * channels);
-    transpose_red_blue(iv.ptr, transposed, iv.width, iv.height, channels);
-    write_kitty(transposed, iv.width, iv.height, channels);
-    free(transposed);
+  case nanoclj_rgba8:
+    return write_kitty(iv.ptr, iv.width, iv.height, get_format_channels(iv.format));
+
+  case nanoclj_bgr8_32:{
+    uint8_t * tmp = convert_imagedata(iv.ptr, iv.width, iv.height, iv.format, nanoclj_rgb8);
+    bool r = write_kitty(tmp, iv.width, iv.height, 3);
+    free(tmp);
+    return r;
   }
-    return true;
+  case nanoclj_bgra8:{
+    uint8_t * tmp = convert_imagedata(iv.ptr, iv.width, iv.height, iv.format, nanoclj_rgb8);
+    bool r = write_kitty(tmp, iv.width, iv.height, 3);
+    free(tmp);
+    return r;
+  }
   }
   return false;
 }

@@ -3,12 +3,14 @@
 
 typedef enum {
   nanoclj_r8 = 1,
+  nanoclj_ra8,
   nanoclj_rgb8,
+  nanoclj_rgb565,
   nanoclj_rgba8,
-
+  
   /* Cairo internal formats */
-  nanoclj_argb8,
-  nanoclj_rgb8_32 
+  nanoclj_bgr8_32,
+  nanoclj_bgra8
 } nanoclj_internal_format_t;
 
 typedef struct {

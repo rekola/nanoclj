@@ -13,6 +13,8 @@
 #ifdef WIN32
 
 #include <direct.h>
+#include <processthreadsapi.h>
+
 #define getcwd _getcwd
 #define environ _environ
 #define STBIW_WINDOWS_UTF8
@@ -144,6 +146,42 @@ static inline nanoclj_val_t System_glob(nanoclj_t * sc, nanoclj_val_t args0) {
   }
 #endif
   return mk_nil();
+}
+
+#ifdef WIN32
+static inline long long filetime_to_msec(FILETIME ft) {
+  return ((((long long)(ft.dwHighDateTime)) << 32) | ((long long)ft.dwLowDateTime)) / 1000000;
+}
+#endif
+
+/* Returns the system timing information (idle, kernel, user) */
+static nanoclj_val_t System_getSystemTimes(nanoclj_t * sc, nanoclj_val_t args) {
+  nanoclj_cell_t * r = NULL;
+#ifdef WIN32
+   FILETIME idleTime, kernelTime, userTime;
+   GetSystemTimes(&idleTime, &kernelTime, &userTime);
+   long long idle = filetime_to_msec(idleTime);
+   r = mk_vector(sc, 3);
+   set_vector_elem(r, 0, mk_integer(sc, idle));
+   set_vector_elem(r, 1, mk_integer(sc, filetime_to_msec(kernelTime) - idle));
+   set_vector_elem(r, 2, mk_integer(sc, filetime_to_msec(userTime)));
+#else
+  char * b = alloc_c_str(sc, to_strview(slurp(sc, mk_string(sc, "/proc/stat"))));
+  const char * p;
+  if (strncmp(b, "cpu ", 4) == 0) p = b;
+  else p = strstr(b, "\ncpu ");
+  if (p) {
+    long long user, nice, system, idle;
+    if (sscanf(p, "cpu  %lld %lld %lld %lld", &user, &nice, &system, &idle) == 4) {
+      r = mk_vector(sc, 3);
+      set_vector_elem(r, 0, mk_integer(sc, idle));
+      set_vector_elem(r, 1, mk_integer(sc, system));
+      set_vector_elem(r, 2, mk_integer(sc, user));
+    }
+    sc->free(b);
+  }
+#endif
+  return mk_pointer(r);
 }
 
 /* Math */
@@ -356,7 +394,8 @@ static inline nanoclj_val_t Image_resize(nanoclj_t * sc, nanoclj_val_t args0) {
   
   int target_w = to_int(target_w0), target_h = to_int(target_h0);
   int channels = get_format_channels(iv.format);
-  size_t target_size = target_w * target_h * channels;
+  int bpp = get_format_bpp(iv.format);
+  size_t target_size = target_w * target_h * bpp;
 
   nanoclj_val_t target_image = mk_image(sc, target_w, target_h, target_w, iv.format, NULL);
 
@@ -375,14 +414,14 @@ static inline nanoclj_val_t Image_transpose(nanoclj_t * sc, nanoclj_val_t args0)
     return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Not an Image")));
   }
   int w = iv.width, h = iv.height;
-  int channels = get_format_channels(iv.format);
   nanoclj_val_t new_image = mk_image(sc, h, w, h, iv.format, NULL);
   uint8_t * data = image_unchecked(new_image)->data;
-
+  size_t bpp = get_format_bpp(iv.format);
+  
   for (int y = 0; y < h; y++) {
     for (int x = 0; x < w; x++) {
-      for (int c = 0; c < channels; c++) {
-	data[channels * (x * h + y) + c] = iv.ptr[channels * (y * w + x) + c];
+      for (int c = 0; c < bpp; c++) {
+	data[bpp * (x * h + y) + c] = iv.ptr[bpp * (y * w + x) + c];
       }
     }
   }
@@ -466,8 +505,8 @@ static inline int * mk_kernel(nanoclj_t * sc, float radius, int * size) {
 /* Horizontal gaussian blur */
 nanoclj_val_t Image_horizontalGaussianBlur(nanoclj_t * sc, nanoclj_val_t args0) {
   nanoclj_cell_t * args = decode_pointer(args0);
-  nanoclj_val_t radius = first(sc, args);
-  imageview_t iv = to_imageview(second(sc, args));
+  imageview_t iv = to_imageview(first(sc, args));
+  nanoclj_val_t radius = second(sc, args);
   if (!iv.ptr) {
     return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Not an Image")));
   }
@@ -476,6 +515,7 @@ nanoclj_val_t Image_horizontalGaussianBlur(nanoclj_t * sc, nanoclj_val_t args0) 
   }
   int w = iv.width, h = iv.height;
   int channels = get_format_channels(iv.format);
+  size_t bpp = get_format_bpp(iv.format);
     
   int kernel_size;
   int * kernel = mk_kernel(sc, to_double(radius), &kernel_size);
@@ -485,7 +525,7 @@ nanoclj_val_t Image_horizontalGaussianBlur(nanoclj_t * sc, nanoclj_val_t args0) 
   
   nanoclj_val_t r = mk_image(sc, w, h, w, iv.format, NULL);
   uint8_t * output_data = image_unchecked(r)->data;
-  
+    
   switch (channels) {
   case 4:
     for (int row = 0; row < h; row++) {
@@ -509,14 +549,14 @@ nanoclj_val_t Image_horizontalGaussianBlur(nanoclj_t * sc, nanoclj_val_t args0) 
   case 3:
     for (int row = 0; row < h; row++) {
       for (int col = 0; col < w; col++) {
-	int c0 = 0, c1 = 0, c2 = 0, c3 = 0;
+	int c0 = 0, c1 = 0, c2 = 0;
 	for (int i = 0; i < kernel_size; i++) {
-	  const uint8_t * ptr = iv.ptr + (row * w + clamp(col + i - kernel_size / 2, 0, w - 1)) * 3;
+	  const uint8_t * ptr = iv.ptr + (row * w + clamp(col + i - kernel_size / 2, 0, w - 1)) * bpp;
 	  c0 += *ptr++ * kernel[i];
 	  c1 += *ptr++ * kernel[i];
 	  c2 += *ptr++ * kernel[i];
 	}
-	uint8_t * ptr = output_data + (row * w + col) * 4;
+	uint8_t * ptr = output_data + (row * w + col) * bpp;
 	*ptr++ = (uint8_t)(c0 / total);
 	*ptr++ = (uint8_t)(c1 / total);
 	*ptr++ = (uint8_t)(c2 / total);
@@ -1061,7 +1101,7 @@ static inline void register_functions(nanoclj_t * sc) {
   intern_foreign_func(sc, System, "getProperty", System_getProperty, 0, 1);
   intern_foreign_func(sc, System, "setProperty", System_setProperty, 0, 1);
   intern_foreign_func(sc, System, "glob", System_glob, 1, 1);
-  
+  intern_foreign_func(sc, System, "getSystemTimes", System_getSystemTimes, 0, 0);
   intern_foreign_func(sc, Math, "sin", Math_sin, 1, 1);
   intern_foreign_func(sc, Math, "cos", Math_cos, 1, 1);
   intern_foreign_func(sc, Math, "exp", Math_exp, 1, 1);

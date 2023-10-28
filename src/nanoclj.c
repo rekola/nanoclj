@@ -1216,7 +1216,7 @@ static inline nanoclj_val_t mk_image(nanoclj_t * sc, int32_t width, int32_t heig
 				     nanoclj_cell_t * meta) {
   nanoclj_cell_t * x = get_cell_x(sc, T_IMAGE, T_GC_ATOM, NULL, NULL, meta);
   if (x) {
-    size_t size = width * height * get_format_channels(f);
+    size_t size = width * height * get_format_bpp(f);
     uint8_t * data = sc->malloc(size);
     if (data) {
       nanoclj_image_t * image = sc->malloc(sizeof(nanoclj_image_t));
@@ -3381,6 +3381,24 @@ static inline nanoclj_val_t port_from_filename(nanoclj_t * sc, strview_t sv, uin
   return port_rep_from_file(sc, type, f, filename);
 }
 
+static inline nanoclj_val_t slurp(nanoclj_t * sc, nanoclj_val_t v) {
+  nanoclj_val_t rdr0;
+  if (type(v) == T_STRING) {
+    rdr0 = port_from_filename(sc, to_strview(v), T_READER);
+  } else {
+    return mk_nil();
+  }
+  nanoclj_cell_t * rdr = decode_pointer(rdr0);
+  nanoclj_byte_array_t * array = mk_string_store(sc, 0, 0);
+  size_t size = 0;
+  while ( 1 ) {
+    int32_t c = inchar(rdr);
+    if (c < 0) break;
+    size += append_codepoint(sc, array, c);
+  }
+  return mk_pointer(_get_string_object(sc, T_STRING, 0, size, array));
+}
+
 static inline bool file_push(nanoclj_t * sc, nanoclj_val_t f) {
   nanoclj_val_t p = port_from_filename(sc, to_strview(f), T_READER);
   if (!is_nil(p)) {
@@ -4684,7 +4702,7 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
 #if NANOCLJ_HAS_CANVAS
 	imageview_t iv = canvas_get_imageview(rep_unchecked(x)->canvas.impl);
 	nanoclj_val_t img = mk_image(sc, iv.width, iv.height, iv.stride, iv.format, NULL);
-	memcpy(image_unchecked(img)->data, iv.ptr, iv.width * iv.height * get_format_channels(iv.format));
+	memcpy(image_unchecked(img)->data, iv.ptr, iv.width * iv.height * get_format_bpp(iv.format));
 #endif
 	return img;
       }

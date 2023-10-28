@@ -73,24 +73,55 @@ static inline int strview_cmp(strview_t a, strview_t b) {
   }
 }
 
-static inline void transpose_red_blue(const uint8_t * input, uint8_t * output, size_t w, size_t h, size_t c) {
-  for (size_t i = 0; i < w * h; i++) {
-    output[c * i + 0] = input[c * i + 2];
-    output[c * i + 1] = input[c * i + 1];
-    output[c * i + 2] = input[c * i + 0];
-    if (c == 4) output[c * i + 3] = input[c * i + 3];
-  }
-}
-
 static inline int get_format_channels(nanoclj_internal_format_t f) {
   switch (f) {
   case nanoclj_r8: return 1;
+  case nanoclj_ra8: return 2;
   case nanoclj_rgb8: return 3;
+  case nanoclj_rgb565: return 3;
   case nanoclj_rgba8: return 4;
-  case nanoclj_argb8: return 4;
-  case nanoclj_rgb8_32: return 3;
+  case nanoclj_bgr8_32: return 3;
+  case nanoclj_bgra8: return 4;
   }
   return 0;
+}
+
+static inline int get_format_bpp(nanoclj_internal_format_t f) {
+  switch (f) {
+  case nanoclj_r8:
+    return 1;
+  case nanoclj_ra8:
+  case nanoclj_rgb565:
+    return 2;
+  case nanoclj_rgb8:
+    return 3;
+  case nanoclj_rgba8:
+  case nanoclj_bgr8_32:
+  case nanoclj_bgra8:
+    return 4;
+  }
+  return 0;
+}
+
+static inline uint8_t * convert_imagedata(const uint8_t * input, int width, int height, nanoclj_internal_format_t from, nanoclj_internal_format_t to) {
+  uint8_t * output = 0;
+  if (from == nanoclj_bgr8_32 && to == nanoclj_rgb8) {
+    output = malloc(width * height * 3);
+    for (size_t i = 0; i < width * height; i++) {
+      output[3 * i + 0] = input[4 * i + 2];
+      output[3 * i + 1] = input[4 * i + 1];
+      output[3 * i + 2] = input[4 * i + 0];
+    }
+  } else if (from == nanoclj_bgra8 && to == nanoclj_rgba8) {
+    output = malloc(width * height * 3);
+    for (size_t i = 0; i < width * height; i++) {
+      output[3 * i + 0] = input[4 * i + 2];
+      output[3 * i + 1] = input[4 * i + 1];
+      output[3 * i + 2] = input[4 * i + 0];
+      output[3 * i + 3] = input[4 * i + 3];
+    }
+  }
+  return output;
 }
 
 #endif
