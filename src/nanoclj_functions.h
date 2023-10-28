@@ -330,16 +330,19 @@ static inline nanoclj_val_t Image_load(nanoclj_t * sc, nanoclj_val_t args0) {
   set_vector_elem(meta, 1, mk_mapentry(sc, sc->HEIGHT, mk_int(h)));
   set_vector_elem(meta, 2, mk_mapentry(sc, sc->FILE, filename00));
 
-  nanoclj_val_t image = mk_image(sc, w, h, w, channels, meta);
-
-  if (channels >= 3) {
-    transpose_red_blue(data, image_unchecked(image)->data, w, h, channels);
-  } else {
-    memcpy(image_unchecked(image)->data, data, w * h * channels);
+  nanoclj_internal_format_t f;
+  switch (channels) {
+  case 1: f = nanoclj_r8; break;
+  case 3: f = nanoclj_rgb8; break;
+  case 4: f = nanoclj_rgba8; break;
+  default:
+    stbi_image_free(data);
+    return mk_nil();
   }
+  nanoclj_val_t image = mk_image(sc, w, h, w, f, meta);
+  memcpy(image_unchecked(image)->data, data, w * h * channels);
     
   stbi_image_free(data);
-
   return image;
 }
 
@@ -352,14 +355,15 @@ static inline nanoclj_val_t Image_resize(nanoclj_t * sc, nanoclj_val_t args0) {
   }
   
   int target_w = to_int(target_w0), target_h = to_int(target_h0);
-  size_t target_size = target_w * target_h * iv.channels;
+  int channels = get_format_channels(iv.format);
+  size_t target_size = target_w * target_h * channels;
 
-  nanoclj_val_t target_image = mk_image(sc, target_w, target_h, target_w, iv.channels, NULL);
+  nanoclj_val_t target_image = mk_image(sc, target_w, target_h, target_w, iv.format, NULL);
 
   nanoclj_image_t * img = image_unchecked(target_image);
   uint8_t * target_ptr = img->data;
   
-  stbir_resize_uint8_generic(iv.ptr, iv.width, iv.height, 0, target_ptr, target_w, target_h, 0, iv.channels, 0, STBIR_FLAG_ALPHA_PREMULTIPLIED, STBIR_EDGE_CLAMP, STBIR_FILTER_DEFAULT, STBIR_COLORSPACE_LINEAR, NULL);
+  stbir_resize_uint8_generic(iv.ptr, iv.width, iv.height, 0, target_ptr, target_w, target_h, 0, channels, 0, STBIR_FLAG_ALPHA_PREMULTIPLIED, STBIR_EDGE_CLAMP, STBIR_FILTER_DEFAULT, STBIR_COLORSPACE_LINEAR, NULL);
     
   return target_image;
 }
@@ -369,12 +373,10 @@ static inline nanoclj_val_t Image_transpose(nanoclj_t * sc, nanoclj_val_t args0)
   imageview_t iv = to_imageview(first(sc, args));
   if (!iv.ptr) {
     return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Not an Image")));
-  } else if (iv.channels != 4) {
-    return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Unsupported number of channels")));
   }
-  
-  int w = iv.width, h = iv.height, channels = iv.channels;
-  nanoclj_val_t new_image = mk_image(sc, h, w, h, channels, NULL);
+  int w = iv.width, h = iv.height;
+  int channels = get_format_channels(iv.format);
+  nanoclj_val_t new_image = mk_image(sc, h, w, h, iv.format, NULL);
   uint8_t * data = image_unchecked(new_image)->data;
 
   for (int y = 0; y < h; y++) {
@@ -400,7 +402,8 @@ static inline nanoclj_val_t Image_save(nanoclj_t * sc, nanoclj_val_t args0) {
   }
   char * filename = alloc_c_str(sc, to_strview(filename0));
 
-  int w = iv.width, h = iv.height, channels = iv.channels;
+  int w = iv.width, h = iv.height;
+  int channels = get_format_channels(iv.format);
   const uint8_t * data = iv.ptr;
   
   char * ext = strrchr(filename, '.');
@@ -471,15 +474,16 @@ nanoclj_val_t Image_horizontalGaussianBlur(nanoclj_t * sc, nanoclj_val_t args0) 
   if (!is_number(radius)) {
     return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Not a number")));
   }
-  int w = iv.width, h = iv.height, channels = iv.channels;
-  
+  int w = iv.width, h = iv.height;
+  int channels = get_format_channels(iv.format);
+    
   int kernel_size;
   int * kernel = mk_kernel(sc, to_double(radius), &kernel_size);
 
   int total = 0;
   for (int i = 0; i < kernel_size; i++) total += kernel[i];
   
-  nanoclj_val_t r = mk_image(sc, w, h, w, channels, NULL);
+  nanoclj_val_t r = mk_image(sc, w, h, w, iv.format, NULL);
   uint8_t * output_data = image_unchecked(r)->data;
   
   switch (channels) {

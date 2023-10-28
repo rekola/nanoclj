@@ -27,21 +27,41 @@
 #if NANOCLJ_SIXEL
 #include <sixel.h>
 
-static int sixel_write(char *data, int size, void *priv) {
+static int write_sixel_output(char *data, int size, void *priv) {
   return fwrite(data, 1, size, (FILE *)priv);
 }
 
-static inline bool print_image_sixel(imageview_t iv, nanoclj_color_t fg, nanoclj_color_t bg) {
-  int pf = 0;
-  switch (iv.channels) {
-  case 1: pf = SIXEL_PIXELFORMAT_G8; break;
-  case 3: pf = SIXEL_PIXELFORMAT_BGR888; break;
-  case 4: pf = SIXEL_PIXELFORMAT_BGRA8888; break;
-  default: return false;
-  }
-
+static inline bool write_sixel(int pf, const uint8_t * pal, const uint8_t * ptr, int width, int height) {
   sixel_dither_t * dither;
-  if (iv.channels == 1) {
+  if (pf == SIXEL_PIXELFORMAT_PAL8) {
+    sixel_dither_new(&dither, 256, NULL);
+    sixel_dither_set_palette(dither, (uint8_t*)pal);
+    sixel_dither_set_pixelformat(dither, pf);
+  } else {
+    sixel_dither_new(&dither, -1, NULL);
+    sixel_dither_initialize(dither, (uint8_t*)ptr, width, height, pf, SIXEL_LARGE_NORM, SIXEL_REP_CENTER_BOX, SIXEL_QUALITY_HIGHCOLOR);
+  }
+  
+  sixel_output_t * output;
+  sixel_output_new(&output, write_sixel_output, stdout, NULL);
+  
+  /* convert pixels into sixel format and write it to output context */
+  sixel_encode((uint8_t*)ptr,
+	       width,
+	       height,
+	       8,
+	       dither,
+	       output);
+
+  sixel_output_destroy(output);
+  sixel_dither_destroy(dither);
+  
+  return true;
+}
+  
+static inline bool print_image_sixel(imageview_t iv, nanoclj_color_t fg, nanoclj_color_t bg) {
+  switch (iv.format) {
+  case nanoclj_r8:
     uint8_t pal[3 * 256];
     for (size_t i = 0; i < 256; i++) {
       nanoclj_color_t c = mix(bg, fg, i / 255.0f);
@@ -49,29 +69,26 @@ static inline bool print_image_sixel(imageview_t iv, nanoclj_color_t fg, nanoclj
       pal[3 * i + 1] = c.green;
       pal[3 * i + 2] = c.blue;
     }
-    sixel_dither_new(&dither, 256, NULL);
-    sixel_dither_set_palette(dither, pal);
-    sixel_dither_set_pixelformat(dither, SIXEL_PIXELFORMAT_PAL8);
-  } else {
-    sixel_dither_new(&dither, -1, NULL);
-    sixel_dither_initialize(dither, (uint8_t*)iv.ptr, iv.width, iv.height, pf, SIXEL_LARGE_NORM, SIXEL_REP_CENTER_BOX, SIXEL_QUALITY_HIGHCOLOR);
+    return write_sixel(SIXEL_PIXELFORMAT_PAL8, pal, iv.ptr, iv.width, iv.height);
+  case nanoclj_rgb8:
+    return write_sixel(SIXEL_PIXELFORMAT_RGB888, NULL, iv.ptr, iv.width, iv.height);
+  case nanoclj_rgba8:
+    return write_sixel(SIXEL_PIXELFORMAT_RGBA8888, NULL, iv.ptr, iv.width, iv.height);
+  case nanoclj_argb8:
+    return write_sixel(SIXEL_PIXELFORMAT_BGRA8888, NULL, iv.ptr, iv.width, iv.height);
+  case nanoclj_rgb8_32:{
+    uint8_t * tmp = malloc(iv.width * iv.height * 3);
+    for (size_t i = 0; i < iv.width * iv.height; i++) {
+      tmp[3 * i + 0] = iv.ptr[4 * i + 0];
+      tmp[3 * i + 1] = iv.ptr[4 * i + 1];
+      tmp[3 * i + 2] = iv.ptr[4 * i + 2];
+    }
+    bool r = write_sixel(SIXEL_PIXELFORMAT_BGR888, NULL, tmp, iv.width, iv.height);
+    free(tmp);
+    return r;
   }
-  
-  sixel_output_t * output;
-  sixel_output_new(&output, sixel_write, stdout, NULL);
-  
-  /* convert pixels into sixel format and write it to output context */
-  sixel_encode((uint8_t*)iv.ptr,
-	       iv.width,
-	       iv.height,
-	       8,
-	       dither,
-	       output);
-
-  sixel_output_destroy(output);
-  sixel_dither_destroy(dither);
-
-  return true;
+  default: return false;
+  }
 }
 #endif
 
@@ -91,8 +108,8 @@ static inline void write_kitty(const uint8_t * ptr, int width, int height, int c
 
 static inline bool print_image_kitty(imageview_t iv, nanoclj_color_t fg, nanoclj_color_t bg) {
   size_t n = iv.width * iv.height;
-  switch (iv.channels) {
-  case 1:{
+  switch (iv.format) {
+  case nanoclj_r8:{
     uint8_t * ptr = malloc(3 * n);
     for (size_t i = 0; i < n; i++) {
       nanoclj_color_t c = mix(bg, fg, iv.ptr[i] / 255.0f);
@@ -105,11 +122,12 @@ static inline bool print_image_kitty(imageview_t iv, nanoclj_color_t fg, nanoclj
     return true;
   }
 
-  case 3:
-  case 4:{
-    uint8_t * transposed = malloc(n * iv.channels);
-    transpose_red_blue(iv.ptr, transposed, iv.width, iv.height, iv.channels);
-    write_kitty(transposed, iv.width, iv.height, iv.channels);
+  case nanoclj_rgb8:
+  case nanoclj_rgba8:{
+    int channels = get_format_channels(iv.format);
+    uint8_t * transposed = malloc(n * channels);
+    transpose_red_blue(iv.ptr, transposed, iv.width, iv.height, channels);
+    write_kitty(transposed, iv.width, iv.height, channels);
     free(transposed);
   }
     return true;

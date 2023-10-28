@@ -844,7 +844,7 @@ static inline imageview_t _to_imageview(nanoclj_cell_t * c) {
   switch (_type(c)) {
   case T_IMAGE:{
     nanoclj_image_t * img = _image_unchecked(c);
-    return (imageview_t){ img->data, img->width, img->height, img->stride, img->channels };
+    return (imageview_t){ img->data, img->width, img->height, img->stride, img->format };
   }
   case T_WRITER:
 #if NANOCLJ_HAS_CANVAS
@@ -1212,10 +1212,11 @@ static inline nanoclj_val_t mk_integer(nanoclj_t * sc, long long num) {
 }
 
 static inline nanoclj_val_t mk_image(nanoclj_t * sc, int32_t width, int32_t height,
-				     int32_t stride, int32_t chan, nanoclj_cell_t * meta) {
+				     int32_t stride, nanoclj_internal_format_t f,
+				     nanoclj_cell_t * meta) {
   nanoclj_cell_t * x = get_cell_x(sc, T_IMAGE, T_GC_ATOM, NULL, NULL, meta);
   if (x) {
-    size_t size = width * height * chan;
+    size_t size = width * height * get_format_channels(f);
     uint8_t * data = sc->malloc(size);
     if (data) {
       nanoclj_image_t * image = sc->malloc(sizeof(nanoclj_image_t));
@@ -1226,7 +1227,7 @@ static inline nanoclj_val_t mk_image(nanoclj_t * sc, int32_t width, int32_t heig
 	image->width = width;
 	image->height = height;
 	image->stride = stride;
-	image->channels = chan;
+	image->format = f;
 
 	_image_unchecked(x) = image;
 	_image_metadata(x) = meta;
@@ -2351,8 +2352,6 @@ static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t
       if (result) *result = mk_int(image->width);
     } else if (key.as_long == sc->HEIGHT.as_long) {
       if (result) *result = mk_int(image->height);
-    } else if (key.as_long == sc->CHANNELS.as_long) {
-      if (result) *result = mk_int(image->channels);
     } else {
       return false;
     }
@@ -4082,7 +4081,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
 	  nanoclj_image_t * img = _image_unchecked(c);
 	  sv = (strview_t){
 	    sc->strbuff,
-	    snprintf(sc->strbuff, STRBUFFSIZE, "#<Image %d %d %d>", img->width, img->height, img->channels)
+	    snprintf(sc->strbuff, STRBUFFSIZE, "#<Image %d %d %d>", img->width, img->height,get_format_channels(img->format))
 	  };
 	}
 	break;
@@ -4642,12 +4641,20 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
 	if (args && t == T_WRITER) {
 	  y = first(sc, args);
 	  nanoclj_color_t fill_color = sc->bg_color;
-	  int channels = 4;
+	  int channels = 3;
 	  for (args = next(sc, args); args; args = next(sc, args)) {
 	    nanoclj_val_t a = first(sc, args);
 	    if (a.as_long == sc->GRAY.as_long) {
 	      channels = 1;
-	    } else if (!is_nil(a)) {
+	      a = second(sc, args);
+	    } else if (a.as_long == sc->RGB.as_long) {
+	      channels = 3;
+	      a = second(sc, args);
+	    } else if (a.as_long == sc->RGBA.as_long) {
+	      channels = 4;
+	      a = second(sc, args);
+	    }
+	    if (!is_nil(a)) {
 	      fill_color = to_color(a);
 	    }
 	  }
@@ -4676,9 +4683,10 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
       } else if (is_writer(x) && port_type_unchecked(x) == port_canvas) {
 #if NANOCLJ_HAS_CANVAS
 	imageview_t iv = canvas_get_imageview(rep_unchecked(x)->canvas.impl);
-	nanoclj_val_t img = mk_image(sc, iv.width, iv.height, iv.stride, iv.channels, NULL);
-	memcpy(image_unchecked(img)->data, iv.ptr, iv.width * iv.height * iv.channels);
+	nanoclj_val_t img = mk_image(sc, iv.width, iv.height, iv.stride, iv.format, NULL);
+	memcpy(image_unchecked(img)->data, iv.ptr, iv.width * iv.height * get_format_channels(iv.format));
 #endif
+	return img;
       }
     }
 
@@ -7833,6 +7841,8 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   sc->INLINE = def_keyword(sc, "inline");
   sc->BLOCK = def_keyword(sc, "block");
   sc->GRAY = def_keyword(sc, "gray");
+  sc->RGB = def_keyword(sc, "rgb");
+  sc->RGBA = def_keyword(sc, "rgba");
   
   sc->SORTED_SET = def_symbol(sc, "sorted-set");
   sc->ARRAY_MAP = def_symbol(sc, "array-map");

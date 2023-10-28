@@ -246,6 +246,8 @@ extern "C" {
     nanoclj_val_t INLINE;	  /* :inline */
     nanoclj_val_t BLOCK;	  /* :block */
     nanoclj_val_t GRAY;		  /* :gray */
+    nanoclj_val_t RGB;		  /* :rgb */
+    nanoclj_val_t RGBA;		  /* :rgba */
     
     nanoclj_val_t SORTED_SET;	  /* sorted-set */
     nanoclj_val_t ARRAY_MAP;	  /* array-map */

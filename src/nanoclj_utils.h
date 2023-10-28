@@ -82,5 +82,16 @@ static inline void transpose_red_blue(const uint8_t * input, uint8_t * output, s
   }
 }
 
+static inline int get_format_channels(nanoclj_internal_format_t f) {
+  switch (f) {
+  case nanoclj_r8: return 1;
+  case nanoclj_rgb8: return 3;
+  case nanoclj_rgba8: return 4;
+  case nanoclj_argb8: return 4;
+  case nanoclj_rgb8_32: return 3;
+  }
+  return 0;
+}
+
 #endif
 

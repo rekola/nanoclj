@@ -12,7 +12,8 @@ typedef enum {
 } nanoclj_internal_format_t;
 
 typedef struct {
-  int32_t width, height, stride, channels;
+  int32_t width, height, stride;
+  nanoclj_internal_format_t format;
   unsigned char * data;
 } nanoclj_image_t;
 
@@ -46,7 +47,8 @@ typedef enum {
 
 typedef struct {
   const uint8_t * ptr;
-  uint32_t width, height, stride, channels;
+  uint32_t width, height, stride;
+  nanoclj_internal_format_t format;
 } imageview_t;
 
 typedef struct {
