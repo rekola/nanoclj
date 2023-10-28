@@ -166,7 +166,7 @@ static nanoclj_val_t System_getSystemTimes(nanoclj_t * sc, nanoclj_val_t args) {
    set_vector_elem(r, 1, mk_integer(sc, filetime_to_msec(kernelTime) - idle));
    set_vector_elem(r, 2, mk_integer(sc, filetime_to_msec(userTime)));
 #else
-  char * b = alloc_c_str(sc, to_strview(slurp(sc, mk_string(sc, "/proc/stat"))));
+   char * b = alloc_c_str(sc, to_strview(slurp(sc, T_READER, mk_string(sc, "/proc/stat"))));
   const char * p;
   if (strncmp(b, "cpu ", 4) == 0) p = b;
   else p = strstr(b, "\ncpu ");
@@ -352,21 +352,20 @@ static inline nanoclj_val_t browse_url(nanoclj_t * sc, nanoclj_val_t args0) {
 
 static inline nanoclj_val_t Image_load(nanoclj_t * sc, nanoclj_val_t args0) {
   nanoclj_cell_t * args = decode_pointer(args0);
-  nanoclj_val_t filename00 = first(sc, args);
-  strview_t filename0 = to_strview(filename00);
-  char * filename = alloc_c_str(sc, filename0);
-	    
+  nanoclj_val_t src = first(sc, args);
+  strview_t sv = to_strview(slurp(sc, T_INPUT_STREAM, src));
+  
   int w, h, channels;
-  uint8_t * data = stbi_load(filename, &w, &h, &channels, 0);
-  sc->free(filename);
+  uint8_t * data = stbi_load_from_memory((const uint8_t *)sv.ptr, sv.size, &w, &h, &channels, 0);
   if (!data) { /* FIXME: stbi_failure_reason() is not thread-safe */
-    return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string_fmt(sc, "%s [%.*s]", stbi_failure_reason(), (int)filename0.size, filename0.ptr)));
+    strview_t src_sv = to_strview(src);
+    return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string_fmt(sc, "%s [%.*s]", stbi_failure_reason(), (int)src_sv.size, src_sv.ptr)));
   }
 
   nanoclj_cell_t * meta = mk_arraymap(sc, 3);
   set_vector_elem(meta, 0, mk_mapentry(sc, sc->WIDTH, mk_int(w)));
   set_vector_elem(meta, 1, mk_mapentry(sc, sc->HEIGHT, mk_int(h)));
-  set_vector_elem(meta, 2, mk_mapentry(sc, sc->FILE, filename00));
+  set_vector_elem(meta, 2, mk_mapentry(sc, sc->FILE, src));
 
   nanoclj_internal_format_t f;
   switch (channels) {

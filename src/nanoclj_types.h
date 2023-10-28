@@ -48,6 +48,13 @@ typedef enum {
 } nanoclj_display_mode_t;
 
 typedef struct {
+  nanoclj_color_t fg;
+  nanoclj_color_t bg;
+  nanoclj_graphics_t gfx;
+  nanoclj_colortype_t color;
+} nanoclj_termdata_t;
+
+typedef struct {
   const uint8_t * ptr;
   uint32_t width, height, stride;
   nanoclj_internal_format_t format;

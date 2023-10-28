@@ -3381,20 +3381,34 @@ static inline nanoclj_val_t port_from_filename(nanoclj_t * sc, strview_t sv, uin
   return port_rep_from_file(sc, type, f, filename);
 }
 
-static inline nanoclj_val_t slurp(nanoclj_t * sc, nanoclj_val_t v) {
+static inline nanoclj_val_t slurp(nanoclj_t * sc, uint16_t t, nanoclj_val_t v) {
   nanoclj_val_t rdr0;
-  if (type(v) == T_STRING) {
-    rdr0 = port_from_filename(sc, to_strview(v), T_READER);
-  } else {
+  switch (type(v)) {
+  case T_STRING:
+  case T_FILE:
+    rdr0 = port_from_filename(sc, to_strview(v), t);
+    break;
+  case T_READER:
+  case T_INPUT_STREAM:
+    rdr0 = v;
+    break;
+  default:
     return mk_nil();
   }
   nanoclj_cell_t * rdr = decode_pointer(rdr0);
   nanoclj_byte_array_t * array = mk_string_store(sc, 0, 0);
   size_t size = 0;
   while ( 1 ) {
-    int32_t c = inchar(rdr);
-    if (c < 0) break;
-    size += append_codepoint(sc, array, c);
+    if (t == T_READER) {
+      int32_t c = inchar(rdr);
+      if (c < 0) break;
+      size += append_codepoint(sc, array, c);
+    } else {
+      int32_t c = inchar_raw(rdr);
+      if (c < 0) break;
+      uint8_t b = c;
+      size += append_bytes(sc, array, &b, 1);
+    }
   }
   return mk_pointer(_get_string_object(sc, T_STRING, 0, size, array));
 }
@@ -7491,7 +7505,6 @@ static inline void update_window_info(nanoclj_t * sc, nanoclj_cell_t * out) {
       cell_size = mk_vector_2d(sc, width / cols / f, height / lines / f);
     }
 
-    get_current_colors(stdin, stdout, &(sc->fg_color), &(sc->bg_color));
     pr->stdio.fg = sc->fg_color;
     pr->stdio.bg = sc->bg_color;
   }
@@ -7957,10 +7970,11 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   sc->window_scale_factor = 1.0;
   sc->window_lines = sc->window_columns = 0;
 
-  sc->term_graphics = get_term_graphics(stdin, stdout);
-  sc->term_colors = get_term_colortype(stdout);
-  sc->fg_color = mk_color3i(255, 255, 255);
-  sc->bg_color = mk_color3i(0, 0, 0);
+  nanoclj_termdata_t td = get_termdata(stdin, stdout);
+  sc->fg_color = td.fg;
+  sc->bg_color = td.bg;
+  sc->term_graphics = td.gfx;
+  sc->term_colors = td.color;
   
   sc->context->properties = mk_properties(sc);
   sc->tensor_ctx = mk_tensor_context();

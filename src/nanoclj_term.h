@@ -313,111 +313,116 @@ static bool get_cursor_position(FILE * in, FILE * out, int * x, int * y) {
   }
 }
 
-/* Gets the current therminal fg and bg colors, or guesses them. */
-static inline bool get_current_colors(FILE * in, FILE * out, nanoclj_color_t * fg, nanoclj_color_t * bg) {
-  if (!isatty(fileno(out))) {
-    return false;
-  }
-  struct termios orig_term = set_raw_mode(fileno(in));
-
-  char buf[32];   
-  bool has_bg = false;
-  uint32_t r, g, b;
-  if (write(fileno(out), "\033]11;?\033\\", 8) == 8 && term_read_upto(fileno(in), buf, sizeof(buf), '\\')) {
-    if (sscanf(buf, "\033]11;rgb:%2x/%2x/%2x", &r, &g, &b) == 3) {
-      *bg = mk_color3i(r, g, b);
-      has_bg = true;
-    } else if (sscanf(buf, "\033]11;rgb:%x/%x/%x", &r, &g, &b) == 3) {
-      *bg = mk_color3i(r >> 8, g >> 8, b >> 8);
-      has_bg = true;
-    }
-  }
-
-  bool has_fg = false;
-  if (has_bg && write(fileno(out), "\033]10;?\033\\", 8) == 8 && term_read_upto(fileno(in), buf, sizeof(buf), '\\')) {
-    if (sscanf(buf, "\033]10;rgb:%2x/%2x/%2x", &r, &g, &b) == 3) {
-      *fg = mk_color3i(r, g, b);
-      has_fg = true;
-    } else if (sscanf(buf, "\033]10;rgb:%x/%x/%x", &r, &g, &b) == 3) {
-      *fg = mk_color3i(r >> 8, g >> 8, b >> 8);
-      has_fg = true;
-    }
-  }
-  
-  if (!has_fg) {
-    if (bg->red < 128 && bg->green < 128 && bg->blue < 128) {
-      *fg = mk_color3i(255, 255, 255);
-    } else {
-      *fg = mk_color3i(0, 0, 0);
-    }
-  }
-  
-  tcsetattr(STDIN_FILENO, TCSADRAIN, &orig_term);
-
-  return has_bg;
-}
-
-static inline nanoclj_colortype_t get_term_colortype(FILE * stdout) {
-#ifdef _WIN32
+static inline nanoclj_colortype_t get_term_colortype_from_env() {
+#ifdef WIN32
   return nanoclj_colortype_16;
 #else
-  if (!isatty(fileno(stdout))) {
+  const char * colorterm = getenv("COLORTERM");
+  if ((colorterm &&
+       (strcmp(colorterm, "truecolor") == 0 || strcmp(colorterm, "24bit") == 0)) ||
+      getenv("MLTERM")) {
+    return nanoclj_colortype_true;
+  }
+  
+  const char * term_program = getenv("TERM_PROGRAM");
+  if (term_program && (strcmp(term_program, "iTerm.app") == 0 ||
+		       strcmp(term_program, "HyperTerm") == 0 ||
+		       strcmp(term_program, "Hyper") == 0 ||
+		       strcmp(term_program, "MacTerm") == 0)) {
+    return nanoclj_colortype_true;
+  } else if (term_program && strcmp(term_program, "Apple_Terminal") == 0) {
+    return nanoclj_colortype_256;
+  }
+  
+  const char * term = getenv("TERM");    
+  if (!term || strcmp(term, "dumb") == 0) {
     return nanoclj_colortype_none;
-  } else {
-    const char * colorterm = getenv("COLORTERM");
-    if ((colorterm &&
-	 (strcmp(colorterm, "truecolor") == 0 || strcmp(colorterm, "24bit") == 0)) ||
-	getenv("MLTERM")) {
-      return nanoclj_colortype_true;
-    }
-    
-    const char * term_program = getenv("TERM_PROGRAM");
-    if (term_program && (strcmp(term_program, "iTerm.app") == 0 ||
-			 strcmp(term_program, "HyperTerm") == 0 ||
-			 strcmp(term_program, "Hyper") == 0 ||
-			 strcmp(term_program, "MacTerm") == 0)) {
-      return nanoclj_colortype_true;
-    } else if (term_program && strcmp(term_program, "Apple_Terminal") == 0) {
+  } else if (strstr(term, "256color") || getenv("TMUX")) {
+    return nanoclj_colortype_256;
+  }
+  
+  /* CI platforms */
+  if (getenv("CI") || getenv("TEAMCITY_VERSION")) {
+    if (getenv("TRAVIS")) {
       return nanoclj_colortype_256;
-    }
-    
-    const char * term = getenv("TERM");    
-    if (!term || strcmp(term, "dumb") == 0) {
-      return nanoclj_colortype_none;
-    } else if (strstr(term, "256color") || getenv("TMUX")) {
-      return nanoclj_colortype_256;
-    }
-
-    /* CI platforms */
-    if (getenv("CI") || getenv("TEAMCITY_VERSION")) {
-      if (getenv("TRAVIS")) {
-	return nanoclj_colortype_256;
-      } else {
-	return nanoclj_colortype_none;
-      }
     } else {
-      return nanoclj_colortype_16;
+      return nanoclj_colortype_none;
     }
+  } else {
+    return nanoclj_colortype_16;
   }
 #endif
 }
 
-static inline nanoclj_graphics_t get_term_graphics(FILE * in, FILE * out) {
-#ifndef _WIN32
+/* Gets the current therminal fg and bg colors, or guesses them. */
+static inline nanoclj_termdata_t get_termdata(FILE * in, FILE * out) {
+  nanoclj_termdata_t td;
+  bool has_bg = false, has_fg = false;
+  nanoclj_graphics_t gfx = nanoclj_no_gfx;
+  nanoclj_colortype_t color = nanoclj_colortype_none;
+
+#ifndef WIN32
   if (isatty(fileno(out))) {
+    struct termios orig_term = set_raw_mode(fileno(in));
+    
+    char buf[32];   
+    uint32_t r, g, b;
+    if (write(fileno(out), "\033]11;?\033\\", 8) == 8 && term_read_upto(fileno(in), buf, sizeof(buf), '\\')) {
+      if (sscanf(buf, "\033]11;rgb:%2x/%2x/%2x", &r, &g, &b) == 3) {
+	td.bg = mk_color3i(r, g, b);
+	has_bg = true;
+      } else if (sscanf(buf, "\033]11;rgb:%x/%x/%x", &r, &g, &b) == 3) {
+	td.bg = mk_color3i(r >> 8, g >> 8, b >> 8);
+	has_bg = true;
+      }
+    }
+
+    
+    if (has_bg && write(fileno(out), "\033]10;?\033\\", 8) == 8 && term_read_upto(fileno(in), buf, sizeof(buf), '\\')) {
+      if (sscanf(buf, "\033]10;rgb:%2x/%2x/%2x", &r, &g, &b) == 3) {
+	td.fg = mk_color3i(r, g, b);
+	has_fg = true;
+      } else if (sscanf(buf, "\033]10;rgb:%x/%x/%x", &r, &g, &b) == 3) {
+	td.fg = mk_color3i(r >> 8, g >> 8, b >> 8);
+	has_fg = true;
+      }
+    }
+
     const char * term = getenv("TERM");    
     if (term && strcmp(term, "xterm-kitty") == 0) {
-      return nanoclj_kitty;
+      gfx = nanoclj_kitty;
     } else if (getenv("KONSOLE_VERSION")) {
-      return nanoclj_kitty;
+      gfx = nanoclj_kitty;
     } else {
 #if NANOCLJ_SIXEL
-      return nanoclj_sixel;
+      /* Request Device Attributes (CSI Ps c) to detect Sixel support */
+      if (write(fileno(out), "\033[0c", 4) && term_read_upto(fileno(in), buf, sizeof(buf), 'c') && strchr(buf, '4')) {
+	gfx = nanoclj_sixel;
+      }
 #endif
     }
+
+    color = get_term_colortype_from_env();
+    
+    tcsetattr(STDIN_FILENO, TCSADRAIN, &orig_term);    
   }
 #endif
-  return nanoclj_no_gfx;
+  
+  if (!has_bg) {
+    td.bg = mk_color3i(0, 0, 0);
+    td.fg = mk_color3i(255, 255, 255);
+  } else if (!has_fg) {
+    if (td.bg.red < 128 && td.bg.green < 128 && td.bg.blue < 128) {
+      td.fg = mk_color3i(255, 255, 255);
+    } else {
+      td.fg = mk_color3i(0, 0, 0);
+    }
+  }
+
+  td.gfx = gfx;
+  td.color = color;
+  
+  return td;
 }
 
 #endif
