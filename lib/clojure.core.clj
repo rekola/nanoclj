@@ -335,23 +335,24 @@
 ; Printing and Reading
 
 (defn slurp
-  "Reads a file"
-  [fn] (let [rdr (clojure.java.io/reader fn)
-             f (fn [s] (let [c (-read rdr)] (if (= c ##Eof) s (recur (conj s c)))))
-             r (f "")]
-         (-close rdr)
-         r))
+  "Reads a file. Arguments are passed to Reader so same kind of input is supported
+  (e.g. URL or filename)"
+  [f & opts] (let [rdr (apply clojure.java.io/reader f opts)
+                   fun (fn [s] (let [c (-read rdr)] (if (= c ##Eof) s (recur (conj s c)))))
+                   r (fun "")]
+               (-close rdr)
+               r))
 
 (defn spit
-  "Writes content to a file"
-  [f content] (let [prev-out *out*
-                    w (clojure.java.io/writer f)
-                    ]
-                (set! *out* w)
-                (print (str content))
-                (-close w)
-                (set! *out* prev-out)
-                nil))
+  "Writes content to a file. Arguments are passed to Writer so same kind of input is supported"
+  [f content & options] (let [prev-out *out*
+                              w (apply clojure.java.io/writer f options)
+                              ]
+                          (set! *out* w)
+                          (print (str content))
+                          (-close w)
+                          (set! *out* prev-out)
+                          nil))
 
 (def printf (fn [& args] (-print (apply format args))))
 
