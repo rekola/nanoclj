@@ -11,11 +11,12 @@ language. It is based on TinyScheme which was based on MiniScheme.
 
 ## Features
 
+- Terminal graphics (*Kitty* or *Sixel* protocols)
+- 2D Canvas
 - Image and audio loading
-- 2D canvas
 - REPL output is colored by type
-- Callback ports have been added for printing into a GUI instead of stdout
-- Type names try to imitate Java and Clojure types when possible `(type 1) ;=> java.lang.Long`
+- Callback Writer for printing into a GUI instead of stdout
+- Class and namespace names try to imitate Java and Clojure names when possible (e.g. `(type 1) ;=> java.lang.Long`)
 
 ### 2D Graphics
 
@@ -30,20 +31,24 @@ Tektronix terminal, or move-to could set the cursor position in a text
 mode program. The canvas interface has been modeled after Cairo.
 
 In GUI program the resulting canvas can be displayed in a REPL using
-the GUI callbacks for output Writer. In terminal program *sixels* are
-used to print the results of a function call when the function returns
-a canvas or image. The terminal must, of course, has to support sixel
-graphics and sixel support must be enabled. The following terminals
-have been tested:
+the GUI callbacks for output Writer. In terminal program Kitty or
+Sixel protocol is used to print the results of a function call when
+the function returns a canvas or image. The terminal must, of course,
+need to support Kitty or Sixel graphics and support must be
+enabled. The following terminals have been tested:
 
 | Terminal | Graphics | Mouse | Notes |
 | - | - | - | - |
 | foot | OK | OK | Wayland only |
-| wezterm | Cannot get background color | OK | Buggy (as of 20230712) |
-| xterm | No true color, inline image layout doesn't work | OK | |
-| mlterm | Cannot get background color, inline image layout doesn't work | ? | Output flickers when updated |
+| kitty | OK | ? | True color images, but window resizing has bugs (as of 0.26.5) |
+| wezterm | OK | OK | Buggy (as of 20230712) |
+| mlterm | OK | ? | linenoise output flickers when updated |
+| Konsole | OK | ? | True color images, but on HiDPI system images are upscaled |
+| contour | Inline image layout doesn't work | ? | |
+| xterm | No true color	| OK | Sixel support must be enabled in `.Xresources` |
 | Black Box | Inline image layout doesn't work | ? | On HiDPI system the images are upscaled, and the terminal and the flatpak system use too much CPU time when idling. |
-| GNOME Terminal | ? | ? | Sixels are not enabled by default |
+| Alacritty | None | ? | |
+| GNOME Terminal | None | ? | Sixel support is not enabled by default |
 
 ![Plotting from nanoclj](https://user-images.githubusercontent.com/6755525/277504459-737b498e-005b-49ad-92b2-0917a1a10b7e.jpg "Plotting from nanoclj")
 *The plot function returns a canvas, which can be converted to an image, and then saved with Image/save or modified using other functions in the Image namespace.*
@@ -83,7 +88,19 @@ As well as printing images in block mode like the plot function does, they can a
 - utf8proc
 - shapelib
 
-## Windows Support
+## Building
+
+### Ubuntu
+
+```
+sudo apt install libutf8proc-dev libsixel-dev libpcre2-dev libcairo2-dev libshp-dev libcurl4-gnutls-dev libxml2-dev libzip-dev
+mkdir build
+cd build
+cmake ..
+make
+```
+
+### Windows
 
 Windows support is in progress.
 
@@ -95,8 +112,7 @@ Windows support is in progress.
 - Queues, Arrays
 - Reader Conditionals
 - BigInts, BigDecimals and Exotic numeric literals (e.g. 3N, 0.1M, hexadecimal floats)
-- Persistent data structures
-- Transient data structures
+- Persistent data structures, Transient data structures
 - Unchecked operations
 - Autopromoting operations
 - StructMaps
@@ -107,8 +123,7 @@ Windows support is in progress.
 - Metadata reader macro, Threading macros (->, -->, some-> and some->>)
 - Homogenous vectors (vector-of)
 - Pre and post conditions for functions
-- Readers, Writers, spit and slurp do not accept options such as :encoding or :append
-- spit and slurp do not accept Writers or Readers
+- Readers and Writers do not accept options such as :encoding or :append
 - Associative destructuring
 - `*print-length*`, `*print-level*`, `*file*`, `*flush-on-newline*`, `*clojure-version*`, `*load-tests*`, `*print-meta*`
 - Missing core functions and macros
@@ -126,7 +141,7 @@ Windows support is in progress.
   - condp
   - when-let, letfn, if-let, if-some
   - reduced, reduced?
-  - with-local-vars, var-set, find-var, alter-var-root, declare, binding
+  - with-local-vars, var-set, find-var, alter-var-root, declare, binding, with-bindings
   - as-url, resource
   - sequence
   - make-hierarchy, ancestors, supers, bases
@@ -139,7 +154,7 @@ Windows support is in progress.
   - with-open
   - with-meta, vary-meta, alter-meta!, reset-meta!
 - clojure.core.async
-  - thread-call
+  - thread, thread-call
 - clojure.core.reducers
 - clojure.main
   - load-script
