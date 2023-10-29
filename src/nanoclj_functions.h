@@ -158,15 +158,15 @@ static inline long long filetime_to_msec(FILETIME ft) {
 static nanoclj_val_t System_getSystemTimes(nanoclj_t * sc, nanoclj_val_t args) {
   nanoclj_cell_t * r = NULL;
 #ifdef WIN32
-   FILETIME idleTime, kernelTime, userTime;
-   GetSystemTimes(&idleTime, &kernelTime, &userTime);
-   long long idle = filetime_to_msec(idleTime);
-   r = mk_vector(sc, 3);
-   set_vector_elem(r, 0, mk_integer(sc, idle));
-   set_vector_elem(r, 1, mk_integer(sc, filetime_to_msec(kernelTime) - idle));
-   set_vector_elem(r, 2, mk_integer(sc, filetime_to_msec(userTime)));
+  FILETIME idleTime, kernelTime, userTime;
+  GetSystemTimes(&idleTime, &kernelTime, &userTime);
+  long long idle = filetime_to_msec(idleTime);
+  r = mk_vector(sc, 3);
+  set_vector_elem(r, 0, mk_integer(sc, idle));
+  set_vector_elem(r, 1, mk_integer(sc, filetime_to_msec(kernelTime) - idle));
+  set_vector_elem(r, 2, mk_integer(sc, filetime_to_msec(userTime)));
 #else
-   char * b = alloc_c_str(sc, to_strview(slurp(sc, T_READER, mk_string(sc, "/proc/stat"))));
+  char * b = alloc_c_str(sc, to_strview(slurp(sc, T_READER, cons(sc, mk_string(sc, "/proc/stat"), NULL))));
   const char * p;
   if (strncmp(b, "cpu ", 4) == 0) p = b;
   else p = strstr(b, "\ncpu ");
@@ -353,7 +353,7 @@ static inline nanoclj_val_t browse_url(nanoclj_t * sc, nanoclj_val_t args0) {
 static inline nanoclj_val_t Image_load(nanoclj_t * sc, nanoclj_val_t args0) {
   nanoclj_cell_t * args = decode_pointer(args0);
   nanoclj_val_t src = first(sc, args);
-  strview_t sv = to_strview(slurp(sc, T_INPUT_STREAM, src));
+  strview_t sv = to_strview(slurp(sc, T_INPUT_STREAM, args));
   
   int w, h, channels;
   uint8_t * data = stbi_load_from_memory((const uint8_t *)sv.ptr, sv.size, &w, &h, &channels, 0);
@@ -581,12 +581,13 @@ nanoclj_val_t Image_horizontalGaussianBlur(nanoclj_t * sc, nanoclj_val_t args0) 
 
 static inline nanoclj_val_t Audio_load(nanoclj_t * sc, nanoclj_val_t args0) {
   nanoclj_cell_t * args = decode_pointer(args0);
-  char * filename = alloc_c_str(sc, to_strview(first(sc, args)));
+  nanoclj_val_t src = first(sc, args);
+  strview_t sv = to_strview(slurp(sc, T_INPUT_STREAM, args));
+
   drwav wav;
-  if (!drwav_init_file(&wav, filename, NULL)) {
+  if (!drwav_init_memory(&wav, sv.ptr, sv.size, NULL)) {
     return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Failed to load Audio")));
   }
-  sc->free(filename);
 
   nanoclj_val_t audio = mk_audio(sc, wav.totalPCMFrameCount, wav.channels, wav.sampleRate);
   nanoclj_audio_t * a = audio_unchecked(audio);
@@ -805,10 +806,10 @@ static inline nanoclj_val_t Geo_load(nanoclj_t * sc, nanoclj_val_t args0) {
 
 static inline nanoclj_val_t Graph_load(nanoclj_t * sc, nanoclj_val_t args0) {
   nanoclj_cell_t * args = decode_pointer(args0);
-  char * filename = alloc_c_str(sc, to_strview(first(sc, args)));
+  nanoclj_val_t src = first(sc, args);
+  strview_t sv = to_strview(slurp(sc, T_READER, args));
 
-  xmlDoc * doc = xmlReadFile(filename, NULL, 0);
-  sc->free(filename);
+  xmlDoc * doc = xmlReadMemory(sv.ptr, sv.size, "noname.xml", NULL, 0);
   if (doc == NULL) {
     return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Could not parse file")));    
   }
@@ -876,10 +877,10 @@ static inline nanoclj_val_t create_xml_node(nanoclj_t * sc, xmlNode * input) {
 
 static inline nanoclj_val_t clojure_xml_parse(nanoclj_t * sc, nanoclj_val_t args0) {
   nanoclj_cell_t * args = decode_pointer(args0);
-  char * filename = alloc_c_str(sc, to_strview(first(sc, args)));
+  nanoclj_val_t src = first(sc, args);
+  strview_t sv = to_strview(slurp(sc, T_READER, args));
 
-  xmlDoc * doc = xmlReadFile(filename, NULL, 0);
-  sc->free(filename);
+  xmlDoc * doc = xmlReadMemory(sv.ptr, sv.size, "noname.xml", NULL, 0);
   if (doc == NULL) {
     return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Could not parse file")));    
   }
@@ -890,7 +891,8 @@ static inline nanoclj_val_t clojure_xml_parse(nanoclj_t * sc, nanoclj_val_t args
 
 static inline nanoclj_val_t clojure_data_csv_read_csv(nanoclj_t * sc, nanoclj_val_t args0) {
   nanoclj_cell_t * args = decode_pointer(args0);
-  nanoclj_val_t reader = first(sc, args);
+  nanoclj_cell_t * rdr = mk_reader(sc, T_READER, args);
+  
   return mk_nil();
 }
 

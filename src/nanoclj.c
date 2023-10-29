@@ -2748,6 +2748,11 @@ static inline void ok_to_freely_gc(nanoclj_t * sc) {
   _set_car(&(sc->sink), sc->EMPTY);
 }
 
+static inline nanoclj_val_t nanoclj_throw(nanoclj_t * sc, nanoclj_cell_t * e) {
+  sc->pending_exception = e;
+  return mk_nil();
+}
+
 /* ========== oblist implementation  ========== */
 
 static inline nanoclj_cell_t * oblist_initial_value(nanoclj_t * sc) {
@@ -3381,21 +3386,41 @@ static inline nanoclj_val_t port_from_filename(nanoclj_t * sc, strview_t sv, uin
   return port_rep_from_file(sc, type, f, filename);
 }
 
-static inline nanoclj_val_t slurp(nanoclj_t * sc, uint16_t t, nanoclj_val_t v) {
-  nanoclj_val_t rdr0;
-  switch (type(v)) {
-  case T_STRING:
-  case T_FILE:
-    rdr0 = port_from_filename(sc, to_strview(v), t);
-    break;
-  case T_READER:
-  case T_INPUT_STREAM:
-    rdr0 = v;
-    break;
-  default:
-    return mk_nil();
+static inline nanoclj_val_t port_from_string(nanoclj_t * sc, strview_t sv, uint8_t type) {
+  nanoclj_cell_t * p = get_port_object(sc, type, port_string);
+  if (!p) return mk_nil();
+  
+  nanoclj_byte_array_t * s = mk_string_store(sc, sv.size, 0);
+  memcpy(s->data, sv.ptr, sv.size);
+  
+  nanoclj_port_rep_t * pr = _rep_unchecked(p);
+  pr->string.data = s;
+  pr->string.read_pos = 0;
+  
+  return mk_pointer(p);  
+}
+
+static inline nanoclj_cell_t * mk_reader(nanoclj_t * sc, uint16_t t, nanoclj_cell_t * args) {
+  nanoclj_val_t f = first(sc, args);
+  if (is_nil(f)) {
+    nanoclj_throw(sc, sc->NullPointerException);
+  } else {
+    switch (type(f)) {
+    case T_STRING:
+    case T_FILE:
+      return decode_pointer(port_from_filename(sc, to_strview(f), t));
+    case T_CHAR_ARRAY:
+      return decode_pointer(port_from_string(sc, to_strview(f), t));
+    case T_READER:
+    case T_INPUT_STREAM:
+      return decode_pointer(f);
+    }
   }
-  nanoclj_cell_t * rdr = decode_pointer(rdr0);
+  return NULL;  
+}
+
+static inline nanoclj_val_t slurp(nanoclj_t * sc, uint16_t t, nanoclj_cell_t * args) {
+  nanoclj_cell_t * rdr = mk_reader(sc, t, args);
   nanoclj_byte_array_t * array = mk_string_store(sc, 0, 0);
   size_t size = 0;
   while ( 1 ) {
@@ -3442,20 +3467,6 @@ static inline nanoclj_val_t mk_writer_from_callback(nanoclj_t * sc,
   pr->callback.restore = restore;
   pr->callback.image = image;
   return mk_pointer(p);
-}
-
-static inline nanoclj_val_t port_from_string(nanoclj_t * sc, strview_t sv, uint8_t type) {
-  nanoclj_cell_t * p = get_port_object(sc, type, port_string);
-  if (!p) return mk_nil();
-  
-  nanoclj_byte_array_t * s = mk_string_store(sc, sv.size, 0);
-  memcpy(s->data, sv.ptr, sv.size);
-  
-  nanoclj_port_rep_t * pr = _rep_unchecked(p);
-  pr->string.data = s;
-  pr->string.read_pos = 0;
-  
-  return mk_pointer(p);  
 }
 
 static inline void putchars(nanoclj_t * sc, const char *s, size_t len, nanoclj_cell_t * out) {
@@ -3569,11 +3580,6 @@ static inline char *readstr_upto(nanoclj_t * sc, char *delim, nanoclj_cell_t * i
 
   rdbuff->data[rdbuff->size] = 0;
   return (char *)rdbuff->data;
-}
-
-static inline nanoclj_val_t nanoclj_throw(nanoclj_t * sc, nanoclj_cell_t * e) {
-  sc->pending_exception = e;
-  return mk_nil();
 }
 
 static inline const char * escape_char(int32_t c, char * buffer, bool in_string) {
@@ -4657,14 +4663,21 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
     return mk_pointer(get_cell(sc, t, 0, mk_pointer(cons(sc, sc->EMPTY, decode_pointer(first(sc, args)))), sc->envir, NULL));
     
   case T_INPUT_STREAM:
-  case T_OUTPUT_STREAM:
   case T_READER:  
+    return mk_pointer(mk_reader(sc, t, args));
+		      
+  case T_OUTPUT_STREAM:
   case T_WRITER:
     if (!args) {
       return port_from_string(sc, mk_strview(0), t);
     } else {
       x = first(sc, args);
-      if (is_string(x) || is_file(x)) {
+      if (is_nil(x)) {
+	nanoclj_throw(sc, sc->NullPointerException);
+	return mk_nil();
+      } else if (type(x) == t) {
+	return x;
+      } else if (is_string(x) || is_file(x)) {
 	return port_from_filename(sc, to_strview(x), t);
       } else if (is_char_array(x)) {
 	return port_from_string(sc, to_strview(x), t);
