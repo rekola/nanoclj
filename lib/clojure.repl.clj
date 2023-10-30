@@ -14,7 +14,7 @@
   "Returns a list of functions whose name contains str"
   [pattern] (filter (fn [s] (clojure.string/includes? (str s) pattern)) (ns-interns root)))
 
-(defn banner
+(defn ^:private draw-banner
   [] (let [label "nanoclj"
            v-margin 5
            h-margin 0
@@ -37,8 +37,8 @@
   "Starts the REPL"
   []
                                         ; (in-ns 'user)
-  (mode :block)                   
-  (pr (banner))
+  (mode :block)
+  (pr (draw-banner))
   (newline)
   
   (let [hfn (clojure.java.io/file (System/getProperty "user.home") "/.nanoclj_history")
