@@ -58,7 +58,7 @@ static inline bool write_sixel(int pf, const uint8_t * pal, const uint8_t * ptr,
   
   return true;
 }
-  
+
 static inline bool print_image_sixel(imageview_t iv, nanoclj_color_t fg, nanoclj_color_t bg) {
   switch (iv.format) {
   case nanoclj_r8:
@@ -71,7 +71,7 @@ static inline bool print_image_sixel(imageview_t iv, nanoclj_color_t fg, nanoclj
     }
     return write_sixel(SIXEL_PIXELFORMAT_PAL8, pal, iv.ptr, iv.width, iv.height);
   case nanoclj_ra8:
-    return write_sixel(SIXEL_PIXELFORMAT_GA88, pal, iv.ptr, iv.width, iv.height);
+    return write_sixel(SIXEL_PIXELFORMAT_GA88, NULL, iv.ptr, iv.width, iv.height);
   case nanoclj_rgb8:
     return write_sixel(SIXEL_PIXELFORMAT_RGB888, NULL, iv.ptr, iv.width, iv.height);
   case nanoclj_rgba8:
@@ -180,7 +180,7 @@ static inline void set_term_fg_color(FILE * fh, nanoclj_color_t color, nanoclj_c
     case nanoclj_colortype_16:
       break;
     case nanoclj_colortype_256:
-      fprintf(fh, "\033[38:5:%dm", convert_to_256color(color));    
+      fprintf(fh, "\033[38:5:%dm", convert_to_256color(color));
       break;
     case nanoclj_colortype_true:
       fprintf(fh, "\033[38;2;%d;%d;%dm", color.red, color.green, color.blue);
@@ -196,7 +196,7 @@ static inline void set_term_bg_color(FILE * fh, nanoclj_color_t color, nanoclj_c
     case nanoclj_colortype_16:
       break;
     case nanoclj_colortype_256:
-      fprintf(fh, "\033[48:5:%dm", convert_to_256color(color));    
+      fprintf(fh, "\033[48:5:%dm", convert_to_256color(color));
       break;
     case nanoclj_colortype_true:
       fprintf(fh, "\033[48;2;%d;%d;%dm", color.red, color.green, color.blue);
@@ -225,7 +225,7 @@ static inline struct termios set_raw_mode(int fd) {
   tcgetattr(fd, &orig_term);
 
   struct termios raw = orig_term;
-  
+
   raw.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
   raw.c_oflag &= ~(OPOST);
   raw.c_cflag |= CS8;
@@ -290,7 +290,7 @@ static inline bool get_window_size(FILE * in, FILE * out, int * cols, int * rows
 
   return true;
 }
-	   
+
 static bool get_cursor_position(FILE * in, FILE * out, int * x, int * y) {
   if (isatty(fileno(in)) && isatty(fileno(out))) {
     struct termios orig_term = set_raw_mode(fileno(in));
@@ -317,27 +317,27 @@ static inline nanoclj_colortype_t get_term_colortype_from_env() {
 #ifdef WIN32
   return nanoclj_colortype_16;
 #else
-  const char * colorterm = getenv("COLORTERM");
-  if ((colorterm &&
-       (strcmp(colorterm, "truecolor") == 0 || strcmp(colorterm, "24bit") == 0)) ||
-      getenv("MLTERM")) {
+  const char * term = getenv("TERM");
+  if (!term || strcmp(term, "dumb") == 0) {
+    return nanoclj_colortype_none;
+  }
+  
+  const char * ctrm = getenv("COLORTERM");
+  if (ctrm && (strcmp(ctrm, "truecolor") == 0 || strcmp(ctrm, "24bit") == 0)) {
     return nanoclj_colortype_true;
   }
   
-  const char * term_program = getenv("TERM_PROGRAM");
-  if (term_program && (strcmp(term_program, "iTerm.app") == 0 ||
-		       strcmp(term_program, "HyperTerm") == 0 ||
-		       strcmp(term_program, "Hyper") == 0 ||
-		       strcmp(term_program, "MacTerm") == 0)) {
+  const char * program = getenv("TERM_PROGRAM");
+  if (program && (strcmp(program, "iTerm.app") == 0 ||
+		       strcmp(program, "HyperTerm") == 0 ||
+		       strcmp(program, "Hyper") == 0 ||
+		       strcmp(program, "MacTerm") == 0)) {
     return nanoclj_colortype_true;
-  } else if (term_program && strcmp(term_program, "Apple_Terminal") == 0) {
+  } else if (program && strcmp(program, "Apple_Terminal") == 0) {
     return nanoclj_colortype_256;
   }
   
-  const char * term = getenv("TERM");    
-  if (!term || strcmp(term, "dumb") == 0) {
-    return nanoclj_colortype_none;
-  } else if (strstr(term, "256color") || getenv("TMUX")) {
+  if (term && strstr(term, "256color")) {
     return nanoclj_colortype_256;
   }
   
@@ -365,7 +365,7 @@ static inline nanoclj_termdata_t get_termdata(FILE * in, FILE * out) {
   if (isatty(fileno(out))) {
     struct termios orig_term = set_raw_mode(fileno(in));
     
-    char buf[32];   
+    char buf[32];
     uint32_t r, g, b;
     if (write(fileno(out), "\033]11;?\033\\", 8) == 8 && term_read_upto(fileno(in), buf, sizeof(buf), '\\')) {
       if (sscanf(buf, "\033]11;rgb:%2x/%2x/%2x", &r, &g, &b) == 3) {
@@ -388,7 +388,7 @@ static inline nanoclj_termdata_t get_termdata(FILE * in, FILE * out) {
       }
     }
 
-    const char * term = getenv("TERM");    
+    const char * term = getenv("TERM");
     if (term && strcmp(term, "xterm-kitty") == 0) {
       gfx = nanoclj_kitty;
     } else if (getenv("KONSOLE_VERSION")) {
@@ -404,7 +404,7 @@ static inline nanoclj_termdata_t get_termdata(FILE * in, FILE * out) {
 
     color = get_term_colortype_from_env();
     
-    tcsetattr(STDIN_FILENO, TCSADRAIN, &orig_term);    
+    tcsetattr(STDIN_FILENO, TCSADRAIN, &orig_term);
   }
 #endif
   
