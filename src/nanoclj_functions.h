@@ -889,11 +889,55 @@ static inline nanoclj_val_t clojure_xml_parse(nanoclj_t * sc, nanoclj_val_t args
   return xml;
 }
 
-static inline nanoclj_val_t clojure_data_csv_read_csv(nanoclj_t * sc, nanoclj_val_t args0) {
-  nanoclj_cell_t * args = decode_pointer(args0);
-  nanoclj_cell_t * rdr = mk_reader(sc, T_READER, args);
+static inline nanoclj_val_t clojure_data_csv_read_csv(nanoclj_t * sc, nanoclj_val_t args) {
+  nanoclj_val_t f = first(sc, decode_pointer(args));
+  if (is_nil(f)) {
+    return nanoclj_throw(sc, sc->NullPointerException);
+  }
+  nanoclj_cell_t * rdr = decode_pointer(f);
+  if (_type(rdr) != T_READER) {
+    return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Argument is not a reader")));
+  }
+
+  bool is_quoted = false;
+  nanoclj_cell_t * vec = NULL, * value = NULL;
+  int32_t delimiter = ',';
   
-  return mk_nil();
+  while ( 1 ) {
+    int32_t c = inchar(rdr);
+    if (c == -1) break;
+    if (c == '\r') continue;
+    if (!is_quoted) {
+      if (!vec) vec = mk_vector(sc, 0);
+      if (c == '\n') {
+	break;	
+      } else {
+	if (!value) value = get_string_object(sc, T_STRING, NULL, 0, 0);
+	if (c == '"') {
+	  is_quoted = true;
+	} else if (c == delimiter) {
+	  vec = conjoin(sc, vec, mk_pointer(value));
+	  value = get_string_object(sc, T_STRING, NULL, 0, 0);
+	} else {
+	  value = conjoin(sc, value, mk_codepoint(c));
+	}
+      }
+    } else if (c == '"') {
+      is_quoted = false;
+    } else {
+      value = conjoin(sc, value, mk_codepoint(c));
+    }
+  }
+
+  if (vec) {
+    if (value) vec = conjoin(sc, vec, mk_pointer(value));
+    nanoclj_val_t next_row = mk_foreign_func(sc, clojure_data_csv_read_csv, 1, 1);
+    nanoclj_cell_t * code = cons(sc, mk_pointer(cons(sc, next_row, cons(sc, mk_pointer(rdr), NULL))), NULL);
+    nanoclj_cell_t * lazy_seq = get_cell(sc, T_LAZYSEQ, 0, mk_pointer(cons(sc, sc->EMPTY, code)), sc->envir, NULL);
+    return mk_pointer(cons(sc, mk_pointer(vec), lazy_seq));
+  } else {
+    return sc->EMPTY;
+  }
 }
 
 #if NANOCLJ_USE_LINENOISE

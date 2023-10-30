@@ -204,16 +204,16 @@ extern "C" {
     nanoclj_val_t LAMBDA;             /* pointer to syntax lambda */
     nanoclj_val_t DO;                 /* pointer to syntax do */
     nanoclj_val_t QUOTE;              /* pointer to syntax quote */
-    nanoclj_val_t ARG1;		  /* first arg in literal functions */
-    nanoclj_val_t ARG2;		  /* second arg in literal functions */
-    nanoclj_val_t ARG3;		  /* third arg in literal functions */
-    nanoclj_val_t ARG_REST;	  	  /* rest args in literal functions */
-    
     nanoclj_val_t DEREF;		  /* pointer to symbol deref */
     nanoclj_val_t VAR;		  /* pointer to symbol var */
     nanoclj_val_t QQUOTE;             /* pointer to symbol quasiquote */
     nanoclj_val_t UNQUOTE;            /* pointer to symbol unquote */
     nanoclj_val_t UNQUOTESP;          /* pointer to symbol unquote-splicing */
+
+    nanoclj_val_t ARG1;		  /* first arg in literal functions */
+    nanoclj_val_t ARG2;		  /* second arg in literal functions */
+    nanoclj_val_t ARG3;		  /* third arg in literal functions */
+    nanoclj_val_t ARG_REST;	  	  /* rest args in literal functions */
     
     nanoclj_val_t TAG_HOOK;           /* *default-data-reader-fn* */
     nanoclj_val_t COMPILE_HOOK;       /* *compile-hook* */

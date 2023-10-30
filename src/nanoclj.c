@@ -735,18 +735,6 @@ static inline nanoclj_cell_t * closure_env(nanoclj_cell_t * p) {
   return decode_pointer(_cdr(p));
 }
 
-static inline bool is_lazyseq(nanoclj_val_t p) {
-  if (!is_cell(p)) return false;
-  nanoclj_cell_t * c = decode_pointer(p);
-  return c && _type(c) == T_LAZYSEQ;
-}
-
-static inline bool is_delay(nanoclj_val_t p) {
-  if (!is_cell(p)) return false;
-  nanoclj_cell_t * c = decode_pointer(p);
-  return c && _type(c) == T_DELAY;
-}
-
 static inline bool is_environment(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
   nanoclj_cell_t * c = decode_pointer(p);
@@ -1125,7 +1113,8 @@ static inline nanoclj_cell_t * get_cell(nanoclj_t * sc, uint16_t type, uint8_t f
   return cell;
 }
 
-static inline nanoclj_val_t mk_foreign_func_with_arity(nanoclj_t * sc, foreign_func f, int min_arity, int max_arity) {
+/* Creates a foreign function. For infinite arity, set max_arity to -1. */
+static inline nanoclj_val_t mk_foreign_func(nanoclj_t * sc, foreign_func f, int min_arity, int max_arity) {
   nanoclj_cell_t * x = get_cell_x(sc, T_FOREIGN_FUNCTION, T_GC_ATOM, NULL, NULL, NULL);
   if (x) {
     _ff_unchecked(x) = f;
@@ -1140,16 +1129,12 @@ static inline nanoclj_val_t mk_foreign_func_with_arity(nanoclj_t * sc, foreign_f
   return mk_pointer(x);
 }
 
-static inline nanoclj_val_t mk_foreign_func(nanoclj_t * sc, foreign_func f) {
-  return mk_foreign_func_with_arity(sc, f, 0, 0x7fffffff);  
-}
-
 static inline nanoclj_val_t mk_foreign_object(nanoclj_t * sc, void * o) {
   nanoclj_cell_t * x = get_cell_x(sc, T_FOREIGN_OBJECT, T_GC_ATOM, NULL, NULL, NULL);
   if (x) {
     _fo_unchecked(x) = o;
     _min_arity_unchecked(x) = 0;
-    _max_arity_unchecked(x) = 0x7fffffff;
+    _max_arity_unchecked(x) = -1;
   
 #if RETAIN_ALLOCS
     retain(sc, x);
@@ -1905,18 +1890,44 @@ static inline nanoclj_cell_t * rseq(nanoclj_t * sc, nanoclj_cell_t * coll) {
   }
 }
 
+static inline void s_save(nanoclj_t * sc, enum nanoclj_opcode op,
+			  nanoclj_cell_t * args, nanoclj_val_t code) {  
+  dump_stack_frame_t * next_frame = s_add_frame(sc);
+  next_frame->op = op;
+  next_frame->args = args;
+  next_frame->envir = sc->envir;
+  next_frame->code = code;
+#ifdef USE_RECUR_REGISTER
+  next_frame->recur = sc->recur;
+#endif
+}
+
+static inline nanoclj_cell_t * deref(nanoclj_t * sc, nanoclj_cell_t * c) {
+  if (_is_realized(c)) {
+    if (is_nil(_car(c)) && is_nil(_cdr(c))) {
+      return NULL;
+    } else {
+      return c;
+    }
+  } else {
+    /* Should change type to closure here */
+    save_from_C_call(sc);
+    nanoclj_val_t v = mk_pointer(c);
+    s_save(sc, OP_SAVE_FORCED, NULL, v);
+    sc->code = v;
+    sc->args = NULL;
+    Eval_Cycle(sc, OP_APPLY);
+    return decode_pointer(sc->value);
+  }
+}
+
 /* Returns nil or not-empty sequence */
 static inline nanoclj_cell_t * seq(nanoclj_t * sc, nanoclj_cell_t * coll) {
   if (!coll) {
     return NULL;
   }
   if (_type(coll) == T_LAZYSEQ) {
-    if (!_is_realized(coll)) {
-      nanoclj_cell_t * code = cons(sc, sc->DEREF, cons(sc, mk_pointer(coll), NULL));
-      coll = decode_pointer(eval(sc, code));
-    } else if (is_nil(_car(coll)) && is_nil(_cdr(coll))) {
-      return NULL;
-    }
+    coll = deref(sc, coll);    
   }
 
   if (_is_sequence(coll)) {
@@ -1957,15 +1968,8 @@ static inline bool is_empty(nanoclj_t * sc, nanoclj_cell_t * coll) {
   } else if (_is_sequence(coll)) {
     return false;
   } else if (_type(coll) == T_LAZYSEQ) {
-    if (!_is_realized(coll)) {
-      nanoclj_cell_t * code = cons(sc, sc->DEREF, cons(sc, mk_pointer(coll), NULL));
-      coll = decode_pointer(eval(sc, code));
-      if (!coll) {
-	return true;
-      }
-    } else if (is_nil(_car(coll)) && is_nil(_cdr(coll))) {
-      return true;
-    }
+    coll = deref(sc, coll);
+    if (!coll) return true;    
   }
 
   switch (_type(coll)) {
@@ -1991,12 +1995,8 @@ static inline nanoclj_cell_t * rest(nanoclj_t * sc, nanoclj_cell_t * coll) {
     int typ = _type(coll);
     
     if (typ == T_LAZYSEQ) {
-      if (!_is_realized(coll)) {
-	nanoclj_cell_t * code = cons(sc, sc->DEREF, cons(sc, mk_pointer(coll), NULL));
-	coll = decode_pointer(eval(sc, code));
-      } else if (is_nil(_car(coll)) && is_nil(_cdr(coll))) {
-	return &(sc->_EMPTY);
-      }
+      coll = deref(sc, coll);
+      if (!coll) return &(sc->_EMPTY);
     }
     
     switch (typ) {
@@ -2036,12 +2036,7 @@ static inline nanoclj_cell_t * next(nanoclj_t * sc, nanoclj_cell_t * coll) {
   if (!coll) return NULL;
   nanoclj_cell_t * r = rest(sc, coll);
   if (_type(r) == T_LAZYSEQ) {
-    if (!_is_realized(r)) {
-      nanoclj_cell_t * code = cons(sc, sc->DEREF, cons(sc, mk_pointer(r), NULL));
-      r = decode_pointer(eval(sc, code));
-    } else if (is_nil(_car(r)) && is_nil(_cdr(r))) {
-      return NULL;
-    }
+    r = deref(sc, r);    
   }
   if (r == &(sc->_EMPTY)) {
     return NULL;
@@ -2052,15 +2047,9 @@ static inline nanoclj_cell_t * next(nanoclj_t * sc, nanoclj_cell_t * coll) {
 static inline nanoclj_val_t first(nanoclj_t * sc, nanoclj_cell_t * coll) {
   if (coll == NULL) {
     return mk_nil();
-  }
-
-  if (_type(coll) == T_LAZYSEQ) {
-    if (!_is_realized(coll)) {
-      nanoclj_cell_t * code = cons(sc, sc->DEREF, cons(sc, mk_pointer(coll), NULL));
-      coll = decode_pointer(eval(sc, code));
-    } else if (is_nil(_car(coll)) && is_nil(_cdr(coll))) {
-      return mk_nil();
-    }
+  } else if (_type(coll) == T_LAZYSEQ) {
+    coll = deref(sc, coll);
+    if (!coll) return mk_nil();
   }
   
   switch (_type(coll)) {
@@ -2108,6 +2097,11 @@ static inline nanoclj_val_t first(nanoclj_t * sc, nanoclj_cell_t * coll) {
 
 static inline size_t count(nanoclj_t * sc, nanoclj_cell_t * coll) {
   if (!coll) return 0;
+  else if (_type(coll) == T_LAZYSEQ) {
+    coll = deref(sc, coll);
+    if (!coll) return 0;
+  }
+
   switch (_type(coll)) {
   case T_NIL:
     return 0;
@@ -2998,7 +2992,7 @@ static inline nanoclj_val_t intern_foreign_func(nanoclj_t * sc, nanoclj_cell_t *
   set_vector_elem(md, 0, mk_mapentry(sc, sc->NS, ns_sym));
   set_vector_elem(md, 0, mk_mapentry(sc, sc->NAME, sym));
 
-  nanoclj_val_t fn = mk_foreign_func_with_arity(sc, fptr, min_arity, max_arity);
+  nanoclj_val_t fn = mk_foreign_func(sc, fptr, min_arity, max_arity);
   set_metadata(decode_pointer(fn), md);
   intern_with_meta(sc, envir, sym, fn, md);
   return fn;
@@ -4361,18 +4355,6 @@ static nanoclj_val_t get_in_port(nanoclj_t * sc) {
     return true; END
 
 #define s_return(sc,a) return _s_return(sc,a)
-  
-static inline void s_save(nanoclj_t * sc, enum nanoclj_opcode op,
-			  nanoclj_cell_t * args, nanoclj_val_t code) {  
-  dump_stack_frame_t * next_frame = s_add_frame(sc);
-  next_frame->op = op;
-  next_frame->args = args;
-  next_frame->envir = sc->envir;
-  next_frame->code = code;
-#ifdef USE_RECUR_REGISTER
-  next_frame->recur = sc->recur;
-#endif
-}
 
 static inline bool _s_return(nanoclj_t * sc, nanoclj_val_t a) { 
   sc->value = a;
@@ -5185,7 +5167,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       case T_FOREIGN_FUNCTION:{
 	/* Keep nested calls from GC'ing the arglist */
 	retain(sc, sc->args);
-	if (_min_arity_unchecked(code_cell) > 0 || _max_arity_unchecked(code_cell) < 0x7fffffff) {
+	if (_min_arity_unchecked(code_cell) > 0 || _max_arity_unchecked(code_cell) != -1) {
 	  int n = seq_length(sc, sc->args);
 	  if (n < _min_arity_unchecked(code_cell) || n > _max_arity_unchecked(code_cell)) {
 	    nanoclj_val_t ns_v = mk_nil(), name_v = mk_nil();
@@ -6450,33 +6432,31 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_DEREF:
     if (!unpack_args_1(sc, &arg0)) {
       return false;
-    } else if (!is_cell(arg0)) {
-      s_return(sc, arg0);
-    } else {
+    } else if (is_cell(arg0)) {
       nanoclj_cell_t * c = decode_pointer(arg0);
-      if (!c) {
-	s_return(sc, mk_nil());
-      }
-      if (_type(c) == T_LAZYSEQ || _type(c) == T_DELAY) {
-	if (!_is_realized(c)) {
-	  /* Should change type to closure here */
-	  s_save(sc, OP_SAVE_FORCED, NULL, arg0);
-	  sc->code = arg0;
-	  sc->args = NULL;
-	  s_goto(sc, OP_APPLY);
-	} else if (_type(c) == T_LAZYSEQ && is_nil(_car(c)) && is_nil(_cdr(c))) {
-	  s_return(sc, sc->EMPTY);
+      if (c) {
+	if (_type(c) == T_LAZYSEQ || _type(c) == T_DELAY) {
+	  if (!_is_realized(c)) {
+	    /* Should change type to closure here */
+	    s_save(sc, OP_SAVE_FORCED, NULL, arg0);
+	    sc->code = arg0;
+	    sc->args = NULL;
+	    s_goto(sc, OP_APPLY);
+	  } else if (_type(c) == T_LAZYSEQ && is_nil(_car(c)) && is_nil(_cdr(c))) {
+	    s_return(sc, sc->EMPTY);
+	  }
+	}
+	if (_type(c) == T_DELAY) {
+	  s_return(sc, _car(c));
+	} else if (_type(c) == T_VAR) {
+	  s_return(sc, vector_elem(c, 1));
+	} else {
+	  s_return(sc, arg0);
 	}
       }
-      if (_type(c) == T_DELAY) {
-	s_return(sc, _car(c));
-      } else if (_type(c) == T_VAR) {
-	s_return(sc, vector_elem(c, 1));
-      } else {
-	s_return(sc, arg0);
-      }
     }
-
+    s_return(sc, arg0);
+    
   case OP_SAVE_FORCED:         /* Save forced value replacing lazy-seq or delay */
     if (!is_cell(sc->code)) {
       s_return(sc, sc->code);
@@ -7876,16 +7856,17 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   /* initialization of global nanoclj_val_ts to special symbols */
   sc->LAMBDA = def_symbol(sc, "fn");
   sc->DO = def_symbol(sc, "do");
-  sc->ARG1 = def_symbol(sc, "%1");
-  sc->ARG2 = def_symbol(sc, "%2");
-  sc->ARG3 = def_symbol(sc, "%3");
-  sc->ARG_REST = def_symbol(sc, "%&");
   sc->QUOTE = def_symbol(sc, "quote");
   sc->DEREF = def_symbol(sc, "deref");
   sc->VAR = def_symbol(sc, "var");
   sc->QQUOTE = def_symbol(sc, "quasiquote");
   sc->UNQUOTE = def_symbol(sc, "unquote");
   sc->UNQUOTESP = def_symbol(sc, "unquote-splicing");
+
+  sc->ARG1 = def_symbol(sc, "%1");
+  sc->ARG2 = def_symbol(sc, "%2");
+  sc->ARG3 = def_symbol(sc, "%3");
+  sc->ARG_REST = def_symbol(sc, "%&");
 
   sc->TAG_HOOK = def_symbol(sc, "*default-data-reader-fn*");
   sc->COMPILE_HOOK = def_symbol(sc, "*compile-hook*");
@@ -8140,7 +8121,7 @@ nanoclj_val_t nanoclj_call(nanoclj_t * sc, nanoclj_val_t func, nanoclj_val_t arg
 
 #if !NANOCLJ_STANDALONE
 void nanoclj_register_foreign_func(nanoclj_t * sc, nanoclj_registerable * sr) {
-  intern(sc, sc->global_env, def_symbol(sc, sr->name), mk_foreign_func(sc, sr->f));
+  intern(sc, sc->global_env, def_symbol(sc, sr->name), mk_foreign_func(sc, sr->f, 0, -1));
 }
 
 void nanoclj_register_foreign_func_list(nanoclj_t * sc,
@@ -8184,7 +8165,7 @@ int main(int argc, const char **argv) {
   nanoclj_set_error_port_file(&sc, stderr);
 #if USE_DL
   intern(&sc, sc.global_env, def_symbol(&sc, "load-extension"),
-		mk_foreign_func(&sc, scm_load_ext));
+	 mk_foreign_func(&sc, scm_load_ext, 0, -1));
 #endif
 
   nanoclj_cell_t * args = NULL;
