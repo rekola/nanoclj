@@ -521,7 +521,12 @@
 (defn read-string [s] (with-in-str s (read)))
 (defn load-string [s] (eval (read-string s)))
 
-(defn str [& args] (with-out-str (apply print args)))
+(defn str
+  "Converts arguments to string"
+  ([] "")
+  ([x] (with-out-str (print x)))
+  ([x & ys] (with-out-str (do (print x)
+                              (run! print ys)))))
 
 ; Logic
 
