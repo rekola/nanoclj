@@ -7453,6 +7453,39 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
     s_return(sc, mk_nil());
 
+  case OP_TRANSLATE:
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
+      return false;
+    } else {
+      x = get_out_port(sc);
+      if (is_writer(x) && port_type_unchecked(x) == port_canvas) {
+	canvas_translate(rep_unchecked(x)->canvas.impl, to_double(arg0), to_double(arg1));
+      }
+      s_return(sc, mk_nil());
+    }
+
+  case OP_SCALE:
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
+      return false;
+    } else {
+      x = get_out_port(sc);
+      if (is_writer(x) && port_type_unchecked(x) == port_canvas) {
+	canvas_scale(rep_unchecked(x)->canvas.impl, to_double(arg0), to_double(arg1));
+      }
+      s_return(sc, mk_nil());
+    }
+
+  case OP_ROTATE:
+    if (!unpack_args_1(sc, &arg0)) {
+      return false;
+    } else {
+      x = get_out_port(sc);
+      if (is_writer(x) && port_type_unchecked(x) == port_canvas) {
+	canvas_rotate(rep_unchecked(x)->canvas.impl, to_double(arg0));
+      }
+      s_return(sc, mk_nil());
+    }
+
   default:
     snprintf(sc->strbuff, STRBUFFSIZE, "%d: illegal operator", sc->op);
     Error_0(sc, sc->strbuff);

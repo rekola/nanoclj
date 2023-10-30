@@ -176,4 +176,16 @@ static inline void canvas_get_text_extents(nanoclj_t * sc, void * canvas, strvie
   sc->free(tmp);
 }
 
+static inline void canvas_translate(void * canvas, double x, double y) {
+  cairo_translate((cairo_t *)canvas, x, y);
+}
+
+static inline void canvas_scale(void * canvas, double x, double y) {
+  cairo_scale((cairo_t *)canvas, x, y);
+}
+
+static inline void canvas_rotate(void * canvas, double angle) {
+  cairo_rotate((cairo_t *)canvas, angle);
+}
+
 #endif

@@ -148,4 +148,7 @@ _OP_DEF("restore", 0, OP_RESTORE)
 _OP_DEF("resize", 0, OP_RESIZE)
 _OP_DEF("flush", 0, OP_FLUSH)
 _OP_DEF("mode", 0, OP_MODE)
+_OP_DEF("translate", 0, OP_TRANSLATE)
+_OP_DEF("scale", 0, OP_SCALE)
+_OP_DEF("rotate", 0, OP_ROTATE)
 #undef _OP_DEF
