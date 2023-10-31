@@ -47,12 +47,12 @@
          min-y (apply min (map #( apply min (second %1) ) plots))
          max-x (apply max (map #( apply max (first %1) ) plots))
          max-y (apply max (map #( apply max (second %1) ) plots))
-         range-x (- max-x min-x)
+         range-x (- (double max-x) (double min-x))
          range-y (- max-y min-y)
-         fit-x (fn [x] (+ (* (/ (- x min-x) range-x) content-width) margin-left))
+         fit-x (fn [x] (+ (* (/ (- (double x) (double min-x)) range-x) content-width) margin-left))
          fit-y (fn [y] (+ (* (/ (- max-y y) range-y) content-height) margin-top))
-         x-tick-step 0.25
-         y-tick-step 0.25
+         x-tick-step (Math/pow 10 (dec (Math/round (Math/log10 range-x))))
+         y-tick-step (Math/pow 10 (dec (Math/round (Math/log10 range-y))))
          draw-x-ticks (fn [x] (if (<= x max-x)
                                 (let [fx (fit-x x)
                                       label (format "%.2f" x)
@@ -99,7 +99,7 @@
                 (close-path)
                 (stroke)
                                         ; Draw ticks
-                (draw-x-ticks (* (int (/ min-x x-tick-step)) x-tick-step))
+                (draw-x-ticks (* (int (/ (double min-x) x-tick-step)) x-tick-step))
                 (draw-y-ticks (* (int (/ min-y y-tick-step)) y-tick-step))
                                         ; Draw the plots
                 (set-line-width 3)
