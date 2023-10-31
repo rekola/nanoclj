@@ -882,7 +882,7 @@ static inline nanoclj_val_t clojure_xml_parse(nanoclj_t * sc, nanoclj_val_t args
 
   xmlDoc * doc = xmlReadMemory(sv.ptr, sv.size, "noname.xml", NULL, 0);
   if (doc == NULL) {
-    return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Could not parse file")));    
+    return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Could not parse file")));
   }
   nanoclj_val_t xml = create_xml_node(sc, xmlDocGetRootElement(doc));
   xmlFreeDoc(doc);
@@ -900,7 +900,8 @@ static inline nanoclj_val_t clojure_data_csv_read_csv(nanoclj_t * sc, nanoclj_va
   }
 
   bool is_quoted = false;
-  nanoclj_cell_t * vec = NULL, * value = NULL;
+  nanoclj_valarray_t * vec = NULL;
+  nanoclj_bytearray_t * value = NULL;
   int32_t delimiter = ',';
   
   while ( 1 ) {
@@ -908,33 +909,33 @@ static inline nanoclj_val_t clojure_data_csv_read_csv(nanoclj_t * sc, nanoclj_va
     if (c == -1) break;
     if (c == '\r') continue;
     if (!is_quoted) {
-      if (!vec) vec = mk_vector(sc, 0);
+      if (!vec) vec = mk_valarray(sc, 0, 0);
       if (c == '\n') {
-	break;	
+	break;
       } else {
-	if (!value) value = get_string_object(sc, T_STRING, NULL, 0, 0);
+	if (!value) value = mk_bytearray(sc, 0, 32);
 	if (c == '"') {
 	  is_quoted = true;
 	} else if (c == delimiter) {
-	  vec = conjoin(sc, vec, mk_pointer(value));
-	  value = get_string_object(sc, T_STRING, NULL, 0, 0);
+	  valarray_push(sc, vec, mk_string_with_bytearray(sc, value));
+	  value = mk_bytearray(sc, 0, 32);
 	} else {
-	  value = conjoin(sc, value, mk_codepoint(c));
+	  append_codepoint(sc, value, c);
 	}
       }
     } else if (c == '"') {
       is_quoted = false;
     } else {
-      value = conjoin(sc, value, mk_codepoint(c));
+      append_codepoint(sc, value, c);
     }
   }
 
   if (vec) {
-    if (value) vec = conjoin(sc, vec, mk_pointer(value));
+    if (value) valarray_push(sc, vec, mk_string_with_bytearray(sc, value));
     nanoclj_val_t next_row = mk_foreign_func(sc, clojure_data_csv_read_csv, 1, 1);
     nanoclj_cell_t * code = cons(sc, mk_pointer(cons(sc, next_row, cons(sc, mk_pointer(rdr), NULL))), NULL);
     nanoclj_cell_t * lazy_seq = get_cell(sc, T_LAZYSEQ, 0, mk_pointer(cons(sc, sc->EMPTY, code)), sc->envir, NULL);
-    return mk_pointer(cons(sc, mk_pointer(vec), lazy_seq));
+    return mk_pointer(cons(sc, mk_vector_with_valarray(sc, vec), lazy_seq));
   } else {
     return sc->EMPTY;
   }

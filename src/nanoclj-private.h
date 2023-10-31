@@ -42,18 +42,18 @@ extern "C" {
     OP_MAXDEFINED
   };
   
-  typedef struct nanoclj_byte_array_t {
+  typedef struct {
     uint8_t *data;
     size_t size, reserved, refcnt;
-  } nanoclj_byte_array_t;
+  } nanoclj_bytearray_t;
 
-  typedef struct nanoclj_vector_t {
+  typedef struct {
     nanoclj_val_t * data;
     size_t size, reserved, refcnt;
     struct nanoclj_cell_t * meta;
-  } nanoclj_vector_t;
+  } nanoclj_valarray_t;
 
-  typedef struct nanoclj_float_array_t {
+  typedef struct {
     float * data;
     size_t size, reserved, refcnt;
   } nanoclj_float_array_t;
@@ -76,7 +76,7 @@ extern "C" {
     } stdio;
     struct {
       size_t read_pos;
-      nanoclj_byte_array_t * data;
+      nanoclj_bytearray_t * data;
     } string;
     struct {
       void (*text) (const char *, size_t, void*);
@@ -98,12 +98,12 @@ extern "C" {
     union {
       struct {
 	uint8_t data[NANOCLJ_SMALL_STR_SIZE];
-      } _small_byte_array;      
+      } _small_bytearray;      
       struct {
 	size_t offset, size;
 	union {
-	  nanoclj_vector_t * _vec;
-	  nanoclj_byte_array_t * _str;
+	  nanoclj_valarray_t * _vec;
+	  nanoclj_bytearray_t * _str;
 	} _store;
       } _collection;
       struct {
@@ -198,7 +198,7 @@ extern "C" {
     nanoclj_cell_t * oblist;         /* pointer to symbol table */
     nanoclj_cell_t * global_env;         /* pointer to global environment */
     nanoclj_cell_t * root_env;		/* pointer to the initial root env */
-    nanoclj_vector_t * types;
+    nanoclj_valarray_t * types;
 
 /* global pointers to special symbols */
     nanoclj_val_t LAMBDA;             /* pointer to syntax lambda */
@@ -257,10 +257,10 @@ extern "C" {
     nanoclj_cell_t * EMPTYVEC;
     
     nanoclj_val_t save_inport;
-    nanoclj_vector_t * load_stack;
+    nanoclj_valarray_t * load_stack;
     
     char strbuff[STRBUFFSIZE];
-    nanoclj_byte_array_t * rdbuff;
+    nanoclj_bytearray_t * rdbuff;
 
     int tok;
     nanoclj_val_t value;
