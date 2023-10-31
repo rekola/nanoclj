@@ -172,15 +172,16 @@ enum nanoclj_types {
   T_FILE = 34,
   T_DATE = 35,
   T_UUID = 36,
-  T_RUNTIME_EXCEPTION = 37,
-  T_ARITY_EXCEPTION = 38,
-  T_ILLEGAL_ARG_EXCEPTION = 39,
-  T_NUM_FMT_EXCEPTION = 40,
-  T_ARITHMETIC_EXCEPTION = 41,
-  T_CLASS_CAST_EXCEPTION = 42,
-  T_TENSOR = 43,
-  T_GRAPH = 44,
-  T_LAST_SYSTEM_TYPE = 45
+  T_QUEUE = 37,
+  T_RUNTIME_EXCEPTION = 38,
+  T_ARITY_EXCEPTION = 39,
+  T_ILLEGAL_ARG_EXCEPTION = 40,
+  T_NUM_FMT_EXCEPTION = 41,
+  T_ARITHMETIC_EXCEPTION = 42,
+  T_CLASS_CAST_EXCEPTION = 43,
+  T_TENSOR = 44,
+  T_GRAPH = 45,
+  T_LAST_SYSTEM_TYPE = 46
 };
 
 typedef struct {
@@ -441,6 +442,7 @@ static inline bool is_seqable_type(uint_fast16_t t) {
   case T_MAPENTRY:
   case T_CLOSURE:
   case T_MACRO:
+  case T_QUEUE:
     return true;
   }
   return false;
@@ -455,18 +457,19 @@ static inline bool is_coll_type(uint_fast16_t t) {
   case T_ARRAYMAP:
   case T_SORTED_SET:
   case T_LAZYSEQ:
+  case T_QUEUE:
     return true;
   }
   return false;
 }
 
 static inline bool is_string_type(uint_fast16_t t) {
-  return t == T_STRING || t == T_CHAR_ARRAY || t == T_FILE || t == T_UUID;  
+  return t == T_STRING || t == T_CHAR_ARRAY || t == T_FILE || t == T_UUID;
 }
 
 static inline bool is_vector_type(uint_fast16_t t) {
   return t == T_VECTOR || t == T_ARRAYMAP || t == T_SORTED_SET ||
-    t == T_RATIO || t == T_MAPENTRY || t == T_VAR;
+    t == T_RATIO || t == T_MAPENTRY || t == T_VAR || t == T_QUEUE;
 }
 
 static inline nanoclj_val_t vector_elem(nanoclj_cell_t * vec, size_t ielem) {
@@ -503,6 +506,7 @@ static inline nanoclj_cell_t * get_metadata(nanoclj_cell_t * c) {
   case T_ARRAYMAP:
   case T_SORTED_SET:
   case T_VAR:
+  case T_QUEUE:
     if (_is_small(c)) {
       return _so_vector_metadata(c);
     } else {
@@ -528,6 +532,7 @@ static inline void set_metadata(nanoclj_cell_t * c, nanoclj_cell_t * meta) {
   case T_ARRAYMAP:
   case T_SORTED_SET:
   case T_VAR:
+  case T_QUEUE:
     if (_is_small(c)) {
       _so_vector_metadata(c) = meta;
     } else {
@@ -614,6 +619,7 @@ static inline long long to_long_w_def(nanoclj_val_t p, long long def) {
 	case T_VECTOR:
 	case T_SORTED_SET:
 	case T_ARRAYMAP:
+	case T_QUEUE:
 	  return get_size(c);
 	case T_CLASS:
 	  return c->type;
@@ -649,11 +655,12 @@ static inline int32_t to_int(nanoclj_val_t p) {
       case T_VECTOR:
       case T_SORTED_SET:
       case T_ARRAYMAP:
+      case T_QUEUE:
 	return get_size(c);
       case T_CLASS:
 	return c->type;
-      }      
-    }     
+      }
+    }
   }
   return 0;
 }
@@ -1006,7 +1013,8 @@ static inline void finalize_cell(nanoclj_t * sc, nanoclj_cell_t * a) {
     break;
   case T_VECTOR:
   case T_ARRAYMAP:
-  case T_SORTED_SET:{
+  case T_SORTED_SET:
+  case T_QUEUE:{
     nanoclj_valarray_t * s = _vec_store_unchecked(a);
     if (s) {
       s->refcnt--;
@@ -1957,6 +1965,7 @@ static inline nanoclj_cell_t * seq(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_VECTOR:
   case T_ARRAYMAP:
   case T_SORTED_SET:
+  case T_QUEUE:
     if (get_size(coll) == 0) {
       return NULL;
     } else {
@@ -1965,8 +1974,8 @@ static inline nanoclj_cell_t * seq(nanoclj_t * sc, nanoclj_cell_t * coll) {
       return s;
     }
     break;
-  }  
-  
+  }
+
   return coll;
 }
 
@@ -1992,9 +2001,10 @@ static inline bool is_empty(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_SORTED_SET:
   case T_MAPENTRY:
   case T_RATIO:
+  case T_QUEUE:
     return get_size(coll) == 0;
-  }  
-  
+  }
+
   return false;
 }
 
@@ -2009,18 +2019,19 @@ static inline nanoclj_cell_t * rest(nanoclj_t * sc, nanoclj_cell_t * coll) {
     
     switch (typ) {
     case T_NIL:
-      break;    
+      break;
     case T_LIST:
     case T_LAZYSEQ:
     case T_ENVIRONMENT:
     case T_CLASS:
-      return decode_pointer(_cdr(coll));    
+      return decode_pointer(_cdr(coll));
     case T_VECTOR:
     case T_ARRAYMAP:
     case T_SORTED_SET:
     case T_STRING:
     case T_CHAR_ARRAY:
     case T_FILE:
+    case T_QUEUE:
       if (get_size(coll) >= 2) {
 	nanoclj_cell_t * s;
 	if (_is_reverse(coll)) {
@@ -2076,6 +2087,7 @@ static inline nanoclj_val_t first(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_RATIO:
   case T_MAPENTRY:
   case T_VAR:
+  case T_QUEUE:
     if (get_size(coll) > 0) {
       if (_is_reverse(coll)) {
 	return vector_elem(coll, get_size(coll) - 1);
@@ -2131,6 +2143,7 @@ static inline size_t count(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_SORTED_SET:
   case T_MAPENTRY:
   case T_RATIO:
+  case T_QUEUE:
     return get_size(coll);
   }
 
@@ -2205,7 +2218,8 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
       case T_SORTED_SET:
       case T_RATIO:
       case T_VAR:
-      case T_MAPENTRY:{
+      case T_MAPENTRY:
+      case T_QUEUE:{
 	size_t l = get_size(a);
 	if (l == get_size(b)) {
 	  for (size_t i = 0; i < l; i++) {
@@ -2586,7 +2600,8 @@ static inline int compare(nanoclj_val_t a, nanoclj_val_t b) {
 	case T_VECTOR:
 	case T_SORTED_SET:
 	case T_MAPENTRY:
-	case T_VAR:{
+	case T_VAR:
+	case T_QUEUE:{
 	  size_t la = get_size(a2), lb = get_size(b2);
 	  if (la < lb) return -1;
 	  else if (la > lb) return +1;
@@ -2707,7 +2722,8 @@ static int32_t hasheq(nanoclj_t * sc, nanoclj_val_t v) {
       
     case T_MAPENTRY:
     case T_VECTOR:
-    case T_VAR:{
+    case T_VAR:
+    case T_QUEUE:{
       uint32_t hash = 1;
       size_t n = get_size(c);
       for (size_t i = 0; i < n; i++) {
@@ -4164,6 +4180,7 @@ static inline size_t seq_length(nanoclj_t * sc, nanoclj_cell_t * a) {
   case T_VECTOR:
   case T_ARRAYMAP:
   case T_SORTED_SET:
+  case T_QUEUE:
   case T_RATIO:
   case T_STRING:
   case T_CHAR_ARRAY:
@@ -4201,7 +4218,7 @@ static inline nanoclj_cell_t * mk_collection(nanoclj_t * sc, int type, nanoclj_c
   
   nanoclj_cell_t * coll = get_vector_object(sc, type, len);
   if (coll) {
-    if (type == T_ARRAYMAP) {    
+    if (type == T_ARRAYMAP) {
       for (size_t i = 0; i < len; args = rest(sc, args), i++) {
 	nanoclj_val_t key = first(sc, args);
 	args = rest(sc, args);
@@ -4214,7 +4231,7 @@ static inline nanoclj_cell_t * mk_collection(nanoclj_t * sc, int type, nanoclj_c
       }
       if (type == T_SORTED_SET) {
 	sort_vector_in_place(coll);
-      }   
+      }
     }
   }
   return coll;
@@ -4543,6 +4560,7 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
   case T_VECTOR:
   case T_ARRAYMAP:
   case T_SORTED_SET:
+  case T_QUEUE:
     return mk_pointer(mk_collection(sc, t, args));
 
   case T_CLOSURE:
@@ -6192,6 +6210,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       case T_STRING:
       case T_CHAR_ARRAY:
       case T_FILE:
+      case T_QUEUE:
 	s_return(sc, mk_pointer(conjoin(sc, coll, arg1)));
       }
     }
@@ -6222,8 +6241,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  s_return(sc, mk_pointer(new_set));
 	}
       }
-    }    
-    Error_0(sc, "No protocol method ICollection.-disjoin defined for type");      
+    }
+    Error_0(sc, "No protocol method ICollection.-disjoin defined for type");
 
   case OP_COUNT:
     if (!unpack_args_1(sc, &arg0)) {
@@ -7972,13 +7991,13 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   mk_class(sc, "java.util.UUID", T_UUID, sc->Object);
   mk_class(sc, "java.util.regex.Pattern", T_REGEX, sc->Object);
   mk_class(sc, "java.lang.ArithmeticException", T_ARITHMETIC_EXCEPTION, RuntimeException);
-  		
+  
   /* Clojure types */
   nanoclj_cell_t * AReference = mk_class(sc, "clojure.lang.AReference", gentypeid(sc), sc->Object);
   nanoclj_cell_t * Obj = mk_class(sc, "clojure.lang.Obj", gentypeid(sc), sc->Object);
   nanoclj_cell_t * ASeq = mk_class(sc, "clojure.lang.ASeq", gentypeid(sc), Obj);
   nanoclj_cell_t * PersistentVector = mk_class(sc, "clojure.lang.PersistentVector", T_VECTOR, AFn);
-    
+  
   mk_class(sc, "clojure.lang.PersistentTreeSet", T_SORTED_SET, AFn);
   mk_class(sc, "clojure.lang.PersistentArrayMap", T_ARRAYMAP, AFn);
   mk_class(sc, "clojure.lang.Symbol", T_SYMBOL, AFn);  
@@ -7991,6 +8010,7 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   mk_class(sc, "clojure.lang.Namespace", T_ENVIRONMENT, AReference);
   mk_class(sc, "clojure.lang.Var", T_VAR, AReference);
   mk_class(sc, "clojure.lang.MapEntry", T_MAPENTRY, PersistentVector);
+  nanoclj_cell_t * PersistentQueue = mk_class(sc, "clojure.lang.PersistentQueue", T_QUEUE, Obj);
   mk_class(sc, "clojure.lang.ArityException", T_ARITY_EXCEPTION, Exception);
   
   /* nanoclj types */
@@ -8010,6 +8030,9 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
 
   sc->OutOfMemoryError = mk_exception(sc, OutOfMemoryError, "Out of memory");
   sc->NullPointerException = mk_exception(sc, NullPointerException, "Null pointer exception");
+
+  nanoclj_val_t EMPTY = def_symbol(sc, "EMPTY");
+  intern(sc, PersistentQueue, EMPTY, mk_pointer(mk_collection(sc, T_QUEUE, NULL)));
   
   intern(sc, sc->global_env, sc->MOUSE_POS, mk_nil());
 

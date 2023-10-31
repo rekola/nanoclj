@@ -108,7 +108,7 @@ Windows support is in progress.
 - Custom types
 - Transducers
 - Refs, Agents, Atoms, Validators
-- Queues, Arrays, StructMaps
+- Arrays, StructMaps
 - Reader Conditionals
 - BigInts, BigDecimals and Exotic numeric literals (e.g. 3N, 0.1M, hexadecimal floats)
 - Persistent data structures, Transient data structures
