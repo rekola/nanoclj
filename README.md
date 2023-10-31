@@ -12,8 +12,8 @@ language. It is based on TinyScheme which was based on MiniScheme.
 ## Features
 
 - Terminal graphics (*Kitty* or *Sixel* protocols)
-- 2D Canvas
-- Image and audio loading
+- Image, audio, Shapefile, XML and CSV loading
+- 2D Canvas and simple image operations (blur, transpose etc.)
 - REPL output is colored by type
 - Callback Writer for printing into a GUI instead of stdout
 - Class and namespace names try to imitate Java and Clojure names when possible (e.g. `(type 1) ;=> java.lang.Long`)
@@ -61,7 +61,6 @@ As well as printing images in block mode like the plot function does, they can a
 
 - Characters are 32 bit and strings and char arrays are UTF-8 (count is O(n))
 - Strings are sequences, and they are compared and sorted as such.
-- By default 32 bit integers are used, since 64 bit integers don't fit in the NaN boxing.
 - List count has complexity of O(n)
 - Vectors support O(1) append, but update is O(n)
 - Macros use the TinyScheme syntax
@@ -109,20 +108,19 @@ Windows support is in progress.
 - Custom types
 - Transducers
 - Refs, Agents, Atoms, Validators
-- Queues, Arrays
+- Queues, Arrays, StructMaps
 - Reader Conditionals
 - BigInts, BigDecimals and Exotic numeric literals (e.g. 3N, 0.1M, hexadecimal floats)
 - Persistent data structures, Transient data structures
 - Unchecked operations
 - Autopromoting operations
-- StructMaps
 - Interfaces, Records, Protocols and Multi-methods
 - Locals cleaning
 - Multithreading, transactions and STM
 - monitor-enter, monitor-exit, and locking
 - Metadata reader macro, Threading macros (->, -->, some-> and some->>)
 - Homogenous vectors (vector-of)
-- Pre and post conditions for functions
+- Pre- and post-conditions for functions
 - Readers and Writers do not accept options such as :encoding or :append
 - Associative destructuring
 - `*print-length*`, `*print-level*`, `*file*`, `*flush-on-newline*`, `*clojure-version*`, `*load-tests*`, `*print-meta*`
@@ -165,10 +163,11 @@ Windows support is in progress.
   - dir
 - clojure.test
   - deftest, set-test, with-test
+- clojure.pprint
+  - print-table
 - clojure.set
 - clojure.data
 - clojure.walk
 - clojure.zip
-- clojure.pprint
 - clojure.spec
 - ...and lots more...
