@@ -58,7 +58,7 @@ else()
   target_link_libraries(nanoclj cairo)
 
   find_library(SIXEL_LIBRARY sixel REQUIRED)
-  if(SIXEL_LIBRARY) 
+  if(SIXEL_LIBRARY)
     target_link_libraries(nanoclj sixel)
     find_path(SIXEL_INCLUDE_DIR NAMES sixel.h PATHS "/usr/include" "/usr/include/sixel")
     target_include_directories(nanoclj PRIVATE ${SIXEL_INCLUDE_DIR})
@@ -66,19 +66,19 @@ else()
 
   find_library(SHP_LIBRARY shp REQUIRED)
   target_link_libraries(nanoclj shp)
-      
+
   if(false)
-    find_library(ZLIB z REQUIRED)
-    target_link_libraries(nanoclj z)
-    
     find_library(LIBZIP zip REQUIRED)
     target_link_libraries(nanoclj zip)
   endif()
 
+  find_library(ZLIB z REQUIRED)
+  target_link_libraries(nanoclj z)
+
   find_package(LibXml2 REQUIRED)
   target_link_libraries(nanoclj LibXml2::LibXml2)
   include_directories(${LIBXML2_INCLUDE_DIR})
-  
+
   find_package(CURL REQUIRED)
   target_link_libraries(nanoclj CURL::libcurl)
   include_directories(${CURL_INCLUDE_DIR})
@@ -97,8 +97,8 @@ configure_file(lib/java.lang.Double.clj java.lang.Double.clj @ONLY)
 configure_file(lib/java.lang.Long.clj java.lang.Long.clj @ONLY)
 configure_file(lib/java.lang.String.clj java.lang.String.clj @ONLY)
 configure_file(lib/java.util.Date.clj java.util.Date.clj @ONLY)
-configure_file(lib/Plot.clj Plot.clj @ONLY)
 configure_file(lib/nanoclj.core.Codepoint.clj nanoclj.core.Codepoint.clj @ONLY)
 configure_file(lib/nanoclj.core.Tensor.clj nanoclj.core.Tensor.clj @ONLY)
+configure_file(lib/nanoclj.plot.clj nanoclj.plot.clj @ONLY)
 configure_file(lib/nanoclj.image.clj nanoclj.image.clj @ONLY)
 configure_file(lib/nanoclj.audio.clj nanoclj.audio.clj @ONLY)

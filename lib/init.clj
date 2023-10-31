@@ -13,7 +13,7 @@
 (load-file "java.lang.Long.clj")
 (load-file "java.lang.String.clj")
 (load-file "java.util.Date.clj")
-(load-file "Plot.clj")
+(load-file "nanoclj.plot.clj")
 (load-file "nanoclj.core.Codepoint.clj")
 (load-file "nanoclj.core.Tensor.clj")
 (load-file "nanoclj.image.clj")
