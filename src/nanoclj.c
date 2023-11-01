@@ -5257,7 +5257,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	    return false;
 	  }
 	}
-	x = _ff_unchecked(code_cell)(sc, mk_pointer(sc->args));
+	x = _ff_unchecked(code_cell)(sc, sc->args);
 	if (sc->pending_exception) {
 	  return false;
 	} else {
@@ -5267,7 +5267,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       case T_FOREIGN_OBJECT:{
 	/* Keep nested calls from GC'ing the arglist */
 	retain(sc, sc->args);
-	x = sc->object_invoke_callback(sc, _fo_unchecked(code_cell), mk_pointer(sc->args));
+	x = sc->object_invoke_callback(sc, _fo_unchecked(code_cell), sc->args);
 	s_return(sc, x);
       }
       case T_VECTOR:
@@ -8137,11 +8137,11 @@ void nanoclj_set_external_data(nanoclj_t * sc, void *p) {
   sc->ext_data = p;
 }
 
-void nanoclj_set_object_invoke_callback(nanoclj_t * sc, nanoclj_val_t (*func) (nanoclj_t *, void *, nanoclj_val_t)) {
+void nanoclj_set_object_invoke_callback(nanoclj_t * sc, nanoclj_val_t (*func) (nanoclj_t *, void *, nanoclj_cell_t *)) {
   sc->object_invoke_callback = func;
 }
 
-void nanoclj_deinit(nanoclj_t * sc) {  
+void nanoclj_deinit(nanoclj_t * sc) {
   sc->oblist = NULL;
   sc->root_env = sc->global_env = NULL;
   dump_stack_free(sc);

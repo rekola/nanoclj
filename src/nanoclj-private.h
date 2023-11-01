@@ -267,7 +267,7 @@ extern "C" {
     enum nanoclj_opcode op;
 
     void *ext_data;             /* For the benefit of foreign functions */
-    nanoclj_val_t (*object_invoke_callback) (nanoclj_t *, void *, nanoclj_val_t);
+    nanoclj_val_t (*object_invoke_callback) (nanoclj_t *, void *, nanoclj_cell_t *);
 
     struct nanoclj_interface *vptr;
     dump_stack_frame_t * dump_base;            /* pointer to base of allocated dump stack */

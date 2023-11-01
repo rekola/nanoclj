@@ -83,10 +83,10 @@ typedef struct nanoclj_cell_t nanoclj_cell_t;
   NANOCLJ_EXPORT nanoclj_val_t nanoclj_call(nanoclj_t * sc, nanoclj_val_t func, nanoclj_val_t args);
   NANOCLJ_EXPORT nanoclj_val_t nanoclj_eval(nanoclj_t * sc, nanoclj_val_t obj);
   void nanoclj_set_external_data(nanoclj_t * sc, void *p);
-  void nanoclj_set_object_invoke_callback(nanoclj_t * sc, nanoclj_val_t (*func) (nanoclj_t *, void *, nanoclj_val_t));
+  void nanoclj_set_object_invoke_callback(nanoclj_t * sc, nanoclj_val_t (*func) (nanoclj_t *, void *, nanoclj_cell_t *));
   NANOCLJ_EXPORT void nanoclj_intern(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t symbol, nanoclj_val_t value);
 
-  typedef nanoclj_val_t(*foreign_func) (nanoclj_t *, nanoclj_val_t);
+  typedef nanoclj_val_t(*foreign_func) (nanoclj_t *, nanoclj_cell_t*);
 
 #if 0
   nanoclj_val_t _cons(nanoclj_t * sc, nanoclj_val_t a, nanoclj_val_t b, int immutable);

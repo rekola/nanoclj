@@ -43,8 +43,8 @@
 
 /* Thread */
 
-static nanoclj_val_t Thread_sleep(nanoclj_t * sc, nanoclj_val_t args) {
-  long long ms = to_long(first(sc, decode_pointer(args)));
+static nanoclj_val_t Thread_sleep(nanoclj_t * sc, nanoclj_cell_t * args) {
+  long long ms = to_long(first(sc, args));
   if (ms > 0) {
     nanoclj_sleep(ms);
   }
@@ -53,25 +53,24 @@ static nanoclj_val_t Thread_sleep(nanoclj_t * sc, nanoclj_val_t args) {
 
 /* System */
 
-static nanoclj_val_t System_exit(nanoclj_t * sc, nanoclj_val_t args) {
-  exit(to_int(first(sc, decode_pointer(args))));
+static nanoclj_val_t System_exit(nanoclj_t * sc, nanoclj_cell_t * args) {
+  exit(to_int(first(sc, args)));
 }
 
-static nanoclj_val_t System_currentTimeMillis(nanoclj_t * sc, nanoclj_val_t args) {
+static nanoclj_val_t System_currentTimeMillis(nanoclj_t * sc, nanoclj_cell_t * args) {
   return mk_integer(sc, system_time() / 1000);
 }
 
-static nanoclj_val_t System_nanoTime(nanoclj_t * sc, nanoclj_val_t args) {
+static nanoclj_val_t System_nanoTime(nanoclj_t * sc, nanoclj_cell_t * args) {
   return mk_integer(sc, 1000 * system_time());
 }
 
-static nanoclj_val_t System_gc(nanoclj_t * sc, nanoclj_val_t args) {
+static nanoclj_val_t System_gc(nanoclj_t * sc, nanoclj_cell_t * args) {
   gc(sc, NULL, NULL, NULL);
   return (nanoclj_val_t)kTRUE;
 }
 
-static nanoclj_val_t System_getenv(nanoclj_t * sc, nanoclj_val_t args0) {
-  nanoclj_cell_t * args = decode_pointer(args0);
+static nanoclj_val_t System_getenv(nanoclj_t * sc, nanoclj_cell_t * args) {
   if (args) {
     char * name = alloc_c_str(sc, to_strview(first(sc, args)));
     const char * v = getenv(name);
@@ -100,8 +99,7 @@ static nanoclj_val_t System_getenv(nanoclj_t * sc, nanoclj_val_t args0) {
   }
 }
 
-static nanoclj_val_t System_getProperty(nanoclj_t * sc, nanoclj_val_t args0) {
-  nanoclj_cell_t * args = decode_pointer(args0);
+static nanoclj_val_t System_getProperty(nanoclj_t * sc, nanoclj_cell_t * args) {
   if (args) {
     nanoclj_val_t v;
     if (get_elem(sc, sc->context->properties, first(sc, args), &v)) {
@@ -114,8 +112,7 @@ static nanoclj_val_t System_getProperty(nanoclj_t * sc, nanoclj_val_t args0) {
   }
 }
 
-static nanoclj_val_t System_setProperty(nanoclj_t * sc, nanoclj_val_t args0) {
-  nanoclj_cell_t * args = decode_pointer(args0);
+static nanoclj_val_t System_setProperty(nanoclj_t * sc, nanoclj_cell_t * args) {
   nanoclj_val_t key = first(sc, args);
   nanoclj_val_t val = second(sc, args);
 
@@ -124,9 +121,7 @@ static nanoclj_val_t System_setProperty(nanoclj_t * sc, nanoclj_val_t args0) {
   return mk_nil();  
 }
 
-static inline nanoclj_val_t System_glob(nanoclj_t * sc, nanoclj_val_t args0) {
-  nanoclj_cell_t * args = decode_pointer(args0);
-
+static inline nanoclj_val_t System_glob(nanoclj_t * sc, nanoclj_cell_t * args) {
 #ifndef WIN32
   char * tmp = alloc_c_str(sc, to_strview(first(sc, args)));
   glob_t gstruct;
@@ -155,7 +150,7 @@ static inline long long filetime_to_msec(FILETIME ft) {
 #endif
 
 /* Returns the system timing information (idle, kernel, user) */
-static nanoclj_val_t System_getSystemTimes(nanoclj_t * sc, nanoclj_val_t args) {
+static nanoclj_val_t System_getSystemTimes(nanoclj_t * sc, nanoclj_cell_t * args) {
   nanoclj_cell_t * r = NULL;
 #ifdef WIN32
   FILETIME idleTime, kernelTime, userTime;
@@ -178,48 +173,47 @@ static nanoclj_val_t System_getSystemTimes(nanoclj_t * sc, nanoclj_val_t args) {
       set_vector_elem(r, 1, mk_integer(sc, system));
       set_vector_elem(r, 2, mk_integer(sc, user));
     }
-    sc->free(b);
   }
+  sc->free(b);
 #endif
   return mk_pointer(r);
 }
 
 /* Math */
 
-static nanoclj_val_t Math_sin(nanoclj_t * sc, nanoclj_val_t args) {
-  return mk_real(sin(to_double(first(sc, decode_pointer(args)))));
+static nanoclj_val_t Math_sin(nanoclj_t * sc, nanoclj_cell_t * args) {
+  return mk_real(sin(to_double(first(sc, args))));
 }
 
-static nanoclj_val_t Math_cos(nanoclj_t * sc, nanoclj_val_t args) {
-  return mk_real(cos(to_double(first(sc, decode_pointer(args)))));
+static nanoclj_val_t Math_cos(nanoclj_t * sc, nanoclj_cell_t * args) {
+  return mk_real(cos(to_double(first(sc, args))));
 }
 
-static nanoclj_val_t Math_exp(nanoclj_t * sc, nanoclj_val_t args) {
-  return mk_real(exp(to_double(first(sc, decode_pointer(args)))));
+static nanoclj_val_t Math_exp(nanoclj_t * sc, nanoclj_cell_t * args) {
+  return mk_real(exp(to_double(first(sc, args))));
 }
 
-static nanoclj_val_t Math_log(nanoclj_t * sc, nanoclj_val_t args) {
-  return mk_real(log(to_double(first(sc, decode_pointer(args)))));
+static nanoclj_val_t Math_log(nanoclj_t * sc, nanoclj_cell_t * args) {
+  return mk_real(log(to_double(first(sc, args))));
 }
 
-static nanoclj_val_t Math_log10(nanoclj_t * sc, nanoclj_val_t args) {
-  return mk_real(log10(to_double(first(sc, decode_pointer(args)))));
+static nanoclj_val_t Math_log10(nanoclj_t * sc, nanoclj_cell_t * args) {
+  return mk_real(log10(to_double(first(sc, args))));
 }
 
-static nanoclj_val_t Math_tan(nanoclj_t * sc, nanoclj_val_t args) {
-  return mk_real(tan(to_double(first(sc, decode_pointer(args)))));
+static nanoclj_val_t Math_tan(nanoclj_t * sc, nanoclj_cell_t * args) {
+  return mk_real(tan(to_double(first(sc, args))));
 }
 
-static nanoclj_val_t Math_asin(nanoclj_t * sc, nanoclj_val_t args) {
-  return mk_real(asin(to_double(first(sc, decode_pointer(args)))));
+static nanoclj_val_t Math_asin(nanoclj_t * sc, nanoclj_cell_t * args) {
+  return mk_real(asin(to_double(first(sc, args))));
 }
 
-static nanoclj_val_t Math_acos(nanoclj_t * sc, nanoclj_val_t args) {
-  return mk_real(acos(to_double(first(sc, decode_pointer(args)))));
+static nanoclj_val_t Math_acos(nanoclj_t * sc, nanoclj_cell_t * args) {
+  return mk_real(acos(to_double(first(sc, args))));
 }
 
-static nanoclj_val_t Math_atan(nanoclj_t * sc, nanoclj_val_t args0) {
-  nanoclj_cell_t * args = decode_pointer(args0);
+static nanoclj_val_t Math_atan(nanoclj_t * sc, nanoclj_cell_t * args) {
   nanoclj_val_t x = first(sc, args);
   args = next(sc, args);
   if (args) {
@@ -230,29 +224,28 @@ static nanoclj_val_t Math_atan(nanoclj_t * sc, nanoclj_val_t args0) {
   }
 }
 
-static nanoclj_val_t Math_sqrt(nanoclj_t * sc, nanoclj_val_t args) {
-  return mk_real(sqrt(to_double(first(sc, decode_pointer(args)))));
+static nanoclj_val_t Math_sqrt(nanoclj_t * sc, nanoclj_cell_t * args) {
+  return mk_real(sqrt(to_double(first(sc, args))));
 }
 
-static nanoclj_val_t Math_cbrt(nanoclj_t * sc, nanoclj_val_t args) {
-  return mk_real(cbrt(to_double(first(sc, decode_pointer(args)))));
+static nanoclj_val_t Math_cbrt(nanoclj_t * sc, nanoclj_cell_t * args) {
+  return mk_real(cbrt(to_double(first(sc, args))));
 }
 
-static nanoclj_val_t Math_pow(nanoclj_t * sc, nanoclj_val_t args0) {
-  nanoclj_cell_t * args = decode_pointer(args0);
+static nanoclj_val_t Math_pow(nanoclj_t * sc, nanoclj_cell_t * args) {
   return mk_real(pow(to_double(first(sc, args)), to_double(second(sc, args))));
 }
 
-static nanoclj_val_t Math_floor(nanoclj_t * sc, nanoclj_val_t args) {
-  return mk_real(floor(to_double(first(sc, decode_pointer(args)))));
+static nanoclj_val_t Math_floor(nanoclj_t * sc, nanoclj_cell_t * args) {
+  return mk_real(floor(to_double(first(sc, args))));
 }
 
-static nanoclj_val_t Math_ceil(nanoclj_t * sc, nanoclj_val_t args) {
-  return mk_real(ceil(to_double(first(sc, decode_pointer(args)))));
+static nanoclj_val_t Math_ceil(nanoclj_t * sc, nanoclj_cell_t * args) {
+  return mk_real(ceil(to_double(first(sc, args))));
 }
 
-static nanoclj_val_t Math_round(nanoclj_t * sc, nanoclj_val_t args) {
-  return mk_real(round(to_double(first(sc, decode_pointer(args)))));
+static nanoclj_val_t Math_round(nanoclj_t * sc, nanoclj_cell_t * args) {
+  return mk_real(round(to_double(first(sc, args))));
 }
 
 /* clojure.math.numeric-tower */
@@ -287,8 +280,7 @@ static inline bool ipow_overflow(long long base, int_fast8_t exp, long long * re
   return false;
 }
 
-static nanoclj_val_t numeric_tower_expt(nanoclj_t * sc, nanoclj_val_t args0) {
-  nanoclj_cell_t * args = decode_pointer(args0);
+static nanoclj_val_t numeric_tower_expt(nanoclj_t * sc, nanoclj_cell_t * args) {
   nanoclj_val_t x = first(sc, args);
   nanoclj_val_t y = second(sc, args);
 
@@ -330,8 +322,7 @@ static nanoclj_val_t numeric_tower_expt(nanoclj_t * sc, nanoclj_val_t args0) {
   return mk_real(pow(to_double(x), to_double(y)));
 }
 
-static inline nanoclj_val_t browse_url(nanoclj_t * sc, nanoclj_val_t args0) {
-  nanoclj_cell_t * args = decode_pointer(args0);
+static inline nanoclj_val_t browse_url(nanoclj_t * sc, nanoclj_cell_t * args) {
 #ifdef WIN32
   char * url = alloc_c_str(sc, to_strview(first(sc, args)));
   ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
@@ -350,8 +341,7 @@ static inline nanoclj_val_t browse_url(nanoclj_t * sc, nanoclj_val_t args0) {
 #endif
 }
 
-static inline nanoclj_val_t Image_load(nanoclj_t * sc, nanoclj_val_t args0) {
-  nanoclj_cell_t * args = decode_pointer(args0);
+static inline nanoclj_val_t Image_load(nanoclj_t * sc, nanoclj_cell_t * args) {
   nanoclj_val_t src = first(sc, args);
   strview_t sv = to_strview(slurp(sc, T_INPUT_STREAM, args));
   
@@ -383,8 +373,7 @@ static inline nanoclj_val_t Image_load(nanoclj_t * sc, nanoclj_val_t args0) {
   return image;
 }
 
-static inline nanoclj_val_t Image_resize(nanoclj_t * sc, nanoclj_val_t args0) {
-  nanoclj_cell_t * args = decode_pointer(args0);
+static inline nanoclj_val_t Image_resize(nanoclj_t * sc, nanoclj_cell_t * args) {
   imageview_t iv = to_imageview(first(sc, args));
   nanoclj_val_t target_w0 = second(sc, args), target_h0 = third(sc, args);
   if (!iv.ptr || !is_number(target_w0) || !is_number(target_h0)) {
@@ -406,8 +395,7 @@ static inline nanoclj_val_t Image_resize(nanoclj_t * sc, nanoclj_val_t args0) {
   return target_image;
 }
 
-static inline nanoclj_val_t Image_transpose(nanoclj_t * sc, nanoclj_val_t args0) {
-  nanoclj_cell_t * args = decode_pointer(args0);
+static inline nanoclj_val_t Image_transpose(nanoclj_t * sc, nanoclj_cell_t * args) {
   imageview_t iv = to_imageview(first(sc, args));
   if (!iv.ptr) {
     return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Not an Image")));
@@ -428,8 +416,7 @@ static inline nanoclj_val_t Image_transpose(nanoclj_t * sc, nanoclj_val_t args0)
   return new_image;
 }
 
-static inline nanoclj_val_t Image_save(nanoclj_t * sc, nanoclj_val_t args0) {
-  nanoclj_cell_t * args = decode_pointer(args0);
+static inline nanoclj_val_t Image_save(nanoclj_t * sc, nanoclj_cell_t * args) {
   imageview_t iv = to_imageview(first(sc, args));
   nanoclj_val_t filename0 = second(sc, args);
   if (!iv.ptr) {
@@ -502,8 +489,7 @@ static inline int * mk_kernel(nanoclj_t * sc, float radius, int * size) {
 }
 
 /* Horizontal gaussian blur */
-nanoclj_val_t Image_horizontalGaussianBlur(nanoclj_t * sc, nanoclj_val_t args0) {
-  nanoclj_cell_t * args = decode_pointer(args0);
+nanoclj_val_t Image_horizontalGaussianBlur(nanoclj_t * sc, nanoclj_cell_t * args) {
   imageview_t iv = to_imageview(first(sc, args));
   nanoclj_val_t radius = second(sc, args);
   if (!iv.ptr) {
@@ -579,8 +565,7 @@ nanoclj_val_t Image_horizontalGaussianBlur(nanoclj_t * sc, nanoclj_val_t args0) 
   return r;
 }
 
-static inline nanoclj_val_t Audio_load(nanoclj_t * sc, nanoclj_val_t args0) {
-  nanoclj_cell_t * args = decode_pointer(args0);
+static inline nanoclj_val_t Audio_load(nanoclj_t * sc, nanoclj_cell_t * args) {
   nanoclj_val_t src = first(sc, args);
   strview_t sv = to_strview(slurp(sc, T_INPUT_STREAM, args));
 
@@ -603,12 +588,11 @@ static inline nanoclj_val_t Audio_load(nanoclj_t * sc, nanoclj_val_t args0) {
   return audio;
 }
 
-static inline nanoclj_val_t Audio_lowpass(nanoclj_t * sc, nanoclj_val_t args) {
+static inline nanoclj_val_t Audio_lowpass(nanoclj_t * sc, nanoclj_cell_t * args) {
   return mk_nil();
 }
 
-static inline nanoclj_val_t Geo_load(nanoclj_t * sc, nanoclj_val_t args0) {
-  nanoclj_cell_t * args = decode_pointer(args0);
+static inline nanoclj_val_t Geo_load(nanoclj_t * sc, nanoclj_cell_t * args) {
   char * filename = alloc_c_str(sc, to_strview(first(sc, args)));
 
   SHPHandle shp = SHPOpen(filename, "rb");
@@ -804,8 +788,7 @@ static inline nanoclj_val_t Geo_load(nanoclj_t * sc, nanoclj_val_t args0) {
   return mk_pointer(r);
 }
 
-static inline nanoclj_val_t Graph_load(nanoclj_t * sc, nanoclj_val_t args0) {
-  nanoclj_cell_t * args = decode_pointer(args0);
+static inline nanoclj_val_t Graph_load(nanoclj_t * sc, nanoclj_cell_t * args) {
   nanoclj_val_t src = first(sc, args);
   strview_t sv = to_strview(slurp(sc, T_READER, args));
 
@@ -875,8 +858,7 @@ static inline nanoclj_val_t create_xml_node(nanoclj_t * sc, xmlNode * input) {
   return mk_pointer(output);
 }
 
-static inline nanoclj_val_t clojure_xml_parse(nanoclj_t * sc, nanoclj_val_t args0) {
-  nanoclj_cell_t * args = decode_pointer(args0);
+static inline nanoclj_val_t clojure_xml_parse(nanoclj_t * sc, nanoclj_cell_t * args) {
   nanoclj_val_t src = first(sc, args);
   strview_t sv = to_strview(slurp(sc, T_READER, args));
 
@@ -889,8 +871,8 @@ static inline nanoclj_val_t clojure_xml_parse(nanoclj_t * sc, nanoclj_val_t args
   return xml;
 }
 
-static inline nanoclj_val_t clojure_data_csv_read_csv(nanoclj_t * sc, nanoclj_val_t args) {
-  nanoclj_val_t f = first(sc, decode_pointer(args));
+static inline nanoclj_val_t clojure_data_csv_read_csv(nanoclj_t * sc, nanoclj_cell_t * args) {
+  nanoclj_val_t f = first(sc, args);
   if (is_nil(f)) {
     return nanoclj_throw(sc, sc->NullPointerException);
   }
@@ -1072,14 +1054,14 @@ static inline void init_linenoise(nanoclj_t * sc) {
   linenoiseHistorySetMaxLen(10000);
 }
 
-static inline nanoclj_val_t linenoise_readline(nanoclj_t * sc, nanoclj_val_t args) {
+static inline nanoclj_val_t linenoise_readline(nanoclj_t * sc, nanoclj_cell_t * args) {
   nanoclj_val_t out = get_out_port(sc);
   if (is_cell(out)) {
     nanoclj_cell_t * o = decode_pointer(out);
     if (is_writable(o)) _line_unchecked(o)++;
   }
   
-  strview_t prompt = to_strview(first(sc, decode_pointer(args)));
+  strview_t prompt = to_strview(first(sc, args));
   char * line = linenoise(prompt.ptr, prompt.size);
   if (line == NULL) return mk_nil();
   
@@ -1101,16 +1083,14 @@ static inline nanoclj_val_t linenoise_readline(nanoclj_t * sc, nanoclj_val_t arg
   return r;
 }
 
-static inline nanoclj_val_t linenoise_history_load(nanoclj_t * sc, nanoclj_val_t args0) {
-  nanoclj_cell_t * args = decode_pointer(args0);
+static inline nanoclj_val_t linenoise_history_load(nanoclj_t * sc, nanoclj_cell_t * args) {
   char * fn = alloc_c_str(sc, to_strview(first(sc, args)));
   linenoiseHistoryLoad(fn);
   sc->free(fn);
   return mk_nil();
 }
 
-static inline nanoclj_val_t linenoise_history_append(nanoclj_t * sc, nanoclj_val_t args0) {
-  nanoclj_cell_t * args = decode_pointer(args0);
+static inline nanoclj_val_t linenoise_history_append(nanoclj_t * sc, nanoclj_cell_t * args) {
   char * line = alloc_c_str(sc, to_strview(first(sc, args)));
   linenoiseHistoryAdd(line);
   args = next(sc, args);
