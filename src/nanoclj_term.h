@@ -81,7 +81,7 @@ static inline bool print_image_sixel(imageview_t iv, nanoclj_color_t fg, nanoclj
   case nanoclj_rgb565:
     return write_sixel(SIXEL_PIXELFORMAT_RGB565, NULL, iv.ptr, iv.width, iv.height);
   case nanoclj_bgr8_32:{
-    uint8_t * tmp = convert_imagedata(iv.ptr, iv.width, iv.height, iv.format, nanoclj_rgb8);
+    uint8_t * tmp = convert_imageview(iv, nanoclj_rgb8);
     bool r = write_sixel(SIXEL_PIXELFORMAT_RGB888, NULL, tmp, iv.width, iv.height);
     free(tmp);
     return r;
@@ -128,13 +128,13 @@ static inline bool print_image_kitty(imageview_t iv, nanoclj_color_t fg, nanoclj
     return write_kitty(iv.ptr, iv.width, iv.height, get_format_channels(iv.format));
 
   case nanoclj_bgr8_32:{
-    uint8_t * tmp = convert_imagedata(iv.ptr, iv.width, iv.height, iv.format, nanoclj_rgb8);
+    uint8_t * tmp = convert_imageview(iv, nanoclj_rgb8);
     bool r = write_kitty(tmp, iv.width, iv.height, 3);
     free(tmp);
     return r;
   }
   case nanoclj_bgra8:{
-    uint8_t * tmp = convert_imagedata(iv.ptr, iv.width, iv.height, iv.format, nanoclj_rgb8);
+    uint8_t * tmp = convert_imageview(iv, nanoclj_rgb8);
     bool r = write_kitty(tmp, iv.width, iv.height, 3);
     free(tmp);
     return r;

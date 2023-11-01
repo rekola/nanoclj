@@ -103,23 +103,29 @@ static inline int get_format_bpp(nanoclj_internal_format_t f) {
   return 0;
 }
 
-static inline uint8_t * convert_imagedata(const uint8_t * input, int width, int height, nanoclj_internal_format_t from, nanoclj_internal_format_t to) {
-  uint8_t * output = 0;
-  if (from == nanoclj_bgr8_32 && to == nanoclj_rgb8) {
-    output = malloc(width * height * 3);
-    for (size_t i = 0; i < width * height; i++) {
-      output[3 * i + 0] = input[4 * i + 2];
-      output[3 * i + 1] = input[4 * i + 1];
-      output[3 * i + 2] = input[4 * i + 0];
+static inline size_t get_image_size(size_t width, size_t height, size_t stride, nanoclj_internal_format_t format) {
+  /* FIXME: use stride */
+  return width * height * get_format_bpp(format);
+}
+
+static inline uint8_t * convert_imageview(imageview_t iv, nanoclj_internal_format_t to) {
+  uint8_t * output = malloc(get_image_size(iv.width, iv.height, iv.stride, to));
+  if (iv.format == nanoclj_bgr8_32 && to == nanoclj_rgb8) {
+    for (size_t i = 0; i < iv.width * iv.height; i++) {
+      output[3 * i + 0] = iv.ptr[4 * i + 2];
+      output[3 * i + 1] = iv.ptr[4 * i + 1];
+      output[3 * i + 2] = iv.ptr[4 * i + 0];
     }
-  } else if (from == nanoclj_bgra8 && to == nanoclj_rgba8) {
-    output = malloc(width * height * 3);
-    for (size_t i = 0; i < width * height; i++) {
-      output[3 * i + 0] = input[4 * i + 2];
-      output[3 * i + 1] = input[4 * i + 1];
-      output[3 * i + 2] = input[4 * i + 0];
-      output[3 * i + 3] = input[4 * i + 3];
+  } else if (iv.format == nanoclj_bgra8 && to == nanoclj_rgba8) {
+    for (size_t i = 0; i < iv.width * iv.height; i++) {
+      output[4 * i + 0] = iv.ptr[4 * i + 2];
+      output[4 * i + 1] = iv.ptr[4 * i + 1];
+      output[4 * i + 2] = iv.ptr[4 * i + 0];
+      output[4 * i + 3] = iv.ptr[4 * i + 3];
     }
+  } else {
+    free(output);
+    return NULL;
   }
   return output;
 }

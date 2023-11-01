@@ -421,35 +421,43 @@ static inline nanoclj_val_t Image_save(nanoclj_t * sc, nanoclj_cell_t * args) {
   nanoclj_val_t filename0 = second(sc, args);
   if (!iv.ptr) {
     return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Not an Image")));
-  }
-  if (!is_string(filename0)) {
+  } else if (!is_string(filename0)) {
     return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Not a string")));
   }
   char * filename = alloc_c_str(sc, to_strview(filename0));
-
-  int w = iv.width, h = iv.height;
-  int channels = get_format_channels(iv.format);
-  const uint8_t * data = iv.ptr;
-  
   char * ext = strrchr(filename, '.');
   if (!ext) {
     sc->free(filename);
     return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Could not determine file format")));
   } else {
+    uint8_t * tmp = NULL;
+    int w = iv.width, h = iv.height, channels = get_format_channels(iv.format);
+    switch (iv.format) {
+    case nanoclj_bgra8:
+      tmp = convert_imageview(iv, nanoclj_rgba8);
+      break;
+    case nanoclj_rgb565:
+    case nanoclj_bgr8_32:
+      tmp = convert_imageview(iv, nanoclj_rgb8);
+      break;
+    }
+
     int success = 0;
     if (strcmp(ext, ".png") == 0) {
-      success = stbi_write_png(filename, w, h, channels, data, w);
+      success = stbi_write_png(filename, w, h, channels, tmp ? tmp : iv.ptr, w);
     } else if (strcmp(ext, ".bmp") == 0) {
-      success = stbi_write_bmp(filename, w, h, channels, data);
+      success = stbi_write_bmp(filename, w, h, channels, tmp ? tmp : iv.ptr);
     } else if (strcmp(ext, ".tga") == 0) {
-      success = stbi_write_tga(filename, w, h, channels, data);
+      success = stbi_write_tga(filename, w, h, channels, tmp ? tmp : iv.ptr);
     } else if (strcmp(ext, ".jpg") == 0) {
-      success = stbi_write_jpg(filename, w, h, channels, data, 95);
+      success = stbi_write_jpg(filename, w, h, channels, tmp ? tmp : iv.ptr, 95);
     } else {
+      sc->free(tmp);
       sc->free(filename);
       return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Unsupported file format")));
     }
 
+    sc->free(tmp);
     sc->free(filename);
 
     if (!success) {
@@ -466,7 +474,7 @@ static inline int * mk_kernel(nanoclj_t * sc, float radius, int * size) {
   if (r <= 0) {
     *size = 0;
     return NULL;
-  }    
+  }
   
   int rows = 2 * r + 1;
   float sigma = radius / 3;
