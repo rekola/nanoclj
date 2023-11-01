@@ -24,10 +24,10 @@ static void out_restore_callback(void * data) {
     auto interpreter = reinterpret_cast<Interpreter *>(data);
     interpreter->flush();
     interpreter->restore();
-  }  
+  }
 }
 
-static void out_image_callback(nanoclj_image_t * image, void * data) {
+static void out_image_callback(imageview_t image, void * data) {
   if (data) {
     auto interpreter = reinterpret_cast<Interpreter *>(data);
     interpreter->flush();
@@ -63,24 +63,26 @@ Interpreter::Interpreter() {
     const char * path = getcwd(buf, 1024);
     if (path) {
       chdir("assets/nanoclj");
-      auto fin = fopen("init.clj", "rt");
-      if (fin) {
-	nanoclj_load_named_file(sc, fin, "init.clj");
-	fclose(fin);
-      }
+      nanoclj_load_named_file(sc, "init.clj");
       chdir(path);
     }
 
+#if 0
     std::string expr = "(ns-interns *ns*)";
     auto sym = nanoclj_eval_string(sc, expr.c_str(), expr.size());
-    for ( ; sym.as_uint64 != sc->EMPTY.as_uint64; sym = sc->vptr->pair_cdr(sym)) {
+    for ( ; sym.as_long != sc->EMPTY.as_long; sym = sc->vptr->pair_cdr(sym)) {
       auto v = sc->vptr->pair_car(sym);
       if (sc->vptr->is_symbol(v)) {
-	symbols_.emplace_back(sc->vptr->symname(v));
+	auto sym0 = sc->vptr->to_strview(v);
+	auto sym = std::string_view(sym0.ptr, sym0.size);
+	symbols_.emplace_back(sym);
       } else if (sc->vptr->is_mapentry(v)) {
-	symbols_.emplace_back(sc->vptr->symname(sc->vptr->pair_car(v)));
+	auto sym0 = sc->vptr->to_strview(sc->vptr->pair_car(v));
+	auto sym = std::string_view(sym0.ptr, sym0.size);
+	symbols_.emplace_back(sym);
       }
     }
+#endif
   }
 }
 

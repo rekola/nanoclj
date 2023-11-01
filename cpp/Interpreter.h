@@ -2,7 +2,7 @@
 #define _NANOCLJ_INTERPRETER_H_
 
 #include "nanoclj.h"
-#include "nanoclj_priv.h"
+#include "nanoclj-private.h"
 
 #include <vector>
 #include <string>
@@ -31,7 +31,7 @@ namespace nanoclj {
 
     virtual void print(std::string_view s) { }
     virtual void print_error(std::string_view s) { }
-    virtual void print_image(nanoclj_image_t * image) { }
+    virtual void print_image(imageview_t image) { }
 
     virtual void set_color(double r, double g, double b) { }
     virtual void restore() { }
@@ -62,9 +62,10 @@ namespace nanoclj {
     }
     
     void define(std::string symbol, UserFn function) {
-      sc_->vptr->nanoclj_intern(sc_, sc_->global_env,
-				sc_->vptr->mk_symbol(sc_, symbol.c_str()), 
-				sc_->vptr->mk_foreign_func(sc_, function));
+      sc_->vptr->intern(sc_, sc_->global_env,
+			sc_->vptr->mk_symbol(sc_, symbol.c_str()), 
+			sc_->vptr->mk_foreign_func(sc_, function, 0, -1)
+			);
     }
 
     const std::vector<std::string> & getSymbols() const { return symbols_; }
