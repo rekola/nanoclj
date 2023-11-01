@@ -1971,7 +1971,7 @@ static inline nanoclj_cell_t * seq(nanoclj_t * sc, nanoclj_cell_t * coll) {
     return NULL;
   }
   if (_type(coll) == T_LAZYSEQ) {
-    coll = deref(sc, coll);    
+    coll = deref(sc, coll);
   }
 
   if (_is_sequence(coll)) {
@@ -2920,41 +2920,53 @@ static inline size_t append_codepoint(nanoclj_t * sc, nanoclj_bytearray_t * s, i
   return n;
 }
 
+static inline nanoclj_cell_t * vector_conjoin(nanoclj_t * sc, nanoclj_cell_t * vec, nanoclj_val_t new_value) {
+  size_t old_size = get_size(vec);
+  uint16_t t = _type(vec);
+  if (_is_small(vec)) {
+    nanoclj_cell_t * new_vec = get_vector_object(sc, t, old_size + 1);
+    nanoclj_val_t * data = _smalldata_unchecked(vec);
+    nanoclj_val_t * new_data;
+    if (_is_small(new_vec)) {
+      new_data = _smalldata_unchecked(new_vec);
+    } else {
+      new_data = _vec_store_unchecked(new_vec)->data;
+    }
+    memcpy(new_data, data, old_size * sizeof(nanoclj_val_t));
+    set_vector_elem(new_vec, old_size, new_value);
+    return new_vec;
+  } else {
+    nanoclj_valarray_t * s = _vec_store_unchecked(vec);
+    size_t old_offset = _offset_unchecked(vec);
+    
+    if (old_offset + old_size != s->size) {
+      nanoclj_valarray_t * old_s = s;
+      s = mk_valarray(sc, old_size, 2 * old_size + 1);
+      memcpy(s->data, old_s->data + old_offset, old_size * sizeof(nanoclj_val_t));
+    } else {
+      s->refcnt++;
+    }
+    
+    valarray_push(sc, s, new_value);
+    return _get_vector_object(sc, t, old_offset, old_size + 1, s);
+  }
+}
+
 static inline nanoclj_cell_t * conjoin(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t new_value) {
   if (!coll) coll = &(sc->_EMPTY);
 
   int t = _type(coll);
   if (_is_sequence(coll) || t == T_NIL || t == T_LIST || t == T_LAZYSEQ) {
     return get_cell(sc, T_LIST, 0, new_value, coll, NULL);
-  } else if (is_vector_type(t)) {
-    size_t old_size = get_size(coll);
-    if (_is_small(coll)) {
-      nanoclj_cell_t * new_coll = get_vector_object(sc, t, old_size + 1);
-      nanoclj_val_t * data = _smalldata_unchecked(coll);
-      nanoclj_val_t * new_data;
-      if (_is_small(new_coll)) {
-	new_data = _smalldata_unchecked(new_coll);
-      } else {
-	new_data = _vec_store_unchecked(new_coll)->data;
-      }
-      memcpy(new_data, data, old_size * sizeof(nanoclj_val_t));
-      set_vector_elem(new_coll, old_size, new_value);
-      return new_coll;
-    } else {
-      nanoclj_valarray_t * s = _vec_store_unchecked(coll);
-      size_t old_offset = _offset_unchecked(coll);
-    
-      if (old_offset + old_size != s->size) {
-	nanoclj_valarray_t * old_s = s;
-	s = mk_valarray(sc, old_size, 2 * old_size + 1);
-	memcpy(s->data, old_s->data + old_offset, old_size * sizeof(nanoclj_val_t));
-      } else {
-	s->refcnt++;
-      }
-
-      valarray_push(sc, s, new_value);
-      return _get_vector_object(sc, t, old_offset, old_size + 1, s);
+  } else if (t == T_SORTED_SET) {
+    if (!get_elem(sc, coll, new_value, NULL)) {
+      coll = vector_conjoin(sc, coll, new_value);
+      coll = copy_vector(sc, coll);
+      sort_vector_in_place(coll);
     }
+    return coll;
+  } else if (is_vector_type(t)) {
+    return vector_conjoin(sc, coll, new_value);
   } else if (is_string_type(t)) {
     int32_t c = decode_integer(new_value);
     size_t size = get_size(coll);
@@ -5262,7 +5274,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       }
     }
 
-    case T_NIL:{      
+    case T_NIL:{
       nanoclj_cell_t * code_cell = decode_pointer(sc->code);
       if (!code_cell) {
 	nanoclj_throw(sc, sc->NullPointerException);
@@ -6157,10 +6169,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	return false;
       } else {
 	int t = _type(c);
-	if (t == T_VECTOR || t == T_STRING) {
+	if ((t == T_VECTOR || t == T_STRING) && !_is_sequence(c)) {
 	  s_return(sc, mk_pointer(remove_suffix(sc, c, 1)));
-	} else if (t == T_QUEUE) {
-	  s_return(sc, mk_pointer(remove_prefix(sc, c, 1)));
 	} else if (is_seqable_type(t)) {
 	  s_return(sc, mk_pointer(rest(sc, c)));
 	}
@@ -6257,77 +6267,56 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     } else if (is_cell(arg0)) {
       nanoclj_cell_t * coll = decode_pointer(arg0);
       if (!coll) coll = &(sc->_EMPTY);
-      switch (_type(coll)) {
-      case T_VECTOR:{
-	size_t vector_len = get_size(coll);
-
-	/* If MapEntry is added to vector, it is an index value pair */
-	if (type(arg1) == T_MAPENTRY) {
-	  nanoclj_cell_t * y2 = decode_pointer(arg1);
-	  long long index = to_long_w_def(first(sc, y2), -1);
-	  nanoclj_val_t value = second(sc, y2);
-	  if (index < 0 || index >= vector_len) {
-	    Error_0(sc, "Index out of bounds");     
-	  } else {
-	    nanoclj_cell_t * vec = copy_vector(sc, coll);
-	    if (vec) set_vector_elem(vec, index, value);
-	    s_return(sc, mk_pointer(vec));
-	  }
-	} else {
-	  s_return(sc, mk_pointer(conjoin(sc, coll, arg1)));
-	}
-      }
-	
-      case T_ARRAYMAP:{
-	nanoclj_cell_t * p = decode_pointer(arg1);
-	if (_type(p) == T_ARRAYMAP) {
-	  size_t other_len = get_size(p);
-	  for (size_t i = 0; i < other_len; i++) {
-	    nanoclj_cell_t * e = decode_pointer(vector_elem(p, i));
-	    nanoclj_val_t key = vector_elem(e, 0), val = vector_elem(e, 1);
-	    size_t j = find_index(sc, coll, key);
-	    if (j != NPOS) {
-	      coll = copy_vector(sc, coll);
-	      /* Rebuild the mapentry in case the input is not mapentry */
-	      set_vector_elem(coll, j, mk_mapentry(sc, key, val));
-	    } else {
-	      coll = conjoin(sc, coll, mk_mapentry(sc, key, val));
+      if (_type(coll) == T_ARRAYMAP) {
+	if (is_cell(arg1)) {
+	  nanoclj_cell_t * arg = decode_pointer(arg1);
+	  if (arg) {
+	    if (_type(arg) == T_ARRAYMAP) {
+	      size_t other_len = get_size(arg);
+	      for (size_t i = 0; i < other_len; i++) {
+		nanoclj_cell_t * e = decode_pointer(vector_elem(arg, i));
+		nanoclj_val_t key = vector_elem(e, 0), val = vector_elem(e, 1);
+		size_t j = find_index(sc, coll, key);
+		if (j != NPOS) {
+		  coll = copy_vector(sc, coll);
+		  /* Rebuild the mapentry in case the input is not mapentry */
+		  set_vector_elem(coll, j, mk_mapentry(sc, key, val));
+		} else {
+		  coll = conjoin(sc, coll, mk_mapentry(sc, key, val));
+		}
+	      }
+	      s_return(sc, mk_pointer(coll));
+	    } else if (is_seqable_type(_type(arg))) {
+	      nanoclj_val_t key = first(sc, arg), val = second(sc, arg);
+	      size_t i = find_index(sc, coll, key);
+	      if (i != NPOS) {
+		coll = copy_vector(sc, coll);
+		/* Rebuild the mapentry in case the input is not mapentry */
+		set_vector_elem(coll, i, mk_mapentry(sc, key, val));
+		s_return(sc, mk_pointer(coll));
+	      } else {
+		/* Not found */
+		s_return(sc, mk_pointer(conjoin(sc, coll, mk_mapentry(sc, key, val))));
+	      }
 	    }
 	  }
-	  s_return(sc, mk_pointer(coll));
-	} else {
-	  nanoclj_val_t key = first(sc, p), val = second(sc, p);
-	  size_t i = find_index(sc, coll, key);
-	  if (i != NPOS) {
-	    coll = copy_vector(sc, coll);
-	    /* Rebuild the mapentry in case the input is not mapentry */
-	    set_vector_elem(coll, i, mk_mapentry(sc, key, val));
-	    s_return(sc, mk_pointer(coll));
-	  } else {
-	    /* Not found */
-	    s_return(sc, mk_pointer(conjoin(sc, coll, mk_mapentry(sc, key, val))));
-	  }
 	}
-      }
-      
-      case T_SORTED_SET:{
-	if (!get_elem(sc, coll, arg1, NULL)) {
-	  nanoclj_cell_t * vec = conjoin(sc, coll, arg1);
-	  vec = copy_vector(sc, vec);
-	  sort_vector_in_place(vec);
+	Error_0(sc, "Value is not ISeqable");
+      } else if (_type(coll) == T_VECTOR && !is_nil(arg1) && type(arg1) == T_MAPENTRY) {
+	/* If MapEntry is added to vector, it is an index value pair */
+	nanoclj_cell_t * arg = decode_pointer(arg1);
+	size_t vector_len = get_size(coll);
+	long long index = to_long_w_def(first(sc, arg), -1);
+	nanoclj_val_t value = second(sc, arg);
+	if (index < 0 || index >= vector_len) {
+	  Error_0(sc, "Index out of bounds");
+	} else {
+	  nanoclj_cell_t * vec = copy_vector(sc, coll);
+	  if (vec) set_vector_elem(vec, index, value);
 	  s_return(sc, mk_pointer(vec));
-	} else {
-	  s_return(sc, arg0);
 	}
       }
-	
-      case T_NIL:
-      case T_LIST:
-      case T_LAZYSEQ:
-      case T_STRING:
-      case T_CHAR_ARRAY:
-      case T_FILE:
-      case T_QUEUE:
+      if (is_seqable_type(_type(coll))) {
 	s_return(sc, mk_pointer(conjoin(sc, coll, arg1)));
       }
     }
@@ -6615,9 +6604,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     s_return(sc, arg0);
     
   case OP_SAVE_FORCED:         /* Save forced value replacing lazy-seq or delay */
-    if (!is_cell(sc->code)) {
-      s_return(sc, sc->code);
-    } else {
+    if (is_cell(sc->code)) {
       nanoclj_cell_t * c = decode_pointer(sc->code);
       _set_realized(c);
       if (_type(c) == T_DELAY) {
@@ -6628,12 +6615,17 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	_set_car(c, mk_nil());
 	_set_cdr(c, mk_nil());
 	s_return(sc, sc->EMPTY);
-      } else {
-	_set_car(c, car(sc->value));
-	_set_cdr(c, cdr(sc->value));
-	s_return(sc, sc->code);
+      } else if (is_cell(sc->value)) {
+	nanoclj_cell_t * c2 = decode_pointer(sc->value);
+	if (is_seqable_type(_type(c2))) {
+	  _set_car(c, first(sc, c2));
+	  _set_cdr(c, mk_pointer(rest(sc, c2)));
+	  s_return(sc, sc->code);
+	}
       }
+      Error_0(sc, "Value is not ISeqable");
     }
+    s_return(sc, sc->code);
     
   case OP_PR:               /* pr- */
   case OP_PRINT:            /* print- */
