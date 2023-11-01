@@ -80,6 +80,7 @@ As well as printing images in block mode like the plot function does, they can a
 - stb_image, stb_image_resize, stb_image_write (included)
 - dr_wav (included)
 - ggml (included, experimental)
+- zlib
 - libxml2
 - pcre2
 - cairo
@@ -92,7 +93,7 @@ As well as printing images in block mode like the plot function does, they can a
 ### Ubuntu
 
 ```
-sudo apt install libutf8proc-dev libsixel-dev libpcre2-dev libcairo2-dev libshp-dev libcurl4-gnutls-dev libxml2-dev libzip-dev
+sudo apt install libutf8proc-dev libsixel-dev libpcre2-dev libcairo2-dev libshp-dev libcurl4-dev libxml2-dev libz-dev
 mkdir build
 cd build
 cmake ..
