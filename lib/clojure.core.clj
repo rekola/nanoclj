@@ -231,22 +231,12 @@
                                              (pred (first coll)) (recur (rest coll) (conj acc (first coll)))
                                              :else (recur (rest coll) acc))))
 
-; Stacks
-
-(def peek (fn [coll] (cond (empty? coll) '()
-			   (vector? coll) (coll (dec (count coll)))
-                           :else (first coll))))
-(def pop (fn [coll] (cond (empty? coll) '()
-     	     	    	  (vector? coll) (butlast coll)
-			  :else (rest coll))))
-
-
 (def range (fn ([]               (iterate inc 0))
                ([end]            (range 0 end))
                ([start end]      (if (ge start end) '() (cons start (lazy-seq (range (inc start) end)))))
      	       ([start end step] (if (ge start end) '() (cons start (lazy-seq (range (+ start step) end step)))))
              ))
-                                       
+
 (defn doall [seq] (if (empty? seq) '() (cons (first seq) (doall (rest seq)))))
 (defn dorun [seq] (if (empty? seq) nil (recur (rest seq))))
 

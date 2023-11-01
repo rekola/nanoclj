@@ -14,12 +14,14 @@ typedef enum {
 } nanoclj_internal_format_t;
 
 typedef struct {
+  size_t refcnt;
   int32_t width, height, stride;
   nanoclj_internal_format_t format;
   unsigned char * data;
 } nanoclj_image_t;
 
 typedef struct {
+  size_t refcnt;
   int32_t frames, channels, sample_rate;
   float * data;
 } nanoclj_audio_t;

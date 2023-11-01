@@ -190,9 +190,10 @@ enum nanoclj_types {
   T_NUM_FMT_EXCEPTION = 44,
   T_ARITHMETIC_EXCEPTION = 45,
   T_CLASS_CAST_EXCEPTION = 46,
-  T_TENSOR = 47,
-  T_GRAPH = 48,
-  T_LAST_SYSTEM_TYPE = 49
+  T_ILLEGAL_STATE_EXCEPTION = 47,
+  T_TENSOR = 48,
+  T_GRAPH = 49,
+  T_LAST_SYSTEM_TYPE = 50
 };
 
 typedef struct {
@@ -354,6 +355,7 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define _cons_metadata(p)	  ((p)->_object._cons.meta)
 #define _ff_metadata(p)		  ((p)->_object._ff.meta)
 #define _image_metadata(p)	  ((p)->_object._image.meta)
+#define _audio_metadata(p)	  ((p)->_object._audio.meta)
 
 #define _is_realized(p)           (p->flags & T_REALIZED)
 #define _set_realized(p)          (p->flags |= T_REALIZED)
@@ -382,7 +384,7 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define _column_unchecked(p)	  ((p)->_object._port.column)
 
 #define _image_unchecked(p)	  ((p)->_object._image.rep)
-#define _audio_unchecked(p)	  ((p)->_object._audio)
+#define _audio_unchecked(p)	  ((p)->_object._audio.rep)
 #define _tensor_unchecked(p)	  ((p)->_object._tensor.impl)
 #define _lvalue_unchecked(p)      ((p)->_object._lvalue)
 #define _re_unchecked(p)	  ((p)->_object._re)
@@ -533,6 +535,8 @@ static inline nanoclj_cell_t * get_metadata(nanoclj_cell_t * c) {
     return _ff_metadata(c);
   case T_IMAGE:
     return _image_metadata(c);
+  case T_AUDIO:
+    return _audio_metadata(c);
   }
   return NULL;
 }
@@ -560,6 +564,9 @@ static inline void set_metadata(nanoclj_cell_t * c, nanoclj_cell_t * meta) {
     break;
   case T_IMAGE:
     _image_metadata(c) = meta;
+    break;
+  case T_AUDIO:
+    _audio_metadata(c) = meta;
     break;
   }
 }
@@ -853,14 +860,14 @@ static inline imageview_t _to_imageview(nanoclj_cell_t * c) {
     }
 #endif
   }
-  return (imageview_t){ 0 };  
+  return (imageview_t){ 0 };
 }
 
 static inline imageview_t to_imageview(nanoclj_val_t p) {
   if (is_cell(p)) {
     return _to_imageview(decode_pointer(p));
   } else {
-    return (imageview_t){ 0 };  
+    return (imageview_t){ 0 };
   }
 }
 
@@ -1042,14 +1049,18 @@ static inline void finalize_cell(nanoclj_t * sc, nanoclj_cell_t * a) {
     break;
   case T_IMAGE:{
     nanoclj_image_t * image = _image_unchecked(a);
-    sc->free(image->data);
-    sc->free(image);
+    if (--(image->refcnt)) {
+      sc->free(image->data);
+      sc->free(image);
+    }
   }
     break;
   case T_AUDIO:{
     nanoclj_audio_t * audio = _audio_unchecked(a);
-    sc->free(audio->data);
-    sc->free(audio);
+    if (--(audio->refcnt)) {
+      sc->free(audio->data);
+      sc->free(audio);
+    }
   }
     break;
   case T_REGEX:
@@ -1092,7 +1103,6 @@ static inline nanoclj_cell_t * get_cell_x(nanoclj_t * sc, uint16_t type_id, uint
   } else {
     sc->pending_exception = sc->OutOfMemoryError;
   }
-  
   return x;
 }
 
@@ -1227,6 +1237,7 @@ static inline nanoclj_val_t mk_image(nanoclj_t * sc, int32_t width, int32_t heig
       if (!image) {
 	sc->free(data);
       } else {
+	image->refcnt = 1;
 	image->data = data;
 	image->width = width;
 	image->height = height;
@@ -1257,17 +1268,16 @@ static inline nanoclj_val_t mk_audio(nanoclj_t * sc, size_t frames, int32_t chan
       if (!audio) {
 	sc->free(data);
       } else {
+	audio->refcnt = 1;
 	audio->data = data;
 	audio->frames = frames;
 	audio->channels = channels;
 	audio->sample_rate = sample_rate;
-  
 	_audio_unchecked(x) = audio;
-  
+	
 #if RETAIN_ALLOCS
 	retain(sc, x);
 #endif
-
 	return mk_pointer(x);
       }
     }
@@ -1464,6 +1474,10 @@ static inline nanoclj_cell_t * mk_arithmetic_exception(nanoclj_t * sc, const cha
 
 static inline nanoclj_cell_t * mk_class_cast_exception(nanoclj_t * sc, const char * msg) {
   return get_cell(sc, T_CLASS_CAST_EXCEPTION, 0, mk_string(sc, msg), NULL, NULL);
+}
+
+static inline nanoclj_cell_t * mk_illegal_state_exception(nanoclj_t * sc, const char * msg) {
+  return get_cell(sc, T_ILLEGAL_STATE_EXCEPTION, 0, mk_string(sc, msg), NULL, NULL);
 }
 
 static inline nanoclj_cell_t * mk_arity_exception(nanoclj_t * sc, int n_args, nanoclj_val_t ns, nanoclj_val_t fn) {
@@ -3504,7 +3518,9 @@ static inline nanoclj_val_t slurp(nanoclj_t * sc, uint16_t t, nanoclj_cell_t * a
       size += append_bytes(sc, array, &b, 1);
     }
   }
-  return mk_pointer(_get_string_object(sc, T_STRING, 0, size, array));
+  nanoclj_val_t r = mk_pointer(_get_string_object(sc, T_STRING, 0, size, array));
+  port_close(sc, rdr);
+  return r;
 }
 
 static inline bool file_push(nanoclj_t * sc, nanoclj_val_t f) {
@@ -3973,7 +3989,7 @@ static inline bool print_imageview(nanoclj_t * sc, imageview_t iv, nanoclj_cell_
     }
   case port_file:
     if (pr->stdio.file == stdout) {
-      switch (sc->term_graphics) {	
+      switch (sc->term_graphics) {
       case nanoclj_no_gfx: break;
 #if NANOCLJ_SIXEL
       case nanoclj_sixel:
@@ -3991,7 +4007,7 @@ static inline bool print_imageview(nanoclj_t * sc, imageview_t iv, nanoclj_cell_
     }
   }
 
-  return false;  
+  return false;
 }
 
 static inline nanoclj_cell_t * get_type_object(nanoclj_t * sc, nanoclj_val_t v) {
@@ -4154,7 +4170,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
       case T_ENVIRONMENT:{
 	nanoclj_val_t name_v;
 	if (get_elem(sc, _cons_metadata(c), sc->NAME, &name_v)) {
-	  sv = to_strview(name_v);	  
+	  sv = to_strview(name_v);
 	}
 	if (print_flag) {
 	  sv = (strview_t){
@@ -6130,6 +6146,45 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	}
       }
     }
+
+  case OP_POP:
+    if (!unpack_args_1(sc, &arg0)) {
+      return false;
+    } else if (is_cell(arg0)) {
+      nanoclj_cell_t * c = decode_pointer(arg0);
+      if (is_empty(sc, c)) {
+	nanoclj_throw(sc, mk_illegal_state_exception(sc, "Can't pop empty collection"));
+	return false;
+      } else {
+	int t = _type(c);
+	if (t == T_VECTOR || t == T_STRING) {
+	  s_return(sc, mk_pointer(remove_suffix(sc, c, 1)));
+	} else if (t == T_QUEUE) {
+	  s_return(sc, mk_pointer(remove_prefix(sc, c, 1)));
+	} else if (is_seqable_type(t)) {
+	  s_return(sc, mk_pointer(rest(sc, c)));
+	}
+      }
+    }
+    Error_0(sc, "No protocol method IStack.-pop defined for type");
+
+  case OP_PEEK:
+    if (!unpack_args_1(sc, &arg0)) {
+      return false;
+    } else if (is_cell(arg0)) {
+      nanoclj_cell_t * c = decode_pointer(arg0);
+      if (c) {
+	int t = _type(c);
+	if (t != T_QUEUE && is_vector_type(t)) {
+	  size_t s = get_size(c);
+	  if (s >= 1) s_return(sc, vector_elem(c, get_size(c) - 1));
+	  else s_return(sc, mk_nil());
+	} else if (is_seqable_type(t)) {
+	  s_return(sc, first(sc, c));
+	}
+      }
+    }
+    Error_0(sc, "No protocol method IStack.-peek defined for type");
     
   case OP_FIRST:                 /* first */
     if (!unpack_args_1(sc, &arg0)) {
@@ -6140,7 +6195,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	s_return(sc, first(sc, c));
       }
     }
-    Error_0(sc, "Value is not ISeqable");    
+    Error_0(sc, "Value is not ISeqable");
 
   case OP_SECOND:
     if (!unpack_args_1(sc, &arg0)) {
@@ -8037,9 +8092,10 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   nanoclj_cell_t * RuntimeException = mk_class(sc, "java.lang.RuntimeException", T_RUNTIME_EXCEPTION, Exception);
   nanoclj_cell_t * IllegalArgumentException = mk_class(sc, "java.lang.IllegalArgumentException", T_ILLEGAL_ARG_EXCEPTION, RuntimeException);
   nanoclj_cell_t * NumberFormatException = mk_class(sc, "java.lang.NumberFormatException", T_NUM_FMT_EXCEPTION, IllegalArgumentException);
-  nanoclj_cell_t * OutOfMemoryError = mk_class(sc, "java.lang.OutOfMemoryError", gentypeid(sc), sc->Throwable);    
+  nanoclj_cell_t * OutOfMemoryError = mk_class(sc, "java.lang.OutOfMemoryError", gentypeid(sc), sc->Throwable);
   nanoclj_cell_t * NullPointerException = mk_class(sc, "java.lang.NullPointerException", gentypeid(sc), RuntimeException);
   nanoclj_cell_t * ClassCastException = mk_class(sc, "java.lang.ClassCastException", T_CLASS_CAST_EXCEPTION, RuntimeException);
+  nanoclj_cell_t * IllegalStateException = mk_class(sc, "java.lang.IllegalStateException", T_ILLEGAL_STATE_EXCEPTION, RuntimeException);
   nanoclj_cell_t * AFn = mk_class(sc, "clojure.lang.AFn", gentypeid(sc), sc->Object);  
   
   mk_class(sc, "java.lang.Class", T_CLASS, AFn); /* non-standard parent */

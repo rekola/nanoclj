@@ -123,7 +123,10 @@ extern "C" {
 	nanoclj_image_t * rep;
 	struct nanoclj_cell_t * meta;
       } _image;
-      nanoclj_audio_t * _audio;
+      struct {
+	nanoclj_audio_t * rep;
+	struct nanoclj_cell_t * meta;
+      } _audio;
       struct {
 	int min_arity, max_arity;
 	foreign_func ptr;
