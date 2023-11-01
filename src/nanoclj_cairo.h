@@ -2,6 +2,7 @@
 #define _NANOCLJ_CAIRO_H_
 
 #include <cairo/cairo.h>
+#include <cairo/cairo-pdf.h>
 
 #define NANOCLJ_HAS_CANVAS 1
 
@@ -44,6 +45,22 @@ static inline void * mk_canvas(nanoclj_t * sc, int width, int height, int channe
   cairo_set_font_options(cr, options);
   cairo_font_options_destroy(options);
 
+  return cr;
+}
+
+static inline void * mk_canvas_pdf(nanoclj_t * sc, double width, double height, strview_t fn0, nanoclj_color_t fg, nanoclj_color_t bg) {
+  char * fn = alloc_c_str(sc, fn0);
+
+  cairo_surface_t * surface = cairo_pdf_surface_create(fn, width, height);
+  cairo_t * cr = cairo_create(surface);
+  cairo_surface_destroy(surface);
+  
+  if (bg.alpha > 0 && (bg.red != 255 || bg.green != 255 || bg.blue != 255) && width > 0 && height > 0) {
+    cairo_set_source_rgba(cr, bg.red / 255.0, bg.green / 255.0, bg.blue / 255.0, bg.alpha / 255.0);
+    cairo_rectangle(cr, 0, 0, width, height);
+    cairo_fill(cr);
+  }
+  cairo_set_source_rgba(cr, fg.red / 255.0, fg.green / 255.0, fg.blue / 255.0, fg.alpha / 255.0);
   return cr;
 }
 

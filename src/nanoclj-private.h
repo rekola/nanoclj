@@ -3,16 +3,8 @@
 
 #include "nanoclj.h"
 
-#ifndef CELL_SEGSIZE
-#define CELL_SEGSIZE    262144
-#endif
-
 #define NANOCLJ_SMALL_VEC_SIZE 2
 #define NANOCLJ_SMALL_STR_SIZE 24
-
-#ifndef GC_VERBOSE
-#define GC_VERBOSE 0
-#endif
 
 #ifndef STRBUFFSIZE
 #define STRBUFFSIZE 256
@@ -22,17 +14,20 @@
 extern "C" {
 #endif
 
+#include <zlib.h>
+
 #include "nanoclj_types.h"
 #include "nanoclj_threads.h"
 
   struct pcre2_real_code_8;
-	
+  
   typedef enum {
     port_free = 0,
-    port_file = 1,
-    port_string = 2,
-    port_callback = 3,
-    port_canvas = 4
+    port_file,
+    port_string,
+    port_callback,
+    port_canvas,
+    port_z
   } nanoclj_port_type_t;
   
   /* operator code */
@@ -85,6 +80,9 @@ extern "C" {
       void (*image) (imageview_t, void*);
     } callback;
     struct {
+      z_stream strm;
+    } z;
+    struct {
       void * impl;
     } canvas;
   } nanoclj_port_rep_t;
@@ -94,11 +92,11 @@ extern "C" {
     int32_t hasheq;
     uint16_t type;
     uint8_t flags;
-    uint8_t so_size;    
+    uint8_t so_size;
     union {
       struct {
 	uint8_t data[NANOCLJ_SMALL_STR_SIZE];
-      } _small_bytearray;      
+      } _small_bytearray;
       struct {
 	size_t offset, size;
 	union {
@@ -118,7 +116,7 @@ extern "C" {
       struct {
 	nanoclj_port_rep_t * rep;
 	int nesting;
-	uint8_t type, flags;	
+	uint8_t type, flags;
 	int32_t line, column;
       } _port;
       struct {
@@ -236,6 +234,7 @@ extern "C" {
     nanoclj_val_t WIDTH;	  /* :width */
     nanoclj_val_t HEIGHT;	  /* :height */
     nanoclj_val_t CHANNELS;	  /* :channels */
+    nanoclj_val_t GRAPHICS;	  /* :graphics */
     nanoclj_val_t WATCHES;	  /* :watches */
     nanoclj_val_t NAME;		  /* :name */
     nanoclj_val_t TYPE;		  /* :type */
@@ -248,6 +247,7 @@ extern "C" {
     nanoclj_val_t GRAY;		  /* :gray */
     nanoclj_val_t RGB;		  /* :rgb */
     nanoclj_val_t RGBA;		  /* :rgba */
+    nanoclj_val_t PDF;	          /* :pdf */
     
     nanoclj_val_t SORTED_SET;	  /* sorted-set */
     nanoclj_val_t ARRAY_MAP;	  /* array-map */

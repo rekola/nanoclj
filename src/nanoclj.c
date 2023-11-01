@@ -23,6 +23,14 @@
 // #define VECTOR_ARGS
 // #define RETAIN_ALLOCS 1
 
+#ifndef CELL_SEGSIZE
+#define CELL_SEGSIZE    262144
+#endif
+
+#ifndef GC_VERBOSE
+#define GC_VERBOSE 0
+#endif
+
 #ifdef _WIN32
 
 #if defined(_MSC_VER) && _MSC_VER < 1900
@@ -154,34 +162,36 @@ enum nanoclj_types {
   T_WRITER = 16,
   T_INPUT_STREAM = 17,
   T_OUTPUT_STREAM = 18,
-  T_VECTOR = 19,
-  T_MACRO = 20,
-  T_LAZYSEQ = 21,
-  T_ENVIRONMENT = 22,
-  T_CLASS = 23,
-  T_MAPENTRY = 24,
-  T_ARRAYMAP = 25,
-  T_SORTED_SET = 26,
-  T_VAR = 27,
-  T_FOREIGN_OBJECT = 28,
-  T_BIGINT = 29,
-  T_REGEX = 30,
-  T_DELAY = 31,
-  T_IMAGE = 32,
-  T_AUDIO = 33,
-  T_FILE = 34,
-  T_DATE = 35,
-  T_UUID = 36,
-  T_QUEUE = 37,
-  T_RUNTIME_EXCEPTION = 38,
-  T_ARITY_EXCEPTION = 39,
-  T_ILLEGAL_ARG_EXCEPTION = 40,
-  T_NUM_FMT_EXCEPTION = 41,
-  T_ARITHMETIC_EXCEPTION = 42,
-  T_CLASS_CAST_EXCEPTION = 43,
-  T_TENSOR = 44,
-  T_GRAPH = 45,
-  T_LAST_SYSTEM_TYPE = 46
+  T_GZIP_INPUT_STREAM = 19,
+  T_GZIP_OUTPUT_STREAM = 20,
+  T_VECTOR = 21,
+  T_MACRO = 22,
+  T_LAZYSEQ = 23,
+  T_ENVIRONMENT = 24,
+  T_CLASS = 25,
+  T_MAPENTRY = 26,
+  T_ARRAYMAP = 27,
+  T_SORTED_SET = 28,
+  T_VAR = 29,
+  T_FOREIGN_OBJECT = 30,
+  T_BIGINT = 31,
+  T_REGEX = 32,
+  T_DELAY = 33,
+  T_IMAGE = 34,
+  T_AUDIO = 35,
+  T_FILE = 36,
+  T_DATE = 37,
+  T_UUID = 38,
+  T_QUEUE = 39,
+  T_RUNTIME_EXCEPTION = 40,
+  T_ARITY_EXCEPTION = 41,
+  T_ILLEGAL_ARG_EXCEPTION = 42,
+  T_NUM_FMT_EXCEPTION = 43,
+  T_ARITHMETIC_EXCEPTION = 44,
+  T_CLASS_CAST_EXCEPTION = 45,
+  T_TENSOR = 46,
+  T_GRAPH = 47,
+  T_LAST_SYSTEM_TYPE = 48
 };
 
 typedef struct {
@@ -588,16 +598,6 @@ static inline char * _strvalue(nanoclj_cell_t * s) {
   }
 }
 
-static inline const char * strvalue(nanoclj_val_t p) {
-  if (is_cell(p)) {
-    nanoclj_cell_t * c = decode_pointer(p);
-    if (c && is_string_type(_type(c))) {
-      return _strvalue(c);
-    }
-  }
-  return "";
-}
-
 static inline long long to_long_w_def(nanoclj_val_t p, long long def) {
   switch (prim_type(p)) {
   case T_LONG:
@@ -699,7 +699,8 @@ static inline bool is_readable(nanoclj_cell_t * p) {
   if (!p) return false;
   switch (_type(p)) {
   case T_READER:
-  case T_INPUT_STREAM: return true;
+  case T_INPUT_STREAM:
+  case T_GZIP_INPUT_STREAM: return true;
   }
   return false;
 }
@@ -982,6 +983,10 @@ static inline int port_close(nanoclj_t * sc, nanoclj_cell_t * p) {
     }
   }
     break;
+  case port_z:{
+
+  }
+    break;
 #if NANOCLJ_HAS_CANVAS
   case port_canvas:
     finalize_canvas(sc, pr->canvas.impl);
@@ -1029,6 +1034,8 @@ static inline void finalize_cell(nanoclj_t * sc, nanoclj_cell_t * a) {
   case T_WRITER:
   case T_INPUT_STREAM:
   case T_OUTPUT_STREAM:
+  case T_GZIP_INPUT_STREAM:
+  case T_GZIP_OUTPUT_STREAM:
     port_close(sc, a);
     sc->free(_rep_unchecked(a));
     break;
@@ -1548,10 +1555,12 @@ static inline int32_t inchar(nanoclj_cell_t * p) {
     return EOF;
   }
   int32_t c;
-  if (_type(p) == T_INPUT_STREAM) { /* Binary */
-    c = inchar_raw(p);
-  } else {
+  switch (_type(p)) {
+  case T_READER: /* Text */
     c = inchar_utf8(p);
+    break;
+  default:
+    c = inchar_raw(p);
   }
   if (c == EOF) {
     /* Instead, set port_saw_EOF */
@@ -2388,6 +2397,8 @@ static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t
   case T_READER:
   case T_OUTPUT_STREAM:
   case T_INPUT_STREAM:
+  case T_GZIP_INPUT_STREAM:
+  case T_GZIP_OUTPUT_STREAM:
     if (key.as_long == sc->LINE.as_long) {
       if (result) {
 	int l = _line_unchecked(coll);
@@ -2398,6 +2409,8 @@ static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t
 	int c = _column_unchecked(coll);
 	*result = c != -1 ? mk_int(c) : mk_nil();
       }
+    } else if (key.as_long == sc->GRAPHICS.as_long) {
+      if (result) *result = mk_boolean(sc->term_graphics != nanoclj_no_gfx);
     } else {
       return false;
     }
@@ -3355,7 +3368,7 @@ static inline int http_open_thread(nanoclj_t * sc, strview_t sv) {
   return pipefd[0];
 }
 
-static inline nanoclj_val_t port_rep_from_file(nanoclj_t * sc, uint8_t type, FILE * f, char * filename) {
+static inline nanoclj_val_t port_rep_from_file(nanoclj_t * sc, uint16_t type, FILE * f, char * filename) {
   nanoclj_cell_t * p = get_port_object(sc, type, port_file);
   if (!p) return mk_nil();
 
@@ -3371,7 +3384,15 @@ static inline nanoclj_val_t port_rep_from_file(nanoclj_t * sc, uint8_t type, FIL
   return mk_pointer(p);
 }
 
-static inline nanoclj_val_t port_from_filename(nanoclj_t * sc, strview_t sv, uint16_t type) {
+static inline nanoclj_val_t port_from_stream(nanoclj_t * sc, uint16_t type, nanoclj_cell_t * stream) {
+  switch (type) {
+  case T_GZIP_INPUT_STREAM:
+  case T_GZIP_OUTPUT_STREAM:
+  }
+  return mk_nil();
+}
+
+static inline nanoclj_val_t port_from_filename(nanoclj_t * sc, uint16_t type, strview_t sv) {
   const char * mode;
   switch (type) {
   case T_WRITER: mode = "w"; break;
@@ -3380,7 +3401,7 @@ static inline nanoclj_val_t port_from_filename(nanoclj_t * sc, strview_t sv, uin
   case T_INPUT_STREAM: mode = "rb"; break;
   default: return mk_nil();
   }
-  
+
   FILE * f = NULL;
   char * filename = alloc_c_str(sc, sv);
   if (strcmp(filename, "-") == 0) {
@@ -3404,7 +3425,7 @@ static inline nanoclj_val_t port_from_filename(nanoclj_t * sc, strview_t sv, uin
   return port_rep_from_file(sc, type, f, filename);
 }
 
-static inline nanoclj_val_t port_from_string(nanoclj_t * sc, strview_t sv, uint8_t type) {
+static inline nanoclj_val_t port_from_string(nanoclj_t * sc, uint16_t type, strview_t sv) {
   nanoclj_cell_t * p = get_port_object(sc, type, port_string);
   if (!p) return mk_nil();
   
@@ -3415,26 +3436,33 @@ static inline nanoclj_val_t port_from_string(nanoclj_t * sc, strview_t sv, uint8
   pr->string.data = s;
   pr->string.read_pos = 0;
   
-  return mk_pointer(p);  
+  return mk_pointer(p);
 }
 
 static inline nanoclj_cell_t * mk_reader(nanoclj_t * sc, uint16_t t, nanoclj_cell_t * args) {
   nanoclj_val_t f = first(sc, args);
-  if (is_nil(f)) {
-    nanoclj_throw(sc, sc->NullPointerException);
-  } else {
-    switch (type(f)) {
-    case T_STRING:
-    case T_FILE:
-      return decode_pointer(port_from_filename(sc, to_strview(f), t));
-    case T_CHAR_ARRAY:
-      return decode_pointer(port_from_string(sc, to_strview(f), t));
-    case T_READER:
-    case T_INPUT_STREAM:
-      return decode_pointer(f);
+  if (is_cell(f)) {
+    nanoclj_cell_t * c = decode_pointer(f);
+    if (!c) {
+      nanoclj_throw(sc, sc->NullPointerException);
+    } else {
+      switch (_type(c)) {
+      case T_STRING:
+      case T_FILE:
+	return decode_pointer(port_from_filename(sc, t, _to_strview(c)));
+      case T_CHAR_ARRAY:
+	return decode_pointer(port_from_string(sc, t, _to_strview(c)));
+      case T_READER:
+      case T_INPUT_STREAM:
+	if (t == T_GZIP_INPUT_STREAM || t == T_GZIP_OUTPUT_STREAM) {
+	  return decode_pointer(port_from_stream(sc, t, c));
+	} else {
+	  return c;
+	}
+      }
     }
   }
-  return NULL;  
+  return NULL;
 }
 
 static inline nanoclj_val_t slurp(nanoclj_t * sc, uint16_t t, nanoclj_cell_t * args) {
@@ -3457,7 +3485,7 @@ static inline nanoclj_val_t slurp(nanoclj_t * sc, uint16_t t, nanoclj_cell_t * a
 }
 
 static inline bool file_push(nanoclj_t * sc, nanoclj_val_t f) {
-  nanoclj_val_t p = port_from_filename(sc, to_strview(f), T_READER);
+  nanoclj_val_t p = port_from_filename(sc, T_READER, to_strview(f));
   if (!is_nil(p)) {
     valarray_push(sc, sc->load_stack, p);
     return !sc->pending_exception;
@@ -4683,14 +4711,16 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
     /* make closure. first is code. second is environment */
     return mk_pointer(get_cell(sc, t, 0, mk_pointer(cons(sc, sc->EMPTY, decode_pointer(first(sc, args)))), sc->envir, NULL));
     
+  case T_READER:
   case T_INPUT_STREAM:
-  case T_READER:  
+  case T_GZIP_INPUT_STREAM:
     return mk_pointer(mk_reader(sc, t, args));
-		      
-  case T_OUTPUT_STREAM:
+    
   case T_WRITER:
+  case T_OUTPUT_STREAM:
+  case T_GZIP_OUTPUT_STREAM:
     if (!args) {
-      return port_from_string(sc, mk_strview(0), t);
+      return port_from_string(sc, t, mk_strview(0));
     } else {
       x = first(sc, args);
       if (is_nil(x)) {
@@ -4699,41 +4729,52 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
       } else if (type(x) == t) {
 	return x;
       } else if (is_string(x) || is_file(x)) {
-	return port_from_filename(sc, to_strview(x), t);
+	return port_from_filename(sc, t, to_strview(x));
       } else if (is_char_array(x)) {
-	return port_from_string(sc, to_strview(x), t);
+	return port_from_string(sc, t, to_strview(x));
       } else {
 	args = next(sc, args);
 	if (args && t == T_WRITER) {
 	  y = first(sc, args);
 	  nanoclj_color_t fill_color = sc->bg_color;
 	  int channels = 3;
+	  strview_t pdf_fn = { 0 };
 	  for (args = next(sc, args); args; args = next(sc, args)) {
 	    nanoclj_val_t a = first(sc, args);
 	    if (a.as_long == sc->GRAY.as_long) {
 	      channels = 1;
-	      a = second(sc, args);
 	    } else if (a.as_long == sc->RGB.as_long) {
 	      channels = 3;
-	      a = second(sc, args);
 	    } else if (a.as_long == sc->RGBA.as_long) {
 	      channels = 4;
-	      a = second(sc, args);
-	    }
-	    if (!is_nil(a)) {
+	    } else if (a.as_long == sc->PDF.as_long) {
+	      channels = 0;
+	      args = next(sc, args);
+	      pdf_fn = to_strview(first(sc, args));
+	    } else if (!is_nil(a)) {
 	      fill_color = to_color(a);
 	    }
 	  }
 #if NANOCLJ_HAS_CANVAS
-	  nanoclj_cell_t * port = get_port_object(sc, t, port_canvas);
-	  _rep_unchecked(port)->canvas.impl = mk_canvas(sc,
-							(int)(to_double(x) * sc->window_scale_factor),
-							(int)(to_double(y) * sc->window_scale_factor),
-							channels,
-							sc->fg_color, fill_color);
-	  return mk_pointer(port);
+	  if (channels) {
+	    nanoclj_cell_t * port = get_port_object(sc, t, port_canvas);
+	    _rep_unchecked(port)->canvas.impl = mk_canvas(sc,
+							  (int)(to_double(x) * sc->window_scale_factor),
+							  (int)(to_double(y) * sc->window_scale_factor),
+							  channels,
+							  sc->fg_color, fill_color);
+	    return mk_pointer(port);
+	  } else if (pdf_fn.size) {
+	    nanoclj_cell_t * port = get_port_object(sc, t, port_canvas);
+	    _rep_unchecked(port)->canvas.impl = mk_canvas_pdf(sc,
+							      (int)(to_double(x) * sc->window_scale_factor),
+							      (int)(to_double(y) * sc->window_scale_factor),
+							      pdf_fn,
+							      sc->fg_color, fill_color);
+	    return mk_pointer(port);
+	  }
 #endif
-	}	
+	}
       }
       return mk_nil();
     }
@@ -4923,7 +4964,7 @@ static NANOCLJ_THREAD_SIG thread_main(void *ptr) {
   return 0;
 }
 
-static inline void start_thread(nanoclj_t * sc, nanoclj_val_t code) {
+static inline void eval_in_thread(nanoclj_t * sc, nanoclj_val_t code) {
   nanoclj_t * child = sc->malloc(sizeof(nanoclj_t));
   memcpy(child, sc, sizeof(nanoclj_t));
   
@@ -5478,7 +5519,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     if (!is_list(sc->code)) {
       s_return(sc, sc->code);
     }
-    start_thread(sc, sc->code);
+    eval_in_thread(sc, sc->code);
     s_return(sc, mk_nil());
 
   case OP_IF0:                 /* if */
@@ -6567,13 +6608,16 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     } else if (is_nil(arg0)) {
       nanoclj_throw(sc, sc->NullPointerException);
       return false;
-    } else {
-      switch (type(arg0)) {
+    } else if (is_cell(arg0)) {
+      nanoclj_cell_t * c = decode_pointer(arg0);
+      switch (_type(c)) {
       case T_READER:
       case T_WRITER:
       case T_INPUT_STREAM:
       case T_OUTPUT_STREAM:
-	s_return(sc, mk_int(port_close(sc, decode_pointer(arg0))));
+      case T_GZIP_INPUT_STREAM:
+      case T_GZIP_OUTPUT_STREAM:
+	s_return(sc, mk_int(port_close(sc, c)));
       }
       s_return(sc, mk_nil());
     }
@@ -7652,16 +7696,12 @@ static size_t size_checked(nanoclj_t * sc, nanoclj_val_t coll) {
   }
 }
 
-void nanoclj_intern(nanoclj_t * sc, nanoclj_val_t ns, nanoclj_val_t symbol, nanoclj_val_t value) {
-  intern(sc, decode_pointer(ns), symbol, value);  
-}
-
 nanoclj_val_t nanoclj_mk_vector(nanoclj_t * sc, size_t size) {
   return mk_pointer(mk_vector(sc, size));
 }
 
 static struct nanoclj_interface vtbl = {
-  nanoclj_intern,
+  intern,
   cons_checked,
   mk_integer,
   mk_real,
@@ -7673,7 +7713,7 @@ static struct nanoclj_interface vtbl = {
   mk_boolean,
 
   is_string,
-  strvalue,
+  to_strview,
   is_number,
   to_long,
   to_double,
@@ -7929,6 +7969,7 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   sc->WIDTH = def_keyword(sc, "width");
   sc->HEIGHT = def_keyword(sc, "height");
   sc->CHANNELS = def_keyword(sc, "channels");
+  sc->GRAPHICS = def_keyword(sc, "graphics");
   sc->WATCHES = def_keyword(sc, "watches");
   sc->NAME = def_keyword(sc, "name");
   sc->TYPE = def_keyword(sc, "type");
@@ -7941,6 +7982,7 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   sc->GRAY = def_keyword(sc, "gray");
   sc->RGB = def_keyword(sc, "rgb");
   sc->RGBA = def_keyword(sc, "rgba");
+  sc->PDF = def_keyword(sc, "pdf");
   
   sc->SORTED_SET = def_symbol(sc, "sorted-set");
   sc->ARRAY_MAP = def_symbol(sc, "array-map");
@@ -7973,9 +8015,9 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   nanoclj_cell_t * NumberFormatException = mk_class(sc, "java.lang.NumberFormatException", T_NUM_FMT_EXCEPTION, IllegalArgumentException);
   nanoclj_cell_t * OutOfMemoryError = mk_class(sc, "java.lang.OutOfMemoryError", gentypeid(sc), sc->Throwable);    
   nanoclj_cell_t * NullPointerException = mk_class(sc, "java.lang.NullPointerException", gentypeid(sc), RuntimeException);
-  nanoclj_cell_t * ClassCastException = mk_class(sc, "java.lang.ClassCastException", T_CLASS_CAST_EXCEPTION, RuntimeException);  
+  nanoclj_cell_t * ClassCastException = mk_class(sc, "java.lang.ClassCastException", T_CLASS_CAST_EXCEPTION, RuntimeException);
   nanoclj_cell_t * AFn = mk_class(sc, "clojure.lang.AFn", gentypeid(sc), sc->Object);  
-    
+  
   mk_class(sc, "java.lang.Class", T_CLASS, AFn); /* non-standard parent */
   mk_class(sc, "java.lang.String", T_STRING, sc->Object);
   mk_class(sc, "java.lang.Boolean", T_BOOLEAN, sc->Object);
@@ -7986,6 +8028,8 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   mk_class(sc, "java.io.Writer", T_WRITER, sc->Object);
   mk_class(sc, "java.io.InputStream", T_INPUT_STREAM, sc->Object);
   mk_class(sc, "java.io.OutputStream", T_OUTPUT_STREAM, sc->Object);
+  mk_class(sc, "java.util.zip.GZIPInputStream", T_GZIP_INPUT_STREAM, sc->Object);
+  mk_class(sc, "java.util.zip.GZIPOutputStream", T_GZIP_OUTPUT_STREAM, sc->Object);
   mk_class(sc, "java.io.File", T_FILE, sc->Object);
   mk_class(sc, "java.util.Date", T_DATE, sc->Object);
   mk_class(sc, "java.util.UUID", T_UUID, sc->Object);
@@ -8055,7 +8099,7 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   } else {
     intern(sc, sc->global_env, sc->THEME, def_keyword(sc, "bright"));
   }
-     
+  
   return sc->pending_exception == NULL;
 }
 
@@ -8112,7 +8156,7 @@ void nanoclj_deinit(nanoclj_t * sc) {
   
   sc->load_stack->size = 0;
 
-  gc(sc, NULL, NULL, NULL);  
+  gc(sc, NULL, NULL, NULL);
 }
 
 void nanoclj_deinit_shared(nanoclj_t * sc, nanoclj_shared_context_t * ctx) {
@@ -8128,12 +8172,12 @@ void nanoclj_deinit_shared(nanoclj_t * sc, nanoclj_shared_context_t * ctx) {
 bool nanoclj_load_named_file(nanoclj_t * sc, const char *filename) {
   dump_stack_reset(sc);
 
-  nanoclj_val_t p = port_from_filename(sc, mk_strview(filename), T_READER);
+  nanoclj_val_t p = port_from_filename(sc, T_READER, mk_strview(filename));
 
   sc->envir = sc->global_env;
   valarray_push(sc, sc->load_stack, p);
   sc->args = NULL;
-    
+  
   Eval_Cycle(sc, OP_T0LVL);
 
   return sc->pending_exception == NULL;
@@ -8142,7 +8186,7 @@ bool nanoclj_load_named_file(nanoclj_t * sc, const char *filename) {
 nanoclj_val_t nanoclj_eval_string(nanoclj_t * sc, const char *cmd, size_t len) {
   dump_stack_reset(sc);
 
-  nanoclj_val_t p = port_from_string(sc, (strview_t){ cmd, len }, T_READER);
+  nanoclj_val_t p = port_from_string(sc, T_READER, (strview_t){ cmd, len });
   
   sc->envir = sc->global_env;
   valarray_push(sc, sc->load_stack, p);
@@ -8229,7 +8273,7 @@ int main(int argc, const char **argv) {
 	  nanoclj_val_t v = slot_value_in_env(x);
 	  nanoclj_call(&sc, v, sc.EMPTY);
 	}
-      }    
+      }
     } else {
       const char * expr = "(clojure.repl/repl)";
       nanoclj_eval_string(&sc, expr, strlen(expr));

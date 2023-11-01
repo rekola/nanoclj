@@ -10,8 +10,11 @@ extern "C" {
 #endif
 
 #include "nanoclj_types.h"
-  
+
 /* #define USE_RECUR_REGISTER */
+
+struct nanoclj_cell_t;
+typedef struct nanoclj_cell_t nanoclj_cell_t;
 
 /*
  * Default values for #define'd symbols
@@ -81,7 +84,7 @@ extern "C" {
   NANOCLJ_EXPORT nanoclj_val_t nanoclj_eval(nanoclj_t * sc, nanoclj_val_t obj);
   void nanoclj_set_external_data(nanoclj_t * sc, void *p);
   void nanoclj_set_object_invoke_callback(nanoclj_t * sc, nanoclj_val_t (*func) (nanoclj_t *, void *, nanoclj_val_t));
-  NANOCLJ_EXPORT void nanoclj_intern(nanoclj_t * sc, nanoclj_val_t ns, nanoclj_val_t symbol, nanoclj_val_t value);
+  NANOCLJ_EXPORT void nanoclj_intern(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t symbol, nanoclj_val_t value);
 
   typedef nanoclj_val_t(*foreign_func) (nanoclj_t *, nanoclj_val_t);
 
@@ -100,7 +103,7 @@ extern "C" {
 
 #if USE_INTERFACE
   struct nanoclj_interface {
-    void (*nanoclj_intern) (nanoclj_t * sc, nanoclj_val_t ns, nanoclj_val_t symbol, nanoclj_val_t value);
+    nanoclj_val_t (*intern) (nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t symbol, nanoclj_val_t value);
     nanoclj_val_t (*cons) (nanoclj_t * sc, nanoclj_val_t head, nanoclj_val_t tail);
     nanoclj_val_t (*mk_integer) (nanoclj_t * sc, long long num);
     nanoclj_val_t (*mk_real) (double num);
@@ -112,7 +115,7 @@ extern "C" {
     nanoclj_val_t (*mk_boolean) (bool b);
     
     bool (*is_string) (nanoclj_val_t p);
-    const char *(*string_value) (nanoclj_val_t p);
+    strview_t (*to_strview) (nanoclj_val_t p);
     bool (*is_number) (nanoclj_val_t p);
     long long (*to_long) (nanoclj_val_t p);
     double (*to_double) (nanoclj_val_t p);
