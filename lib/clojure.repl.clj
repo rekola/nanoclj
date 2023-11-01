@@ -15,30 +15,32 @@
   [pattern] (filter (fn [s] (clojure.string/includes? (str s) pattern)) (ns-interns root)))
 
 (defn ^:private draw-banner
-  [] (let [label "nanoclj"
-           v-margin 5
-           h-margin 0
-           [cell-width cell-height] *cell-size*
-           cx (clojure.java.io/writer 0 0 :gray)]
-       (with-out cx
-         (set-font-size (* 1.5 cell-height))
-         (let [[ label-w label-h ] (get-text-extents label)
-               y-pos (* 1.3 cell-height)]
-           (resize (* 2 (+ h-margin label-w)) (* 2 cell-height))
-           (set-font-size (* 1.5 cell-height))
-           (move-to h-margin y-pos)
-           (print label)
-           (set-font-size (* 0.6 cell-height))
-           (print (System/getProperty "nanoclj.version"))
-           (flush)
-           ))))
-    
+  [label version] (if (*out* :graphics)
+                    (let [v-margin 5
+                          h-margin 0
+                          [cell-width cell-height] *cell-size*
+                          cx (clojure.java.io/writer 0 0 :gray)]
+                      (with-out cx
+                        (set-font-size (* 1.5 cell-height))
+                        (let [[ label-w label-h ] (get-text-extents label)
+                              y-pos (* 1.3 cell-height)]
+                          (resize (* 2 (+ h-margin label-w)) (* 2 cell-height))
+                          (set-font-size (* 1.5 cell-height))
+                          (move-to h-margin y-pos)
+                          (print label)
+                          (set-font-size (* 0.6 cell-height))
+                          (print version)
+                          (flush)
+                          )))
+                    (str label \space version)))
+
+
 (defn repl
   "Starts the REPL"
   []
                                         ; (in-ns 'user)
   (mode :block)
-  (pr (draw-banner))
+  (print (draw-banner "nanoclj" (System/getProperty "nanoclj.version")))
   (newline)
   
   (let [hfn (clojure.java.io/file (System/getProperty "user.home") "/.nanoclj_history")
