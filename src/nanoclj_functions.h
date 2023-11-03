@@ -352,11 +352,12 @@ static inline nanoclj_val_t Image_load(nanoclj_t * sc, nanoclj_cell_t * args) {
     return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string_fmt(sc, "%s [%.*s]", stbi_failure_reason(), (int)src_sv.size, src_sv.ptr)));
   }
 
-  nanoclj_cell_t * meta = mk_arraymap(sc, 3);
+  nanoclj_cell_t * meta = mk_arraymap(sc, 2);
   set_vector_elem(meta, 0, mk_mapentry(sc, sc->WIDTH, mk_int(w)));
   set_vector_elem(meta, 1, mk_mapentry(sc, sc->HEIGHT, mk_int(h)));
-  set_vector_elem(meta, 2, mk_mapentry(sc, sc->FILE, src));
-
+  if (is_string(src) || is_file(src)) {
+    meta = conjoin(sc, meta, mk_mapentry(sc, sc->FILE, src));
+  }  
   nanoclj_internal_format_t f;
   switch (channels) {
   case 1: f = nanoclj_r8; break;
@@ -799,16 +800,71 @@ static inline nanoclj_val_t Geo_load(nanoclj_t * sc, nanoclj_cell_t * args) {
 static inline nanoclj_val_t Graph_load(nanoclj_t * sc, nanoclj_cell_t * args) {
   nanoclj_val_t src = first(sc, args);
   strview_t sv = to_strview(slurp(sc, T_READER, args));
-
-  xmlDoc * doc = xmlReadMemory(sv.ptr, sv.size, "noname.xml", NULL, 0);
-  if (doc == NULL) {
-    return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Could not parse file")));    
+  char * fn = NULL;
+  if (is_file(src) || is_string(src)) {
+    fn = alloc_c_str(sc, to_strview(src));
   }
+  xmlDoc * doc = xmlReadMemory(sv.ptr, sv.size, fn, NULL, 0);
+  if (doc == NULL) {
+    nanoclj_cell_t * e = mk_runtime_exception(sc, mk_string_fmt(sc, "Could not parse GraphML file [%s]", fn ? fn : ""));
+    sc->free(fn);
+    return nanoclj_throw(sc, e);
+  }
+  sc->free(fn);
+
   xmlNode * root = xmlDocGetRootElement(doc);
+  xmlNode * node = NULL, * graph_node = NULL;
+  for (node = root->children; node; node = node->next) {
+    if (node->type == XML_ELEMENT_NODE && strcmp((const char *)node->name, "graph") == 0) {
+      graph_node = node;
+    } else if (node->type == XML_ELEMENT_NODE && strcmp((const char *)node->name, "key") == 0) {
+      /* TODO: Handle key */
+    }
+  }
+  if (!graph_node) return mk_nil();
+
+  nanoclj_graph_array_t * g = mk_graph_array(sc);
   
-  
+  for (node = graph_node->children; node; node = node->next) {
+    if (node->type == XML_ELEMENT_NODE && strcmp((const char *)node->name, "edge") == 0) {
+
+    } else if (node->type == XML_ELEMENT_NODE && strcmp((const char *)node->name, "node") == 0) {
+      nanoclj_val_t id = mk_nil();
+      xmlAttr* property = node->properties;
+      for (; property; property = property->next) {
+	if (strcmp((const char *)property->name, "id") != 0) continue;
+	xmlChar * value = xmlNodeListGetString(doc, property->children, 1);
+	id = mk_string(sc, (const char *)value);
+	xmlFree(value);
+      }
+      nanoclj_cell_t * attributes = mk_arraymap(sc, 0);
+      xmlNode * child = node->children;
+      for (; child; child = child->next) {
+	if (child->type != XML_ELEMENT_NODE || strcmp((const char *)child->name, "data") != 0) continue;
+	xmlAttr * child_property = child->properties;
+	nanoclj_val_t key = mk_nil(), value = mk_nil();
+	for (; child_property; child_property = child_property->next) {
+	  if (strcmp((const char*)child_property->name, "key") == 0) {
+	    xmlChar * value = xmlNodeListGetString(doc, child_property->children, 1);
+	    key = mk_string(sc, (const char *)value);
+	    xmlFree(value);
+	  }
+	}
+	xmlNode * content = child->children;
+	if (content && content->type == XML_TEXT_NODE) {
+	  value = mk_string(sc, (const char *)content->content);
+	}
+	if (!is_nil(key)) {
+	  attributes = conjoin(sc, attributes, mk_mapentry(sc, key, value));
+	}
+      }
+      if (!is_nil(id)) {
+	graph_array_append_node(sc, g, mk_mapentry(sc, id, mk_pointer(attributes)));
+      }
+    }
+  }
   xmlFreeDoc(doc);
-  return mk_nil();
+  return mk_pointer(mk_graph(sc, 0, g->num_nodes, g));
 }
 
 static inline nanoclj_val_t create_xml_node(nanoclj_t * sc, xmlNode * input) {
@@ -824,7 +880,7 @@ static inline nanoclj_val_t create_xml_node(nanoclj_t * sc, xmlNode * input) {
 	if (!content) content = mk_vector(sc, 0);
 	content = conjoin(sc, content, child);
 	retain(sc, content);
-      }     
+      }
     }
 
     xmlAttr* attribute = input->properties;
@@ -838,7 +894,7 @@ static inline nanoclj_val_t create_xml_node(nanoclj_t * sc, xmlNode * input) {
 	attrs = conjoin(sc, attrs, e);
       }
       retain(sc, attrs);
-      xmlFree(value); 
+      xmlFree(value);
     }
     
     output = mk_arraymap(sc, 1 + (content ? 1 : 0) + (attrs ? 1 : 0));
@@ -869,11 +925,17 @@ static inline nanoclj_val_t create_xml_node(nanoclj_t * sc, xmlNode * input) {
 static inline nanoclj_val_t clojure_xml_parse(nanoclj_t * sc, nanoclj_cell_t * args) {
   nanoclj_val_t src = first(sc, args);
   strview_t sv = to_strview(slurp(sc, T_READER, args));
-
-  xmlDoc * doc = xmlReadMemory(sv.ptr, sv.size, "noname.xml", NULL, 0);
-  if (doc == NULL) {
-    return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Could not parse file")));
+  char * fn = NULL;
+  if (is_file(src) || is_string(src)) {
+    fn = alloc_c_str(sc, to_strview(src));
   }
+  xmlDoc * doc = xmlReadMemory(sv.ptr, sv.size, fn, NULL, 0);
+  if (doc == NULL) {
+    nanoclj_cell_t * e = mk_runtime_exception(sc, mk_string_fmt(sc, "Could not parse xml file [%s]", fn ? fn : ""));
+    sc->free(fn);
+    return nanoclj_throw(sc, e);
+  }
+  sc->free(fn);
   nanoclj_val_t xml = create_xml_node(sc, xmlDocGetRootElement(doc));
   xmlFreeDoc(doc);
   return xml;
@@ -1124,7 +1186,7 @@ static inline void register_functions(nanoclj_t * sc) {
   nanoclj_cell_t * Geo = def_namespace(sc, "Geo", __FILE__);
   nanoclj_cell_t * xml = def_namespace(sc, "clojure.xml", __FILE__);
   nanoclj_cell_t * csv = def_namespace(sc, "clojure.data.csv", __FILE__);
-    
+  
   intern_foreign_func(sc, Thread, "sleep", Thread_sleep, 1, 1);
   
   intern_foreign_func(sc, System, "exit", System_exit, 1, 1);
@@ -1179,8 +1241,8 @@ static inline void register_functions(nanoclj_t * sc) {
   intern_foreign_func(sc, linenoise, "history-load", linenoise_history_load, 1, 1);
   intern_foreign_func(sc, linenoise, "history-append", linenoise_history_append, 1, 2);
 
-  init_linenoise(sc);  
-#endif  
+  init_linenoise(sc);
+#endif
 }
 
 #endif

@@ -1,13 +1,17 @@
 #ifndef _NANOCLJ_TYPES_H_
 #define _NANOCLJ_TYPES_H_
 
+typedef union {
+  uint64_t as_long;
+  double as_double;
+} nanoclj_val_t;
+
 typedef enum {
   nanoclj_r8 = 1,
   nanoclj_ra8,
   nanoclj_rgb8,
   nanoclj_rgb565,
   nanoclj_rgba8,
-  
   /* Cairo internal formats */
   nanoclj_bgr8_32,
   nanoclj_bgra8
@@ -66,5 +70,25 @@ typedef struct {
   const char * ptr;
   size_t size;
 } strview_t;
+
+typedef struct {
+  double x, y;
+  nanoclj_val_t data;
+} nanoclj_node_t;
+
+typedef struct {
+  uint32_t from, to;
+  nanoclj_val_t data;
+} nanoclj_edge_t;
+
+typedef struct {
+  uint32_t num_nodes, num_edges, reserved_nodes, reserved_edges, refcnt;
+  nanoclj_node_t * nodes;
+  nanoclj_edge_t * edges;
+} nanoclj_graph_array_t;
+
+typedef struct {
+  size_t num_rows, num_columns;
+} nanoclj_table_t;
 
 #endif

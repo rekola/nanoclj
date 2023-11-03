@@ -128,6 +128,11 @@ extern "C" {
 	struct nanoclj_cell_t * meta;
       } _audio;
       struct {
+	nanoclj_graph_array_t * rep;
+	uint32_t num_nodes, num_edges;
+	uint32_t node_offset, edge_offset;
+      } _graph;
+      struct {
 	int min_arity, max_arity;
 	foreign_func ptr;
 	struct nanoclj_cell_t * meta;

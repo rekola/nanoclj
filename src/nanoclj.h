@@ -54,10 +54,6 @@ typedef struct nanoclj_cell_t nanoclj_cell_t;
 #endif
 
   typedef struct nanoclj_s nanoclj_t;
-  typedef union {
-    uint64_t as_long;
-    double as_double;
-  } nanoclj_val_t;
   
   typedef void *(*func_alloc) (size_t);
   typedef void (*func_dealloc) (void *);
@@ -127,12 +123,11 @@ typedef struct nanoclj_cell_t nanoclj_cell_t;
     void (*set_vector_elem) (nanoclj_val_t vec, size_t ielem, nanoclj_val_t newel);
     
     bool (*is_list) (nanoclj_val_t p);
-    nanoclj_val_t (*pair_car) (nanoclj_val_t p);
-    nanoclj_val_t (*pair_cdr) (nanoclj_val_t p);
 
-    nanoclj_val_t (*first)(nanoclj_t * sc, nanoclj_val_t coll);
-    bool (*is_empty)(nanoclj_t * sc, nanoclj_val_t coll);
-    nanoclj_val_t (*rest)(nanoclj_t * sc, nanoclj_val_t coll);
+    nanoclj_val_t (*first)(nanoclj_t * sc, nanoclj_cell_t * coll);
+    bool (*is_empty)(nanoclj_t * sc, nanoclj_cell_t * coll);
+    nanoclj_cell_t * (*rest)(nanoclj_t * sc, nanoclj_cell_t * coll);
+    nanoclj_cell_t * (*next)(nanoclj_t * sc, nanoclj_cell_t * coll);
 
     bool (*is_symbol) (nanoclj_val_t p);
     bool (*is_keyword) (nanoclj_val_t p);

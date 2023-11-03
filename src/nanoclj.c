@@ -1,6 +1,6 @@
 /* nanoclj 0.2.0
  * Mikael Rekola (mikael.rekola@gmail.com)
- * 
+ *
  * This version of nanoclj was branched at 1.42 from TinyScheme:
  *
  * T I N Y S C H E M E    1 . 4 2
@@ -193,7 +193,8 @@ enum nanoclj_types {
   T_ILLEGAL_STATE_EXCEPTION = 47,
   T_TENSOR = 48,
   T_GRAPH = 49,
-  T_LAST_SYSTEM_TYPE = 50
+  T_TABLE = 50,
+  T_LAST_SYSTEM_TYPE = 51
 };
 
 typedef struct {
@@ -229,13 +230,13 @@ typedef struct {
 #define UNMARK         127      /* 01111111 */
 
 static uint_fast16_t prim_type(nanoclj_val_t value) {
-  uint64_t signature = value.as_long >> 48;   
+  uint64_t signature = value.as_long >> 48;
   if (signature == SIGNATURE_CELL) {
     return T_NIL;
   } else if ((signature & (MASK_EXPONENT | MASK_QUIET)) == (MASK_EXPONENT | MASK_QUIET)) {
     return (signature & 7) + 1;
   }
-  return T_REAL;  
+  return T_REAL;
 }
 
 static inline bool is_cell(nanoclj_val_t v) {
@@ -396,6 +397,12 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define _smallstrvalue_unchecked(p)      (&((p)->_object._small_bytearray.data[0]))
 #define _sosize_unchecked(p)      ((p)->so_size)
 
+#define _graph_unchecked(p)	  ((p)->_object._graph.rep)
+#define _num_nodes_unchecked(p)	  ((p)->_object._graph.num_nodes)
+#define _num_edges_unchecked(p)	  ((p)->_object._graph.num_edges)
+#define _node_offset_unchecked(p) ((p)->_object._graph.node_offset)
+#define _edge_offset_unchecked(p) ((p)->_object._graph.edge_offset)
+
 /* macros for cell operations */
 #define cell_type(p)      	  (decode_pointer(p)->type)
 #define cell_flags(p)      	  (decode_pointer(p)->flags)
@@ -456,6 +463,8 @@ static inline bool is_seqable_type(uint_fast16_t t) {
   case T_CLOSURE:
   case T_MACRO:
   case T_QUEUE:
+  case T_GRAPH:
+  case T_TABLE:
     return true;
   }
   return false;
@@ -595,7 +604,24 @@ static inline bool is_numeric_type(uint16_t t) {
 
 /* Returns true if argument is number */
 static inline bool is_number(nanoclj_val_t p) {
-  return !is_nil(p) && is_numeric_type(type(p));  
+  switch (prim_type(p)) {
+  case T_REAL:
+  case T_LONG:
+    return true;
+  case T_NIL:
+    {
+      nanoclj_cell_t * c = decode_pointer(p);
+      if (c) {
+	switch (_type(c)) {
+	case T_LONG:
+	case T_BIGINT:
+	case T_RATIO:
+	  return true;
+	}
+      }
+    }
+  }
+  return false;
 }
 
 static inline char * _strvalue(nanoclj_cell_t * s) {
@@ -914,9 +940,8 @@ static inline int alloc_cellseg(nanoclj_t * sc, int n) {
   nanoclj_shared_context_t * context = sc->context;
   nanoclj_val_t p;
 
-  if (context->last_cell_seg >= context->n_seg_reserved - 1) {
-    int n = context->n_seg_reserved ? context->n_seg_reserved * 2 : 12;
-    context->n_seg_reserved = n;
+  if (context->last_cell_seg + 1 >= context->n_seg_reserved) {
+    context->n_seg_reserved = (context->n_seg_reserved + 1) * 2;
     context->alloc_seg = sc->realloc(context->alloc_seg, n * sizeof(nanoclj_cell_t *));
     context->cell_seg = sc->realloc(context->cell_seg, n * sizeof(nanoclj_val_t));
   }
@@ -1286,6 +1311,42 @@ static inline nanoclj_val_t mk_audio(nanoclj_t * sc, size_t frames, int32_t chan
   return mk_nil();
 }
 
+static inline nanoclj_graph_array_t * mk_graph_array(nanoclj_t * sc) {
+  nanoclj_graph_array_t * g = sc->malloc(sizeof(nanoclj_graph_array_t));
+  g->num_nodes = g->num_edges = g->reserved_nodes = g->reserved_edges = 0;
+  g->refcnt = 1;
+  g->nodes = NULL;
+  g->edges = NULL;
+  return g;
+}
+
+static inline void graph_array_append_node(nanoclj_t * sc, nanoclj_graph_array_t * g, nanoclj_val_t d) {
+  if (g->num_nodes >= g->reserved_nodes) {
+    g->reserved_nodes = (g->reserved_nodes + 1) * 2;
+    g->nodes = sc->realloc(g->nodes, g->reserved_nodes * sizeof(nanoclj_node_t));
+  }
+  nanoclj_node_t * n = &(g->nodes[g->num_nodes++]);
+  n->x = n->y = 0;
+  n->data = d;
+}
+
+static inline nanoclj_cell_t * mk_graph(nanoclj_t * sc, uint32_t offset, uint32_t size, nanoclj_graph_array_t * ga) {
+  nanoclj_cell_t * x = get_cell_x(sc, T_GRAPH, T_GC_ATOM, NULL, NULL, NULL);
+  if (x) {
+    _graph_unchecked(x) = ga;
+    _node_offset_unchecked(x) = offset;
+    _num_nodes_unchecked(x) = size;
+    _edge_offset_unchecked(x) = 0;
+    _num_edges_unchecked(x) = ga->num_edges;
+#if RETAIN_ALLOCS
+    retain(sc, x);
+#endif
+  } else {
+    sc->pending_exception = sc->OutOfMemoryError;
+  }
+  return x;
+}
+
 static inline long long gcd_int64(long long a, long long b) {
   long long temp;
   while (b != 0) {
@@ -1372,7 +1433,7 @@ static inline void initialize_string_object(nanoclj_cell_t * s, size_t offset, s
   } else {
     s->flags |= T_SMALL;
     s->so_size = size;
-  }  
+  }
 }
 
 static inline nanoclj_cell_t * _get_string_object(nanoclj_t * sc, int32_t t, size_t offset, size_t size, nanoclj_bytearray_t * store) {
@@ -2002,6 +2063,16 @@ static inline nanoclj_cell_t * seq(nanoclj_t * sc, nanoclj_cell_t * coll) {
       return s;
     }
     break;
+  case T_GRAPH:
+    if (_num_nodes_unchecked(coll) == 0) {
+      return NULL;
+    } else {
+      nanoclj_graph_array_t * ga = _graph_unchecked(coll);
+      ga->refcnt++;
+      coll = mk_graph(sc, _node_offset_unchecked(coll), _num_nodes_unchecked(coll), ga);
+      _set_seq(coll);
+      return coll;
+    }
   }
 
   return coll;
@@ -2014,7 +2085,7 @@ static inline bool is_empty(nanoclj_t * sc, nanoclj_cell_t * coll) {
     return false;
   } else if (_type(coll) == T_LAZYSEQ) {
     coll = deref(sc, coll);
-    if (!coll) return true;    
+    if (!coll) return true;
   }
 
   switch (_type(coll)) {
@@ -2031,6 +2102,9 @@ static inline bool is_empty(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_RATIO:
   case T_QUEUE:
     return get_size(coll) == 0;
+
+  case T_GRAPH:
+    return _num_nodes_unchecked(coll);
   }
 
   return false;
@@ -2061,18 +2135,26 @@ static inline nanoclj_cell_t * rest(nanoclj_t * sc, nanoclj_cell_t * coll) {
     case T_FILE:
     case T_QUEUE:
       if (get_size(coll) >= 2) {
-	nanoclj_cell_t * s;
 	if (_is_reverse(coll)) {
-	  s = remove_suffix(sc, coll, 1);
-	  _set_rseq(s);
+	  coll = remove_suffix(sc, coll, 1);
+	  _set_rseq(coll);
 	} else {
-	  s = remove_prefix(sc, coll, 1);
-	  _set_seq(s);
+	  coll = remove_prefix(sc, coll, 1);
+	  _set_seq(coll);
 	}
 	/* In the case of multi-byte utf8 character, the string can be empty */
-	return get_size(s) ? s : &(sc->_EMPTY);
+	return get_size(coll) ? coll : &(sc->_EMPTY);
       }
       break;
+
+    case T_GRAPH:
+      if (_num_nodes_unchecked(coll) >= 2) {
+	nanoclj_graph_array_t * ga = _graph_unchecked(coll);
+	ga->refcnt++;
+	coll = mk_graph(sc, _node_offset_unchecked(coll) + 1, _num_nodes_unchecked(coll) - 1, ga);
+	_set_seq(coll);
+	return coll;
+      }
     }
   }
   
@@ -2138,6 +2220,11 @@ static inline nanoclj_val_t first(nanoclj_t * sc, nanoclj_cell_t * coll) {
       }
     }
     break;
+  case T_GRAPH:
+    if (_num_nodes_unchecked(coll)) {
+      nanoclj_graph_array_t * g = _graph_unchecked(coll);
+      return g->nodes[_node_offset_unchecked(coll)].data;
+    }
   }
 
   return mk_nil();
@@ -2173,6 +2260,9 @@ static inline size_t count(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_RATIO:
   case T_QUEUE:
     return get_size(coll);
+
+  case T_GRAPH:
+    return _num_nodes_unchecked(coll);
   }
 
   return 0;
@@ -6633,11 +6723,14 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       return false;
     } else {
       x = get_out_port(sc);
-      if (is_cell(x)) {
+      if (!is_writer(x)) {
+	nanoclj_throw(sc, mk_illegal_arg_exception(sc, "Not a Writer"));
+	return false;
+      } else {
 	print_primitive(sc, arg0, op == OP_PR, decode_pointer(x));
+	s_return(sc, mk_nil());
       }
     }
-    s_return(sc, mk_nil());
 
   case OP_WRITEM:               /* .writer */
     if (!unpack_args_2(sc, &arg0, &arg1)) {
@@ -6654,7 +6747,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	s_return(sc, mk_nil());
       }
     }
-    Error_0(sc, "Not a writer");
+    nanoclj_throw(sc, mk_illegal_arg_exception(sc, "Not a Writer"));
+    return false;
 
   case OP_FORMAT:
     if (!unpack_args_1_plus(sc, &arg0, &arg_next)) {
@@ -7100,7 +7194,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       return false;
     }
     s_return(sc, mk_int(compare(arg0, arg1)));
-	     
+    
   case OP_SORT:{
     if (!unpack_args_1(sc, &arg0)) {
       return false;
@@ -7310,7 +7404,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	tensor_set1f(_tensor_unchecked(t), to_long(arg1), to_double(arg2));
 	s_return(sc, mk_nil());
       }
-    }     
+    }
     nanoclj_throw(sc, mk_illegal_arg_exception(sc, "Invalid argument types"));
     return false;
     
@@ -7319,8 +7413,15 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       return false;
     } else if (is_nil(arg0)) {
       nanoclj_throw(sc, sc->NullPointerException);
+      return false;
     } else {
-      set_color(sc, to_color(arg0), get_out_port(sc));
+      x = get_out_port(sc);
+      if (!is_writer(x)) {
+	nanoclj_throw(sc, mk_illegal_arg_exception(sc, "Not a Writer"));
+	return false;
+      } else {
+	set_color(sc, to_color(arg0), x);
+      }
     }
     s_return(sc, mk_nil());
 
@@ -7329,6 +7430,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       return false;
     } else if (is_nil(arg0)) {
       nanoclj_throw(sc, sc->NullPointerException);
+      return false;
     } else {
       set_bg_color(sc, to_color(arg0), get_out_port(sc));
     }
@@ -7693,7 +7795,7 @@ static inline void update_window_info(nanoclj_t * sc, nanoclj_cell_t * out) {
   intern(sc, sc->global_env, sc->WINDOW_SIZE, size);
   intern(sc, sc->global_env, sc->CELL_SIZE, cell_size);
   intern(sc, sc->global_env, sc->WINDOW_SCALE_F, mk_real(sc->window_scale_factor));
-} 
+}
 
 /* initialization of nanoclj_t */
 #if USE_INTERFACE
@@ -7736,28 +7838,6 @@ static void set_vector_elem_checked(nanoclj_val_t vec, size_t ielem, nanoclj_val
     set_vector_elem(decode_pointer(vec), ielem, newel);
   }
 }
-static nanoclj_val_t first_checked(nanoclj_t * sc, nanoclj_val_t coll) {
-  if (is_cell(coll)) {
-    return first(sc, decode_pointer(coll));
-  } else {
-    return mk_nil();
-  }
-}
-
-static bool is_empty_checked(nanoclj_t * sc, nanoclj_val_t coll) {
-  if (is_cell(coll)) {
-    return is_empty(sc, decode_pointer(coll));
-  } else {
-    return false;
-  }
-}
-static nanoclj_val_t rest_checked(nanoclj_t * sc, nanoclj_val_t coll) {
-  if (is_cell(coll)) {
-    return mk_pointer(rest(sc, decode_pointer(coll)));
-  } else {
-    return mk_nil();
-  }
-}
 
 static size_t size_checked(nanoclj_t * sc, nanoclj_val_t coll) {
   if (is_cell(coll)) {
@@ -7795,12 +7875,11 @@ static struct nanoclj_interface vtbl = {
   vector_elem_checked,
   set_vector_elem_checked,
   is_list,
-  checked_car,
-  checked_cdr,
 
-  first_checked,
-  is_empty_checked,
-  rest_checked,
+  first,
+  is_empty,
+  rest,
+  next,
   
   is_symbol,
   is_keyword,
