@@ -10,7 +10,7 @@
 #include <functional>
 
 namespace nanoclj {
-  using UserFn = nanoclj_val_t(*)(nanoclj_t *, nanoclj_val_t);
+  using UserFn = nanoclj_val_t(*)(nanoclj_t *, nanoclj_cell_t *);
   
   class Value {
   public:

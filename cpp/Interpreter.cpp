@@ -42,8 +42,8 @@ static void error_callback(const char * s, size_t len, void * data) {
   }
 }
 
-static nanoclj_val_t object_invoke_callback(nanoclj_t * sc, void * object, nanoclj_val_t args) {
-  return args;
+static nanoclj_val_t object_invoke_callback(nanoclj_t * sc, void * object, nanoclj_cell_t * args) {
+  return sc->vptr->first(sc, args);
 }
 
 Interpreter::Interpreter() {
