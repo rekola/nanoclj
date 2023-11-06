@@ -1092,7 +1092,15 @@ static inline void finalize_cell(nanoclj_t * sc, nanoclj_cell_t * a) {
     pcre2_code_free(_re_unchecked(a));
     break;
   case T_FOREIGN_OBJECT:
-    
+    break;
+  case T_GRAPH:
+    {
+      nanoclj_graph_array_t * g = _graph_unchecked(a);
+      if (--(g->refcnt)) {
+	sc->free(g->nodes);
+	sc->free(g->edges);
+      }
+    }
     break;
   }
 }
@@ -1250,12 +1258,12 @@ static inline nanoclj_val_t mk_integer(nanoclj_t * sc, long long num) {
   }
 }
 
-static inline nanoclj_val_t mk_image(nanoclj_t * sc, int32_t width, int32_t height,
-				     int32_t stride, nanoclj_internal_format_t f,
-				     nanoclj_cell_t * meta) {
+static inline nanoclj_val_t mk_image_ext(nanoclj_t * sc, int32_t width, int32_t height,
+					 int32_t stride, nanoclj_internal_format_t f,
+					 nanoclj_cell_t * meta) {
   nanoclj_cell_t * x = get_cell_x(sc, T_IMAGE, T_GC_ATOM, NULL, NULL, meta);
   if (x) {
-    size_t size = get_image_size(width, height, stride, f);
+    size_t size = get_image_size(height, stride, f);
     uint8_t * data = sc->malloc(size);
     if (data) {
       nanoclj_image_t * image = sc->malloc(sizeof(nanoclj_image_t));
@@ -1281,6 +1289,12 @@ static inline nanoclj_val_t mk_image(nanoclj_t * sc, int32_t width, int32_t heig
   }
   sc->pending_exception = sc->OutOfMemoryError;
   return mk_nil();
+}
+
+static inline nanoclj_val_t mk_image(nanoclj_t * sc, int32_t width, int32_t height,
+				     nanoclj_internal_format_t f, nanoclj_cell_t * meta) {
+  int stride = width * get_format_bpp(f);
+  return mk_image_ext(sc, width, height, stride, f, meta);
 }
 
 static inline nanoclj_val_t mk_audio(nanoclj_t * sc, size_t frames, int32_t channels, int32_t sample_rate) {
@@ -1320,14 +1334,41 @@ static inline nanoclj_graph_array_t * mk_graph_array(nanoclj_t * sc) {
   return g;
 }
 
+static inline size_t find_node_index(nanoclj_graph_array_t * g, nanoclj_val_t key) {
+  for (uint32_t i = 0; i < g->num_nodes; i++) {
+    nanoclj_node_t * n = &(g->nodes[i]);
+    nanoclj_val_t e = n->data;
+    if (type(e) == T_MAPENTRY) {
+      nanoclj_val_t key2 = vector_elem(decode_pointer(e), 0);
+      if (key.as_long == key2.as_long) {
+	return i;
+      }
+    } else if (e.as_long == key.as_long) {
+      return i;
+    }
+  }
+  return NPOS;
+}
+
 static inline void graph_array_append_node(nanoclj_t * sc, nanoclj_graph_array_t * g, nanoclj_val_t d) {
   if (g->num_nodes >= g->reserved_nodes) {
     g->reserved_nodes = (g->reserved_nodes + 1) * 2;
     g->nodes = sc->realloc(g->nodes, g->reserved_nodes * sizeof(nanoclj_node_t));
   }
   nanoclj_node_t * n = &(g->nodes[g->num_nodes++]);
-  n->x = n->y = 0;
+  n->pos = n->ppos = (nanoclj_vec2f){ (float)rand() / RAND_MAX, (float)rand() / RAND_MAX };
   n->data = d;
+}
+
+static inline void graph_array_append_edge(nanoclj_t * sc, nanoclj_graph_array_t * g, uint32_t source, uint32_t target) {
+  if (g->num_edges >= g->reserved_edges) {
+    g->reserved_edges = (g->reserved_edges + 1) * 2;
+    g->edges = sc->realloc(g->edges, g->reserved_edges * sizeof(nanoclj_edge_t));
+  }
+  nanoclj_edge_t * e = &(g->edges[g->num_edges++]);
+  e->source = source;
+  e->target = target;
+  e->data = mk_nil();
 }
 
 static inline nanoclj_cell_t * mk_graph(nanoclj_t * sc, uint32_t offset, uint32_t size, nanoclj_graph_array_t * ga) {
@@ -4923,7 +4964,7 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
 
   case T_IMAGE:
     if (!args) {
-      return mk_image(sc, 0, 0, 0, 0, NULL);
+      return mk_image(sc, 0, 0, 0, NULL);
     } else {
       x = first(sc, args);
       if (is_image(x)) {
@@ -4931,8 +4972,8 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
       } else if (is_writer(x) && port_type_unchecked(x) == port_canvas) {
 #if NANOCLJ_HAS_CANVAS
 	imageview_t iv = canvas_get_imageview(rep_unchecked(x)->canvas.impl);
-	nanoclj_val_t img = mk_image(sc, iv.width, iv.height, iv.stride, iv.format, NULL);
-	memcpy(image_unchecked(img)->data, iv.ptr, get_image_size(iv.width, iv.height, iv.stride, iv.format));
+	nanoclj_val_t img = mk_image_ext(sc, iv.width, iv.height, iv.stride, iv.format, NULL);
+	memcpy(image_unchecked(img)->data, iv.ptr, get_image_size(iv.height, iv.stride, iv.format));
 #endif
 	return img;
       }

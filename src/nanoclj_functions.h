@@ -357,7 +357,7 @@ static inline nanoclj_val_t Image_load(nanoclj_t * sc, nanoclj_cell_t * args) {
   set_vector_elem(meta, 1, mk_mapentry(sc, sc->HEIGHT, mk_int(h)));
   if (is_string(src) || is_file(src)) {
     meta = conjoin(sc, meta, mk_mapentry(sc, sc->FILE, src));
-  }  
+  }
   nanoclj_internal_format_t f;
   switch (channels) {
   case 1: f = nanoclj_r8; break;
@@ -367,13 +367,13 @@ static inline nanoclj_val_t Image_load(nanoclj_t * sc, nanoclj_cell_t * args) {
     stbi_image_free(data);
     return mk_nil();
   }
-  nanoclj_val_t image = mk_image(sc, w, h, w, f, meta);
-  memcpy(image_unchecked(image)->data, data, w * h * channels);
-    
+  nanoclj_val_t image = mk_image(sc, w, h, f, meta);
+  memcpy(image_unchecked(image)->data, data, w * h * get_format_bpp(f));
   stbi_image_free(data);
   return image;
 }
 
+/* Resizes an image. Only support simple formats r8, rgb8 or rgba8. */
 static inline nanoclj_val_t Image_resize(nanoclj_t * sc, nanoclj_cell_t * args) {
   imageview_t iv = to_imageview(first(sc, args));
   nanoclj_val_t target_w0 = second(sc, args), target_h0 = third(sc, args);
@@ -383,16 +383,13 @@ static inline nanoclj_val_t Image_resize(nanoclj_t * sc, nanoclj_cell_t * args) 
   
   int target_w = to_int(target_w0), target_h = to_int(target_h0);
   int channels = get_format_channels(iv.format);
-  int bpp = get_format_bpp(iv.format);
-  size_t target_size = target_w * target_h * bpp;
 
-  nanoclj_val_t target_image = mk_image(sc, target_w, target_h, target_w, iv.format, NULL);
-
+  nanoclj_val_t target_image = mk_image(sc, target_w, target_h, iv.format, NULL);
   nanoclj_image_t * img = image_unchecked(target_image);
   uint8_t * target_ptr = img->data;
   
-  stbir_resize_uint8_generic(iv.ptr, iv.width, iv.height, 0, target_ptr, target_w, target_h, 0, channels, 0, STBIR_FLAG_ALPHA_PREMULTIPLIED, STBIR_EDGE_CLAMP, STBIR_FILTER_DEFAULT, STBIR_COLORSPACE_LINEAR, NULL);
-    
+  stbir_resize_uint8_generic(iv.ptr, iv.width, iv.height, iv.stride, target_ptr, target_w, target_h, 0, channels, 0, STBIR_FLAG_ALPHA_PREMULTIPLIED, STBIR_EDGE_CLAMP, STBIR_FILTER_DEFAULT, STBIR_COLORSPACE_LINEAR, NULL);
+
   return target_image;
 }
 
@@ -401,15 +398,15 @@ static inline nanoclj_val_t Image_transpose(nanoclj_t * sc, nanoclj_cell_t * arg
   if (!iv.ptr) {
     return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Not an Image")));
   }
-  int w = iv.width, h = iv.height;
-  nanoclj_val_t new_image = mk_image(sc, h, w, h, iv.format, NULL);
+  int w = iv.width, h = iv.height, stride = iv.stride;
+  nanoclj_val_t new_image = mk_image(sc, h, w, iv.format, NULL);
   uint8_t * data = image_unchecked(new_image)->data;
   size_t bpp = get_format_bpp(iv.format);
   
   for (int y = 0; y < h; y++) {
     for (int x = 0; x < w; x++) {
       for (int c = 0; c < bpp; c++) {
-	data[bpp * (x * h + y) + c] = iv.ptr[bpp * (y * w + x) + c];
+	data[bpp * (x * h + y) + c] = iv.ptr[y * stride + x * bpp + c];
       }
     }
   }
@@ -445,7 +442,7 @@ static inline nanoclj_val_t Image_save(nanoclj_t * sc, nanoclj_cell_t * args) {
 
     int success = 0;
     if (strcmp(ext, ".png") == 0) {
-      success = stbi_write_png(filename, w, h, channels, tmp ? tmp : iv.ptr, w);
+      success = stbi_write_png(filename, w, h, channels, tmp ? tmp : iv.ptr, iv.stride);
     } else if (strcmp(ext, ".bmp") == 0) {
       success = stbi_write_bmp(filename, w, h, channels, tmp ? tmp : iv.ptr);
     } else if (strcmp(ext, ".tga") == 0) {
@@ -507,26 +504,25 @@ nanoclj_val_t Image_horizontalGaussianBlur(nanoclj_t * sc, nanoclj_cell_t * args
   if (!is_number(radius)) {
     return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Not a number")));
   }
-  int w = iv.width, h = iv.height;
-  int channels = get_format_channels(iv.format);
+  int w = iv.width, h = iv.height, stride = iv.stride;
   size_t bpp = get_format_bpp(iv.format);
-    
   int kernel_size;
   int * kernel = mk_kernel(sc, to_double(radius), &kernel_size);
 
   int total = 0;
   for (int i = 0; i < kernel_size; i++) total += kernel[i];
   
-  nanoclj_val_t r = mk_image(sc, w, h, w, iv.format, NULL);
+  nanoclj_val_t r = mk_image(sc, w, h, iv.format, NULL);
   uint8_t * output_data = image_unchecked(r)->data;
     
-  switch (channels) {
-  case 4:
+  switch (iv.format) {
+  case nanoclj_rgba8:
+  case nanoclj_bgra8:
     for (int row = 0; row < h; row++) {
       for (int col = 0; col < w; col++) {
 	int c0 = 0, c1 = 0, c2 = 0, c3 = 0;
 	for (int i = 0; i < kernel_size; i++) {
-	  const uint8_t * ptr = iv.ptr + (row * w + clamp(col + i - kernel_size / 2, 0, w - 1)) * 4;
+	  const uint8_t * ptr = iv.ptr + row * stride + clamp(col + i - kernel_size / 2, 0, w - 1) * 4;
 	  c0 += *ptr++ * kernel[i];
 	  c1 += *ptr++ * kernel[i];
 	  c2 += *ptr++ * kernel[i];
@@ -540,12 +536,13 @@ nanoclj_val_t Image_horizontalGaussianBlur(nanoclj_t * sc, nanoclj_cell_t * args
       }
     }
     break;
-  case 3:
+  case nanoclj_rgb8:
+  case nanoclj_bgr8_32:
     for (int row = 0; row < h; row++) {
       for (int col = 0; col < w; col++) {
 	int c0 = 0, c1 = 0, c2 = 0;
 	for (int i = 0; i < kernel_size; i++) {
-	  const uint8_t * ptr = iv.ptr + (row * w + clamp(col + i - kernel_size / 2, 0, w - 1)) * bpp;
+	  const uint8_t * ptr = iv.ptr + row * stride + clamp(col + i - kernel_size / 2, 0, w - 1) * bpp;
 	  c0 += *ptr++ * kernel[i];
 	  c1 += *ptr++ * kernel[i];
 	  c2 += *ptr++ * kernel[i];
@@ -557,18 +554,21 @@ nanoclj_val_t Image_horizontalGaussianBlur(nanoclj_t * sc, nanoclj_cell_t * args
       }
     }
     break;
-  case 1:      
+  case nanoclj_r8:
     for (int row = 0; row < h; row++) {
       for (int col = 0; col < w; col++) {
 	int c0 = 0;
 	for (int i = 0; i < kernel_size; i++) {
-	  const uint8_t * ptr = iv.ptr + (row * w + clamp(col + i - kernel_size / 2, 0, w - 1));
+	  const uint8_t * ptr = iv.ptr + row * stride + clamp(col + i - kernel_size / 2, 0, w - 1);
 	  c0 += *ptr * kernel[i];
 	}
 	uint8_t * ptr = output_data + row * w + col;
 	*ptr = (uint8_t)(c0 / total);
       }
     }
+    break;
+  default:
+    r = mk_nil();
   }
   sc->free(kernel);
   return r;
@@ -827,7 +827,23 @@ static inline nanoclj_val_t Graph_load(nanoclj_t * sc, nanoclj_cell_t * args) {
   
   for (node = graph_node->children; node; node = node->next) {
     if (node->type == XML_ELEMENT_NODE && strcmp((const char *)node->name, "edge") == 0) {
-
+      nanoclj_val_t source = mk_nil(), target = mk_nil();
+      xmlAttr* property = node->properties;
+      for (; property; property = property->next) {
+	xmlChar * value = xmlNodeListGetString(doc, property->children, 1);
+	if (strcmp((const char *)property->name, "source") != 0) {
+	  source = mk_string(sc, (const char *)value);
+	} else if (strcmp((const char *)property->name, "target") != 0) {
+	  target = mk_string(sc, (const char *)value);
+	}
+	xmlFree(value);
+      }
+      if (!is_nil(source) && !is_nil(target)) {
+	size_t si = find_node_index(g, source), ti = find_node_index(g, target);
+	if (si != NPOS && ti != NPOS) {
+	  graph_array_append_edge(sc, g, si, ti);
+	}
+      }
     } else if (node->type == XML_ELEMENT_NODE && strcmp((const char *)node->name, "node") == 0) {
       nanoclj_val_t id = mk_nil();
       xmlAttr* property = node->properties;

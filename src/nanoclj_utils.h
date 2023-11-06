@@ -103,13 +103,12 @@ static inline int get_format_bpp(nanoclj_internal_format_t f) {
   return 0;
 }
 
-static inline size_t get_image_size(size_t width, size_t height, size_t stride, nanoclj_internal_format_t format) {
-  /* FIXME: use stride */
-  return width * height * get_format_bpp(format);
+static inline size_t get_image_size(size_t height, size_t stride, nanoclj_internal_format_t format) {
+  return height * stride;
 }
 
 static inline uint8_t * convert_imageview(imageview_t iv, nanoclj_internal_format_t to) {
-  uint8_t * output = malloc(get_image_size(iv.width, iv.height, iv.stride, to));
+  uint8_t * output = malloc(get_image_size(iv.height, iv.stride, to));
   if (iv.format == nanoclj_bgr8_32 && to == nanoclj_rgb8) {
     for (size_t i = 0; i < iv.width * iv.height; i++) {
       output[3 * i + 0] = iv.ptr[4 * i + 2];
