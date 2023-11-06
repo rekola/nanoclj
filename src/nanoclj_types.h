@@ -72,12 +72,16 @@ typedef struct {
 } strview_t;
 
 typedef struct {
-  double x, y;
+  float x, y;
+} nanoclj_vec2f;
+
+typedef struct {
+  nanoclj_vec2f pos, ppos;
   nanoclj_val_t data;
 } nanoclj_node_t;
 
 typedef struct {
-  uint32_t from, to;
+  uint32_t source, target;
   nanoclj_val_t data;
 } nanoclj_edge_t;
 
