@@ -12,8 +12,8 @@ language. It is based on TinyScheme which was based on MiniScheme.
 ## Features
 
 - Terminal graphics (*Kitty* or *Sixel* protocols)
-- Image, audio, Shapefile, XML and CSV loading
-- 2D Canvas and simple image operations (blur, transpose etc.)
+- Image, audio, Shapefile, XML, CSV and GraphML loading
+- Simple image operations (blur, transpose etc.) and 2D canvas, with HiDPI support
 - REPL output is colored by type
 - Callback Writer for printing into a GUI instead of stdout
 - Class and namespace names try to imitate Java and Clojure names when possible (e.g. `(type 1) ;=> java.lang.Long`)
@@ -49,6 +49,7 @@ enabled. The following terminals have been tested:
 | Black Box | Inline image layout doesn't work | ? | On HiDPI system the images are upscaled, and the terminal and the flatpak system use too much CPU time when idling. |
 | Alacritty | None | ? | |
 | GNOME Terminal | None | ? | Sixel support is not enabled by default |
+| mintty | ? | ? | Not tested yet. |
 
 ![Plotting from nanoclj](https://user-images.githubusercontent.com/6755525/277504459-737b498e-005b-49ad-92b2-0917a1a10b7e.jpg "Plotting from nanoclj")
 *The plot function returns a canvas, which can be converted to an image, and then saved with Image/save or modified using other functions in the Image namespace.*
@@ -70,7 +71,7 @@ As well as printing images in block mode like the plot function does, they can a
 - No 32-bit floating point numbers or small integers
 - Symbols are interned and cannot have metadata
 - Primitives such as doubles and 32 bit integers are passed by value, and are in effect, interned
-- Strings are not interned (identical? "abc" "abc") ;=> false
+- Strings are not interned: (identical? "abc" "abc") ;=> false
 - `rationalize` is exact and Ratios use the smallest suitable integer type for numerator and denominator
 - No chunked or buffered lazy sequences
 
