@@ -34,6 +34,7 @@ E2:_setmark(p);
   case T_VECTOR:
   case T_ARRAYMAP:
   case T_SORTED_SET:
+  case T_QUEUE:
   case T_MAPENTRY:
   case T_VAR:
   case T_RATIO:{
@@ -56,6 +57,17 @@ E2:_setmark(p);
       }
     }
   }
+    break;
+
+  case T_GRAPH:
+    {
+      size_t num = _num_nodes_unchecked(p);
+      nanoclj_graph_array_t * g = _graph_unchecked(p);
+      for (size_t i = 0; i < num; i++) {
+	nanoclj_val_t v = g->nodes[i].data;
+	if (is_cell(v) && !is_nil(v)) mark(decode_pointer(v));
+      }
+    }
     break;
   }
   
