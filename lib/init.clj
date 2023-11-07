@@ -16,5 +16,6 @@
 (load-file "nanoclj.plot.clj")
 (load-file "nanoclj.core.Codepoint.clj")
 (load-file "nanoclj.core.Tensor.clj")
+(load-file "nanoclj.graph.clj")
 (load-file "nanoclj.image.clj")
 (load-file "nanoclj.audio.clj")
