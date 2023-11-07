@@ -145,7 +145,7 @@ extern "C" {
         nanoclj_val_t car, cdr;
 	struct nanoclj_cell_t * meta;
       } _cons;
-    } _object;
+    };
   } nanoclj_cell_t;
 
   /* this structure holds all the interpreter's registers */
@@ -197,6 +197,8 @@ extern "C" {
     nanoclj_cell_t * OutOfMemoryError;
     nanoclj_cell_t * NullPointerException;
     nanoclj_cell_t * Throwable;
+    nanoclj_cell_t * IOException;
+    nanoclj_cell_t * FileNotFoundException;
     
     nanoclj_cell_t sink;	      /* when mem. alloc. fails */
     nanoclj_cell_t _EMPTY;
@@ -256,6 +258,10 @@ extern "C" {
     nanoclj_val_t RGB;		  /* :rgb */
     nanoclj_val_t RGBA;		  /* :rgba */
     nanoclj_val_t PDF;	          /* :pdf */
+    nanoclj_val_t POSITION;	  /* :position */
+    nanoclj_val_t EDGES;	  /* :edges */
+    nanoclj_val_t SOURCE;         /* :source */
+    nanoclj_val_t TARGET;         /* :target */
     
     nanoclj_val_t SORTED_SET;	  /* sorted-set */
     nanoclj_val_t ARRAY_MAP;	  /* array-map */

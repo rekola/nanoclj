@@ -55,6 +55,7 @@
 #include <assert.h>
 #include <signal.h>
 #include <sys/stat.h>
+#include <errno.h>
 
 #define PCRE2_CODE_UNIT_WIDTH 8
 #include <pcre2.h>
@@ -179,22 +180,26 @@ enum nanoclj_types {
   T_REGEX = 33,
   T_DELAY = 34,
   T_IMAGE = 35,
-  T_AUDIO = 36,
-  T_FILE = 37,
-  T_DATE = 38,
-  T_UUID = 39,
-  T_QUEUE = 40,
-  T_RUNTIME_EXCEPTION = 41,
-  T_ARITY_EXCEPTION = 42,
-  T_ILLEGAL_ARG_EXCEPTION = 43,
-  T_NUM_FMT_EXCEPTION = 44,
-  T_ARITHMETIC_EXCEPTION = 45,
-  T_CLASS_CAST_EXCEPTION = 46,
-  T_ILLEGAL_STATE_EXCEPTION = 47,
-  T_TENSOR = 48,
-  T_GRAPH = 49,
-  T_TABLE = 50,
-  T_LAST_SYSTEM_TYPE = 51
+  T_VIDEO = 36,
+  T_AUDIO = 37,
+  T_FILE = 38,
+  T_DATE = 39,
+  T_UUID = 40,
+  T_QUEUE = 41,
+  T_RUNTIME_EXCEPTION = 42,
+  T_ARITY_EXCEPTION = 43,
+  T_ILLEGAL_ARG_EXCEPTION = 44,
+  T_NUM_FMT_EXCEPTION = 45,
+  T_ARITHMETIC_EXCEPTION = 46,
+  T_CLASS_CAST_EXCEPTION = 47,
+  T_ILLEGAL_STATE_EXCEPTION = 48,
+  T_FILE_NOT_FOUND_EXCEPTION = 49,
+  T_TENSOR = 50,
+  T_GRAPH = 51,
+  T_GRAPH_NODE = 52,
+  T_GRAPH_EDGE = 53,
+  T_TABLE = 54,
+  T_LAST_SYSTEM_TYPE = 55
 };
 
 typedef struct {
@@ -343,8 +348,8 @@ static inline bool is_nil(nanoclj_val_t v) {
 }
 
 #define _is_gc_atom(p)            (p->flags & T_GC_ATOM)
-#define _car(p)		 	  ((p)->_object._cons.car)
-#define _cdr(p)			  ((p)->_object._cons.cdr)
+#define _car(p)		 	  ((p)->_cons.car)
+#define _cdr(p)			  ((p)->_cons.cdr)
 #define _set_car(p, v)         	  _car(p) = v
 #define _set_cdr(p, v)         	  _cdr(p) = v
 #define car(p)           	  _car(decode_pointer(p))
@@ -352,11 +357,11 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define set_car(p, v)         	  _car(decode_pointer(p)) = v
 #define set_cdr(p, v)         	  _cdr(decode_pointer(p)) = v
 
-#define _so_vector_metadata(p)	  ((p)->_object._small_collection.meta)
-#define _cons_metadata(p)	  ((p)->_object._cons.meta)
-#define _ff_metadata(p)		  ((p)->_object._ff.meta)
-#define _image_metadata(p)	  ((p)->_object._image.meta)
-#define _audio_metadata(p)	  ((p)->_object._audio.meta)
+#define _so_vector_metadata(p)	  ((p)->_small_collection.meta)
+#define _cons_metadata(p)	  ((p)->_cons.meta)
+#define _ff_metadata(p)		  ((p)->_ff.meta)
+#define _image_metadata(p)	  ((p)->_image.meta)
+#define _audio_metadata(p)	  ((p)->_audio.meta)
 
 #define _is_realized(p)           (p->flags & T_REALIZED)
 #define _set_realized(p)          (p->flags |= T_REALIZED)
@@ -371,37 +376,37 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define _set_gc_atom(p)           (p->flags |= T_GC_ATOM)
 #define _clr_gc_atom(p)           (p->flags &= CLR_GC_ATOM)
 
-#define _offset_unchecked(p)	  ((p)->_object._collection.offset)
-#define _size_unchecked(p)	  ((p)->_object._collection.size)
-#define _vec_store_unchecked(p)	  ((p)->_object._collection._store._vec)
-#define _str_store_unchecked(p)	  ((p)->_object._collection._store._str)
-#define _smalldata_unchecked(p)   (&((p)->_object._small_collection.data[0]))
+#define _offset_unchecked(p)	  ((p)->_collection.offset)
+#define _size_unchecked(p)	  ((p)->_collection.size)
+#define _vec_store_unchecked(p)	  ((p)->_collection._store._vec)
+#define _str_store_unchecked(p)	  ((p)->_collection._store._str)
+#define _smalldata_unchecked(p)   (&((p)->_small_collection.data[0]))
 
-#define _rep_unchecked(p)	  ((p)->_object._port.rep)
-#define _port_type_unchecked(p)	  ((p)->_object._port.type)
-#define _port_flags_unchecked(p)  ((p)->_object._port.flags)
-#define _nesting_unchecked(p)     ((p)->_object._port.nesting)
-#define _line_unchecked(p)	  ((p)->_object._port.line)
-#define _column_unchecked(p)	  ((p)->_object._port.column)
+#define _rep_unchecked(p)	  ((p)->_port.rep)
+#define _port_type_unchecked(p)	  ((p)->_port.type)
+#define _port_flags_unchecked(p)  ((p)->_port.flags)
+#define _nesting_unchecked(p)     ((p)->_port.nesting)
+#define _line_unchecked(p)	  ((p)->_port.line)
+#define _column_unchecked(p)	  ((p)->_port.column)
 
-#define _image_unchecked(p)	  ((p)->_object._image.rep)
-#define _audio_unchecked(p)	  ((p)->_object._audio.rep)
-#define _tensor_unchecked(p)	  ((p)->_object._tensor.impl)
-#define _lvalue_unchecked(p)      ((p)->_object._lvalue)
-#define _re_unchecked(p)	  ((p)->_object._re)
-#define _ff_unchecked(p)	  ((p)->_object._ff.ptr)
-#define _fo_unchecked(p)	  ((p)->_object._fo.ptr)
-#define _min_arity_unchecked(p)	  ((p)->_object._ff.min_arity)
-#define _max_arity_unchecked(p)	  ((p)->_object._ff.max_arity)
+#define _image_unchecked(p)	  ((p)->_image.rep)
+#define _audio_unchecked(p)	  ((p)->_audio.rep)
+#define _tensor_unchecked(p)	  ((p)->_tensor.impl)
+#define _lvalue_unchecked(p)      ((p)->_lvalue)
+#define _re_unchecked(p)	  ((p)->_re)
+#define _ff_unchecked(p)	  ((p)->_ff.ptr)
+#define _fo_unchecked(p)	  ((p)->_fo.ptr)
+#define _min_arity_unchecked(p)	  ((p)->_ff.min_arity)
+#define _max_arity_unchecked(p)	  ((p)->_ff.max_arity)
 
-#define _smallstrvalue_unchecked(p)      (&((p)->_object._small_bytearray.data[0]))
+#define _smallstrvalue_unchecked(p)      (&((p)->_small_bytearray.data[0]))
 #define _sosize_unchecked(p)      ((p)->so_size)
 
-#define _graph_unchecked(p)	  ((p)->_object._graph.rep)
-#define _num_nodes_unchecked(p)	  ((p)->_object._graph.num_nodes)
-#define _num_edges_unchecked(p)	  ((p)->_object._graph.num_edges)
-#define _node_offset_unchecked(p) ((p)->_object._graph.node_offset)
-#define _edge_offset_unchecked(p) ((p)->_object._graph.edge_offset)
+#define _graph_unchecked(p)	  ((p)->_graph.rep)
+#define _num_nodes_unchecked(p)	  ((p)->_graph.num_nodes)
+#define _num_edges_unchecked(p)	  ((p)->_graph.num_edges)
+#define _node_offset_unchecked(p) ((p)->_graph.node_offset)
+#define _edge_offset_unchecked(p) ((p)->_graph.edge_offset)
 
 /* macros for cell operations */
 #define cell_type(p)      	  (decode_pointer(p)->type)
@@ -464,6 +469,8 @@ static inline bool is_seqable_type(uint_fast16_t t) {
   case T_MACRO:
   case T_QUEUE:
   case T_GRAPH:
+  case T_GRAPH_NODE:
+  case T_GRAPH_EDGE:
   case T_TABLE:
     return true;
   }
@@ -1094,6 +1101,8 @@ static inline void finalize_cell(nanoclj_t * sc, nanoclj_cell_t * a) {
   case T_FOREIGN_OBJECT:
     break;
   case T_GRAPH:
+  case T_GRAPH_NODE:
+  case T_GRAPH_EDGE:
     {
       nanoclj_graph_array_t * g = _graph_unchecked(a);
       if (--(g->refcnt)) {
@@ -1328,26 +1337,10 @@ static inline nanoclj_val_t mk_audio(nanoclj_t * sc, size_t frames, int32_t chan
 static inline nanoclj_graph_array_t * mk_graph_array(nanoclj_t * sc) {
   nanoclj_graph_array_t * g = sc->malloc(sizeof(nanoclj_graph_array_t));
   g->num_nodes = g->num_edges = g->reserved_nodes = g->reserved_edges = 0;
-  g->refcnt = 1;
+  g->refcnt = 0;
   g->nodes = NULL;
   g->edges = NULL;
   return g;
-}
-
-static inline size_t find_node_index(nanoclj_graph_array_t * g, nanoclj_val_t key) {
-  for (uint32_t i = 0; i < g->num_nodes; i++) {
-    nanoclj_node_t * n = &(g->nodes[i]);
-    nanoclj_val_t e = n->data;
-    if (type(e) == T_MAPENTRY) {
-      nanoclj_val_t key2 = vector_elem(decode_pointer(e), 0);
-      if (key.as_long == key2.as_long) {
-	return i;
-      }
-    } else if (e.as_long == key.as_long) {
-      return i;
-    }
-  }
-  return NPOS;
 }
 
 static inline void graph_array_append_node(nanoclj_t * sc, nanoclj_graph_array_t * g, nanoclj_val_t d) {
@@ -1371,14 +1364,22 @@ static inline void graph_array_append_edge(nanoclj_t * sc, nanoclj_graph_array_t
   e->data = mk_nil();
 }
 
-static inline nanoclj_cell_t * mk_graph(nanoclj_t * sc, uint32_t offset, uint32_t size, nanoclj_graph_array_t * ga) {
-  nanoclj_cell_t * x = get_cell_x(sc, T_GRAPH, T_GC_ATOM, NULL, NULL, NULL);
+static inline nanoclj_cell_t * mk_graph(nanoclj_t * sc, uint16_t type, uint32_t offset, uint32_t size, nanoclj_graph_array_t * ga) {
+  nanoclj_cell_t * x = get_cell_x(sc, type, T_GC_ATOM, NULL, NULL, NULL);
   if (x) {
+    ga->refcnt++;
     _graph_unchecked(x) = ga;
-    _node_offset_unchecked(x) = offset;
-    _num_nodes_unchecked(x) = size;
-    _edge_offset_unchecked(x) = 0;
-    _num_edges_unchecked(x) = ga->num_edges;
+    if (type == T_GRAPH_EDGE) {
+      _node_offset_unchecked(x) = 0;
+      _num_nodes_unchecked(x) = 0;
+      _edge_offset_unchecked(x) = offset;
+      _num_edges_unchecked(x) = size;
+    } else {
+      _node_offset_unchecked(x) = offset;
+      _num_nodes_unchecked(x) = size;
+      _edge_offset_unchecked(x) = 0;
+      _num_edges_unchecked(x) = ga->num_edges;
+    }
 #if RETAIN_ALLOCS
     retain(sc, x);
 #endif
@@ -1802,6 +1803,41 @@ static inline nanoclj_cell_t * mk_vector(nanoclj_t * sc, size_t len) {
   return get_vector_object(sc, T_VECTOR, len);
 }
 
+static inline nanoclj_val_t mk_vector_2d(nanoclj_t * sc, double x, double y) {
+  nanoclj_cell_t * vec = mk_vector(sc, 2);
+  set_vector_elem(vec, 0, mk_real(x));
+  set_vector_elem(vec, 1, mk_real(y));
+  return mk_pointer(vec);
+}
+
+static inline nanoclj_val_t mk_vector_3d(nanoclj_t * sc, double x, double y, double z) {
+  nanoclj_cell_t * vec = mk_vector(sc, 3);
+  set_vector_elem(vec, 0, mk_real(x));
+  set_vector_elem(vec, 1, mk_real(y));
+  set_vector_elem(vec, 2, mk_real(z));
+  return mk_pointer(vec);
+}
+
+static inline nanoclj_val_t mk_vector_4d(nanoclj_t * sc, double x, double y, double z, double w) {
+  nanoclj_cell_t * vec = mk_vector(sc, 4);
+  set_vector_elem(vec, 0, mk_real(x));
+  set_vector_elem(vec, 1, mk_real(y));
+  set_vector_elem(vec, 2, mk_real(z));
+  set_vector_elem(vec, 3, mk_real(w));
+  return mk_pointer(vec);
+}
+
+static inline nanoclj_val_t mk_vector_6d(nanoclj_t * sc, double x, double y, double z, double w, double a, double b) {
+  nanoclj_cell_t * vec = mk_vector(sc, 6);
+  set_vector_elem(vec, 0, mk_real(x));
+  set_vector_elem(vec, 1, mk_real(y));
+  set_vector_elem(vec, 2, mk_real(z));
+  set_vector_elem(vec, 3, mk_real(w));
+  set_vector_elem(vec, 4, mk_real(a));
+  set_vector_elem(vec, 5, mk_real(b));
+  return mk_pointer(vec);
+}
+
 static inline nanoclj_val_t mk_vector_with_valarray(nanoclj_t * sc, nanoclj_valarray_t * a) {
   return mk_pointer(_get_vector_object(sc, T_VECTOR, 0, a->size, a));
 }
@@ -2105,12 +2141,21 @@ static inline nanoclj_cell_t * seq(nanoclj_t * sc, nanoclj_cell_t * coll) {
     }
     break;
   case T_GRAPH:
+  case T_GRAPH_NODE:
     if (_num_nodes_unchecked(coll) == 0) {
       return NULL;
     } else {
       nanoclj_graph_array_t * ga = _graph_unchecked(coll);
-      ga->refcnt++;
-      coll = mk_graph(sc, _node_offset_unchecked(coll), _num_nodes_unchecked(coll), ga);
+      coll = mk_graph(sc, _type(coll), _node_offset_unchecked(coll), _num_nodes_unchecked(coll), ga);
+      _set_seq(coll);
+      return coll;
+    }
+  case T_GRAPH_EDGE:
+    if (_num_edges_unchecked(coll) == 0) {
+      return NULL;
+    } else {
+      nanoclj_graph_array_t * ga = _graph_unchecked(coll);
+      coll = mk_graph(sc, T_GRAPH_EDGE, _edge_offset_unchecked(coll), _num_edges_unchecked(coll), ga);
       _set_seq(coll);
       return coll;
     }
@@ -2145,7 +2190,11 @@ static inline bool is_empty(nanoclj_t * sc, nanoclj_cell_t * coll) {
     return get_size(coll) == 0;
 
   case T_GRAPH:
-    return _num_nodes_unchecked(coll);
+  case T_GRAPH_NODE:    
+    return _num_nodes_unchecked(coll) == 0;
+
+  case T_GRAPH_EDGE:
+    return _num_edges_unchecked(coll) == 0;
   }
 
   return false;
@@ -2189,13 +2238,23 @@ static inline nanoclj_cell_t * rest(nanoclj_t * sc, nanoclj_cell_t * coll) {
       break;
 
     case T_GRAPH:
+    case T_GRAPH_NODE:
       if (_num_nodes_unchecked(coll) >= 2) {
 	nanoclj_graph_array_t * ga = _graph_unchecked(coll);
-	ga->refcnt++;
-	coll = mk_graph(sc, _node_offset_unchecked(coll) + 1, _num_nodes_unchecked(coll) - 1, ga);
+	coll = mk_graph(sc, typ, _node_offset_unchecked(coll) + 1, _num_nodes_unchecked(coll) - 1, ga);
 	_set_seq(coll);
 	return coll;
       }
+      break;
+      
+    case T_GRAPH_EDGE:
+      if (_num_edges_unchecked(coll) >= 2) {
+	nanoclj_graph_array_t * ga = _graph_unchecked(coll);
+	coll = mk_graph(sc, T_GRAPH_EDGE, _edge_offset_unchecked(coll) + 1, _num_edges_unchecked(coll) - 1, ga);
+	_set_seq(coll);
+	return coll;
+      }
+      break;
     }
   }
   
@@ -2206,7 +2265,7 @@ static inline nanoclj_cell_t * next(nanoclj_t * sc, nanoclj_cell_t * coll) {
   if (!coll) return NULL;
   nanoclj_cell_t * r = rest(sc, coll);
   if (_type(r) == T_LAZYSEQ) {
-    r = deref(sc, r);    
+    r = deref(sc, r);
   }
   if (r == &(sc->_EMPTY)) {
     return NULL;
@@ -2262,10 +2321,16 @@ static inline nanoclj_val_t first(nanoclj_t * sc, nanoclj_cell_t * coll) {
     }
     break;
   case T_GRAPH:
+  case T_GRAPH_NODE:
     if (_num_nodes_unchecked(coll)) {
-      nanoclj_graph_array_t * g = _graph_unchecked(coll);
-      return g->nodes[_node_offset_unchecked(coll)].data;
+      return mk_pointer(mk_graph(sc, T_GRAPH_NODE, _node_offset_unchecked(coll), 1, _graph_unchecked(coll)));
     }
+    break;
+  case T_GRAPH_EDGE:
+    if (_num_edges_unchecked(coll)) {
+      return mk_pointer(mk_graph(sc, T_GRAPH_EDGE, _edge_offset_unchecked(coll), 1, _graph_unchecked(coll)));
+    }
+    break;
   }
 
   return mk_nil();
@@ -2303,7 +2368,11 @@ static inline size_t count(nanoclj_t * sc, nanoclj_cell_t * coll) {
     return get_size(coll);
 
   case T_GRAPH:
+  case T_GRAPH_NODE:
     return _num_nodes_unchecked(coll);
+    
+  case T_GRAPH_EDGE:
+    return _num_edges_unchecked(coll);
   }
 
   return 0;
@@ -2464,6 +2533,23 @@ static inline size_t find_index(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_v
   return NPOS;
 }
 
+static inline size_t find_node_index(nanoclj_t * sc, nanoclj_graph_array_t * g, nanoclj_val_t key) {
+  for (uint32_t i = 0; i < g->num_nodes; i++) {
+    nanoclj_node_t * n = &(g->nodes[i]);
+    nanoclj_val_t e = n->data;
+    if (type(e) == T_MAPENTRY) {
+      nanoclj_val_t key2 = vector_elem(decode_pointer(e), 0);
+      strview_t sv = to_strview(key2);
+      if (equals(sc, key, key2)) {
+	return i;
+      }
+    } else if (equals(sc, key, e)) {
+      return i;
+    }
+  }
+  return NPOS;
+}
+
 static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t key, nanoclj_val_t * result) {
 #if 1
   if (!coll) {
@@ -2501,7 +2587,7 @@ static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t
       }
     }
     break;
-        
+    
   case T_ARRAYMAP:{
     nanoclj_cell_t * e = find(sc, coll, key);
     if (e) {
@@ -2517,7 +2603,7 @@ static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t
       if (equals(sc, key, value)) {
 	if (result) *result = value;
 	return true;
-      }    
+      }
     }
   }
 
@@ -2565,8 +2651,50 @@ static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t
       return false;
     }
     return true;
+
+  case T_GRAPH:
+    if (key.as_long == sc->EDGES.as_long) {
+      if (_num_edges_unchecked(coll)) {
+	if (result) {
+	  coll = mk_graph(sc, T_GRAPH_EDGE, _edge_offset_unchecked(coll), _num_edges_unchecked(coll), _graph_unchecked(coll));
+	  _set_seq(coll);
+	  *result = mk_pointer(coll);
+	}
+	return true;
+      }
+    } else {
+      index = to_long_w_def(key, -1);
+      if (index >= 0 && index < _num_nodes_unchecked(coll)) {
+	if (result) *result = mk_pointer(mk_graph(sc, T_GRAPH_NODE, _node_offset_unchecked(coll) + index, 1, _graph_unchecked(coll)));
+	return true;
+      }
+    }
+    break;
+    
+  case T_GRAPH_NODE:
+    {
+      nanoclj_node_t * n = &(_graph_unchecked(coll)->nodes[_node_offset_unchecked(coll)]);
+      if (key.as_long == sc->POSITION.as_long) {
+	if (result) *result = mk_vector_2d(sc, n->pos.x, n->pos.y);
+      } else {
+	return false;
+      }
+    }
+    return true;
+
+  case T_GRAPH_EDGE:
+    {
+      nanoclj_edge_t * e = &(_graph_unchecked(coll)->edges[_edge_offset_unchecked(coll)]);
+      if (key.as_long == sc->SOURCE.as_long) {
+	if (result) *result = mk_integer(sc, e->source);
+      } else if (key.as_long == sc->TARGET.as_long) {
+	if (result) *result = mk_integer(sc, e->target);
+      } else {
+	return false;
+      }
+    }
+    return true;
   }
-  
   return false;
 }
 
@@ -2966,41 +3094,6 @@ static inline nanoclj_val_t oblist_find_item(nanoclj_t * sc, uint16_t type, strv
     }
   }
   return mk_nil();
-}
-
-static inline nanoclj_val_t mk_vector_2d(nanoclj_t * sc, double x, double y) {
-  nanoclj_cell_t * vec = mk_vector(sc, 2);
-  set_vector_elem(vec, 0, mk_real(x));
-  set_vector_elem(vec, 1, mk_real(y));
-  return mk_pointer(vec);
-}
-
-static inline nanoclj_val_t mk_vector_3d(nanoclj_t * sc, double x, double y, double z) {
-  nanoclj_cell_t * vec = mk_vector(sc, 3);
-  set_vector_elem(vec, 0, mk_real(x));
-  set_vector_elem(vec, 1, mk_real(y));
-  set_vector_elem(vec, 2, mk_real(z));
-  return mk_pointer(vec);
-}
-
-static inline nanoclj_val_t mk_vector_4d(nanoclj_t * sc, double x, double y, double z, double w) {
-  nanoclj_cell_t * vec = mk_vector(sc, 4);
-  set_vector_elem(vec, 0, mk_real(x));
-  set_vector_elem(vec, 1, mk_real(y));
-  set_vector_elem(vec, 2, mk_real(z));
-  set_vector_elem(vec, 3, mk_real(w));
-  return mk_pointer(vec);
-}
-
-static inline nanoclj_val_t mk_vector_6d(nanoclj_t * sc, double x, double y, double z, double w, double a, double b) {
-  nanoclj_cell_t * vec = mk_vector(sc, 6);
-  set_vector_elem(vec, 0, mk_real(x));
-  set_vector_elem(vec, 1, mk_real(y));
-  set_vector_elem(vec, 2, mk_real(z));
-  set_vector_elem(vec, 3, mk_real(w));
-  set_vector_elem(vec, 4, mk_real(a));
-  set_vector_elem(vec, 5, mk_real(b));
-  return mk_pointer(vec);
 }
 
 /* Copies a vector so that the copy can be mutated */
@@ -3478,7 +3571,7 @@ static inline nanoclj_cell_t * get_port_object(nanoclj_t * sc, uint16_t type, na
   if (x) {
     nanoclj_port_rep_t * pr = sc->malloc(sizeof(nanoclj_port_rep_t));
     if (pr) {
-      x->_object._port.rep = pr;
+      _rep_unchecked(x) = pr;
       _port_type_unchecked(x) = port_type;
       _port_flags_unchecked(x) = 0;
       _nesting_unchecked(x) = 0;
@@ -3599,6 +3692,14 @@ static inline nanoclj_val_t port_from_filename(nanoclj_t * sc, uint16_t type, st
   }
   if (!f) {
     sc->free(filename);
+    switch (errno) {
+    case ENOENT:
+      nanoclj_throw(sc, mk_exception(sc, sc->FileNotFoundException, "File not found"));
+      break;
+    default:
+      nanoclj_throw(sc, mk_exception(sc, sc->IOException, "Unknown IO error"));
+      break;
+    }
     return mk_nil();
   }
   
@@ -5459,6 +5560,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       case T_CHAR_ARRAY:
       case T_WRITER:
       case T_READER:
+      case T_GRAPH:
+      case T_GRAPH_NODE:
+      case T_GRAPH_EDGE:
 	if (!unpack_args_1_plus(sc, &arg0, &arg_next)) {
 	  return false;
 	} else if (get_elem(sc, decode_pointer(sc->code), arg0, &x)) {
@@ -5553,7 +5657,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       break;
     }
     }
-    Error_0(sc, "Illegal function");    
+    Error_0(sc, "Illegal function");
     
   case OP_DOMACRO:             /* do macro */
     sc->code = sc->value;
@@ -7501,7 +7605,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     
   case OP_SET_LINE_WIDTH:
     if (!unpack_args_1(sc, &arg0)) {
-      return false;      
+      return false;
     }
 #if NANOCLJ_HAS_CANVAS
     x = get_out_port(sc);
@@ -7616,7 +7720,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 #if NANOCLJ_HAS_CANVAS
     x = get_out_port(sc);
     if (is_writer(x) && port_type_unchecked(x) == port_canvas) {
-      canvas_stroke(rep_unchecked(x)->canvas.impl);
+      canvas_fill(rep_unchecked(x)->canvas.impl);
     }
 #endif
     s_return(sc, mk_nil());
@@ -8174,6 +8278,10 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   sc->RGB = def_keyword(sc, "rgb");
   sc->RGBA = def_keyword(sc, "rgba");
   sc->PDF = def_keyword(sc, "pdf");
+  sc->POSITION = def_keyword(sc, "position");
+  sc->EDGES = def_keyword(sc, "edges");
+  sc->SOURCE = def_keyword(sc, "source");
+  sc->TARGET = def_keyword(sc, "target");
   
   sc->SORTED_SET = def_symbol(sc, "sorted-set");
   sc->ARRAY_MAP = def_symbol(sc, "array-map");
@@ -8208,7 +8316,8 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   nanoclj_cell_t * NullPointerException = mk_class(sc, "java.lang.NullPointerException", gentypeid(sc), RuntimeException);
   nanoclj_cell_t * ClassCastException = mk_class(sc, "java.lang.ClassCastException", T_CLASS_CAST_EXCEPTION, RuntimeException);
   nanoclj_cell_t * IllegalStateException = mk_class(sc, "java.lang.IllegalStateException", T_ILLEGAL_STATE_EXCEPTION, RuntimeException);
-  nanoclj_cell_t * AFn = mk_class(sc, "clojure.lang.AFn", gentypeid(sc), sc->Object);  
+  sc->IOException = mk_class(sc, "java.io.IOExeption", gentypeid(sc), Exception);
+  nanoclj_cell_t * AFn = mk_class(sc, "clojure.lang.AFn", gentypeid(sc), sc->Object);
   
   mk_class(sc, "java.lang.Class", T_CLASS, AFn); /* non-standard parent */
   mk_class(sc, "java.lang.String", T_STRING, sc->Object);
@@ -8227,6 +8336,7 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   mk_class(sc, "java.util.UUID", T_UUID, sc->Object);
   mk_class(sc, "java.util.regex.Pattern", T_REGEX, sc->Object);
   mk_class(sc, "java.lang.ArithmeticException", T_ARITHMETIC_EXCEPTION, RuntimeException);
+  sc->FileNotFoundException = mk_class(sc, "java.io.FileNotFoundException", T_FILE_NOT_FOUND_EXCEPTION, sc->IOException);
   
   /* Clojure types */
   nanoclj_cell_t * AReference = mk_class(sc, "clojure.lang.AReference", gentypeid(sc), sc->Object);
@@ -8263,6 +8373,8 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   mk_class(sc, "nanoclj.core.Tensor", T_TENSOR, sc->Object);
   mk_class(sc, "nanoclj.core.EmptyList", T_NIL, sc->Object);
   sc->Graph = mk_class(sc, "nanoclj.core.Graph", T_GRAPH, sc->Object);
+  mk_class(sc, "nanoclj.core.GraphNode", T_GRAPH_NODE, sc->Object);
+  mk_class(sc, "nanoclj.core.GraphEdge", T_GRAPH_EDGE, sc->Object);
 
   sc->OutOfMemoryError = mk_exception(sc, OutOfMemoryError, "Out of memory");
   sc->NullPointerException = mk_exception(sc, NullPointerException, "Null pointer exception");

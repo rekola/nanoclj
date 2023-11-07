@@ -9,6 +9,7 @@
 
 #include "linenoise.h"
 #include "nanoclj_utils.h"
+#include "nanoclj_graph.h"
 
 #ifdef WIN32
 
@@ -797,6 +798,20 @@ static inline nanoclj_val_t Geo_load(nanoclj_t * sc, nanoclj_cell_t * args) {
   return mk_pointer(r);
 }
 
+static inline nanoclj_val_t Graph_update_layout(nanoclj_t * sc, nanoclj_cell_t * args) {
+  nanoclj_cell_t * g = decode_pointer(first(sc, args));
+  float gravity = 0.075f, friction = 0.9f, charge = -35.0f;
+  float alpha = 0.1f;
+  
+  for (int i = 0; i < 1000; i++) {
+    relax_links(g, alpha);
+    apply_gravity(g, alpha, gravity);
+    apply_repulsion(g, alpha, charge);
+    apply_drag(g, friction);
+  }
+  return mk_nil();
+}
+
 static inline nanoclj_val_t Graph_load(nanoclj_t * sc, nanoclj_cell_t * args) {
   nanoclj_val_t src = first(sc, args);
   strview_t sv = to_strview(slurp(sc, T_READER, args));
@@ -831,15 +846,16 @@ static inline nanoclj_val_t Graph_load(nanoclj_t * sc, nanoclj_cell_t * args) {
       xmlAttr* property = node->properties;
       for (; property; property = property->next) {
 	xmlChar * value = xmlNodeListGetString(doc, property->children, 1);
-	if (strcmp((const char *)property->name, "source") != 0) {
+	if (strcmp((const char *)property->name, "source") == 0) {
 	  source = mk_string(sc, (const char *)value);
-	} else if (strcmp((const char *)property->name, "target") != 0) {
+	} else if (strcmp((const char *)property->name, "target") == 0) {
 	  target = mk_string(sc, (const char *)value);
 	}
 	xmlFree(value);
       }
       if (!is_nil(source) && !is_nil(target)) {
-	size_t si = find_node_index(g, source), ti = find_node_index(g, target);
+	size_t si = find_node_index(sc, g, source), ti = find_node_index(sc, g, target);
+	strview_t ssv = to_strview(source), tsv = to_strview(target);
 	if (si != NPOS && ti != NPOS) {
 	  graph_array_append_edge(sc, g, si, ti);
 	}
@@ -880,7 +896,7 @@ static inline nanoclj_val_t Graph_load(nanoclj_t * sc, nanoclj_cell_t * args) {
     }
   }
   xmlFreeDoc(doc);
-  return mk_pointer(mk_graph(sc, 0, g->num_nodes, g));
+  return mk_pointer(mk_graph(sc, T_GRAPH, 0, g->num_nodes, g));
 }
 
 static inline nanoclj_val_t create_xml_node(nanoclj_t * sc, xmlNode * input) {
@@ -1247,7 +1263,10 @@ static inline void register_functions(nanoclj_t * sc) {
   intern_foreign_func(sc, sc->Audio, "lowpass", Audio_lowpass, 1, 1);
 
   intern_foreign_func(sc, Geo, "load", Geo_load, 1, 1);
+
+  intern_foreign_func(sc, sc->Graph, "update-layout", Graph_update_layout, 1, 1);
   intern_foreign_func(sc, sc->Graph, "load", Graph_load, 1, 1);
+
   intern_foreign_func(sc, xml, "parse", clojure_xml_parse, 1, 1);
   intern_foreign_func(sc, csv, "read-csv", clojure_data_csv_read_csv, 1, 1);
 
