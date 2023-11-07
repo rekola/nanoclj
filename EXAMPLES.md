@@ -38,7 +38,6 @@ First load and unzip ECB data: https://www.ecb.europa.eu/stats/eurofxref/eurofxr
 
 ```clojure
 (def G (nanoclj.graph/load "karate.graphml"))
-(nanoclj.graph/update-layout G)
 (graph-plot G)
 ```
 

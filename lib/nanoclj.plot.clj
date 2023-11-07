@@ -64,6 +64,7 @@
                              (stroke)
                              ))
          draw-graph (fn [g]
+                      (.updateLayout g)
                       (set-color [ 0 0 0 0.5 ])
                       (run! #( draw-edge g %1 ) (g :edges))
                       (run! draw-node g))
