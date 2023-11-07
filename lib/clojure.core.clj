@@ -333,6 +333,20 @@
                (-close rdr)
                r))
 
+(defn read-line
+  "Reads a line from *in* or a reader"
+  ([] (read-line *in*))
+  ([rdr] (let [c0 (-read rdr)]
+           (if (= c0 ##Eof) nil
+               (loop [c c0 acc ""]
+                 (if (or (= c ##Eof) (= c \newline)) acc (recur (-read rdr) (conj acc c))))))))
+
+(defn line-seq
+  "Returns a sequence of line from rdr"
+  [rdr] (let [line (read-line rdr)]
+          (if line
+            (cons line (lazy-seq (line-seq rdr))))))
+
 (defn spit
   "Writes content to a file. Arguments are passed to Writer so same kind of input is supported"
   [f content & options] (let [prev-out *out*
