@@ -34,10 +34,16 @@ First load and unzip ECB data: https://www.ecb.europa.eu/stats/eurofxref/eurofxr
 (plot dates USD)
 ```
 
+## Load and visualize a GraphML file
+
+```clojure
+(def G (nanoclj.graph/load "karate.graphml"))
+(nanoclj.graph/update-layout G)
+(graph-plot G)
+```
+
 ## Create a PDF
 
 ## Track CPU load in a plot
-
-## Load and visualize a GraphML file
 
 ## Draw a rotating supershape
