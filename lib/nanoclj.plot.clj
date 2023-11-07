@@ -22,13 +22,58 @@
              (if (< n 0) acc
                  (recur (+ a (/ (- b a) n)) (dec n) (conj acc a))))))
 
-(defn geo-plot
+(defn graph-plot
   "Plots a map"
-  ([& args]
+  ([& graphs]
    (let [width (*window-size* 0)
          height (int (/ width 3))
+         margin-top 10
+         margin-bottom 10
+         margin-left 10
+         margin-right 10
+         content-width (- width margin-left margin-right)
+         content-height (- height margin-top margin-bottom)
+         min-x -100
+         min-y -100
+         max-x 100
+         max-y 100
+         range-x (- max-x min-x)
+         range-y (- max-y min-y)
+         fit-x (fn [x] (+ (* (/ (- x min-x) range-x) content-width) margin-left))
+         fit-y (fn [y] (+ (* (/ (- max-y y) range-y) content-height) margin-top))
+         cx (clojure.java.io/writer width height [ 1 1 1 ])
+         pi-times-2 (* 2 Math/PI)
+         draw-edge (fn [g e] (let [[x0 y0] ((g (e :source)) :position)
+                                   [x1 y1] ((g (e :target)) :position)
+                                   ]
+                               (set-line-width 5)
+                               (new-path)
+                               (move-to (fit-x x0) (fit-y y0))
+                               (line-to (fit-x x1) (fit-y y1))
+                               (stroke)
+                               ))
+         draw-node (fn [n] (let [[x y] (n :position)]
+                             (set-color [ 1.0 0.5 0.5 ])
+                             (new-path)
+                             (arc (fit-x x) (fit-y y) 20 0 pi-times-2)
+                             (fill)
+                             (set-color [ 0.0 0.0 0.0 0.5 ])
+                             (new-path)
+                             (arc (fit-x x) (fit-y y) 20 0 pi-times-2)
+                             (set-line-width 1)
+                             (stroke)
+                             ))
+         draw-graph (fn [g]
+                      (set-color [ 0 0 0 0.5 ])
+                      (run! #( draw-edge g %1 ) (g :edges))
+                      (run! draw-node g))
+         draw (fn []
+                (set-font-size 10)
+                (run! draw-graph graphs))
          ]
-     )))
+     (with-out cx
+       (draw)
+         ))))
 
 (defn plot
   "Plots a series. Matlab style."
@@ -53,9 +98,13 @@
          fit-y (fn [y] (+ (* (/ (- max-y y) range-y) content-height) margin-top))
          x-tick-step (Math/pow 10 (dec (Math/round (Math/log10 range-x))))
          y-tick-step (Math/pow 10 (dec (Math/round (Math/log10 range-y))))
+         format-x (case (class min-x)
+                    java.util.Date (fn [x] (str (java.util.Date x)))
+                    (fn [x] (format "%.2f" x)))
+         format-y (fn [x] (format "%.2f" x))
          draw-x-ticks (fn [x] (if (<= x max-x)
                                 (let [fx (fit-x x)
-                                      label (format "%.2f" x)
+                                      label (format-x x)
                                       e (get-text-extents label)]
                                   (move-to fx margin-top)
                                   (line-to fx (+ margin-top 3))
@@ -69,7 +118,7 @@
                                 nil))
          draw-y-ticks (fn [y] (if (<= y max-y)
                                 (let [fy (fit-y y)
-                                      label (format "%.2f" y)
+                                      label (format-y y)
                                       e (get-text-extents label)]
                                   (move-to margin-left fy)
                                   (line-to (+ margin-left 3) fy)
