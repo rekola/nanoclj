@@ -798,7 +798,7 @@ static inline nanoclj_val_t Geo_load(nanoclj_t * sc, nanoclj_cell_t * args) {
   return mk_pointer(r);
 }
 
-static inline nanoclj_val_t Graph_update_layout(nanoclj_t * sc, nanoclj_cell_t * args) {
+static inline nanoclj_val_t Graph_updateLayout(nanoclj_t * sc, nanoclj_cell_t * args) {
   nanoclj_cell_t * g = decode_pointer(first(sc, args));
   float gravity = 0.075f, friction = 0.9f, charge = -35.0f;
   float alpha = 0.1f;
@@ -1264,7 +1264,7 @@ static inline void register_functions(nanoclj_t * sc) {
 
   intern_foreign_func(sc, Geo, "load", Geo_load, 1, 1);
 
-  intern_foreign_func(sc, sc->Graph, "update-layout", Graph_update_layout, 1, 1);
+  intern_foreign_func(sc, sc->Graph, "updateLayout", Graph_updateLayout, 1, 1);
   intern_foreign_func(sc, sc->Graph, "load", Graph_load, 1, 1);
 
   intern_foreign_func(sc, xml, "parse", clojure_xml_parse, 1, 1);
