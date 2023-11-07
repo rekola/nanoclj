@@ -108,9 +108,6 @@ extern "C" {
         nanoclj_val_t data[NANOCLJ_SMALL_VEC_SIZE];
 	struct nanoclj_cell_t * meta;
       } _small_collection;
-      struct {
-	void * impl;
-      } _tensor;
       long long _lvalue;
       struct pcre2_real_code_8 * _re;
       struct {
@@ -292,8 +289,6 @@ extern "C" {
     int window_lines, window_columns;
     double window_scale_factor;
     nanoclj_color_t fg_color, bg_color;
-    
-    void * tensor_ctx;
   };
 
 #if 0

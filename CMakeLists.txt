@@ -28,18 +28,16 @@ add_definitions(-DNANOCLJ_STANDALONE -DNANOCLJ_USE_LINENOISE)
 if (CMAKE_SYSTEM_NAME MATCHES "Linux")
   add_compile_definitions(_GNU_SOURCE)
 endif()
-  
+
 set(SOURCE_FILES
   src/nanoclj.c
   src/linenoise.c
-  src/ggml.c
-  src/ggml-alloc.c
   )
 
 add_executable(nanoclj ${SOURCE_FILES})
 target_link_libraries(nanoclj Threads::Threads)
 
-IF (MSVC) 
+IF (MSVC)
   find_package(utf8proc NAMES unofficial-utf8proc REQUIRED)
   target_link_libraries(nanoclj utf8proc)
 

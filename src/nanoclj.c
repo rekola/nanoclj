@@ -391,7 +391,6 @@ static inline bool is_nil(nanoclj_val_t v) {
 
 #define _image_unchecked(p)	  ((p)->_image.rep)
 #define _audio_unchecked(p)	  ((p)->_audio.rep)
-#define _tensor_unchecked(p)	  ((p)->_tensor.impl)
 #define _lvalue_unchecked(p)      ((p)->_lvalue)
 #define _re_unchecked(p)	  ((p)->_re)
 #define _ff_unchecked(p)	  ((p)->_ff.ptr)
@@ -722,18 +721,6 @@ static inline double to_double(nanoclj_val_t p) {
   }
   }
   return NAN;
-}
-
-static inline void * to_tensor(nanoclj_t * sc, nanoclj_val_t p) {
-  switch (prim_type(p)) {
-  case T_NIL:{
-    nanoclj_cell_t * c = decode_pointer(p);
-    switch (_type(c)) {
-    case T_TENSOR: return _tensor_unchecked(c);
-    }
-  }
-  }
-  return NULL;
 }
 
 static inline bool is_readable(nanoclj_cell_t * p) {
@@ -2705,9 +2692,6 @@ static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t
 #include "nanoclj_cairo.h"
 #endif
 
-/* =================== Tensors ===================== */
-#include "nanoclj_ggml.h"
-
 /* =================== HTTP ======================== */
 #ifdef WIN32
 #include "nanoclj_winhttp.h"
@@ -4188,37 +4172,6 @@ static inline void print_slashstring(nanoclj_t * sc, strview_t sv, nanoclj_cell_
   putstr(sc, "\"", out);
 }
 
-static void print_tensor(nanoclj_t * sc, void * tensor, nanoclj_cell_t * out) {
-  switch (tensor_get_n_dims(tensor)) {
-  case 1:{
-    putchars(sc, "[", 1, out);
-    int w = tensor_get_dim(tensor, 0);
-    for (int x = 0; x < w; x++) {
-      int l = sprintf(sc->strbuff, " %.15g", tensor_get1f(tensor, x));
-      putchars(sc, sc->strbuff, l, out);
-    }
-    putchars(sc, " ]", 2, out);
-  }
-    break;
-  case 2:{
-    int w = tensor_get_dim(tensor, 0), h = tensor_get_dim(tensor, 1);
-    for (int y = 0; y < h; y++) {
-      putchars(sc, y == 0 ? "[" : " ", 1, out);
-      for (int x = 0; x < w; x++) {
-	int l = sprintf(sc->strbuff, " %.15g", tensor_get2f(tensor, x, y));
-	putchars(sc, sc->strbuff, l, out);
-      }
-      if (y + 1 < h) {
-	putchars(sc, " ;\n", 3, out);
-      } else {
-	putchars(sc, "\n]", 2, out);
-      }
-    }
-  }
-    break;
-  }
-}
-
 static inline bool print_imageview(nanoclj_t * sc, imageview_t iv, nanoclj_cell_t * out) {
   if (!is_writable(out)) {
     return false;
@@ -4439,9 +4392,6 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
 	  };
 	}
 	break;
-      case T_TENSOR:
-	print_tensor(sc, _tensor_unchecked(c), out);
-	return;
       case T_IMAGE:
 	if (print_imageview(sc, _to_imageview(c), out)) {
 	  return;
@@ -5079,13 +5029,6 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
 	return img;
       }
     }
-
-  case T_TENSOR:
-    switch (seq_length(sc, args)) {
-    case 1: return mk_tensor_1f(sc, to_long(first(sc, args)));
-    case 2: return mk_tensor_2f(sc, to_long(first(sc, args)), to_long(second(sc, args)));
-    case 3: return mk_tensor_3f(sc, to_long(first(sc, args)), to_long(second(sc, args)), to_long(third(sc, args)));
-    }
   }
   
   return mk_nil();
@@ -5266,7 +5209,6 @@ static inline void eval_in_thread(nanoclj_t * sc, nanoclj_val_t code) {
   child->load_stack = NULL;
   child->rdbuff = NULL;
   child->value = mk_nil();
-  child->tensor_ctx = NULL;
 
   /* init sink */
   child->sink.type = T_LIST;
@@ -6203,7 +6145,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	nanoclj_throw(sc, mk_class_cast_exception(sc, "Argument cannot be cast to java.lang.Number"));
 	return false;
       } else if (tx == T_TENSOR || ty == T_TENSOR) {
-	s_return(sc, tensor_add(sc, to_tensor(sc, arg0), to_tensor(sc, arg1)));
+	/* TODO: implement tensor add */
       } else if (tx == T_REAL || ty == T_REAL) {
 	s_return(sc, mk_real(to_double(arg0) + to_double(arg1)));
       } else if (tx == T_RATIO || ty == T_RATIO) {
@@ -7537,22 +7479,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       s_return(sc, mk_string_from_sv(sc, to_strview(arg0)));
     }
     
-  case OP_TENSOR_SET:
-    if (!unpack_args_3(sc, &arg0, &arg1, &arg2)) {
-      return false;
-    } else if (is_cell(arg0)) {
-      nanoclj_cell_t * t = decode_pointer(arg0);
-      if (!t) {
-	nanoclj_throw(sc, sc->NullPointerException);
-	return false;
-      } else if (_type(t) == T_TENSOR) {
-	tensor_set1f(_tensor_unchecked(t), to_long(arg1), to_double(arg2));
-	s_return(sc, mk_nil());
-      }
-    }
-    nanoclj_throw(sc, mk_illegal_arg_exception(sc, "Invalid argument types"));
-    return false;
-    
   case OP_SET_COLOR:
     if (!unpack_args_1(sc, &arg0)) {
       return false;
@@ -8396,7 +8322,6 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   sc->term_colors = td.color;
   
   sc->context->properties = mk_properties(sc);
-  sc->tensor_ctx = mk_tensor_context();
   
   if (sc->bg_color.red < 128 && sc->bg_color.green < 128 && sc->bg_color.blue < 128) {
     intern(sc, sc->global_env, sc->THEME, def_keyword(sc, "dark"));

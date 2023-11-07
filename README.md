@@ -80,7 +80,6 @@ As well as printing images in block mode like the plot function does, they can a
 - linenoise (included, utf8 support added)
 - stb_image, stb_image_resize, stb_image_write (included)
 - dr_wav (included)
-- ggml (included, experimental)
 - zlib
 - libxml2
 - pcre2
