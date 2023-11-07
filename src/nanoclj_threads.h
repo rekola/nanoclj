@@ -63,7 +63,7 @@ static inline void nanoclj_mutex_destroy(nanoclj_mutex_t * m) {
   pthread_mutex_destroy(m);
 }
 
-static void nanoclj_start_thread(NANOCLJ_THREAD_SIG (*start_routine)(void *), void * arg) {
+static inline void nanoclj_start_thread(NANOCLJ_THREAD_SIG (*start_routine)(void *), void * arg) {
   pthread_t thread;
   pthread_attr_t attr;
   pthread_attr_init(&attr);
