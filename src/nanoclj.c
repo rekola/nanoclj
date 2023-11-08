@@ -1274,9 +1274,9 @@ static inline nanoclj_val_t mk_integer(nanoclj_t * sc, long long num) {
   }
 }
 
-static inline nanoclj_val_t mk_image_ext(nanoclj_t * sc, int32_t width, int32_t height,
-					 int32_t stride, nanoclj_internal_format_t f,
-					 nanoclj_cell_t * meta) {
+static inline nanoclj_cell_t * mk_image_ext(nanoclj_t * sc, int32_t width, int32_t height,
+					    int32_t stride, nanoclj_internal_format_t f,
+					    nanoclj_cell_t * meta) {
   nanoclj_cell_t * x = get_cell_x(sc, T_IMAGE, T_GC_ATOM, NULL, NULL, meta);
   if (x) {
     size_t size = get_image_size(height, stride, f);
@@ -1299,16 +1299,16 @@ static inline nanoclj_val_t mk_image_ext(nanoclj_t * sc, int32_t width, int32_t 
 #if RETAIN_ALLOCS
 	retain(sc, x);
 #endif
-	return mk_pointer(x);
+	return x;
       }
     }
   }
   sc->pending_exception = sc->OutOfMemoryError;
-  return mk_nil();
+  return NULL;
 }
 
-static inline nanoclj_val_t mk_image(nanoclj_t * sc, int32_t width, int32_t height,
-				     nanoclj_internal_format_t f, nanoclj_cell_t * meta) {
+static inline nanoclj_cell_t * mk_image(nanoclj_t * sc, int32_t width, int32_t height,
+					nanoclj_internal_format_t f, nanoclj_cell_t * meta) {
   int stride = width * get_format_bpp(f);
   return mk_image_ext(sc, width, height, stride, f, meta);
 }
@@ -5032,7 +5032,7 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
 
   case T_IMAGE:
     if (!args) {
-      return mk_image(sc, 0, 0, 0, NULL);
+      return mk_pointer(mk_image(sc, 0, 0, 0, NULL));
     } else {
       x = first(sc, args);
       if (is_image(x)) {
@@ -5040,10 +5040,10 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
       } else if (is_writer(x) && port_type_unchecked(x) == port_canvas) {
 #if NANOCLJ_HAS_CANVAS
 	imageview_t iv = canvas_get_imageview(rep_unchecked(x)->canvas.impl);
-	nanoclj_val_t img = mk_image_ext(sc, iv.width, iv.height, iv.stride, iv.format, NULL);
-	memcpy(image_unchecked(img)->data, iv.ptr, get_image_size(iv.height, iv.stride, iv.format));
+	nanoclj_cell_t * img = mk_image_ext(sc, iv.width, iv.height, iv.stride, iv.format, NULL);
+	memcpy(_image_unchecked(img)->data, iv.ptr, get_image_size(iv.height, iv.stride, iv.format));
 #endif
-	return img;
+	return mk_pointer(img);
       }
     }
   }
@@ -7868,7 +7868,7 @@ static inline void update_window_info(nanoclj_t * sc, nanoclj_cell_t * out) {
     FILE * fh = pr->stdio.file;
     int lines, cols, width, height;
     if (get_window_size(stdin, fh, &cols, &lines, &width, &height)) {
-      double f = width / cols > 15 ? 2.0 : 1.0;
+      double f = width / cols >= 14 ? 2.0 : 1.0;
       sc->window_columns = cols;
       sc->window_lines = lines;
       sc->window_scale_factor = f;

@@ -360,8 +360,9 @@ static inline nanoclj_val_t Image_load(nanoclj_t * sc, nanoclj_cell_t * args) {
   set_vector_elem(meta, 0, mk_mapentry(sc, sc->WIDTH, mk_int(w)));
   set_vector_elem(meta, 1, mk_mapentry(sc, sc->HEIGHT, mk_int(h)));
   if (is_string(src) || is_file(src)) {
-    meta = conjoin(sc, meta, mk_mapentry(sc, sc->FILE, src));
+    meta = conjoin(sc, meta, mk_mapentry(sc, sc->FILE_KW, src));
   }
+  
   nanoclj_internal_format_t f;
   switch (channels) {
   case 1: f = nanoclj_r8; break;
@@ -371,10 +372,10 @@ static inline nanoclj_val_t Image_load(nanoclj_t * sc, nanoclj_cell_t * args) {
     stbi_image_free(data);
     return mk_nil();
   }
-  nanoclj_val_t image = mk_image(sc, w, h, f, meta);
-  memcpy(image_unchecked(image)->data, data, w * h * get_format_bpp(f));
+  nanoclj_cell_t * image = mk_image(sc, w, h, f, meta);
+  memcpy(_image_unchecked(image)->data, data, w * h * get_format_bpp(f));
   stbi_image_free(data);
-  return image;
+  return mk_pointer(image);
 }
 
 /* Resizes an image. Only support simple formats r8, rgb8 or rgba8. */
@@ -384,17 +385,17 @@ static inline nanoclj_val_t Image_resize(nanoclj_t * sc, nanoclj_cell_t * args) 
   if (!iv.ptr || !is_number(target_w0) || !is_number(target_h0)) {
     return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Invalid type")));
   }
-  
+
   int target_w = to_int(target_w0), target_h = to_int(target_h0);
   int channels = get_format_channels(iv.format);
 
-  nanoclj_val_t target_image = mk_image(sc, target_w, target_h, iv.format, NULL);
-  nanoclj_image_t * img = image_unchecked(target_image);
+  nanoclj_cell_t * target_image = mk_image(sc, target_w, target_h, iv.format, NULL);
+  nanoclj_image_t * img = _image_unchecked(target_image);
   uint8_t * target_ptr = img->data;
   
   stbir_resize_uint8_generic(iv.ptr, iv.width, iv.height, iv.stride, target_ptr, target_w, target_h, 0, channels, 0, STBIR_FLAG_ALPHA_PREMULTIPLIED, STBIR_EDGE_CLAMP, STBIR_FILTER_DEFAULT, STBIR_COLORSPACE_LINEAR, NULL);
 
-  return target_image;
+  return mk_pointer(target_image);
 }
 
 static inline nanoclj_val_t Image_transpose(nanoclj_t * sc, nanoclj_cell_t * args) {
@@ -403,8 +404,8 @@ static inline nanoclj_val_t Image_transpose(nanoclj_t * sc, nanoclj_cell_t * arg
     return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Not an Image")));
   }
   int w = iv.width, h = iv.height, stride = iv.stride;
-  nanoclj_val_t new_image = mk_image(sc, h, w, iv.format, NULL);
-  uint8_t * data = image_unchecked(new_image)->data;
+  nanoclj_cell_t * new_image = mk_image(sc, h, w, iv.format, NULL);
+  uint8_t * data = _image_unchecked(new_image)->data;
   size_t bpp = get_format_bpp(iv.format);
   
   for (int y = 0; y < h; y++) {
@@ -415,7 +416,7 @@ static inline nanoclj_val_t Image_transpose(nanoclj_t * sc, nanoclj_cell_t * arg
     }
   }
   
-  return new_image;
+  return mk_pointer(new_image);
 }
 
 static inline nanoclj_val_t Image_save(nanoclj_t * sc, nanoclj_cell_t * args) {
@@ -515,8 +516,8 @@ nanoclj_val_t Image_horizontalGaussianBlur(nanoclj_t * sc, nanoclj_cell_t * args
   int total = 0;
   for (int i = 0; i < kernel_size; i++) total += kernel[i];
   
-  nanoclj_val_t r = mk_image(sc, w, h, iv.format, NULL);
-  uint8_t * output_data = image_unchecked(r)->data;
+  nanoclj_cell_t * r = mk_image(sc, w, h, iv.format, NULL);
+  uint8_t * output_data = _image_unchecked(r)->data;
     
   switch (iv.format) {
   case nanoclj_rgba8:
@@ -571,10 +572,10 @@ nanoclj_val_t Image_horizontalGaussianBlur(nanoclj_t * sc, nanoclj_cell_t * args
     }
     break;
   default:
-    r = mk_nil();
+    r = NULL;
   }
   sc->free(kernel);
-  return r;
+  return mk_pointer(r);
 }
 
 static inline nanoclj_val_t Audio_load(nanoclj_t * sc, nanoclj_cell_t * args) {
