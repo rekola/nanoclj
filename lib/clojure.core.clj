@@ -499,6 +499,15 @@
   "Prints args into *out* using pr followed by a newline"
   [& more] (apply pr more) (newline))
 
+(def-macro (with-out-pdf filename width height $ body)
+  `(let ((prev-out *out*)
+         (w (clojure.java.io/writer ,width ,height :pdf ,filename)))
+     (set! *out* w)
+     ,@body
+     (set! *out* prev-out)
+     (-close w)
+     nil))
+
 (def-macro (with-out-str body)
    `(let [ prev-out *out*
            w (clojure.java.io/writer)

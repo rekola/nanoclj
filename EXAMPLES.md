@@ -43,6 +43,11 @@ First load and unzip ECB data: https://www.ecb.europa.eu/stats/eurofxref/eurofxr
 
 ## Create a PDF
 
+```clojure
+(with-out-pdf "test.pdf" 612 828
+   (println "Hello world!"))
+```
+
 ## Track CPU load in a plot
 
 ## Draw a rotating supershape
