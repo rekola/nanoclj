@@ -87,13 +87,14 @@ As well as printing images in block mode like the plot function does, they can a
 - libsixel
 - utf8proc
 - shapelib
+- ffmpeg
 
 ## Building
 
 ### Ubuntu
 
 ```
-sudo apt install libutf8proc-dev libsixel-dev libpcre2-dev libcairo2-dev libshp-dev libcurl4-gnutls-dev libxml2-dev libz-dev
+sudo apt install libutf8proc-dev libsixel-dev libpcre2-dev libcairo2-dev libshp-dev libcurl4-gnutls-dev libxml2-dev libz-dev libavcodec-dev
 mkdir build
 cd build
 cmake ..
