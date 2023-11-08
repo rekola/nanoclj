@@ -243,7 +243,7 @@ extern "C" {
     nanoclj_val_t TYPE;		  /* :type */
     nanoclj_val_t LINE;		  /* :line */
     nanoclj_val_t COLUMN;	  /* :column */
-    nanoclj_val_t FILE;		  /* :file */
+    nanoclj_val_t FILE_KW;	  /* :file */
     nanoclj_val_t NS;		  /* :ns */
     nanoclj_val_t INLINE;	  /* :inline */
     nanoclj_val_t BLOCK;	  /* :block */

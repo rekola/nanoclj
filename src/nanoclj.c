@@ -3297,7 +3297,7 @@ static inline nanoclj_cell_t * mk_class_with_fn(nanoclj_t * sc, const char * nam
   nanoclj_val_t sym = def_symbol_from_sv(sc, T_SYMBOL, mk_strview(0), mk_strview(name));
   nanoclj_cell_t * md = mk_arraymap(sc, 2);
   set_vector_elem(md, 0, mk_mapentry(sc, sc->NAME, sym));
-  set_vector_elem(md, 1, mk_mapentry(sc, sc->FILE, mk_string(sc, fn)));
+  set_vector_elem(md, 1, mk_mapentry(sc, sc->FILE_KW, mk_string(sc, fn)));
   nanoclj_cell_t * t = mk_class_with_meta(sc, sym, type_id, parent_type, md);
 
   char * p = strrchr(name, '.');
@@ -3355,7 +3355,7 @@ static inline nanoclj_cell_t * def_namespace(nanoclj_t * sc, const char *name, c
   nanoclj_val_t sym = def_symbol(sc, name);
   nanoclj_cell_t * md = mk_arraymap(sc, 2);
   set_vector_elem(md, 0, mk_mapentry(sc, sc->NAME, sym));
-  set_vector_elem(md, 1, mk_mapentry(sc, sc->FILE, mk_string(sc, file)));
+  set_vector_elem(md, 1, mk_mapentry(sc, sc->FILE_KW, mk_string(sc, file)));
   return def_namespace_with_sym(sc, sym, md);
 }
 
@@ -3366,7 +3366,7 @@ static inline nanoclj_cell_t * mk_meta_from_reader(nanoclj_t * sc, nanoclj_val_t
     nanoclj_cell_t * md = mk_arraymap(sc, 3);
     set_vector_elem(md, 0, mk_mapentry(sc, sc->LINE, mk_int(_line_unchecked(p) + 1)));
     set_vector_elem(md, 1, mk_mapentry(sc, sc->COLUMN, mk_int(_column_unchecked(p) + 1)));
-    set_vector_elem(md, 2, mk_mapentry(sc, sc->FILE, mk_string(sc, pr->stdio.filename)));
+    set_vector_elem(md, 2, mk_mapentry(sc, sc->FILE_KW, mk_string(sc, pr->stdio.filename)));
     return md;
   } else {
     return mk_arraymap(sc, 0);
@@ -7853,7 +7853,7 @@ static inline void assign_proc(nanoclj_t * sc, nanoclj_cell_t * ns, enum nanoclj
   set_vector_elem(meta, 0, mk_mapentry(sc, sc->NS, ns_sym));
   set_vector_elem(meta, 1, mk_mapentry(sc, sc->NAME, x));
   set_vector_elem(meta, 2, mk_mapentry(sc, sc->DOC, mk_string(sc, i->doc)));
-  set_vector_elem(meta, 3, mk_mapentry(sc, sc->FILE, mk_string(sc, __FILE__)));
+  set_vector_elem(meta, 3, mk_mapentry(sc, sc->FILE_KW, mk_string(sc, __FILE__)));
   new_slot_spec_in_env(sc, ns, x, y, meta);
 }
 
@@ -8213,7 +8213,7 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   sc->TYPE = def_keyword(sc, "type");
   sc->LINE = def_keyword(sc, "line");
   sc->COLUMN = def_keyword(sc, "column");
-  sc->FILE = def_keyword(sc, "file");
+  sc->FILE_KW = def_keyword(sc, "file");
   sc->NS = def_keyword(sc, "ns");
   sc->INLINE = def_keyword(sc, "inline");
   sc->BLOCK = def_keyword(sc, "block");

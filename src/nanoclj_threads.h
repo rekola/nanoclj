@@ -3,7 +3,9 @@
 
 #ifdef _WIN32
 
+#include <Windows.h>
 #include <process.h>
+#include <synchapi.h>
 
 typedef HANDLE nanoclj_mutex_t;
 
@@ -27,7 +29,7 @@ static inline void nanoclj_mutex_destroy(nanoclj_mutex_t * m) {
 
 static inline void nanoclj_start_thread(unsigned (__stdcall *start_routine)(void *), void * arg) {
   unsigned threadID;
-  HANDLE h = _beginthreadex( NULL, 0, start_routine, arg, 0, &threadID );
+  uintptr_t h = _beginthreadex( NULL, 0, start_routine, arg, 0, &threadID );
   CloseHandle(h);
 }
 

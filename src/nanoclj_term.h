@@ -1,8 +1,6 @@
 #ifndef _NANOCLJ_TERM_H_
 #define _NANOCLJ_TERM_H_
 
-#include <unistd.h>
-
 #ifdef _WIN32
 #include <conio.h>
 #include <windows.h>
@@ -13,6 +11,7 @@
 
 #else
 
+#include <unistd.h>
 #include <termios.h>
 #include <sys/ioctl.h>
 
