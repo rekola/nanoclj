@@ -6,7 +6,7 @@
 
 #define NANOCLJ_HAS_CANVAS 1
 
-static void finalize_canvas(nanoclj_t * sc, void * canvas) {
+static inline void finalize_canvas(nanoclj_t * sc, void * canvas) {
   if (canvas) cairo_destroy((cairo_t *)canvas);
 }
 
@@ -52,6 +52,8 @@ static inline void * mk_canvas_pdf(nanoclj_t * sc, double width, double height, 
   char * fn = alloc_c_str(sc, fn0);
 
   cairo_surface_t * surface = cairo_pdf_surface_create(fn, width, height);
+  sc->free(fn);
+  
   cairo_t * cr = cairo_create(surface);
   cairo_surface_destroy(surface);
   
@@ -62,6 +64,14 @@ static inline void * mk_canvas_pdf(nanoclj_t * sc, double width, double height, 
   }
   cairo_set_source_rgba(cr, fg.red / 255.0, fg.green / 255.0, fg.blue / 255.0, fg.alpha / 255.0);
   return cr;
+}
+
+static inline bool canvas_has_error(void * canvas) {
+  return cairo_status((cairo_t *)canvas) != 0;
+}
+
+static inline const char * canvas_get_error_text(void * canvas) {
+  return cairo_status_to_string(cairo_status((cairo_t *)canvas));
 }
 
 static inline imageview_t canvas_get_imageview(void * canvas) {

@@ -929,6 +929,25 @@ static inline int_fast16_t syntaxnum(nanoclj_val_t p) {
   return 0;
 }
 
+/* Returns a null-terminated C string based on string view. */
+static inline char * alloc_c_str(nanoclj_t * sc, strview_t sv) {
+  char * buffer = sc->malloc(sv.size + 1);
+  if (!buffer) {
+    sc->pending_exception = sc->OutOfMemoryError;
+  } else {
+    memcpy(buffer, sv.ptr, sv.size);
+    buffer[sv.size] = 0;
+  }
+  return buffer;
+}
+
+/* =================== Canvas ====================== */
+#ifdef WIN32
+#include "nanoclj_gdi.h"
+#else
+#include "nanoclj_cairo.h"
+#endif
+
 /* allocate new cell segment */
 static inline int alloc_cellseg(nanoclj_t * sc, int n) {
   nanoclj_shared_context_t * context = sc->context;
@@ -1025,6 +1044,8 @@ static inline int port_close(nanoclj_t * sc, nanoclj_cell_t * p) {
     finalize_canvas(sc, pr->canvas.impl);
     break;
 #endif
+  case port_free:
+    break;
   }
   sc->free(pr);
   _port_type_unchecked(p) = port_free;
@@ -1092,9 +1113,10 @@ static inline void finalize_cell(nanoclj_t * sc, nanoclj_cell_t * a) {
   case T_GRAPH_EDGE:
     {
       nanoclj_graph_array_t * g = _graph_unchecked(a);
-      if (--(g->refcnt)) {
+      if (g->refcnt > 0 && --(g->refcnt)) {
 	sc->free(g->nodes);
 	sc->free(g->edges);
+	sc->free(g);
       }
     }
     break;
@@ -1429,18 +1451,6 @@ static inline long long get_ratio(nanoclj_val_t n, long long * den) {
   }
   *den = 1;
   return 0;
-}
-
-/* Returns a null-terminated C string based on string view. */
-static inline char * alloc_c_str(nanoclj_t * sc, strview_t sv) {
-  char * buffer = sc->malloc(sv.size + 1);
-  if (!buffer) {
-    sc->pending_exception = sc->OutOfMemoryError;
-  } else {
-    memcpy(buffer, sv.ptr, sv.size);
-    buffer[sv.size] = 0;
-  }
-  return buffer;
 }
 
 /* Creates a string store */
@@ -2685,13 +2695,6 @@ static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t
   return false;
 }
 
-/* =================== Canvas ====================== */
-#ifdef WIN32
-#include "nanoclj_gdi.h"
-#else
-#include "nanoclj_cairo.h"
-#endif
-
 /* =================== HTTP ======================== */
 #ifdef WIN32
 #include "nanoclj_winhttp.h"
@@ -3802,7 +3805,7 @@ static inline void putchars(nanoclj_t * sc, const char *s, size_t len, nanoclj_c
     append_bytes(sc, pr->string.data, (const uint8_t *)s, len);
     break;
 #if NANOCLJ_HAS_CANVAS
-  case port_canvas:  
+  case port_canvas:
     canvas_show_text(sc, pr->canvas.impl, (strview_t){ s, len });
     break;
 #endif
@@ -3818,7 +3821,7 @@ static inline void set_color(nanoclj_t * sc, nanoclj_color_t color, nanoclj_val_
   switch (port_type_unchecked(out)) {
   case port_file:
     pr->stdio.fg = color;
-#ifndef WIN32    
+#ifndef WIN32
     set_term_fg_color(pr->stdio.file, color, sc->term_colors);
 #endif
     break;
@@ -3835,7 +3838,7 @@ static inline void set_color(nanoclj_t * sc, nanoclj_color_t color, nanoclj_val_
   case port_canvas:
     canvas_set_color(pr->canvas.impl, color);
     break;
-#endif    
+#endif
   }
 }
 
@@ -3844,7 +3847,7 @@ static inline void set_bg_color(nanoclj_t * sc, nanoclj_color_t color, nanoclj_v
   switch (port_type_unchecked(out)) {
   case port_file:
     pr->stdio.bg = color;
-#ifndef WIN32    
+#ifndef WIN32
     set_term_bg_color(pr->stdio.file, color, sc->term_colors);
 #endif
     break;
@@ -3860,8 +3863,8 @@ static inline void set_linear_gradient(nanoclj_t * sc, nanoclj_cell_t * p0, nano
   case port_canvas:
     canvas_set_linear_gradient(pr->canvas.impl, p0, p1, colormap);
     break;
-#endif    
-  }  
+#endif
+  }
 }
 
 /* check c is in chars */
@@ -4969,7 +4972,7 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
 	args = next(sc, args);
 	if (args && t == T_WRITER) {
 	  y = first(sc, args);
-	  nanoclj_color_t fill_color = sc->bg_color;
+	  nanoclj_color_t fill_color = mk_color4i(0, 0, 0, 0);
 	  int channels = 3;
 	  strview_t pdf_fn = { 0 };
 	  for (args = next(sc, args); args; args = next(sc, args)) {
@@ -4989,21 +4992,28 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
 	    }
 	  }
 #if NANOCLJ_HAS_CANVAS
+	  void * canvas = NULL;
 	  if (channels) {
-	    nanoclj_cell_t * port = get_port_object(sc, t, port_canvas);
-	    _rep_unchecked(port)->canvas.impl = mk_canvas(sc,
-							  (int)(to_double(x) * sc->window_scale_factor),
-							  (int)(to_double(y) * sc->window_scale_factor),
-							  channels,
-							  sc->fg_color, fill_color);
-	    return mk_pointer(port);
+	    if (channels == 3 && fill_color.alpha == 0) {
+	      fill_color = sc->bg_color;
+	    }
+	    canvas = mk_canvas(sc,
+			       (int)(to_double(x) * sc->window_scale_factor),
+			       (int)(to_double(y) * sc->window_scale_factor),
+			       channels,
+			       sc->fg_color, fill_color);
 	  } else if (pdf_fn.size) {
-	    nanoclj_cell_t * port = get_port_object(sc, t, port_canvas);
-	    _rep_unchecked(port)->canvas.impl = mk_canvas_pdf(sc,
-							      (int)(to_double(x) * sc->window_scale_factor),
-							      (int)(to_double(y) * sc->window_scale_factor),
-							      pdf_fn,
-							      sc->fg_color, fill_color);
+	    canvas = mk_canvas_pdf(sc,
+				   (int)(to_double(x)),
+				   (int)(to_double(y)),
+				   pdf_fn,
+				   mk_color3i(0, 0, 0), fill_color);
+	  }
+	  nanoclj_cell_t * port = get_port_object(sc, t, port_canvas);
+	  _rep_unchecked(port)->canvas.impl = canvas;
+	  if (canvas_has_error(canvas)) {
+	    return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, canvas_get_error_text(canvas))));
+	  } else {
 	    return mk_pointer(port);
 	  }
 #endif
@@ -5814,7 +5824,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       s_goto(sc, OP_LET1);
     }
 
-  case OP_LET1_VEC:{   
+  case OP_LET1_VEC:{
     nanoclj_cell_t * vec = decode_pointer(car(sc->code));
     long long i = sc->args ? to_long(_car(sc->args)) : 0;
     destructure_value(sc, vector_elem(vec, i), sc->value);
@@ -5827,14 +5837,14 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       
       sc->code = vector_elem(vec, i + 3);
       sc->args = NULL;
-      s_goto(sc, OP_EVAL);      
+      s_goto(sc, OP_EVAL);
     } else {
       sc->code = cdr(sc->code);
       sc->args = NULL;
       s_goto(sc, OP_DO);
     }
   }
-    
+
   case OP_LET1:                /* let (calculate parameters) */
     sc->args = cons(sc, sc->value, sc->args);
     
@@ -5850,7 +5860,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       sc->args = reverse_in_place(sc, sc->args);
       sc->code = _car(sc->args);
       sc->args = decode_pointer(_cdr(sc->args));
-      s_goto(sc, OP_LET2);      
+      s_goto(sc, OP_LET2);
     }
 
   case OP_LET2:                /* let */
@@ -7717,7 +7727,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 						sc->fg_color, sc->bg_color);
     }
 #endif
-    s_return(sc, mk_nil());    
+    s_return(sc, mk_nil());
 
   case OP_FLUSH:
     x = get_out_port(sc);
@@ -7725,7 +7735,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       nanoclj_port_rep_t * pr = rep_unchecked(x);
       switch (port_type_unchecked(x)) {
       case port_canvas:
-	canvas_flush(pr->canvas.impl);	
+	canvas_flush(pr->canvas.impl);
 	break;
       case port_file:
 	fflush(pr->stdio.file);
