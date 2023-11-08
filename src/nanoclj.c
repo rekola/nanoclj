@@ -361,7 +361,7 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define _cons_metadata(p)	  ((p)->_cons.meta)
 #define _ff_metadata(p)		  ((p)->_ff.meta)
 #define _image_metadata(p)	  ((p)->_image.meta)
-#define _audio_metadata(p)	  ((p)->_audio.meta)
+#define _audio_metadata(p)	  ((p)->_audio.data->meta)
 
 #define _is_realized(p)           (p->flags & T_REALIZED)
 #define _set_realized(p)          (p->flags |= T_REALIZED)
@@ -390,7 +390,6 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define _column_unchecked(p)	  ((p)->_port.column)
 
 #define _image_unchecked(p)	  ((p)->_image.rep)
-#define _audio_unchecked(p)	  ((p)->_audio.rep)
 #define _lvalue_unchecked(p)      ((p)->_lvalue)
 #define _re_unchecked(p)	  ((p)->_re)
 #define _ff_unchecked(p)	  ((p)->_ff.ptr)
@@ -419,7 +418,6 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define nesting_unchecked(p)      _nesting_unchecked(decode_pointer(p))
 
 #define image_unchecked(p)	  _image_unchecked(decode_pointer(p))
-#define audio_unchecked(p)	  _audio_unchecked(decode_pointer(p))
 
 static inline int32_t decode_integer(nanoclj_val_t value) {
   return (uint32_t)value.as_long;
@@ -1096,10 +1094,10 @@ static inline void finalize_cell(nanoclj_t * sc, nanoclj_cell_t * a) {
   }
     break;
   case T_AUDIO:{
-    nanoclj_audio_t * audio = _audio_unchecked(a);
-    if (--(audio->refcnt)) {
-      sc->free(audio->data);
-      sc->free(audio);
+    nanoclj_tensor_t * tensor = a->_audio.data;
+    if (--(tensor->refcnt)) {
+      sc->free(tensor->data);
+      sc->free(tensor);
     }
   }
     break;
@@ -1315,32 +1313,36 @@ static inline nanoclj_val_t mk_image(nanoclj_t * sc, int32_t width, int32_t heig
   return mk_image_ext(sc, width, height, stride, f, meta);
 }
 
-static inline nanoclj_val_t mk_audio(nanoclj_t * sc, size_t frames, int32_t channels, int32_t sample_rate) {
+static inline nanoclj_cell_t * mk_audio(nanoclj_t * sc, size_t frames, int32_t channels, int32_t sample_rate) {
   nanoclj_cell_t * x = get_cell_x(sc, T_AUDIO, T_GC_ATOM, NULL, NULL, NULL);
   if (x) {
-    size_t size = frames * channels * sizeof(float);
-    float * data = sc->malloc(size);
+    float * data = sc->malloc(frames * channels * sizeof(float));
     if (data) {
-      nanoclj_audio_t * audio = sc->malloc(sizeof(nanoclj_audio_t));
+      nanoclj_tensor_t * audio = sc->malloc(sizeof(nanoclj_tensor_t));
       if (!audio) {
 	sc->free(data);
       } else {
 	audio->refcnt = 1;
 	audio->data = data;
-	audio->frames = frames;
-	audio->channels = channels;
-	audio->sample_rate = sample_rate;
-	_audio_unchecked(x) = audio;
+	audio->n_dims = 2;
+	audio->ne[0] = frames;
+	audio->ne[1] = channels;
+	audio->meta = NULL;
+	
+	x->_audio.data = audio;
+	x->_audio.offset = 0;
+	x->_audio.size = frames;
+	x->_audio.sample_rate = sample_rate;
 	
 #if RETAIN_ALLOCS
 	retain(sc, x);
 #endif
-	return mk_pointer(x);
+	return x;
       }
     }
   }
   sc->pending_exception = sc->OutOfMemoryError;
-  return mk_nil();
+  return NULL;
 }
 
 static inline nanoclj_graph_array_t * mk_graph_array(nanoclj_t * sc) {
@@ -2617,9 +2619,9 @@ static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t
   }
 
   case T_AUDIO:{
-    nanoclj_audio_t * audio = _audio_unchecked(coll);
+    nanoclj_tensor_t * audio = coll->_audio.data;
     if (key.as_long == sc->CHANNELS.as_long) {
-      if (result) *result = mk_int(audio->channels);
+      if (result) *result = mk_int(audio->ne[1]);
     } else {
       return false;
     }
@@ -3727,6 +3729,8 @@ static inline nanoclj_cell_t * mk_reader(nanoclj_t * sc, uint16_t t, nanoclj_cel
 	} else {
 	  return c;
 	}
+      default:
+	nanoclj_throw(sc, mk_illegal_arg_exception(sc, "Invalid arguments for Reader"));
       }
     }
   }
@@ -3735,22 +3739,25 @@ static inline nanoclj_cell_t * mk_reader(nanoclj_t * sc, uint16_t t, nanoclj_cel
 
 static inline nanoclj_val_t slurp(nanoclj_t * sc, uint16_t t, nanoclj_cell_t * args) {
   nanoclj_cell_t * rdr = mk_reader(sc, t, args);
-  nanoclj_bytearray_t * array = mk_bytearray(sc, 0, 0);
-  size_t size = 0;
-  while ( 1 ) {
-    if (t == T_READER) {
-      int32_t c = inchar(rdr);
-      if (c < 0) break;
-      size += append_codepoint(sc, array, c);
-    } else {
-      int32_t c = inchar_raw(rdr);
-      if (c < 0) break;
-      uint8_t b = c;
-      size += append_bytes(sc, array, &b, 1);
+  nanoclj_val_t r = mk_nil();
+  if (rdr) {
+    nanoclj_bytearray_t * array = mk_bytearray(sc, 0, 0);
+    size_t size = 0;
+    while ( 1 ) {
+      if (t == T_READER) {
+	int32_t c = inchar(rdr);
+	if (c < 0) break;
+	size += append_codepoint(sc, array, c);
+      } else {
+	int32_t c = inchar_raw(rdr);
+	if (c < 0) break;
+	uint8_t b = c;
+	size += append_bytes(sc, array, &b, 1);
+      }
     }
+    r = mk_pointer(_get_string_object(sc, T_STRING, 0, size, array));
+    port_close(sc, rdr);
   }
-  nanoclj_val_t r = mk_pointer(_get_string_object(sc, T_STRING, 0, size, array));
-  port_close(sc, rdr);
   return r;
 }
 

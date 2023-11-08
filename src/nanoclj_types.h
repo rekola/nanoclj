@@ -1,6 +1,10 @@
 #ifndef _NANOCLJ_TYPES_H_
 #define _NANOCLJ_TYPES_H_
 
+struct nanoclj_cell_t;
+
+#define NANOCLJ_MAX_DIMS 2
+
 typedef union {
   uint64_t as_long;
   double as_double;
@@ -10,7 +14,6 @@ typedef enum {
   nanoclj_r8 = 1,
   nanoclj_ra8,
   nanoclj_rgb8,
-  nanoclj_rgb565,
   nanoclj_rgba8,
   /* Cairo internal formats */
   nanoclj_bgr8_32,
@@ -25,10 +28,13 @@ typedef struct {
 } nanoclj_image_t;
 
 typedef struct {
+  int n_dims;
+  int32_t ne[NANOCLJ_MAX_DIMS]; /* number of elements */
+  size_t nb[NANOCLJ_MAX_DIMS];  /* stride in bytes */
+  void * data;
+  struct nanoclj_cell_t * meta;
   size_t refcnt;
-  int32_t frames, channels, sample_rate;
-  float * data;
-} nanoclj_audio_t;
+} nanoclj_tensor_t;
 
 typedef struct {
   uint8_t red, green, blue, alpha;

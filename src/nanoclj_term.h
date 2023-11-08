@@ -78,8 +78,6 @@ static inline bool print_image_sixel(imageview_t iv, nanoclj_color_t fg, nanoclj
     return write_sixel(SIXEL_PIXELFORMAT_RGBA8888, NULL, iv.ptr, iv.width, iv.height);
   case nanoclj_bgra8:
     return write_sixel(SIXEL_PIXELFORMAT_BGRA8888, NULL, iv.ptr, iv.width, iv.height);
-  case nanoclj_rgb565:
-    return write_sixel(SIXEL_PIXELFORMAT_RGB565, NULL, iv.ptr, iv.width, iv.height);
   case nanoclj_bgr8_32:{
     uint8_t * tmp = convert_imageview(iv, nanoclj_rgb8);
     bool r = write_sixel(SIXEL_PIXELFORMAT_RGB888, NULL, tmp, iv.width, iv.height);

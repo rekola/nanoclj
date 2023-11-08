@@ -78,7 +78,6 @@ static inline int get_format_channels(nanoclj_internal_format_t f) {
   case nanoclj_r8: return 1;
   case nanoclj_ra8: return 2;
   case nanoclj_rgb8: return 3;
-  case nanoclj_rgb565: return 3;
   case nanoclj_rgba8: return 4;
   case nanoclj_bgr8_32: return 3;
   case nanoclj_bgra8: return 4;
@@ -91,7 +90,6 @@ static inline int get_format_bpp(nanoclj_internal_format_t f) {
   case nanoclj_r8:
     return 1;
   case nanoclj_ra8:
-  case nanoclj_rgb565:
     return 2;
   case nanoclj_rgb8:
     return 3;

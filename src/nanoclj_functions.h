@@ -162,7 +162,9 @@ static nanoclj_val_t System_getSystemTimes(nanoclj_t * sc, nanoclj_cell_t * args
   set_vector_elem(r, 1, mk_integer(sc, filetime_to_msec(kernelTime) - idle));
   set_vector_elem(r, 2, mk_integer(sc, filetime_to_msec(userTime)));
 #else
-  char * b = alloc_c_str(sc, to_strview(slurp(sc, T_READER, cons(sc, mk_string(sc, "/proc/stat"), NULL))));
+  strview_t sv = to_strview(slurp(sc, T_READER, cons(sc, mk_string(sc, "/proc/stat"), NULL)));
+  if (sc->pending_exception) return mk_nil();
+  char * b = alloc_c_str(sc, sv);
   const char * p;
   if (strncmp(b, "cpu ", 4) == 0) p = b;
   else p = strstr(b, "\ncpu ");
@@ -345,6 +347,7 @@ static inline nanoclj_val_t browse_url(nanoclj_t * sc, nanoclj_cell_t * args) {
 static inline nanoclj_val_t Image_load(nanoclj_t * sc, nanoclj_cell_t * args) {
   nanoclj_val_t src = first(sc, args);
   strview_t sv = to_strview(slurp(sc, T_INPUT_STREAM, args));
+  if (sc->pending_exception) return mk_nil();
   
   int w, h, channels;
   uint8_t * data = stbi_load_from_memory((const uint8_t *)sv.ptr, sv.size, &w, &h, &channels, 0);
@@ -435,7 +438,6 @@ static inline nanoclj_val_t Image_save(nanoclj_t * sc, nanoclj_cell_t * args) {
     case nanoclj_bgra8:
       tmp = convert_imageview(iv, nanoclj_rgba8);
       break;
-    case nanoclj_rgb565:
     case nanoclj_bgr8_32:
       tmp = convert_imageview(iv, nanoclj_rgb8);
       break;
@@ -578,24 +580,24 @@ nanoclj_val_t Image_horizontalGaussianBlur(nanoclj_t * sc, nanoclj_cell_t * args
 static inline nanoclj_val_t Audio_load(nanoclj_t * sc, nanoclj_cell_t * args) {
   nanoclj_val_t src = first(sc, args);
   strview_t sv = to_strview(slurp(sc, T_INPUT_STREAM, args));
-
+  if (sc->pending_exception) return mk_nil();
+  
   drwav wav;
   if (!drwav_init_memory(&wav, sv.ptr, sv.size, NULL)) {
     return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Failed to load Audio")));
   }
 
-  nanoclj_val_t audio = mk_audio(sc, wav.totalPCMFrameCount, wav.channels, wav.sampleRate);
-  nanoclj_audio_t * a = audio_unchecked(audio);
-  float * data = a->data;
-  
+  nanoclj_cell_t * audio = mk_audio(sc, wav.totalPCMFrameCount, wav.channels, wav.sampleRate);
+  nanoclj_tensor_t * t = audio->_audio.data;
+  float * data = t->data;
+
   /* Read interleaved frames */
   size_t samples_decoded = drwav_read_pcm_frames_f32(&wav, wav.totalPCMFrameCount, data);
 
   /* TODO: do something if partial read */
   
   drwav_uninit(&wav);
-  
-  return audio;
+  return mk_pointer(audio);
 }
 
 static inline nanoclj_val_t Audio_lowpass(nanoclj_t * sc, nanoclj_cell_t * args) {
@@ -815,6 +817,8 @@ static inline nanoclj_val_t Graph_updateLayout(nanoclj_t * sc, nanoclj_cell_t * 
 static inline nanoclj_val_t Graph_load(nanoclj_t * sc, nanoclj_cell_t * args) {
   nanoclj_val_t src = first(sc, args);
   strview_t sv = to_strview(slurp(sc, T_READER, args));
+  if (sc->pending_exception) return mk_nil();
+  
   char * fn = NULL;
   if (is_file(src) || is_string(src)) {
     fn = alloc_c_str(sc, to_strview(src));
@@ -957,6 +961,8 @@ static inline nanoclj_val_t create_xml_node(nanoclj_t * sc, xmlNode * input) {
 static inline nanoclj_val_t clojure_xml_parse(nanoclj_t * sc, nanoclj_cell_t * args) {
   nanoclj_val_t src = first(sc, args);
   strview_t sv = to_strview(slurp(sc, T_READER, args));
+  if (sc->pending_exception) return mk_nil();
+  
   char * fn = NULL;
   if (is_file(src) || is_string(src)) {
     fn = alloc_c_str(sc, to_strview(src));

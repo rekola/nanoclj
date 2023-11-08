@@ -47,11 +47,6 @@ extern "C" {
     size_t size, reserved, refcnt;
     struct nanoclj_cell_t * meta;
   } nanoclj_valarray_t;
-
-  typedef struct {
-    float * data;
-    size_t size, reserved, refcnt;
-  } nanoclj_float_array_t;
   
   typedef struct {
     nanoclj_display_mode_t mode;
@@ -121,8 +116,9 @@ extern "C" {
 	struct nanoclj_cell_t * meta;
       } _image;
       struct {
-	nanoclj_audio_t * rep;
-	struct nanoclj_cell_t * meta;
+	nanoclj_tensor_t * data;
+	uint32_t sample_rate;
+	uint32_t offset, size;
       } _audio;
       struct {
 	nanoclj_graph_array_t * rep;
