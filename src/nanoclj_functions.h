@@ -991,8 +991,7 @@ static inline nanoclj_val_t clojure_data_csv_read_csv(nanoclj_t * sc, nanoclj_ce
   }
 
   bool is_quoted = false;
-  nanoclj_valarray_t * vec = NULL;
-  nanoclj_bytearray_t * value = NULL;
+  nanoclj_tensor_t * vec = NULL, * value = NULL;
   int32_t delimiter = ',';
   
   while ( 1 ) {
@@ -1008,7 +1007,7 @@ static inline nanoclj_val_t clojure_data_csv_read_csv(nanoclj_t * sc, nanoclj_ce
 	if (c == '"') {
 	  is_quoted = true;
 	} else if (c == delimiter) {
-	  valarray_push(sc, vec, mk_string_with_bytearray(sc, value));
+	  tensor_push(sc, vec, mk_string_with_tensor(sc, value));
 	  value = mk_bytearray(sc, 0, 32);
 	} else {
 	  append_codepoint(sc, value, c);
@@ -1022,11 +1021,11 @@ static inline nanoclj_val_t clojure_data_csv_read_csv(nanoclj_t * sc, nanoclj_ce
   }
 
   if (vec) {
-    if (value) valarray_push(sc, vec, mk_string_with_bytearray(sc, value));
+    if (value) tensor_push(sc, vec, mk_string_with_tensor(sc, value));
     nanoclj_val_t next_row = mk_foreign_func(sc, clojure_data_csv_read_csv, 1, 1);
     nanoclj_cell_t * code = cons(sc, mk_pointer(cons(sc, next_row, cons(sc, mk_pointer(rdr), NULL))), NULL);
     nanoclj_cell_t * lazy_seq = get_cell(sc, T_LAZYSEQ, 0, mk_pointer(cons(sc, sc->EMPTY, code)), sc->envir, NULL);
-    return mk_pointer(cons(sc, mk_vector_with_valarray(sc, vec), lazy_seq));
+    return mk_pointer(cons(sc, mk_vector_with_tensor(sc, vec), lazy_seq));
   } else {
     return sc->EMPTY;
   }

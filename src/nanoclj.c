@@ -378,8 +378,7 @@ static inline bool is_nil(nanoclj_val_t v) {
 
 #define _offset_unchecked(p)	  ((p)->_collection.offset)
 #define _size_unchecked(p)	  ((p)->_collection.size)
-#define _vec_store_unchecked(p)	  ((p)->_collection._store._vec)
-#define _str_store_unchecked(p)	  ((p)->_collection._store._str)
+#define _store_unchecked(p)	  ((p)->_collection.store)
 #define _smalldata_unchecked(p)   (&((p)->_small_collection.data[0]))
 
 #define _rep_unchecked(p)	  ((p)->_port.rep)
@@ -498,11 +497,76 @@ static inline bool is_vector_type(uint_fast16_t t) {
     t == T_RATIO || t == T_MAPENTRY || t == T_VAR || t == T_QUEUE;
 }
 
+static inline void free_tensor(nanoclj_t * sc, nanoclj_tensor_t * a) {
+  if (a) {
+    sc->free(a->data);
+    sc->free(a);
+  }
+}
+
+/* Assumes tensor is 1-dimensional and peeks the last element */
+static inline nanoclj_val_t tensor_peek(nanoclj_tensor_t * tensor) {
+  if (tensor->ne[0] > 0) {
+    return ((nanoclj_val_t *)tensor->data)[tensor->ne[0] - 1];
+  } else {
+    return mk_nil();
+  }
+}
+
+/* Assumes tensor is 1-dimensional and pops the last element */
+static inline void tensor_pop(nanoclj_tensor_t * tensor) {
+  if (tensor->ne[0] > 0) tensor->ne[0]--;
+}
+
+/* Assuments tenso is 1-dimensional and adds an element */
+static inline void tensor_push(nanoclj_t * sc, nanoclj_tensor_t * tensor, nanoclj_val_t val) {
+  if (tensor->ne[0] * tensor->nb[0] >= tensor->nb[1]) {
+    tensor->nb[1] = 2 * (sizeof(nanoclj_val_t) + tensor->nb[1]);
+    tensor->data = sc->realloc(tensor->data, tensor->nb[1]);
+  }
+  ((nanoclj_val_t *)tensor->data)[tensor->ne[0]++] = val;
+}
+
+static inline void tensor_clear(nanoclj_tensor_t * tensor) {
+  tensor->ne[0] = tensor->ne[1] = tensor->ne[2] = 0;
+}
+
+static inline bool tensor_is_empty(nanoclj_tensor_t * tensor) {
+  switch (tensor->n_dims) {
+  case 3: if (tensor->ne[2] == 0) return true;
+  case 2: if (tensor->ne[1] == 0) return true;
+  case 1: if (tensor->ne[0] == 0) return true;
+  }
+  return false;
+}
+
+static inline void tensor_set_f64(nanoclj_tensor_t * tensor, int i, double v) {
+  ((double *)tensor->data)[i] = v;
+}
+
+static inline double tensor_get_f64(nanoclj_tensor_t * tensor, int i) {
+  return ((double *)tensor->data)[i];
+}
+
+static inline nanoclj_val_t tensor_get(nanoclj_tensor_t * tensor, int i) {
+  nanoclj_val_t v;
+  v.as_double = tensor_get_f64(tensor, i);
+  return v;
+}
+
+static inline uint8_t tensor_get_i8(nanoclj_tensor_t * tensor, int i) {
+  return ((uint8_t *)tensor->data)[i];
+}
+
+static inline void tensor_set(nanoclj_tensor_t * tensor, int i, nanoclj_val_t v) {
+  tensor_set_f64(tensor, i, v.as_double);
+}
+
 static inline nanoclj_val_t vector_elem(nanoclj_cell_t * vec, size_t ielem) {
   if (_is_small(vec)) {
     return _smalldata_unchecked(vec)[ielem];
   } else {
-    return _vec_store_unchecked(vec)->data[_offset_unchecked(vec) + ielem];
+    return tensor_get(_store_unchecked(vec), _offset_unchecked(vec) + ielem);
   }
 }
 
@@ -510,7 +574,7 @@ static inline void set_vector_elem(nanoclj_cell_t * vec, size_t ielem, nanoclj_v
   if (_is_small(vec)) {
     _smalldata_unchecked(vec)[ielem] = a;
   } else {
-    _vec_store_unchecked(vec)->data[_offset_unchecked(vec) + ielem] = a;
+    tensor_set(_store_unchecked(vec), _offset_unchecked(vec) + ielem, a);
   }
 }
 
@@ -536,7 +600,7 @@ static inline nanoclj_cell_t * get_metadata(nanoclj_cell_t * c) {
     if (_is_small(c)) {
       return _so_vector_metadata(c);
     } else {
-      return _vec_store_unchecked(c)->meta;
+      return _store_unchecked(c)->meta;
     }
   case T_LIST:
   case T_CLOSURE:
@@ -564,7 +628,7 @@ static inline void set_metadata(nanoclj_cell_t * c, nanoclj_cell_t * meta) {
     if (_is_small(c)) {
       _so_vector_metadata(c) = meta;
     } else {
-      _vec_store_unchecked(c)->meta = meta;
+      _store_unchecked(c)->meta = meta;
     }
     break;
   case T_LIST:
@@ -632,7 +696,7 @@ static inline char * _strvalue(nanoclj_cell_t * s) {
   if (_is_small(s)) {
     return (char *)_smallstrvalue_unchecked(s);
   } else {
-    return (char *)_str_store_unchecked(s)->data + _offset_unchecked(s);
+    return (char *)_store_unchecked(s)->data + _offset_unchecked(s);
   }
 }
 
@@ -832,13 +896,13 @@ static inline strview_t _to_strview(nanoclj_cell_t * c) {
     if (_is_small(c)) {
       return (strview_t){ (char *)_smallstrvalue_unchecked(c), _sosize_unchecked(c) };
     } else {
-      return (strview_t){ (char *)_str_store_unchecked(c)->data + _offset_unchecked(c), _size_unchecked(c) };
+      return (strview_t){ _store_unchecked(c)->data + _offset_unchecked(c), _size_unchecked(c) };
     }
   case T_READER:
   case T_WRITER:
     if (_port_type_unchecked(c) == port_string) {
       nanoclj_port_rep_t * pr = _rep_unchecked(c);
-      return (strview_t){ (char *)pr->string.data->data, pr->string.data->size };
+      return (strview_t){ pr->string.data->data, pr->string.data->ne[0] };
     }
     break;
   }
@@ -1011,20 +1075,6 @@ static inline int alloc_cellseg(nanoclj_t * sc, int n) {
   return n;
 }
 
-static void free_bytearray(nanoclj_t * sc, nanoclj_bytearray_t * a) {
-  if (a) {
-    sc->free(a->data);
-    sc->free(a);
-  }
-}
-
-static void free_valarray(nanoclj_t * sc, nanoclj_valarray_t * a) {
-  if (a) {
-    sc->free(a->data);
-    sc->free(a);
-  }
-}
-
 static inline int port_close(nanoclj_t * sc, nanoclj_cell_t * p) {
   int r = 0;
   nanoclj_port_rep_t * pr = _rep_unchecked(p);
@@ -1046,7 +1096,7 @@ static inline int port_close(nanoclj_t * sc, nanoclj_cell_t * p) {
     }
     break;
   case port_string:
-    free_bytearray(sc, pr->string.data);
+    free_tensor(sc, pr->string.data);
     break;
   case port_z:
     inflateEnd(&(pr->z.strm));
@@ -1074,9 +1124,9 @@ static inline void finalize_cell(nanoclj_t * sc, nanoclj_cell_t * a) {
   case T_CHAR_ARRAY:
   case T_FILE:
   case T_UUID:{
-    nanoclj_bytearray_t * s = _str_store_unchecked(a);
+    nanoclj_tensor_t * s = _store_unchecked(a);
     if (s && --(s->refcnt) == 0) {
-      free_bytearray(sc, s);
+      free_tensor(sc, s);
     }
   }
     break;
@@ -1084,9 +1134,9 @@ static inline void finalize_cell(nanoclj_t * sc, nanoclj_cell_t * a) {
   case T_ARRAYMAP:
   case T_SORTED_SET:
   case T_QUEUE:{
-    nanoclj_valarray_t * s = _vec_store_unchecked(a);
+    nanoclj_tensor_t * s = _store_unchecked(a);
     if (s && --(s->refcnt) == 0) {
-      free_valarray(sc, s);
+      free_tensor(sc, s);
     }
   }
     break;
@@ -1101,17 +1151,15 @@ static inline void finalize_cell(nanoclj_t * sc, nanoclj_cell_t * a) {
     break;
   case T_IMAGE:{
     nanoclj_tensor_t * image = _image_unchecked(a);
-    if (--(image->refcnt)) {
-      sc->free(image->data);
-      sc->free(image);
+    if (image && --(image->refcnt)) {
+      free_tensor(sc, image);
     }
   }
     break;
   case T_AUDIO:{
     nanoclj_tensor_t * tensor = a->_audio.data;
     if (--(tensor->refcnt)) {
-      sc->free(tensor->data);
-      sc->free(tensor);
+      free_tensor(sc, tensor);
     }
   }
     break;
@@ -1478,19 +1526,21 @@ static inline long long get_ratio(nanoclj_val_t n, long long * den) {
 }
 
 /* Creates a string store */
-static inline nanoclj_bytearray_t * mk_bytearray(nanoclj_t * sc, size_t len, size_t padding) {
-  nanoclj_bytearray_t * s = sc->malloc(sizeof(nanoclj_bytearray_t));
+static inline nanoclj_tensor_t * mk_bytearray(nanoclj_t * sc, size_t len, size_t padding) {
+  nanoclj_tensor_t * s = sc->malloc(sizeof(nanoclj_tensor_t));
   s->data = sc->malloc((len + padding) * sizeof(char));
-  s->size = len;
-  s->reserved = len + padding;
+  s->n_dims = 1;
+  s->ne[0] = len;
+  s->nb[0] = 1;
+  s->nb[1] = len + padding;
   s->refcnt = 1;
   return s;
 }
 
-static inline void initialize_string_object(nanoclj_cell_t * s, size_t offset, size_t size, nanoclj_bytearray_t * store) {
+static inline void initialize_string_object(nanoclj_cell_t * s, size_t offset, size_t size, nanoclj_tensor_t * store) {
   if (store) {
     s->flags &= ~T_SMALL;
-    _str_store_unchecked(s) = store;
+    _store_unchecked(s) = store;
     _size_unchecked(s) = size;
     _offset_unchecked(s) = offset;
   } else {
@@ -1499,7 +1549,7 @@ static inline void initialize_string_object(nanoclj_cell_t * s, size_t offset, s
   }
 }
 
-static inline nanoclj_cell_t * _get_string_object(nanoclj_t * sc, int32_t t, size_t offset, size_t size, nanoclj_bytearray_t * store) {
+static inline nanoclj_cell_t * _get_string_object(nanoclj_t * sc, int32_t t, size_t offset, size_t size, nanoclj_tensor_t * store) {
   nanoclj_cell_t * x = get_cell_x(sc, t, T_GC_ATOM, NULL, NULL, NULL);
   if (x) {
     initialize_string_object(x, offset, size, store);
@@ -1512,7 +1562,7 @@ static inline nanoclj_cell_t * _get_string_object(nanoclj_t * sc, int32_t t, siz
 }
 
 static inline nanoclj_cell_t * get_string_object(nanoclj_t * sc, int32_t t, const char *str, size_t len, size_t padding) {
-  nanoclj_bytearray_t * s = 0;
+  nanoclj_tensor_t * s = 0;
   if (len + padding > NANOCLJ_SMALL_STR_SIZE) {
     s = mk_bytearray(sc, len, padding);
   }
@@ -1556,26 +1606,18 @@ static inline nanoclj_val_t mk_string_from_sv(nanoclj_t * sc, strview_t sv) {
   return mk_pointer(get_string_object(sc, T_STRING, sv.ptr, sv.size, 0));
 }
 
-static inline nanoclj_val_t mk_string_with_bytearray(nanoclj_t * sc, nanoclj_bytearray_t * b) {
-  return mk_pointer(_get_string_object(sc, T_STRING, 0, b->size, b));
+static inline nanoclj_val_t mk_string_with_tensor(nanoclj_t * sc, nanoclj_tensor_t * b) {
+  return mk_pointer(_get_string_object(sc, T_STRING, 0, b->ne[0], b));
 }
 
 static inline nanoclj_cell_t * mk_exception(nanoclj_t * sc, nanoclj_cell_t * type, const char * msg) {
   return get_cell(sc, type->type, 0, mk_string(sc, msg), NULL, NULL);
 }
 
-static inline nanoclj_val_t valarray_peek(nanoclj_valarray_t * vec) {
-  if (vec->size) {
-    return vec->data[vec->size - 1];
-  } else {
-    return mk_nil();
-  }
-}
-
 static inline nanoclj_val_t add_exception_source(nanoclj_t * sc, strview_t msg) {
   int line = 0;
   const char * file = "NO_SOURCE_FILE";
-  nanoclj_val_t p0 = valarray_peek(sc->load_stack);
+  nanoclj_val_t p0 = tensor_peek(sc->load_stack);
   if (is_cell(p0)) {
     nanoclj_cell_t * p = decode_pointer(p0);
     line = _line_unchecked(p) + 1;
@@ -1630,10 +1672,10 @@ static inline int32_t inchar_raw(nanoclj_cell_t * p) {
   case port_file:
     return fgetc(pr->stdio.file);
   case port_string:
-    if (pr->string.read_pos == pr->string.data->size) {
+    if (pr->string.read_pos == pr->string.data->ne[0]) {
       return EOF;
     } else {
-      return (unsigned char)pr->string.data->data[pr->string.read_pos++];
+      return tensor_get_i8(pr->string.data, pr->string.read_pos++);
     }
   }
   return EOF;
@@ -1746,16 +1788,18 @@ static inline nanoclj_cell_t * cons(nanoclj_t * sc, nanoclj_val_t head, nanoclj_
 }
 
 /* Creates a vector store */
-static inline nanoclj_valarray_t * mk_valarray(nanoclj_t * sc, size_t len, size_t reserve) {
+static inline nanoclj_tensor_t * mk_valarray(nanoclj_t * sc, size_t len, size_t reserve) {
   nanoclj_val_t * data = sc->malloc(reserve * sizeof(nanoclj_val_t));
   if (data) {
-    nanoclj_valarray_t * s = sc->malloc(sizeof(nanoclj_valarray_t));
+    nanoclj_tensor_t * s = sc->malloc(sizeof(nanoclj_tensor_t));
     if (!s) {
       sc->free(data);
     } else if (s) {
       s->data = data;
-      s->size = len;
-      s->reserved = reserve;
+      s->n_dims = 1;
+      s->ne[0] = len;
+      s->nb[0] = sizeof(nanoclj_val_t);
+      s->nb[1] = reserve * sizeof(nanoclj_val_t);
       s->refcnt = 1;
       s->meta = NULL;
       return s;
@@ -1765,13 +1809,13 @@ static inline nanoclj_valarray_t * mk_valarray(nanoclj_t * sc, size_t len, size_
   return NULL;
 }
 
-static inline nanoclj_cell_t * _get_vector_object(nanoclj_t * sc, int_fast16_t t, size_t offset, size_t size, nanoclj_valarray_t * store) {
+static inline nanoclj_cell_t * _get_vector_object(nanoclj_t * sc, int_fast16_t t, size_t offset, size_t size, nanoclj_tensor_t * store) {
   nanoclj_cell_t * x = get_cell_x(sc, t, T_GC_ATOM, NULL, NULL, NULL);
   if (x) {
     if (store) {
       x->flags = T_GC_ATOM;
       _size_unchecked(x) = size;
-      _vec_store_unchecked(x) = store;
+      _store_unchecked(x) = store;
       _offset_unchecked(x) = offset;
     } else {
       x->flags |= T_SMALL;
@@ -1786,7 +1830,7 @@ static inline nanoclj_cell_t * _get_vector_object(nanoclj_t * sc, int_fast16_t t
 }
 
 static inline nanoclj_cell_t * get_vector_object(nanoclj_t * sc, int_fast16_t t, size_t size) {
-  nanoclj_valarray_t * store = NULL;
+  nanoclj_tensor_t * store = NULL;
   if (size > NANOCLJ_SMALL_VEC_SIZE) {
     store = mk_valarray(sc, size, size);
     if (!store) return NULL;
@@ -1804,9 +1848,9 @@ static inline bool resize_vector(nanoclj_t * sc, nanoclj_cell_t * vec, size_t ne
     vec->so_size = new_size;    
   } else {
     if (_is_small(vec)) {
-      nanoclj_valarray_t * new_store = mk_valarray(sc, new_size, new_size);
+      nanoclj_tensor_t * new_store = mk_valarray(sc, new_size, new_size);
       if (!new_store) return false;
-      _vec_store_unchecked(vec) = new_store;
+      _store_unchecked(vec) = new_store;
       vec->flags = T_GC_ATOM;
     } else {
       /* TODO: resize (and copy if needed) the old store */
@@ -1859,8 +1903,8 @@ static inline nanoclj_val_t mk_vector_6d(nanoclj_t * sc, double x, double y, dou
   return mk_pointer(vec);
 }
 
-static inline nanoclj_val_t mk_vector_with_valarray(nanoclj_t * sc, nanoclj_valarray_t * a) {
-  return mk_pointer(_get_vector_object(sc, T_VECTOR, 0, a->size, a));
+static inline nanoclj_val_t mk_vector_with_tensor(nanoclj_t * sc, nanoclj_tensor_t * a) {
+  return mk_pointer(_get_vector_object(sc, T_VECTOR, 0, a->ne[0], a));
 }
 
 static inline nanoclj_val_t mk_mapentry(nanoclj_t * sc, nanoclj_val_t key, nanoclj_val_t val) {
@@ -1991,7 +2035,7 @@ static inline nanoclj_cell_t * subvec(nanoclj_t * sc, nanoclj_cell_t * vec, size
     }
     return new_vec;
   } else {
-    nanoclj_valarray_t * s = _vec_store_unchecked(vec);
+    nanoclj_tensor_t * s = _store_unchecked(vec);
     size_t old_size = _size_unchecked(vec);
     size_t old_offset = _offset_unchecked(vec);
     
@@ -2022,7 +2066,7 @@ static inline nanoclj_cell_t * remove_prefix(nanoclj_t * sc, nanoclj_cell_t * co
       return get_string_object(sc, coll->type, new_ptr, new_size, 0);
     } else {
       size_t new_offset = new_ptr - old_ptr;
-      nanoclj_bytearray_t * s = _str_store_unchecked(coll);
+      nanoclj_tensor_t * s = _store_unchecked(coll);
       s->refcnt++;
       return _get_string_object(sc, coll->type, _offset_unchecked(coll) + new_offset, new_size, s);
     }
@@ -2081,7 +2125,7 @@ static inline nanoclj_cell_t * rseq(nanoclj_t * sc, nanoclj_cell_t * coll) {
     _set_seq(new_vec); /* small vectors are reversed in-place */
     return new_vec;
   } else {
-    nanoclj_valarray_t * s = _vec_store_unchecked(coll);
+    nanoclj_tensor_t * s = _store_unchecked(coll);
     size_t old_size = _size_unchecked(coll);
     size_t old_offset = _offset_unchecked(coll);
 
@@ -2977,7 +3021,7 @@ static inline void sort_vector_in_place(nanoclj_cell_t * vec) {
     if (_is_small(vec)) {
       qsort(_smalldata_unchecked(vec), s, sizeof(nanoclj_val_t), _compare);
     } else {
-      qsort(_vec_store_unchecked(vec)->data + _offset_unchecked(vec), s, sizeof(nanoclj_val_t), _compare);
+      qsort(_store_unchecked(vec)->data + _offset_unchecked(vec), s, sizeof(nanoclj_val_t), _compare);
     }
   }
 }
@@ -3119,41 +3163,29 @@ static inline nanoclj_cell_t * copy_vector(nanoclj_t * sc, nanoclj_cell_t * vec)
     memcpy(new_data, data, len * sizeof(nanoclj_val_t));
     return new_vec;
   } else {
-    nanoclj_valarray_t * s = mk_valarray(sc, len, 2 * len);
-    memcpy(s->data, _vec_store_unchecked(vec)->data + _offset_unchecked(vec), len * sizeof(nanoclj_val_t));
+    nanoclj_tensor_t * s = mk_valarray(sc, len, 2 * len);
+    memcpy(s->data, _store_unchecked(vec)->data + _offset_unchecked(vec), len * sizeof(nanoclj_val_t));
     return _get_vector_object(sc, _type(vec), 0, len, s);
   }
 }
 
-static inline void valarray_push(nanoclj_t * sc, nanoclj_valarray_t * vec, nanoclj_val_t val) {
-  if (vec->size >= vec->reserved) {
-    vec->reserved = 2 * (1 + vec->reserved);
-    vec->data = sc->realloc(vec->data, vec->reserved * sizeof(nanoclj_val_t));
+static inline size_t append_bytes(nanoclj_t * sc, nanoclj_tensor_t * s, const uint8_t * ptr, size_t n) {
+  if (s->ne[0] + n > s->nb[1]) {
+    s->nb[1] = 2 * (s->ne[0] + n);
+    s->data = sc->realloc(s->data, s->nb[1]);
   }
-  vec->data[vec->size++] = val;
-}
-
-static inline void valarray_pop(nanoclj_valarray_t * vec) {
-  if (vec->size) vec->size--;
-}
-
-static inline size_t append_bytes(nanoclj_t * sc, nanoclj_bytearray_t * s, const uint8_t * ptr, size_t n) {
-  if (s->size + n > s->reserved) {
-    s->reserved = 2 * (s->size + n);
-    s->data = sc->realloc(s->data, s->reserved);
-  }
-  memcpy(s->data + s->size, ptr, n);
-  s->size += n;
+  memcpy(s->data + s->ne[0], ptr, n);
+  s->ne[0] += n;
   return n;
 }
  
-static inline size_t append_codepoint(nanoclj_t * sc, nanoclj_bytearray_t * s, int32_t c) {
-  if (s->size + 4 >= s->reserved) {
-    s->reserved = 2 * (s->size + 4);
-    s->data = sc->realloc(s->data, s->reserved);
+static inline size_t append_codepoint(nanoclj_t * sc, nanoclj_tensor_t * s, int32_t c) {
+  if (s->ne[0] + 4 >= s->nb[1]) {
+    s->nb[1] = 2 * (s->ne[0] + 4);
+    s->data = sc->realloc(s->data, s->nb[1]);
   }
-  size_t n = utf8proc_encode_char(c, (utf8proc_uint8_t *)(s->data + s->size));
-  s->size += n;
+  size_t n = utf8proc_encode_char(c, (utf8proc_uint8_t *)(s->data + s->ne[0]));
+  s->ne[0] += n;
   return n;
 }
 
@@ -3167,24 +3199,24 @@ static inline nanoclj_cell_t * vector_conjoin(nanoclj_t * sc, nanoclj_cell_t * v
     if (_is_small(new_vec)) {
       new_data = _smalldata_unchecked(new_vec);
     } else {
-      new_data = _vec_store_unchecked(new_vec)->data;
+      new_data = _store_unchecked(new_vec)->data;
     }
     memcpy(new_data, data, old_size * sizeof(nanoclj_val_t));
     set_vector_elem(new_vec, old_size, new_value);
     return new_vec;
   } else {
-    nanoclj_valarray_t * s = _vec_store_unchecked(vec);
+    nanoclj_tensor_t * s = _store_unchecked(vec);
     size_t old_offset = _offset_unchecked(vec);
     
-    if (old_offset + old_size != s->size) {
-      nanoclj_valarray_t * old_s = s;
+    if (old_offset + old_size != s->ne[0]) {
+      nanoclj_tensor_t * old_s = s;
       s = mk_valarray(sc, old_size, 2 * old_size + 1);
       memcpy(s->data, old_s->data + old_offset, old_size * sizeof(nanoclj_val_t));
     } else {
       s->refcnt++;
     }
     
-    valarray_push(sc, s, new_value);
+    tensor_push(sc, s, new_value);
     return _get_vector_object(sc, t, old_offset, old_size + 1, s);
   }
 }
@@ -3215,16 +3247,16 @@ static inline nanoclj_cell_t * conjoin(nanoclj_t * sc, nanoclj_cell_t * coll, na
       if (_is_small(new_coll)) {
 	new_data = _smallstrvalue_unchecked(new_coll);
       } else {
-	new_data = _str_store_unchecked(new_coll)->data;
+	new_data = _store_unchecked(new_coll)->data;
       }
       memcpy(new_data, data, size * sizeof(uint8_t));
       memcpy(new_data + size, sc->strbuff, input_len * sizeof(uint8_t));
       return new_coll;
     } else {
-      nanoclj_bytearray_t * s = _str_store_unchecked(coll);
+      nanoclj_tensor_t * s = _store_unchecked(coll);
       size_t offset = _offset_unchecked(coll);
-      if (offset + size != s->size) {
-	nanoclj_bytearray_t * old_s = s;
+      if (offset + size != s->ne[0]) {
+	nanoclj_tensor_t * old_s = s;
 	s = mk_bytearray(sc, size, size);
 	memcpy(s->data, old_s->data + offset, size);
 	offset = 0;
@@ -3308,10 +3340,10 @@ static inline nanoclj_cell_t * mk_class_with_meta(nanoclj_t * sc, nanoclj_val_t 
   fill_vector(vec, mk_nil());
   nanoclj_cell_t * t = get_cell(sc, type_id, T_TYPE, mk_pointer(vec), parent_type, md);
   
-  while (sc->types->size <= (size_t)type_id) {
-    valarray_push(sc, sc->types, mk_nil());
+  while (sc->types->ne[0] <= (size_t)type_id) {
+    tensor_push(sc, sc->types, mk_nil());
   }
-  sc->types->data[type_id] = mk_pointer(t);
+  tensor_set(sc->types, type_id, mk_pointer(t));
   intern_with_meta(sc, sc->global_env, sym, mk_pointer(t), md);
 
   return t;
@@ -3723,7 +3755,7 @@ static inline nanoclj_val_t port_from_string(nanoclj_t * sc, uint16_t type, strv
   nanoclj_cell_t * p = get_port_object(sc, type, port_string);
   if (!p) return mk_nil();
   
-  nanoclj_bytearray_t * s = mk_bytearray(sc, sv.size, 0);
+  nanoclj_tensor_t * s = mk_bytearray(sc, sv.size, 0);
   memcpy(s->data, sv.ptr, sv.size);
   
   nanoclj_port_rep_t * pr = _rep_unchecked(p);
@@ -3765,7 +3797,7 @@ static inline nanoclj_val_t slurp(nanoclj_t * sc, uint16_t t, nanoclj_cell_t * a
   nanoclj_cell_t * rdr = mk_reader(sc, t, args);
   nanoclj_val_t r = mk_nil();
   if (rdr) {
-    nanoclj_bytearray_t * array = mk_bytearray(sc, 0, 0);
+    nanoclj_tensor_t * array = mk_bytearray(sc, 0, 0);
     size_t size = 0;
     while ( 1 ) {
       if (t == T_READER) {
@@ -3788,7 +3820,7 @@ static inline nanoclj_val_t slurp(nanoclj_t * sc, uint16_t t, nanoclj_cell_t * a
 static inline bool file_push(nanoclj_t * sc, nanoclj_val_t f) {
   nanoclj_val_t p = port_from_filename(sc, T_READER, to_strview(f));
   if (!is_nil(p)) {
-    valarray_push(sc, sc->load_stack, p);
+    tensor_push(sc, sc->load_stack, p);
     return !sc->pending_exception;
   } else {
     return false;
@@ -3796,9 +3828,9 @@ static inline bool file_push(nanoclj_t * sc, nanoclj_val_t f) {
 }
 
 static inline void file_pop(nanoclj_t * sc) {
-  if (sc->load_stack->size != 0) {
-    port_close(sc, decode_pointer(valarray_peek(sc->load_stack)));
-    valarray_pop(sc->load_stack);
+  if (!tensor_is_empty(sc->load_stack)) {
+    port_close(sc, decode_pointer(tensor_peek(sc->load_stack)));
+    tensor_pop(sc->load_stack);
   }
 }
 
@@ -3907,8 +3939,8 @@ static inline bool is_one_of(const char *s, int c) {
 
 /* read characters up to delimiter, but cater to character constants */
 static inline char *readstr_upto(nanoclj_t * sc, char *delim, nanoclj_cell_t * inport, bool is_escaped) {
-  nanoclj_bytearray_t * rdbuff = sc->rdbuff;
-  rdbuff->size = 0;
+  nanoclj_tensor_t * rdbuff = sc->rdbuff;
+  tensor_clear(rdbuff);
   
   while (1) {
     int c = inchar(inport);
@@ -3920,13 +3952,13 @@ static inline char *readstr_upto(nanoclj_t * sc, char *delim, nanoclj_cell_t * i
       is_escaped = false;
     } else if (is_one_of(delim, c)) {
       backchar(c, inport);
-      rdbuff->size--;
+      tensor_pop(rdbuff);
       break;
     }
   }
 
   append_codepoint(sc, rdbuff, 0);
-  rdbuff->size--;
+  tensor_pop(rdbuff);
   return (char *)rdbuff->data;
 }
 
@@ -3978,8 +4010,8 @@ static inline const char * escape_char(int32_t c, char * buffer, bool in_string)
 
 /* read string expression "xxx...xxx" */
 static inline nanoclj_val_t readstrexp(nanoclj_t * sc, nanoclj_cell_t * inport, bool regex_mode) {
-  nanoclj_bytearray_t * rdbuff = sc->rdbuff;
-  rdbuff->size = 0;
+  nanoclj_tensor_t * rdbuff = sc->rdbuff;
+  tensor_clear(rdbuff);
 
   int c1 = 0;
   enum { st_ok, st_bsl, st_u1, st_u2, st_u3, st_u4, st_oct2, st_oct3 } state = st_ok;
@@ -4080,7 +4112,7 @@ static inline nanoclj_val_t readstrexp(nanoclj_t * sc, nanoclj_cell_t * inport, 
     }
   } while (!fin);
   
-  return mk_pointer(get_string_object(sc, T_STRING, (char *)rdbuff->data, rdbuff->size, 0));
+  return mk_pointer(get_string_object(sc, T_STRING, (char *)rdbuff->data, rdbuff->ne[0], 0));
 }
 
 /* skip white space characters, returns the first non-whitespace character */
@@ -4243,9 +4275,8 @@ static inline bool print_imageview(nanoclj_t * sc, imageview_t iv, nanoclj_cell_
 
 static inline nanoclj_cell_t * get_type_object(nanoclj_t * sc, nanoclj_val_t v) {
   int type_id = type(v);
-  if (type_id >= 0 && (size_t)type_id < sc->types->size) {
-    nanoclj_cell_t * t = decode_pointer(sc->types->data[type_id]);
-    if (t) return t;
+  if (type_id >= 0 && type_id < sc->types->ne[0]) {
+    return decode_pointer(tensor_get(sc->types, type_id));
   }
   return NULL;
 }
@@ -4253,7 +4284,7 @@ static inline nanoclj_cell_t * get_type_object(nanoclj_t * sc, nanoclj_val_t v) 
 static inline bool isa(nanoclj_t * sc, nanoclj_cell_t * t0, nanoclj_val_t v) {
   if (is_nil(v)) {
     return false;
-  } 
+  }
   nanoclj_cell_t * t1 = get_type_object(sc, v);
   while (t1) {
     if (t1 == t0) {
@@ -4380,7 +4411,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
 	case port_string:
 	  sv = (strview_t){
 	    (char *)pr->string.data->data,
-	    pr->string.data->size
+	    pr->string.data->ne[0]
 	  };
 	  break;
 #if NANOCLJ_HAS_CANVAS
@@ -4433,7 +4464,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
 	  nanoclj_tensor_t * img = _image_unchecked(c);
 	  sv = (strview_t){
 	    sc->strbuff,
-	    snprintf(sc->strbuff, STRBUFFSIZE, "#<Image %d %d %d>", img->ne[0], img->ne[1], img->ne[2])
+	    snprintf(sc->strbuff, STRBUFFSIZE, "#<Image %ld %ld %ld>", img->ne[0], img->ne[1], img->ne[2])
 	  };
 	}
 	break;
@@ -4929,7 +4960,7 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
   case T_CLASS:{
     nanoclj_val_t name = first(sc, args);
     nanoclj_val_t parent = second(sc, args);
-    nanoclj_cell_t * meta = mk_meta_from_reader(sc, valarray_peek(sc->load_stack));
+    nanoclj_cell_t * meta = mk_meta_from_reader(sc, tensor_peek(sc->load_stack));
     return mk_pointer(mk_class_with_meta(sc, name, gentypeid(sc), decode_pointer(parent), meta));
   }
 
@@ -5290,7 +5321,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 
   case OP_T0LVL:               /* top level */
     /* If we reached the end of file, this loop is done. */
-    if (port_flags_unchecked(valarray_peek(sc->load_stack)) & PORT_SAW_EOF) {
+    if (port_flags_unchecked(tensor_peek(sc->load_stack)) & PORT_SAW_EOF) {
       if (sc->global_env != sc->root_env) {
 #if 0
 	fprintf(stderr, "restoring root env\n");
@@ -5298,13 +5329,13 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	sc->envir = sc->global_env = sc->root_env;
       }
 
-      if (nesting_unchecked(valarray_peek(sc->load_stack)) != 0) {
+      if (nesting_unchecked(tensor_peek(sc->load_stack)) != 0) {
 	Error_0(sc, "Unmatched parentheses");
       }
       
       file_pop(sc);
       
-      if (sc->load_stack->size == 0) {
+      if (tensor_is_empty(sc->load_stack)) {
 #if 0
         sc->args = sc->EMPTY;
         s_goto(sc, OP_QUIT);
@@ -5319,7 +5350,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     
     /* Set up another iteration of REPL */
     sc->save_inport = get_in_port(sc);
-    intern(sc, sc->root_env, sc->IN_SYM, valarray_peek(sc->load_stack));
+    intern(sc, sc->root_env, sc->IN_SYM, tensor_peek(sc->load_stack));
       
     s_save(sc, OP_T0LVL, NULL, sc->EMPTY);
     s_save(sc, OP_T1LVL, NULL, sc->EMPTY);
@@ -5724,13 +5755,13 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       }
     }
     
-  case OP_DEF0:{                /* define */    
+  case OP_DEF0:{                /* define */
     nanoclj_cell_t * code = decode_pointer(sc->code);
     x = _car(code);
     if (!is_symbol(x)) {
       Error_0(sc, "Variable is not a symbol");
     }
-    nanoclj_cell_t * meta = mk_meta_from_reader(sc, valarray_peek(sc->load_stack));
+    nanoclj_cell_t * meta = mk_meta_from_reader(sc, tensor_peek(sc->load_stack));
     meta = conjoin(sc, meta, mk_mapentry(sc, sc->NAME, x));
 
     nanoclj_val_t ns_name;
@@ -7418,7 +7449,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       if (var) {
 	ns = decode_pointer(slot_value_in_env(var));
       } else {
-	nanoclj_cell_t * meta = mk_meta_from_reader(sc, valarray_peek(sc->load_stack));
+	nanoclj_cell_t * meta = mk_meta_from_reader(sc, tensor_peek(sc->load_stack));
 	meta = conjoin(sc, meta, mk_mapentry(sc, sc->NAME, arg0));
 	ns = def_namespace_with_sym(sc, arg0, meta);
       }
@@ -8424,7 +8455,7 @@ void nanoclj_deinit(nanoclj_t * sc) {
 #endif
   sc->save_inport = mk_nil();
   
-  sc->load_stack->size = 0;
+  tensor_clear(sc->load_stack);
 
   gc(sc, NULL, NULL, NULL);
 }
@@ -8445,7 +8476,7 @@ bool nanoclj_load_named_file(nanoclj_t * sc, const char *filename) {
   nanoclj_val_t p = port_from_filename(sc, T_READER, mk_strview(filename));
 
   sc->envir = sc->global_env;
-  valarray_push(sc, sc->load_stack, p);
+  tensor_push(sc, sc->load_stack, p);
   sc->args = NULL;
   
   Eval_Cycle(sc, OP_T0LVL);
@@ -8459,7 +8490,7 @@ nanoclj_val_t nanoclj_eval_string(nanoclj_t * sc, const char *cmd, size_t len) {
   nanoclj_val_t p = port_from_string(sc, T_READER, (strview_t){ cmd, len });
   
   sc->envir = sc->global_env;
-  valarray_push(sc, sc->load_stack, p);
+  tensor_push(sc, sc->load_stack, p);
   sc->args = NULL;
   
   Eval_Cycle(sc, OP_T0LVL);

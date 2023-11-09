@@ -38,17 +38,6 @@ extern "C" {
   };
   
   typedef struct {
-    uint8_t *data;
-    size_t size, reserved, refcnt;
-  } nanoclj_bytearray_t;
-
-  typedef struct {
-    nanoclj_val_t * data;
-    size_t size, reserved, refcnt;
-    struct nanoclj_cell_t * meta;
-  } nanoclj_valarray_t;
-  
-  typedef struct {
     nanoclj_display_mode_t mode;
     nanoclj_color_t fg;
     nanoclj_color_t bg;
@@ -66,7 +55,7 @@ extern "C" {
     } stdio;
     struct {
       size_t read_pos;
-      nanoclj_bytearray_t * data;
+      nanoclj_tensor_t * data;
     } string;
     struct {
       void (*text) (const char *, size_t, void*);
@@ -94,10 +83,7 @@ extern "C" {
       } _small_bytearray;
       struct {
 	size_t offset, size;
-	union {
-	  nanoclj_valarray_t * _vec;
-	  nanoclj_bytearray_t * _str;
-	} _store;
+	nanoclj_tensor_t * store;
       } _collection;
       struct {
         nanoclj_val_t data[NANOCLJ_SMALL_VEC_SIZE];
@@ -199,7 +185,7 @@ extern "C" {
     nanoclj_cell_t * oblist;         /* pointer to symbol table */
     nanoclj_cell_t * global_env;         /* pointer to global environment */
     nanoclj_cell_t * root_env;		/* pointer to the initial root env */
-    nanoclj_valarray_t * types;
+    nanoclj_tensor_t * types;
 
 /* global pointers to special symbols */
     nanoclj_val_t LAMBDA;             /* pointer to syntax lambda */
@@ -264,10 +250,10 @@ extern "C" {
     nanoclj_cell_t * EMPTYVEC;
     
     nanoclj_val_t save_inport;
-    nanoclj_valarray_t * load_stack;
+    nanoclj_tensor_t * load_stack;
     
     char strbuff[STRBUFFSIZE];
-    nanoclj_bytearray_t * rdbuff;
+    nanoclj_tensor_t * rdbuff;
 
     int tok;
     nanoclj_val_t value;
@@ -279,7 +265,7 @@ extern "C" {
     struct nanoclj_interface *vptr;
     dump_stack_frame_t * dump_base;            /* pointer to base of allocated dump stack */
     size_t dump_size;              /* number of frames allocated for dump stack */
-        
+    
     nanoclj_graphics_t term_graphics;
     nanoclj_colortype_t term_colors;
     int window_lines, window_columns;

@@ -12,7 +12,8 @@ typedef union {
 
 typedef enum {
   nanoclj_i8 = 1,
-  nanoclj_f32
+  nanoclj_f32,
+  nanoclj_f64
 } nanoclj_tensor_type_t;
 
 typedef enum {
@@ -27,7 +28,7 @@ typedef enum {
 
 typedef struct {
   int n_dims;
-  int32_t ne[NANOCLJ_MAX_DIMS]; /* number of elements */
+  int64_t ne[NANOCLJ_MAX_DIMS]; /* number of elements */
   size_t nb[NANOCLJ_MAX_DIMS];  /* stride in bytes */
   void * data;
   nanoclj_tensor_type_t type;

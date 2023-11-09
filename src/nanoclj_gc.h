@@ -49,7 +49,7 @@ E2:_setmark(p);
     } else {
       size_t offset = _offset_unchecked(p);
       size_t num = _size_unchecked(p);
-      nanoclj_val_t * data = _vec_store_unchecked(p)->data;
+      nanoclj_val_t * data = _store_unchecked(p)->data;
       for (size_t i = 0; i < num; i++) {
 	/* Vector cells will be treated like ordinary cells */
 	nanoclj_val_t v = data[offset + i];
@@ -139,8 +139,8 @@ static void mark_thread(nanoclj_t * sc) {
   mark_value(sc->value);
   mark_value(sc->save_inport);
 
-  for (size_t i = 0; i < sc->load_stack->size; i++) {
-    mark_value(sc->load_stack->data[i]);
+  for (size_t i = 0; i < sc->load_stack->ne[0]; i++) {
+    mark_value(tensor_get(sc->load_stack, i));
   }
   
   /* Exceptions */
@@ -170,10 +170,10 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_c
   mark(sc->NullPointerException);
 
   /* Mark types */  
-  for (size_t i = 0; i < sc->types->size; i++) {
-    mark_value(sc->types->data[i]);
+  for (size_t i = 0; i < sc->types->ne[0]; i++) {
+    mark_value(tensor_get(sc->types, i));
   }
-
+  
   mark_thread(sc);
     
   /* mark variables a, b, c */

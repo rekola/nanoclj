@@ -17,6 +17,7 @@ language. It is based on TinyScheme which was based on MiniScheme.
 - REPL output is colored by type
 - Callback Writer for printing into a GUI instead of stdout
 - Class and namespace names try to imitate Java and Clojure names when possible (e.g. `(type 1) ;=> java.lang.Long`)
+- Tensors are used for representing most data structures. For example, a vector is a 1D tensor of doubles (with NaN-packing for other data types).
 
 ### 2D Graphics
 
