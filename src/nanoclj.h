@@ -13,7 +13,6 @@ extern "C" {
 
 /* #define USE_RECUR_REGISTER */
 
-struct nanoclj_cell_t;
 typedef struct nanoclj_cell_t nanoclj_cell_t;
 
 /*
@@ -24,7 +23,7 @@ typedef struct nanoclj_cell_t nanoclj_cell_t;
 #endif
 
 #ifndef NANOCLJ_SIXEL
-#ifdef WIN32  
+#ifdef WIN32
 #define NANOCLJ_SIXEL 0
 #else
 #define NANOCLJ_SIXEL NANOCLJ_STANDALONE

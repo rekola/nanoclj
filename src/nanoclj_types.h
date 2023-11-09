@@ -3,12 +3,17 @@
 
 struct nanoclj_cell_t;
 
-#define NANOCLJ_MAX_DIMS 2
+#define NANOCLJ_MAX_DIMS 3
 
 typedef union {
   uint64_t as_long;
   double as_double;
 } nanoclj_val_t;
+
+typedef enum {
+  nanoclj_i8 = 1,
+  nanoclj_f32
+} nanoclj_tensor_type_t;
 
 typedef enum {
   nanoclj_r8 = 1,
@@ -21,17 +26,11 @@ typedef enum {
 } nanoclj_internal_format_t;
 
 typedef struct {
-  size_t refcnt;
-  int32_t width, height, stride;
-  nanoclj_internal_format_t format;
-  unsigned char * data;
-} nanoclj_image_t;
-
-typedef struct {
   int n_dims;
   int32_t ne[NANOCLJ_MAX_DIMS]; /* number of elements */
   size_t nb[NANOCLJ_MAX_DIMS];  /* stride in bytes */
   void * data;
+  nanoclj_tensor_type_t type;
   struct nanoclj_cell_t * meta;
   size_t refcnt;
 } nanoclj_tensor_t;

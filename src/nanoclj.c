@@ -848,25 +848,39 @@ static inline strview_t _to_strview(nanoclj_cell_t * c) {
 static inline strview_t to_strview(nanoclj_val_t x) {
   switch (prim_type(x)) {
   case T_BOOLEAN:
-    return decode_integer(x) == 0 ? (strview_t){ "false", 5 } : (strview_t){ "true", 4 };    
+    return decode_integer(x) == 0 ? (strview_t){ "false", 5 } : (strview_t){ "true", 4 };
   case T_SYMBOL:
   case T_KEYWORD:
     return decode_symbol(x)->full_name;
   case T_PROC:
-    return mk_strview(dispatch_table[decode_integer(x)].name);  
-  case T_NIL:{
-    nanoclj_cell_t * c = decode_pointer(x);
-    if (c) return _to_strview(c);
+    return mk_strview(dispatch_table[decode_integer(x)].name);
+  case T_NIL:
+    {
+      nanoclj_cell_t * c = decode_pointer(x);
+      if (c) return _to_strview(c);
+    }
   }
-  }  
   return mk_strview(0);
 }
 
 static inline imageview_t _to_imageview(nanoclj_cell_t * c) {
   switch (_type(c)) {
   case T_IMAGE:{
-    nanoclj_image_t * img = _image_unchecked(c);
-    return (imageview_t){ img->data, img->width, img->height, img->stride, img->format };
+    nanoclj_tensor_t * img = _image_unchecked(c);
+    nanoclj_internal_format_t f;
+    if (img->ne[0] == 4) {
+      f = nanoclj_rgba8;
+    } else if (img->ne[0] == 3) {
+      if (img->nb[1] == 4) {
+	f = nanoclj_bgr8_32;
+      } else {
+	f = nanoclj_rgb8;
+      }
+    } else {
+      f = nanoclj_r8;
+    }
+
+    return (imageview_t){ (uint8_t*)img->data, img->ne[1], img->ne[2], img->nb[2], f };
   }
   case T_WRITER:
 #if NANOCLJ_HAS_CANVAS
@@ -1086,7 +1100,7 @@ static inline void finalize_cell(nanoclj_t * sc, nanoclj_cell_t * a) {
     sc->free(_rep_unchecked(a));
     break;
   case T_IMAGE:{
-    nanoclj_image_t * image = _image_unchecked(a);
+    nanoclj_tensor_t * image = _image_unchecked(a);
     if (--(image->refcnt)) {
       sc->free(image->data);
       sc->free(image);
@@ -1282,16 +1296,21 @@ static inline nanoclj_cell_t * mk_image_ext(nanoclj_t * sc, int32_t width, int32
     size_t size = get_image_size(height, stride, f);
     uint8_t * data = sc->malloc(size);
     if (data) {
-      nanoclj_image_t * image = sc->malloc(sizeof(nanoclj_image_t));
+      nanoclj_tensor_t * image = sc->malloc(sizeof(nanoclj_tensor_t));
       if (!image) {
 	sc->free(data);
       } else {
+	image->n_dims = 3;
+	image->type = nanoclj_i8;
+	image->ne[0] = get_format_channels(f);
+	image->ne[1] = width;
+	image->ne[2] = height;
+	image->nb[0] = 1;
+	image->nb[1] = get_format_bpp(f);
+	image->nb[2] = stride;
+	image->meta = NULL;
 	image->refcnt = 1;
 	image->data = data;
-	image->width = width;
-	image->height = height;
-	image->stride = stride;
-	image->format = f;
 
 	_image_unchecked(x) = image;
 	_image_metadata(x) = meta;
@@ -1322,11 +1341,14 @@ static inline nanoclj_cell_t * mk_audio(nanoclj_t * sc, size_t frames, int32_t c
       if (!audio) {
 	sc->free(data);
       } else {
+	audio->type = nanoclj_f32;
 	audio->refcnt = 1;
 	audio->data = data;
 	audio->n_dims = 2;
-	audio->ne[0] = frames;
-	audio->ne[1] = channels;
+	audio->ne[0] = channels;
+	audio->ne[1] = frames;
+	audio->nb[0] = sizeof(float);
+	audio->nb[1] = channels * sizeof(float);
 	audio->meta = NULL;
 	
 	x->_audio.data = audio;
@@ -2607,11 +2629,13 @@ static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t
   }
 
   case T_IMAGE:{
-    nanoclj_image_t * image = _image_unchecked(coll);
-    if (key.as_long == sc->WIDTH.as_long) {
-      if (result) *result = mk_int(image->width);
+    nanoclj_tensor_t * image = _image_unchecked(coll);
+    if (key.as_long == sc->CHANNELS.as_long) {
+      if (result) *result = mk_int(image->ne[0]);
+    } else if (key.as_long == sc->WIDTH.as_long) {
+      if (result) *result = mk_int(image->ne[1]);
     } else if (key.as_long == sc->HEIGHT.as_long) {
-      if (result) *result = mk_int(image->height);
+      if (result) *result = mk_int(image->ne[2]);
     } else {
       return false;
     }
@@ -2621,7 +2645,7 @@ static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t
   case T_AUDIO:{
     nanoclj_tensor_t * audio = coll->_audio.data;
     if (key.as_long == sc->CHANNELS.as_long) {
-      if (result) *result = mk_int(audio->ne[1]);
+      if (result) *result = mk_int(audio->ne[0]);
     } else {
       return false;
     }
@@ -4406,10 +4430,10 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
 	if (print_imageview(sc, _to_imageview(c), out)) {
 	  return;
 	} else {
-	  nanoclj_image_t * img = _image_unchecked(c);
+	  nanoclj_tensor_t * img = _image_unchecked(c);
 	  sv = (strview_t){
 	    sc->strbuff,
-	    snprintf(sc->strbuff, STRBUFFSIZE, "#<Image %d %d %d>", img->width, img->height,get_format_channels(img->format))
+	    snprintf(sc->strbuff, STRBUFFSIZE, "#<Image %d %d %d>", img->ne[0], img->ne[1], img->ne[2])
 	  };
 	}
 	break;

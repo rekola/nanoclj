@@ -390,7 +390,7 @@ static inline nanoclj_val_t Image_resize(nanoclj_t * sc, nanoclj_cell_t * args) 
   int channels = get_format_channels(iv.format);
 
   nanoclj_cell_t * target_image = mk_image(sc, target_w, target_h, iv.format, NULL);
-  nanoclj_image_t * img = _image_unchecked(target_image);
+  nanoclj_tensor_t * img = _image_unchecked(target_image);
   uint8_t * target_ptr = img->data;
   
   stbir_resize_uint8_generic(iv.ptr, iv.width, iv.height, iv.stride, target_ptr, target_w, target_h, 0, channels, 0, STBIR_FLAG_ALPHA_PREMULTIPLIED, STBIR_EDGE_CLAMP, STBIR_FILTER_DEFAULT, STBIR_COLORSPACE_LINEAR, NULL);

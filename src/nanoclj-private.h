@@ -112,7 +112,7 @@ extern "C" {
 	int32_t line, column;
       } _port;
       struct {
-	nanoclj_image_t * rep;
+	nanoclj_tensor_t * rep;
 	struct nanoclj_cell_t * meta;
       } _image;
       struct {
@@ -175,7 +175,7 @@ extern "C" {
     nanoclj_cell_t * envir;              /* stack register for current environment */
     nanoclj_val_t code;               /* register for current code */
     size_t dump;               /* stack register for next evaluation */
-#ifdef USE_RECUR_REGISTER    
+#ifdef USE_RECUR_REGISTER
     nanoclj_val_t recur;		  /* recursion point */
 #endif
 
