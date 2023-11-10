@@ -83,8 +83,17 @@ extern "C" {
       } _small_bytearray;
       struct {
 	size_t offset, size;
-	nanoclj_tensor_t * store;
+	nanoclj_tensor_t * tensor;
       } _collection;
+      struct {
+	nanoclj_tensor_t * tensor;
+	struct nanoclj_cell_t * meta;
+      } _image;
+      struct {
+	nanoclj_tensor_t * tensor;
+	uint32_t sample_rate;
+	uint32_t offset, size;
+      } _audio;
       struct {
         nanoclj_val_t data[NANOCLJ_SMALL_VEC_SIZE];
 	struct nanoclj_cell_t * meta;
@@ -97,15 +106,6 @@ extern "C" {
 	uint8_t type, flags;
 	int32_t line, column;
       } _port;
-      struct {
-	nanoclj_tensor_t * rep;
-	struct nanoclj_cell_t * meta;
-      } _image;
-      struct {
-	nanoclj_tensor_t * data;
-	uint32_t sample_rate;
-	uint32_t offset, size;
-      } _audio;
       struct {
 	nanoclj_graph_array_t * rep;
 	uint32_t num_nodes, num_edges;
@@ -241,6 +241,7 @@ extern "C" {
     nanoclj_val_t EDGES;	  /* :edges */
     nanoclj_val_t SOURCE;         /* :source */
     nanoclj_val_t TARGET;         /* :target */
+    nanoclj_val_t DATA;		  /* :data */
     
     nanoclj_val_t SORTED_SET;	  /* sorted-set */
     nanoclj_val_t ARRAY_MAP;	  /* array-map */

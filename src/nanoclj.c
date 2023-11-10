@@ -361,7 +361,7 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define _cons_metadata(p)	  ((p)->_cons.meta)
 #define _ff_metadata(p)		  ((p)->_ff.meta)
 #define _image_metadata(p)	  ((p)->_image.meta)
-#define _audio_metadata(p)	  ((p)->_audio.data->meta)
+#define _audio_metadata(p)	  ((p)->_audio.tensor->meta)
 
 #define _is_realized(p)           (p->flags & T_REALIZED)
 #define _set_realized(p)          (p->flags |= T_REALIZED)
@@ -378,7 +378,7 @@ static inline bool is_nil(nanoclj_val_t v) {
 
 #define _offset_unchecked(p)	  ((p)->_collection.offset)
 #define _size_unchecked(p)	  ((p)->_collection.size)
-#define _store_unchecked(p)	  ((p)->_collection.store)
+#define _store_unchecked(p)	  ((p)->_collection.tensor)
 #define _smalldata_unchecked(p)   (&((p)->_small_collection.data[0]))
 
 #define _rep_unchecked(p)	  ((p)->_port.rep)
@@ -388,7 +388,7 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define _line_unchecked(p)	  ((p)->_port.line)
 #define _column_unchecked(p)	  ((p)->_port.column)
 
-#define _image_unchecked(p)	  ((p)->_image.rep)
+#define _image_unchecked(p)	  ((p)->_image.tensor)
 #define _lvalue_unchecked(p)      ((p)->_lvalue)
 #define _re_unchecked(p)	  ((p)->_re)
 #define _ff_unchecked(p)	  ((p)->_ff.ptr)
@@ -497,10 +497,10 @@ static inline bool is_vector_type(uint_fast16_t t) {
     t == T_RATIO || t == T_MAPENTRY || t == T_VAR || t == T_QUEUE;
 }
 
-static inline void free_tensor(nanoclj_t * sc, nanoclj_tensor_t * a) {
-  if (a) {
-    sc->free(a->data);
-    sc->free(a);
+static inline void free_tensor(nanoclj_t * sc, nanoclj_tensor_t * tensor) {
+  if (tensor && tensor->refcnt != 0 && --(tensor->refcnt) == 0) {
+    sc->free(tensor->data);
+    sc->free(tensor);
   }
 }
 
@@ -531,6 +531,21 @@ static inline void tensor_clear(nanoclj_tensor_t * tensor) {
   tensor->ne[0] = tensor->ne[1] = tensor->ne[2] = 0;
 }
 
+static inline int64_t tensor_n_elem(nanoclj_tensor_t * tensor) {
+  int64_t n = 1;
+  switch (tensor->n_dims) {
+  case 3: n *= tensor->ne[2]; return true;
+  case 2: n *= tensor->ne[1]; return true;
+  case 1: n *= tensor->ne[0]; return true;
+  }
+  return false;
+}
+
+static inline size_t tensor_size(nanoclj_tensor_t * tensor) {
+  return tensor->nb[tensor->n_dims + 1];
+}
+
+/* Returns true if the size of any of the tensor dimensions is zero */
 static inline bool tensor_is_empty(nanoclj_tensor_t * tensor) {
   switch (tensor->n_dims) {
   case 3: if (tensor->ne[2] == 0) return true;
@@ -588,6 +603,29 @@ static void fill_vector(nanoclj_cell_t * vec, nanoclj_val_t elem) {
   for (size_t i = 0; i < num; i++) {
     set_vector_elem(vec, i, elem);
   }
+}
+
+static inline nanoclj_tensor_t * get_tensor(nanoclj_cell_t * c) {
+  switch (_type(c)) {
+  case T_VECTOR:
+  case T_ARRAYMAP:
+  case T_SORTED_SET:
+  case T_VAR:
+  case T_QUEUE:
+  case T_STRING:
+  case T_CHAR_ARRAY:
+  case T_FILE:
+  case T_UUID:
+    if (!_is_small(c)) {
+      return c->_collection.tensor;
+    }
+    break;
+  case T_IMAGE:
+    return c->_image.tensor;
+  case T_AUDIO:
+    return c->_audio.tensor;
+  }
+  return NULL;
 }
 
 static inline nanoclj_cell_t * get_metadata(nanoclj_cell_t * c) {
@@ -1119,27 +1157,9 @@ static inline void finalize_cell(nanoclj_t * sc, nanoclj_cell_t * a) {
   if (_is_small(a)) {
     return;
   }
+  free_tensor(sc, get_tensor(a));
+
   switch (_type(a)) {
-  case T_STRING:
-  case T_CHAR_ARRAY:
-  case T_FILE:
-  case T_UUID:{
-    nanoclj_tensor_t * s = _store_unchecked(a);
-    if (s && --(s->refcnt) == 0) {
-      free_tensor(sc, s);
-    }
-  }
-    break;
-  case T_VECTOR:
-  case T_ARRAYMAP:
-  case T_SORTED_SET:
-  case T_QUEUE:{
-    nanoclj_tensor_t * s = _store_unchecked(a);
-    if (s && --(s->refcnt) == 0) {
-      free_tensor(sc, s);
-    }
-  }
-    break;
   case T_READER:
   case T_WRITER:
   case T_INPUT_STREAM:
@@ -1148,20 +1168,6 @@ static inline void finalize_cell(nanoclj_t * sc, nanoclj_cell_t * a) {
   case T_GZIP_OUTPUT_STREAM:
     port_close(sc, a);
     sc->free(_rep_unchecked(a));
-    break;
-  case T_IMAGE:{
-    nanoclj_tensor_t * image = _image_unchecked(a);
-    if (image && --(image->refcnt)) {
-      free_tensor(sc, image);
-    }
-  }
-    break;
-  case T_AUDIO:{
-    nanoclj_tensor_t * tensor = a->_audio.data;
-    if (--(tensor->refcnt)) {
-      free_tensor(sc, tensor);
-    }
-  }
     break;
   case T_REGEX:
     pcre2_code_free(_re_unchecked(a));
@@ -1336,85 +1342,6 @@ static inline nanoclj_val_t mk_integer(nanoclj_t * sc, long long num) {
   }
 }
 
-static inline nanoclj_cell_t * mk_image_ext(nanoclj_t * sc, int32_t width, int32_t height,
-					    int32_t stride, nanoclj_internal_format_t f,
-					    nanoclj_cell_t * meta) {
-  nanoclj_cell_t * x = get_cell_x(sc, T_IMAGE, T_GC_ATOM, NULL, NULL, meta);
-  if (x) {
-    size_t size = get_image_size(height, stride, f);
-    uint8_t * data = sc->malloc(size);
-    if (data) {
-      nanoclj_tensor_t * image = sc->malloc(sizeof(nanoclj_tensor_t));
-      if (!image) {
-	sc->free(data);
-      } else {
-	image->n_dims = 3;
-	image->type = nanoclj_i8;
-	image->ne[0] = get_format_channels(f);
-	image->ne[1] = width;
-	image->ne[2] = height;
-	image->nb[0] = 1;
-	image->nb[1] = get_format_bpp(f);
-	image->nb[2] = stride;
-	image->meta = NULL;
-	image->refcnt = 1;
-	image->data = data;
-
-	_image_unchecked(x) = image;
-	_image_metadata(x) = meta;
-	
-#if RETAIN_ALLOCS
-	retain(sc, x);
-#endif
-	return x;
-      }
-    }
-  }
-  sc->pending_exception = sc->OutOfMemoryError;
-  return NULL;
-}
-
-static inline nanoclj_cell_t * mk_image(nanoclj_t * sc, int32_t width, int32_t height,
-					nanoclj_internal_format_t f, nanoclj_cell_t * meta) {
-  int stride = width * get_format_bpp(f);
-  return mk_image_ext(sc, width, height, stride, f, meta);
-}
-
-static inline nanoclj_cell_t * mk_audio(nanoclj_t * sc, size_t frames, int32_t channels, int32_t sample_rate) {
-  nanoclj_cell_t * x = get_cell_x(sc, T_AUDIO, T_GC_ATOM, NULL, NULL, NULL);
-  if (x) {
-    float * data = sc->malloc(frames * channels * sizeof(float));
-    if (data) {
-      nanoclj_tensor_t * audio = sc->malloc(sizeof(nanoclj_tensor_t));
-      if (!audio) {
-	sc->free(data);
-      } else {
-	audio->type = nanoclj_f32;
-	audio->refcnt = 1;
-	audio->data = data;
-	audio->n_dims = 2;
-	audio->ne[0] = channels;
-	audio->ne[1] = frames;
-	audio->nb[0] = sizeof(float);
-	audio->nb[1] = channels * sizeof(float);
-	audio->meta = NULL;
-	
-	x->_audio.data = audio;
-	x->_audio.offset = 0;
-	x->_audio.size = frames;
-	x->_audio.sample_rate = sample_rate;
-	
-#if RETAIN_ALLOCS
-	retain(sc, x);
-#endif
-	return x;
-      }
-    }
-  }
-  sc->pending_exception = sc->OutOfMemoryError;
-  return NULL;
-}
-
 static inline nanoclj_graph_array_t * mk_graph_array(nanoclj_t * sc) {
   nanoclj_graph_array_t * g = sc->malloc(sizeof(nanoclj_graph_array_t));
   g->num_nodes = g->num_edges = g->reserved_nodes = g->reserved_edges = 0;
@@ -1525,20 +1452,153 @@ static inline long long get_ratio(nanoclj_val_t n, long long * den) {
   return 0;
 }
 
-/* Creates a string store */
-static inline nanoclj_tensor_t * mk_bytearray(nanoclj_t * sc, size_t len, size_t padding) {
-  nanoclj_tensor_t * s = sc->malloc(sizeof(nanoclj_tensor_t));
-  s->data = sc->malloc((len + padding) * sizeof(char));
-  s->n_dims = 1;
-  s->ne[0] = len;
-  s->nb[0] = 1;
-  s->nb[1] = len + padding;
-  s->refcnt = 1;
-  return s;
+static inline get_tensor_cell_size(nanoclj_tensor_type_t t) {
+  switch (t) {
+  case nanoclj_i8: return sizeof(uint8_t);
+  case nanoclj_i32: return sizeof(uint32_t);
+  case nanoclj_f32: return sizeof(float);
+  case nanoclj_f64: return sizeof(double);
+  }
+  return 0;
+}
+
+/* Creates a 1D tensor with padding (reserve space)*/
+static inline nanoclj_tensor_t * mk_tensor_1d_padded(nanoclj_t * sc, nanoclj_tensor_type_t t, int64_t len, int64_t padding) {
+  size_t type_size = get_tensor_cell_size(t);
+  if (!type_size) return NULL;
+  
+  size_t size = (len + padding) * type_size;
+  void * data = sc->malloc(size);
+  
+  if (data) {
+    nanoclj_tensor_t * s = sc->malloc(sizeof(nanoclj_tensor_t));
+    if (s) {
+      s->data = data;
+      s->n_dims = 1;
+      s->type = t;
+      s->ne[0] = len;
+      s->nb[0] = type_size;
+      s->nb[1] = size;
+      s->refcnt = 0;
+      s->meta = NULL;
+      return s;
+    } else {
+      sc->free(data);
+    }
+  }
+  sc->pending_exception = sc->OutOfMemoryError;
+  return NULL;
+}
+
+/* Creates a 1D tensor */
+static inline nanoclj_tensor_t * mk_tensor_1d(nanoclj_t * sc, nanoclj_tensor_type_t t, int64_t size) {
+  return mk_tensor_1d_padded(sc, t, size, 0);
+}
+
+static inline nanoclj_tensor_t * mk_tensor_2d(nanoclj_t * sc, nanoclj_tensor_type_t t, int64_t d0, int64_t d1) {
+  size_t type_size = get_tensor_cell_size(t);
+  if (!type_size) return NULL;
+
+  void * data = sc->malloc(d0 * d1 * type_size);
+  if (data) {
+    nanoclj_tensor_t * tensor = sc->malloc(sizeof(nanoclj_tensor_t));
+    if (!tensor) {
+      sc->free(data);
+    } else {
+      tensor->type = t;
+      tensor->data = data;
+      tensor->n_dims = 2;
+      tensor->ne[0] = d0;
+      tensor->ne[1] = d1;
+      tensor->nb[0] = type_size;
+      tensor->nb[1] = d0 * type_size;
+      tensor->nb[2] = d0 * d1 * type_size;
+      tensor->meta = NULL;
+      return tensor;
+    }
+  }
+  return NULL;
+}
+
+static inline nanoclj_tensor_t * mk_tensor_3d(nanoclj_t * sc, nanoclj_tensor_type_t t, int64_t d0, size_t stride0,
+					      int64_t d1, size_t stride1, int64_t d2) {
+  size_t type_size = get_tensor_cell_size(t);
+  if (!type_size) return NULL;
+
+  void * data = sc->malloc(d2 * stride1);
+  if (data) {
+    nanoclj_tensor_t * tensor = sc->malloc(sizeof(nanoclj_tensor_t));
+    if (!tensor) {
+      sc->free(data);
+    } else {
+      tensor->type = t;
+      tensor->data = data;
+      tensor->n_dims = 3;
+      tensor->ne[0] = d0;
+      tensor->ne[1] = d1;
+      tensor->ne[2] = d2;
+      tensor->nb[0] = type_size;
+      tensor->nb[1] = stride0;
+      tensor->nb[2] = stride1;
+      tensor->nb[3] = d2 * stride1;
+      tensor->meta = NULL;
+      return tensor;
+    }
+  }
+  return NULL;
+}
+
+static inline nanoclj_cell_t * mk_image_ext(nanoclj_t * sc, int32_t width, int32_t height,
+					    int32_t stride, nanoclj_internal_format_t f,
+					    nanoclj_cell_t * meta) {
+  nanoclj_cell_t * x = get_cell_x(sc, T_IMAGE, T_GC_ATOM, NULL, NULL, meta);
+  if (x) {
+    nanoclj_tensor_t * tensor = mk_tensor_3d(sc, nanoclj_i8, get_format_channels(f), get_format_bpp(f),
+					     width, stride, height);
+    _image_unchecked(x) = tensor;
+    _image_metadata(x) = meta;
+    if (tensor) {
+      tensor->refcnt++;
+#if RETAIN_ALLOCS
+      retain(sc, x);
+#endif
+      return x;
+    }
+  }
+  sc->pending_exception = sc->OutOfMemoryError;
+  return NULL;
+}
+
+static inline nanoclj_cell_t * mk_image(nanoclj_t * sc, int32_t width, int32_t height,
+					nanoclj_internal_format_t f, nanoclj_cell_t * meta) {
+  int stride = width * get_format_bpp(f);
+  return mk_image_ext(sc, width, height, stride, f, meta);
+}
+
+static inline nanoclj_cell_t * mk_audio(nanoclj_t * sc, size_t frames, int32_t channels, int32_t sample_rate) {
+  nanoclj_cell_t * x = get_cell_x(sc, T_AUDIO, T_GC_ATOM, NULL, NULL, NULL);
+  if (x) {
+    nanoclj_tensor_t * tensor = mk_tensor_2d(sc, nanoclj_f32, channels, frames);
+    x->_audio.tensor = tensor;
+    x->_audio.offset = 0;
+    x->_audio.size = frames;
+    x->_audio.sample_rate = sample_rate;
+
+    if (tensor) {
+      tensor->refcnt++;
+#if RETAIN_ALLOCS
+      retain(sc, x);
+#endif
+      return x;
+    }
+  }
+  sc->pending_exception = sc->OutOfMemoryError;
+  return NULL;
 }
 
 static inline void initialize_string_object(nanoclj_cell_t * s, size_t offset, size_t size, nanoclj_tensor_t * store) {
   if (store) {
+    store->refcnt++;
     s->flags &= ~T_SMALL;
     _store_unchecked(s) = store;
     _size_unchecked(s) = size;
@@ -1564,7 +1624,7 @@ static inline nanoclj_cell_t * _get_string_object(nanoclj_t * sc, int32_t t, siz
 static inline nanoclj_cell_t * get_string_object(nanoclj_t * sc, int32_t t, const char *str, size_t len, size_t padding) {
   nanoclj_tensor_t * s = 0;
   if (len + padding > NANOCLJ_SMALL_STR_SIZE) {
-    s = mk_bytearray(sc, len, padding);
+    s = mk_tensor_1d_padded(sc, nanoclj_i8, len, padding);
   }
   nanoclj_cell_t * x = _get_string_object(sc, t, 0, len, s);
   if (x && str) {
@@ -1593,7 +1653,7 @@ static inline nanoclj_val_t mk_string_fmt(nanoclj_t * sc, char *fmt, ...) {
   if (n < NANOCLJ_SMALL_STR_SIZE) {
     r->so_size = n; /* Set the small string size */
   } else { /* Reserve 1-byte padding for the 0-marker */
-    initialize_string_object(r, 0, n, mk_bytearray(sc, n, 1));
+    initialize_string_object(r, 0, n, mk_tensor_1d_padded(sc, nanoclj_i8, n, 1));
     
     va_start(ap, fmt);
     vsnprintf(_strvalue(r), n + 1, fmt, ap);
@@ -1787,32 +1847,11 @@ static inline nanoclj_cell_t * cons(nanoclj_t * sc, nanoclj_val_t head, nanoclj_
   return get_cell(sc, T_LIST, 0, head, tail, NULL);
 }
 
-/* Creates a vector store */
-static inline nanoclj_tensor_t * mk_valarray(nanoclj_t * sc, size_t len, size_t reserve) {
-  nanoclj_val_t * data = sc->malloc(reserve * sizeof(nanoclj_val_t));
-  if (data) {
-    nanoclj_tensor_t * s = sc->malloc(sizeof(nanoclj_tensor_t));
-    if (!s) {
-      sc->free(data);
-    } else if (s) {
-      s->data = data;
-      s->n_dims = 1;
-      s->ne[0] = len;
-      s->nb[0] = sizeof(nanoclj_val_t);
-      s->nb[1] = reserve * sizeof(nanoclj_val_t);
-      s->refcnt = 1;
-      s->meta = NULL;
-      return s;
-    }
-  }
-  sc->pending_exception = sc->OutOfMemoryError;
-  return NULL;
-}
-
 static inline nanoclj_cell_t * _get_vector_object(nanoclj_t * sc, int_fast16_t t, size_t offset, size_t size, nanoclj_tensor_t * store) {
   nanoclj_cell_t * x = get_cell_x(sc, t, T_GC_ATOM, NULL, NULL, NULL);
   if (x) {
     if (store) {
+      store->refcnt++;
       x->flags = T_GC_ATOM;
       _size_unchecked(x) = size;
       _store_unchecked(x) = store;
@@ -1832,7 +1871,7 @@ static inline nanoclj_cell_t * _get_vector_object(nanoclj_t * sc, int_fast16_t t
 static inline nanoclj_cell_t * get_vector_object(nanoclj_t * sc, int_fast16_t t, size_t size) {
   nanoclj_tensor_t * store = NULL;
   if (size > NANOCLJ_SMALL_VEC_SIZE) {
-    store = mk_valarray(sc, size, size);
+    store = mk_tensor_1d(sc, nanoclj_f64, size);
     if (!store) return NULL;
   }
   return _get_vector_object(sc, t, 0, size, store);
@@ -1842,14 +1881,16 @@ static inline bool resize_vector(nanoclj_t * sc, nanoclj_cell_t * vec, size_t ne
   size_t old_size = get_size(vec);
   if (new_size <= NANOCLJ_SMALL_VEC_SIZE) {
     if (!_is_small(vec)) {
-      /* TODO: release the old store */
+      /* TODO: copy the old data */
+      free_tensor(sc, _store_unchecked(vec));
       vec->flags = T_SMALL | T_GC_ATOM;
     }
-    vec->so_size = new_size;    
+    vec->so_size = new_size;
   } else {
     if (_is_small(vec)) {
-      nanoclj_tensor_t * new_store = mk_valarray(sc, new_size, new_size);
+      nanoclj_tensor_t * new_store = mk_tensor_1d(sc, nanoclj_f64, new_size);
       if (!new_store) return false;
+      new_store->refcnt++;
       _store_unchecked(vec) = new_store;
       vec->flags = T_GC_ATOM;
     } else {
@@ -2687,7 +2728,7 @@ static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t
   }
 
   case T_AUDIO:{
-    nanoclj_tensor_t * audio = coll->_audio.data;
+    nanoclj_tensor_t * audio = coll->_audio.tensor;
     if (key.as_long == sc->CHANNELS.as_long) {
       if (result) *result = mk_int(audio->ne[0]);
     } else {
@@ -2743,6 +2784,8 @@ static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t
       nanoclj_node_t * n = &(_graph_unchecked(coll)->nodes[_node_offset_unchecked(coll)]);
       if (key.as_long == sc->POSITION.as_long) {
 	if (result) *result = mk_vector_2d(sc, n->pos.x, n->pos.y);
+      } else if (key.as_long == sc->DATA.as_long) {
+	if (result) *result = n->data;
       } else {
 	return false;
       }
@@ -3163,7 +3206,7 @@ static inline nanoclj_cell_t * copy_vector(nanoclj_t * sc, nanoclj_cell_t * vec)
     memcpy(new_data, data, len * sizeof(nanoclj_val_t));
     return new_vec;
   } else {
-    nanoclj_tensor_t * s = mk_valarray(sc, len, 2 * len);
+    nanoclj_tensor_t * s = mk_tensor_1d_padded(sc, nanoclj_f64, len, len);
     memcpy(s->data, _store_unchecked(vec)->data + _offset_unchecked(vec), len * sizeof(nanoclj_val_t));
     return _get_vector_object(sc, _type(vec), 0, len, s);
   }
@@ -3210,12 +3253,9 @@ static inline nanoclj_cell_t * vector_conjoin(nanoclj_t * sc, nanoclj_cell_t * v
     
     if (old_offset + old_size != s->ne[0]) {
       nanoclj_tensor_t * old_s = s;
-      s = mk_valarray(sc, old_size, 2 * old_size + 1);
+      s = mk_tensor_1d_padded(sc, nanoclj_f64, old_size, old_size + 1);
       memcpy(s->data, old_s->data + old_offset, old_size * sizeof(nanoclj_val_t));
-    } else {
-      s->refcnt++;
     }
-    
     tensor_push(sc, s, new_value);
     return _get_vector_object(sc, t, old_offset, old_size + 1, s);
   }
@@ -3257,7 +3297,7 @@ static inline nanoclj_cell_t * conjoin(nanoclj_t * sc, nanoclj_cell_t * coll, na
       size_t offset = _offset_unchecked(coll);
       if (offset + size != s->ne[0]) {
 	nanoclj_tensor_t * old_s = s;
-	s = mk_bytearray(sc, size, size);
+	s = mk_tensor_1d_padded(sc, nanoclj_i8, size, size);
 	memcpy(s->data, old_s->data + offset, size);
 	offset = 0;
       } else {
@@ -3755,7 +3795,9 @@ static inline nanoclj_val_t port_from_string(nanoclj_t * sc, uint16_t type, strv
   nanoclj_cell_t * p = get_port_object(sc, type, port_string);
   if (!p) return mk_nil();
   
-  nanoclj_tensor_t * s = mk_bytearray(sc, sv.size, 0);
+  nanoclj_tensor_t * s = mk_tensor_1d(sc, nanoclj_i8, sv.size);
+  s->refcnt++;
+  
   memcpy(s->data, sv.ptr, sv.size);
   
   nanoclj_port_rep_t * pr = _rep_unchecked(p);
@@ -3797,7 +3839,7 @@ static inline nanoclj_val_t slurp(nanoclj_t * sc, uint16_t t, nanoclj_cell_t * a
   nanoclj_cell_t * rdr = mk_reader(sc, t, args);
   nanoclj_val_t r = mk_nil();
   if (rdr) {
-    nanoclj_tensor_t * array = mk_bytearray(sc, 0, 0);
+    nanoclj_tensor_t * array = mk_tensor_1d(sc, nanoclj_i8, 0);
     size_t size = 0;
     while ( 1 ) {
       if (t == T_READER) {
@@ -8182,8 +8224,9 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
 
   sc->pending_exception = NULL;
 
-  sc->rdbuff = mk_bytearray(sc, 0, 0);
-  sc->load_stack = mk_valarray(sc, 0, 256);
+  sc->rdbuff = mk_tensor_1d(sc, nanoclj_i8, 0);
+  sc->load_stack = mk_tensor_1d(sc, nanoclj_f64, 0);
+  sc->types = mk_tensor_1d(sc, nanoclj_f64, 0);
 
   if (alloc_cellseg(sc, FIRST_CELLSEGS) != FIRST_CELLSEGS) {
     return false;
@@ -8280,6 +8323,7 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
   sc->EDGES = def_keyword(sc, "edges");
   sc->SOURCE = def_keyword(sc, "source");
   sc->TARGET = def_keyword(sc, "target");
+  sc->DATA = def_keyword(sc, "data");
   
   sc->SORTED_SET = def_symbol(sc, "sorted-set");
   sc->ARRAY_MAP = def_symbol(sc, "array-map");
@@ -8291,8 +8335,6 @@ bool nanoclj_init_custom_alloc(nanoclj_t * sc, func_alloc malloc, func_dealloc f
 
   /* Init root namespace clojure.core */
   sc->root_env = sc->global_env = sc->envir = def_namespace(sc, "clojure.core", __FILE__);
-
-  sc->types = mk_valarray(sc, 0, 1024);
 
   size_t n = sizeof(dispatch_table) / sizeof(dispatch_table[0]);
   for (size_t i = 0; i < n; i++) {

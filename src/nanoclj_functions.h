@@ -589,7 +589,7 @@ static inline nanoclj_val_t Audio_load(nanoclj_t * sc, nanoclj_cell_t * args) {
   }
 
   nanoclj_cell_t * audio = mk_audio(sc, wav.totalPCMFrameCount, wav.channels, wav.sampleRate);
-  nanoclj_tensor_t * t = audio->_audio.data;
+  nanoclj_tensor_t * t = audio->_audio.tensor;
   float * data = t->data;
 
   /* Read interleaved frames */
@@ -999,16 +999,16 @@ static inline nanoclj_val_t clojure_data_csv_read_csv(nanoclj_t * sc, nanoclj_ce
     if (c == -1) break;
     if (c == '\r') continue;
     if (!is_quoted) {
-      if (!vec) vec = mk_valarray(sc, 0, 0);
+      if (!vec) vec = mk_tensor_1d(sc, nanoclj_f64, 0);
       if (c == '\n') {
 	break;
       } else {
-	if (!value) value = mk_bytearray(sc, 0, 32);
+	if (!value) value = mk_tensor_1d(sc, nanoclj_i8, 0);
 	if (c == '"') {
 	  is_quoted = true;
 	} else if (c == delimiter) {
 	  tensor_push(sc, vec, mk_string_with_tensor(sc, value));
-	  value = mk_bytearray(sc, 0, 32);
+	  value = mk_tensor_1d(sc, nanoclj_i8, 0);
 	} else {
 	  append_codepoint(sc, value, c);
 	}

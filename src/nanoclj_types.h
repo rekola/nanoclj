@@ -12,8 +12,9 @@ typedef union {
 
 typedef enum {
   nanoclj_i8 = 1,
+  nanoclj_i32,
   nanoclj_f32,
-  nanoclj_f64
+  nanoclj_f64 /* used for standard vectors */
 } nanoclj_tensor_type_t;
 
 typedef enum {
@@ -29,7 +30,7 @@ typedef enum {
 typedef struct {
   int n_dims;
   int64_t ne[NANOCLJ_MAX_DIMS]; /* number of elements */
-  size_t nb[NANOCLJ_MAX_DIMS];  /* stride in bytes */
+  size_t nb[NANOCLJ_MAX_DIMS + 1]; /* stride in bytes */
   void * data;
   nanoclj_tensor_type_t type;
   struct nanoclj_cell_t * meta;
@@ -76,6 +77,10 @@ typedef struct {
   const char * ptr;
   size_t size;
 } strview_t;
+
+typedef struct {
+  void * ptr;
+} tensorview_t;
 
 typedef struct {
   float x, y;
