@@ -52,16 +52,23 @@
                                (line-to (fit-x x1) (fit-y y1))
                                (stroke)
                                ))
-         draw-node (fn [n] (let [[x y] (n :position)]
+         draw-node (fn [n] (let [[x0 y0] (n :position)
+                                 data (val (n :data))
+                                 label (get data "name")
+                                 x (fit-x x0)
+                                 y (fit-y y0)]
                              (set-color [ 1.0 0.5 0.5 ])
                              (new-path)
-                             (arc (fit-x x) (fit-y y) 20 0 pi-times-2)
+                             (arc x y 6 0 pi-times-2)
                              (fill)
                              (set-color [ 0.0 0.0 0.0 0.5 ])
                              (new-path)
-                             (arc (fit-x x) (fit-y y) 20 0 pi-times-2)
+                             (arc x y 6 0 pi-times-2)
                              (set-line-width 1)
                              (stroke)
+                             (when label
+                               (move-to x y)
+                               (print label))
                              ))
          draw-graph (fn [g]
                       (.updateLayout g)
