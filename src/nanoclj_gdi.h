@@ -8,14 +8,14 @@
 
 #define NANOCLJ_HAS_CANVAS 1
 
-static void finalize_canvas(nanoclj_t * sc, void * canvas) {
+static void canvas_free(void * canvas) {
   if (canvas) {
     HDC hdc = (HDC)canvas;
     DeleteDC(hdc);
   }
 }
 
-static inline void * mk_canvas(nanoclj_t * sc, int width, int height) {
+static inline void * mk_canvas(int width, int height) {
   HDC hdc = CreateCompatibleDC(NULL);
   HBITMAP bitmap = CreateBitmap(width, height, 3, 24, NULL);
   SelectObject(hdc, bitmap);
@@ -23,7 +23,7 @@ static inline void * mk_canvas(nanoclj_t * sc, int width, int height) {
   return (void *)hdc;
 }
 
-static inline nanoclj_val_t canvas_create_image(nanoclj_t * sc, void * canvas) {
+static inline nanoclj_val_t canvas_create_image(void * canvas) {
   HDC hdc = (HDC)canvas;
   return mk_nil();
 }

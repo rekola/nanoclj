@@ -36,10 +36,10 @@ static NANOCLJ_THREAD_SIG http_load(void *ptr) {
     curl_easy_cleanup(curl);
   }
   
-  d->free(d->url);
-  d->free(d->useragent);
+  free(d->url);
+  free(d->useragent);
   close(d->fd);
-  d->free(d);
+  free(d);
   
   return 0;
 }

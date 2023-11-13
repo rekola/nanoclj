@@ -141,6 +141,7 @@ extern "C" {
 
   typedef struct {
     nanoclj_mutex_t mutex;
+    /* arrays for segments */
     nanoclj_cell_t ** alloc_seg;
     nanoclj_val_t * cell_seg;
     int n_seg_reserved;
@@ -152,10 +153,6 @@ extern "C" {
   } nanoclj_shared_context_t;
 
   struct nanoclj_s {
-/* arrays for segments */
-    func_alloc malloc;
-    func_dealloc free;
-    func_realloc realloc;
 
 /* We use 5 registers. */
     nanoclj_cell_t * args;               /* register for arguments of function */

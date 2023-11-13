@@ -6,11 +6,11 @@
 
 #define NANOCLJ_HAS_CANVAS 1
 
-static inline void finalize_canvas(nanoclj_t * sc, void * canvas) {
+static inline void canvas_free(void * canvas) {
   if (canvas) cairo_destroy((cairo_t *)canvas);
 }
 
-static inline void * mk_canvas(nanoclj_t * sc, int width, int height, int channels, nanoclj_color_t fg, nanoclj_color_t bg) {
+static inline void * mk_canvas(int width, int height, int channels, nanoclj_color_t fg, nanoclj_color_t bg) {
   cairo_format_t f;
   switch (channels) {
   case 1: f = CAIRO_FORMAT_A8; break;
@@ -22,7 +22,7 @@ static inline void * mk_canvas(nanoclj_t * sc, int width, int height, int channe
   if (channels == 1 && (width % 4) != 0) {
     width += 4 - (width % 4);
   }
-    
+  
   cairo_surface_t * surface = cairo_image_surface_create(f, width, height);
   cairo_t * cr = cairo_create(surface);
   cairo_surface_destroy(surface);
@@ -48,11 +48,11 @@ static inline void * mk_canvas(nanoclj_t * sc, int width, int height, int channe
   return cr;
 }
 
-static inline void * mk_canvas_pdf(nanoclj_t * sc, double width, double height, strview_t fn0, nanoclj_color_t fg, nanoclj_color_t bg) {
-  char * fn = alloc_c_str(sc, fn0);
+static inline void * mk_canvas_pdf(double width, double height, strview_t fn0, nanoclj_color_t fg, nanoclj_color_t bg) {
+  char * fn = alloc_c_str(fn0);
 
   cairo_surface_t * surface = cairo_pdf_surface_create(fn, width, height);
-  sc->free(fn);
+  free(fn);
   
   cairo_t * cr = cairo_create(surface);
   cairo_surface_destroy(surface);
@@ -184,14 +184,14 @@ static inline void canvas_restore(void * canvas) {
   cairo_restore((cairo_t *)canvas);
 }
 
-static inline void canvas_show_text(nanoclj_t * sc, void * canvas, strview_t text) {
-  char * tmp = alloc_c_str(sc, text);
+static inline void canvas_show_text(void * canvas, strview_t text) {
+  char * tmp = alloc_c_str(text);
   cairo_show_text((cairo_t *)canvas, tmp);
-  sc->free(tmp);
+  free(tmp);
 }
 
-static inline void canvas_get_text_extents(nanoclj_t * sc, void * canvas, strview_t text, double * width, double * height) {
-  char * tmp = alloc_c_str(sc, text);
+static inline void canvas_get_text_extents(void * canvas, strview_t text, double * width, double * height) {
+  char * tmp = alloc_c_str(text);
   cairo_text_extents_t extents;
   cairo_text_extents((cairo_t *)canvas, tmp, &extents);
   *width = extents.width;
@@ -200,7 +200,7 @@ static inline void canvas_get_text_extents(nanoclj_t * sc, void * canvas, strvie
      double y_bearing;
      double x_advance;
      double y_advance; */
-  sc->free(tmp);
+  free(tmp);
 }
 
 static inline void canvas_translate(void * canvas, double x, double y) {
