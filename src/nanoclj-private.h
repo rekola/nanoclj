@@ -92,7 +92,8 @@ extern "C" {
       struct {
 	nanoclj_tensor_t * tensor;
 	uint32_t sample_rate;
-	uint32_t offset, size;
+	uint32_t frame_offset, frame_count;
+	uint8_t channel_offset, channel_count;
       } _audio;
       struct {
         nanoclj_val_t data[NANOCLJ_SMALL_VEC_SIZE];
