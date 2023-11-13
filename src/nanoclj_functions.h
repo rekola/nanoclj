@@ -1007,21 +1007,21 @@ static inline nanoclj_val_t clojure_data_csv_read_csv(nanoclj_t * sc, nanoclj_ce
 	if (c == '"') {
 	  is_quoted = true;
 	} else if (c == delimiter) {
-	  tensor_push(sc, vec, mk_string_with_tensor(sc, value));
+	  tensor_mutate_push(sc, vec, mk_string_with_tensor(sc, value));
 	  value = mk_tensor_1d(sc, nanoclj_i8, 0);
 	} else {
-	  append_codepoint(sc, value, c);
+	  tensor_mutate_append_codepoint(sc, value, c);
 	}
       }
     } else if (c == '"') {
       is_quoted = false;
     } else {
-      append_codepoint(sc, value, c);
+      tensor_mutate_append_codepoint(sc, value, c);
     }
   }
 
   if (vec) {
-    if (value) tensor_push(sc, vec, mk_string_with_tensor(sc, value));
+    if (value) tensor_mutate_push(sc, vec, mk_string_with_tensor(sc, value));
     nanoclj_val_t next_row = mk_foreign_func(sc, clojure_data_csv_read_csv, 1, 1);
     nanoclj_cell_t * code = cons(sc, mk_pointer(cons(sc, next_row, cons(sc, mk_pointer(rdr), NULL))), NULL);
     nanoclj_cell_t * lazy_seq = get_cell(sc, T_LAZYSEQ, 0, mk_pointer(cons(sc, sc->EMPTY, code)), sc->envir, NULL);
