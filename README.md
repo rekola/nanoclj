@@ -111,10 +111,9 @@ Windows support is in progress.
 - Custom types
 - Transducers
 - Refs, Agents, Atoms, Validators
-- Arrays, StructMaps
 - Reader Conditionals
 - BigInts, BigDecimals and Exotic numeric literals (e.g. 3N, 0.1M, hexadecimal floats)
-- Persistent data structures, Transient data structures
+- Persistent data structures, Transient data structures, StructMaps
 - Unchecked operations
 - Autopromoting operations
 - Interfaces, Records, Protocols and Multi-methods
@@ -154,6 +153,7 @@ Windows support is in progress.
   - make-parents
   - with-open
   - with-meta, vary-meta, alter-meta!, reset-meta!
+  - int-array, long-array, float-array, double-array, byte-array, short-array, aget, aset-int, aset, aset-int, aset-double, alength, aset, amap, areduce, aclone, into-array, make-array, to-array-2d, to-array
 - clojure.core.async
   - thread, thread-call
 - clojure.core.reducers
