@@ -183,6 +183,7 @@ extern "C" {
     nanoclj_cell_t * oblist;         /* pointer to symbol table */
     nanoclj_cell_t * global_env;         /* pointer to global environment */
     nanoclj_cell_t * root_env;		/* pointer to the initial root env */
+    nanoclj_cell_t * user_env;
     nanoclj_tensor_t * types;
 
 /* global pointers to special symbols */
@@ -240,6 +241,7 @@ extern "C" {
     nanoclj_val_t SOURCE;         /* :source */
     nanoclj_val_t TARGET;         /* :target */
     nanoclj_val_t DATA;		  /* :data */
+    nanoclj_val_t HAIR;	          /* :hair */
     
     nanoclj_val_t SORTED_SET;	  /* sorted-set */
     nanoclj_val_t ARRAY_MAP;	  /* array-map */
