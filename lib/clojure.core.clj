@@ -642,7 +642,7 @@
                                     :else (recur (conj s (first coll)) (rest coll))
                                     ))]
                       (f #{ x y } more)))))
-                     
+
 (defn dedupe
   "Returns a lazy sequence with the consecutive duplicates removed"
   [coll] (if (empty? coll) '()
@@ -752,3 +752,12 @@
   [n] (mod (rand-) n))
 
 (defn rand-nth [coll] (nth coll (rand-int (count coll))))
+
+; Arrays
+
+(defn make-array
+  "Creates an array"
+  [& args] (apply nanoclj.core.Tensor args))
+
+(def subvec -slice)
+(def subs -slice)
