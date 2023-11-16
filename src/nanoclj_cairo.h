@@ -133,7 +133,12 @@ static inline void canvas_set_font_size(void * canvas, double size) {
 }
 
 static inline void canvas_set_line_width(void * canvas, double w) {
-  cairo_set_line_width((cairo_t *)canvas, w);
+  if (w > 0) {
+    cairo_set_hairline((cairo_t *)canvas, false);
+    cairo_set_line_width((cairo_t *)canvas, w);
+  } else {
+    cairo_set_hairline((cairo_t *)canvas, true);
+  }
 }
 
 static inline void canvas_move_to(void * canvas, double x, double y) {
