@@ -10,7 +10,29 @@ static inline void canvas_free(void * canvas) {
   if (canvas) cairo_destroy((cairo_t *)canvas);
 }
 
-static inline void * mk_canvas(int width, int height, int channels, nanoclj_color_t fg, nanoclj_color_t bg) {
+static inline cairo_format_t get_suitable_cairo_format(int channels) {
+  cairo_format_t f;
+  switch (channels) {
+  case 1: return CAIRO_FORMAT_A8;
+  case 3: return CAIRO_FORMAT_RGB24;
+  case 4: return CAIRO_FORMAT_ARGB32;
+  default: return CAIRO_FORMAT_INVALID;
+  }
+}
+
+static inline nanoclj_tensor_t * mk_canvas_backing_tensor(int width, int height, int channels) {
+  if (channels == 1 && (width % 4) != 0) {
+    width += 4 - (width % 4);
+  }
+  cairo_format_t f = get_suitable_cairo_format(channels);
+  int stride = cairo_format_stride_for_width(f, width);
+  nanoclj_tensor_t * tensor = mk_tensor_3d(nanoclj_i8, channels, channels == 1 ? 1 : 4, width, stride, height);
+  tensor_mutate_fill_i8(tensor, 0);
+  return tensor;
+}
+
+static inline void * mk_canvas(nanoclj_tensor_t * tensor, nanoclj_color_t fg, nanoclj_color_t bg) {
+  int channels = tensor->ne[0], width = tensor->ne[1], height = tensor->ne[2];
   cairo_format_t f;
   switch (channels) {
   case 1: f = CAIRO_FORMAT_A8; break;
@@ -18,12 +40,8 @@ static inline void * mk_canvas(int width, int height, int channels, nanoclj_colo
   case 4: f = CAIRO_FORMAT_ARGB32; break;
   default: return NULL;
   }
-
-  if (channels == 1 && (width % 4) != 0) {
-    width += 4 - (width % 4);
-  }
   
-  cairo_surface_t * surface = cairo_image_surface_create(f, width, height);
+  cairo_surface_t * surface = cairo_image_surface_create_for_data(tensor->data, f, width, height, tensor->nb[2]);
   cairo_t * cr = cairo_create(surface);
   cairo_surface_destroy(surface);
 
@@ -72,28 +90,6 @@ static inline bool canvas_has_error(void * canvas) {
 
 static inline const char * canvas_get_error_text(void * canvas) {
   return cairo_status_to_string(cairo_status((cairo_t *)canvas));
-}
-
-static inline imageview_t canvas_get_imageview(void * canvas) {
-  cairo_t * cr = (cairo_t *)canvas;
-  cairo_surface_t * surface = cairo_get_target(cr);
-
-  cairo_surface_flush(surface);
-  
-  uint8_t * data = cairo_image_surface_get_data(surface);
-  int width = cairo_image_surface_get_width(surface);
-  int height = cairo_image_surface_get_height(surface);
-  int stride = cairo_image_surface_get_stride(surface);
-
-  nanoclj_internal_format_t f;
-  switch (cairo_image_surface_get_format(surface)) {
-  case CAIRO_FORMAT_A8: f = nanoclj_r8; break;
-  case CAIRO_FORMAT_RGB24: f = nanoclj_bgr8_32; break;
-  case CAIRO_FORMAT_ARGB32: f = nanoclj_bgra8; break;
-  default: return (imageview_t){0};
-  }
-  
-  return (imageview_t){ data, width, height, stride, f };
 }
 
 static inline int canvas_get_chan(void * canvas) {

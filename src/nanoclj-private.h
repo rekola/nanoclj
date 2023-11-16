@@ -68,6 +68,7 @@ extern "C" {
     } z;
     struct {
       void * impl;
+      nanoclj_tensor_t * data;
     } canvas;
   } nanoclj_port_rep_t;
 
@@ -117,10 +118,6 @@ extern "C" {
 	foreign_func ptr;
 	struct nanoclj_cell_t * meta;
       } _ff;
-      struct {
-	int min_arity, max_arity;
-	void * ptr;
-      } _fo;
       struct {
         nanoclj_val_t car, cdr;
 	struct nanoclj_cell_t * meta;

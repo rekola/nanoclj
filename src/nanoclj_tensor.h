@@ -2,6 +2,7 @@
 #define _NANOCLJ_TENSOR_H_
 
 #include "nanoclj_prim.h"
+#include "nanoclj_types.h"
 
 static inline size_t tensor_get_cell_size(nanoclj_tensor_type_t t) {
   switch (t) {
@@ -200,6 +201,10 @@ static inline size_t tensor_mutate_append_bytes(nanoclj_tensor_t * s, const uint
   return n;
 }
 
+static inline void tensor_mutate_fill_i8(nanoclj_tensor_t * tensor, uint8_t v) {
+  memset(tensor->data, v, tensor->nb[tensor->n_dims]);
+}
+
 /* Appends codepoint to the end of an 1D tensor */
 static inline size_t tensor_mutate_append_codepoint(nanoclj_tensor_t * t, int32_t c) {
   uint8_t buffer[4];
@@ -217,6 +222,23 @@ static inline nanoclj_tensor_t * tensor_append_codepoint(nanoclj_tensor_t * tens
   memcpy(tensor->data + head, &buffer[0], n);
   tensor->ne[0] += n;
   return tensor;
+}
+
+static inline imageview_t tensor_to_imageview(nanoclj_tensor_t * tensor) {
+  nanoclj_internal_format_t f;
+  if (tensor->ne[0] == 4) {
+    f = nanoclj_rgba8;
+  } else if (tensor->ne[0] == 3) {
+    if (tensor->nb[1] == 4) {
+      f = nanoclj_bgr8_32;
+    } else {
+      f = nanoclj_rgb8;
+    }
+  } else {
+    f = nanoclj_r8;
+  }
+
+  return (imageview_t){ (uint8_t*)tensor->data, tensor->ne[1], tensor->ne[2], tensor->nb[2], f };
 }
 
 #endif

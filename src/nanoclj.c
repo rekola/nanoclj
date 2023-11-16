@@ -400,7 +400,6 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define _lvalue_unchecked(p)      ((p)->_lvalue)
 #define _re_unchecked(p)	  ((p)->_re)
 #define _ff_unchecked(p)	  ((p)->_ff.ptr)
-#define _fo_unchecked(p)	  ((p)->_fo.ptr)
 #define _min_arity_unchecked(p)	  ((p)->_ff.min_arity)
 #define _max_arity_unchecked(p)	  ((p)->_ff.max_arity)
 
@@ -904,30 +903,12 @@ static inline strview_t to_strview(nanoclj_val_t x) {
 
 static inline imageview_t _to_imageview(nanoclj_cell_t * c) {
   switch (_type(c)) {
-  case T_IMAGE:{
-    nanoclj_tensor_t * tensor = c->_image.tensor;
-    nanoclj_internal_format_t f;
-    if (tensor->ne[0] == 4) {
-      f = nanoclj_rgba8;
-    } else if (tensor->ne[0] == 3) {
-      if (tensor->nb[1] == 4) {
-	f = nanoclj_bgr8_32;
-      } else {
-	f = nanoclj_rgb8;
-      }
-    } else {
-      f = nanoclj_r8;
-    }
-
-    return (imageview_t){ (uint8_t*)tensor->data, tensor->ne[1], tensor->ne[2], tensor->nb[2], f };
-  }
+  case T_IMAGE: return tensor_to_imageview(c->_image.tensor);
   case T_WRITER:
 #if NANOCLJ_HAS_CANVAS
-    {
+    if (_port_type_unchecked(c) == port_canvas) {
       nanoclj_port_rep_t * pr = _rep_unchecked(c);
-      switch (_port_type_unchecked(c)) {
-      case port_canvas: return canvas_get_imageview(pr->canvas.impl);
-      }
+      if (pr->canvas.data) return tensor_to_imageview(pr->canvas.data);
     }
 #endif
   }
@@ -940,6 +921,23 @@ static inline imageview_t to_imageview(nanoclj_val_t p) {
   } else {
     return (imageview_t){ 0 };
   }
+}
+
+static inline tensorview_t to_tensorview(nanoclj_val_t p) {
+  tensorview_t tv;
+#if 0
+  switch (prim_type_extended(p)) {
+  case T_LONG:
+    tv.n_dims = 1;
+    tv.ne[0] = 1;
+    tv.nb[0] = tv.nb[1] = sizeof(long long);
+    tv.data = ?;
+    tv.type = nanoclj_i64;
+    return tv;
+  }
+  tv.n_dims = 0;
+#endif
+  return tv;
 }
 
 static inline nanoclj_color_t to_color(nanoclj_val_t p) {
@@ -1077,11 +1075,12 @@ static inline int port_close(nanoclj_t * sc, nanoclj_cell_t * p) {
   case port_z:
     inflateEnd(&(pr->z.strm));
     break;
-#if NANOCLJ_HAS_CANVAS
   case port_canvas:
+#if NANOCLJ_HAS_CANVAS
     canvas_free(pr->canvas.impl);
-    break;
 #endif
+    tensor_free(pr->canvas.data);
+    break;
   case port_free:
     break;
   }
@@ -1206,20 +1205,6 @@ static inline nanoclj_val_t mk_foreign_func(nanoclj_t * sc, foreign_func f, int 
     _max_arity_unchecked(x) = max_arity;
     _ff_metadata(x) = NULL;
     
-#if RETAIN_ALLOCS
-    retain(sc, x);
-#endif
-  }
-  return mk_pointer(x);
-}
-
-static inline nanoclj_val_t mk_foreign_object(nanoclj_t * sc, void * o) {
-  nanoclj_cell_t * x = get_cell_x(sc, T_FOREIGN_OBJECT, T_GC_ATOM, NULL, NULL, NULL);
-  if (x) {
-    _fo_unchecked(x) = o;
-    _min_arity_unchecked(x) = 0;
-    _max_arity_unchecked(x) = -1;
-  
 #if RETAIN_ALLOCS
     retain(sc, x);
 #endif
@@ -1398,22 +1383,16 @@ static inline long long get_ratio(nanoclj_val_t n, long long * den) {
   return 0;
 }
 
-static inline nanoclj_cell_t * mk_image_ext(nanoclj_t * sc, int32_t width, int32_t height,
-					    int32_t stride, nanoclj_internal_format_t f,
-					    nanoclj_cell_t * meta) {
+static inline nanoclj_cell_t * mk_image_with_tensor(nanoclj_t * sc, nanoclj_tensor_t * tensor, nanoclj_cell_t * meta) {
   nanoclj_cell_t * x = get_cell_x(sc, T_IMAGE, T_GC_ATOM, NULL, NULL, meta);
   if (x) {
-    nanoclj_tensor_t * tensor = mk_tensor_3d(nanoclj_i8, get_format_channels(f), get_format_bpp(f),
-					     width, stride, height);
+    tensor->refcnt++;
     x->_image.tensor = tensor;
-    _image_metadata(x) = meta;
-    if (tensor) {
-      tensor->refcnt++;
+    x->_image.meta = meta;
 #if RETAIN_ALLOCS
-      retain(sc, x);
+    retain(sc, x);
 #endif
-      return x;
-    }
+    return x;
   }
   sc->pending_exception = sc->OutOfMemoryError;
   return NULL;
@@ -1421,8 +1400,11 @@ static inline nanoclj_cell_t * mk_image_ext(nanoclj_t * sc, int32_t width, int32
 
 static inline nanoclj_cell_t * mk_image(nanoclj_t * sc, int32_t width, int32_t height,
 					nanoclj_internal_format_t f, nanoclj_cell_t * meta) {
-  int stride = width * get_format_bpp(f);
-  return mk_image_ext(sc, width, height, stride, f, meta);
+  nanoclj_tensor_t * tensor = mk_tensor_3d(nanoclj_i8, get_format_channels(f), get_format_bpp(f),
+					   width, width * get_format_bpp(f), height);
+  nanoclj_cell_t * img = mk_image_with_tensor(sc, tensor, meta);
+  if (!img) tensor_free(tensor);
+  return img;
 }
 
 static inline nanoclj_cell_t * mk_audio(nanoclj_t * sc, size_t frames, uint8_t channels, int32_t sample_rate) {
@@ -4245,7 +4227,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
 	    _column_unchecked(c) = _column_unchecked(out);
 	    _line_unchecked(c) = _line_unchecked(out);
 	  }
-	  if (print_imageview(sc, canvas_get_imageview(pr->canvas.impl), out)) {
+	  if (pr->canvas.data && print_imageview(sc, tensor_to_imageview(pr->canvas.data), out)) {
 	    return;
 	  }
 #endif
@@ -4905,15 +4887,16 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
 	    }
 	  }
 #if NANOCLJ_HAS_CANVAS
+	  nanoclj_tensor_t * tensor = NULL;
 	  void * canvas = NULL;
 	  if (channels) {
 	    if (channels == 3 && fill_color.alpha == 0) {
 	      fill_color = sc->bg_color;
 	    }
-	    canvas = mk_canvas((int)(to_double(x) * sc->window_scale_factor),
-			       (int)(to_double(y) * sc->window_scale_factor),
-			       channels,
-			       sc->fg_color, fill_color);
+	    tensor = mk_canvas_backing_tensor((int)(to_double(x) * sc->window_scale_factor),
+					      (int)(to_double(y) * sc->window_scale_factor),
+					      channels);
+	    canvas = mk_canvas(tensor, sc->fg_color, fill_color);
 	  } else if (pdf_fn.size) {
 	    canvas = mk_canvas_pdf((int)(to_double(x)),
 				   (int)(to_double(y)),
@@ -4922,6 +4905,7 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
 	  }
 	  nanoclj_cell_t * port = get_port_object(sc, t, port_canvas);
 	  _rep_unchecked(port)->canvas.impl = canvas;
+	  _rep_unchecked(port)->canvas.data = tensor;
 	  if (canvas_has_error(canvas)) {
 	    return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, canvas_get_error_text(canvas))));
 	  } else {
@@ -4942,13 +4926,10 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
       if (is_image(x)) {
 	return x;
       } else if (is_writer(x) && port_type_unchecked(x) == port_canvas) {
-#if NANOCLJ_HAS_CANVAS
-	imageview_t iv = canvas_get_imageview(rep_unchecked(x)->canvas.impl);
-	nanoclj_cell_t * img = mk_image_ext(sc, iv.width, iv.height, iv.stride, iv.format, NULL);
-	memcpy(img->_image.tensor->data, iv.ptr, get_image_size(iv.height, iv.stride, iv.format));
-#endif
-	return mk_pointer(img);
+	nanoclj_port_rep_t * pr = _rep_unchecked(decode_pointer(x));
+	if (pr->canvas.data) return mk_pointer(mk_image_with_tensor(sc, pr->canvas.data, NULL));
       }
+      break;
     }
 
   case T_TENSOR:
@@ -7642,10 +7623,11 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     x = get_out_port(sc);
 #if NANOCLJ_HAS_CANVAS
     if (is_writer(x) && port_type_unchecked(x) == port_canvas) {
-      rep_unchecked(x)->canvas.impl = mk_canvas((int)(to_double(arg0) * sc->window_scale_factor),
-						(int)(to_double(arg1) * sc->window_scale_factor),
-						canvas_get_chan(rep_unchecked(x)->canvas.impl),
-						sc->fg_color, sc->bg_color);
+      nanoclj_port_rep_t * pr = rep_unchecked(x);
+      pr->canvas.data = mk_canvas_backing_tensor((int)(to_double(arg0) * sc->window_scale_factor),
+						 (int)(to_double(arg1) * sc->window_scale_factor),
+						 canvas_get_chan(pr->canvas.impl));
+      pr->canvas.impl = mk_canvas(pr->canvas.data, sc->fg_color, sc->bg_color);
     }
 #endif
     s_return(sc, mk_nil());

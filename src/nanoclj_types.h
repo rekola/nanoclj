@@ -38,6 +38,14 @@ typedef struct {
 } nanoclj_tensor_t;
 
 typedef struct {
+  int n_dims;
+  int64_t ne[NANOCLJ_MAX_DIMS];
+  size_t nb[NANOCLJ_MAX_DIMS + 1];
+  void * data;
+  nanoclj_tensor_type_t type;
+} tensorview_t;
+
+typedef struct {
   uint8_t red, green, blue, alpha;
 } nanoclj_color_t;
 
@@ -77,10 +85,6 @@ typedef struct {
   const char * ptr;
   size_t size;
 } strview_t;
-
-typedef struct {
-  void * ptr;
-} tensorview_t;
 
 typedef struct {
   float x, y;
