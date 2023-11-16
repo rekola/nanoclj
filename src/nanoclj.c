@@ -366,7 +366,7 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define set_car(p, v)         	  _car(decode_pointer(p)) = v
 #define set_cdr(p, v)         	  _cdr(decode_pointer(p)) = v
 
-#define _so_vector_metadata(p)	  ((p)->_small_collection.meta)
+#define _so_vector_metadata(p)	  ((p)->_small_tensor.vals[2])
 #define _cons_metadata(p)	  ((p)->_cons.meta)
 #define _ff_metadata(p)		  ((p)->_ff.meta)
 #define _image_metadata(p)	  ((p)->_image.meta)
@@ -388,7 +388,7 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define _offset_unchecked(p)	  ((p)->_collection.offset)
 #define _size_unchecked(p)	  ((p)->_collection.size)
 #define _tensor_unchecked(p)	  ((p)->_collection.tensor)
-#define _smalldata_unchecked(p)   (&((p)->_small_collection.data[0]))
+#define _smalldata_unchecked(p)   (&((p)->_small_tensor.vals[0]))
 
 #define _rep_unchecked(p)	  ((p)->_port.rep)
 #define _port_type_unchecked(p)	  ((p)->_port.type)
@@ -397,13 +397,13 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define _line_unchecked(p)	  ((p)->_port.line)
 #define _column_unchecked(p)	  ((p)->_port.column)
 
-#define _lvalue_unchecked(p)      ((p)->_lvalue)
+#define _lvalue_unchecked(p)      ((p)->_small_tensor.longs[0])
 #define _re_unchecked(p)	  ((p)->_re)
 #define _ff_unchecked(p)	  ((p)->_ff.ptr)
 #define _min_arity_unchecked(p)	  ((p)->_ff.min_arity)
 #define _max_arity_unchecked(p)	  ((p)->_ff.max_arity)
 
-#define _smallstrvalue_unchecked(p)      (&((p)->_small_bytearray.data[0]))
+#define _smallstrvalue_unchecked(p)      (&((p)->_small_tensor.bytes[0]))
 #define _sosize_unchecked(p)      ((p)->so_size)
 
 #define _graph_unchecked(p)	  ((p)->_graph.rep)
@@ -526,8 +526,7 @@ static inline size_t get_size(nanoclj_cell_t * c) {
 /* Pointer to the data of vector or string */
 static inline void * get_ptr(nanoclj_cell_t * c) {
   if (_is_small(c)) {
-    if (is_vector_type(_type(c))) return _smalldata_unchecked(c);
-    else return _smallstrvalue_unchecked(c);
+    return _smalldata_unchecked(c);
   } else {
     nanoclj_tensor_t * tensor = _tensor_unchecked(c);
     size_t element_size = tensor->nb[0];
@@ -575,7 +574,7 @@ static inline nanoclj_cell_t * get_metadata(nanoclj_cell_t * c) {
   case T_VAR:
   case T_QUEUE:
     if (_is_small(c)) {
-      return _so_vector_metadata(c);
+      return decode_pointer(_so_vector_metadata(c));
     } else {
       return _tensor_unchecked(c)->meta;
     }
@@ -603,7 +602,7 @@ static inline void set_metadata(nanoclj_cell_t * c, nanoclj_cell_t * meta) {
   case T_VAR:
   case T_QUEUE:
     if (_is_small(c)) {
-      _so_vector_metadata(c) = meta;
+      _so_vector_metadata(c) = mk_pointer(meta);
     } else {
       _tensor_unchecked(c)->meta = meta;
     }
@@ -1694,7 +1693,11 @@ static inline nanoclj_cell_t * get_vector_object(nanoclj_t * sc, int_fast16_t t,
     store = mk_tensor_1d(nanoclj_f64, size);
     if (!store) return NULL;
   }
-  return get_collection_object(sc, t, 0, size, store);
+  nanoclj_cell_t * vec = get_collection_object(sc, t, 0, size, store);
+  if (size < NANOCLJ_SMALL_VEC_SIZE) {
+    _so_vector_metadata(vec) = mk_nil();
+  }
+  return vec;
 }
 
 static inline bool resize_vector(nanoclj_t * sc, nanoclj_cell_t * vec, size_t new_size) {
@@ -2651,7 +2654,7 @@ static inline nanoclj_cell_t * new_slot_spec_in_env(nanoclj_t * sc, nanoclj_cell
   nanoclj_cell_t * slot0 = get_vector_object(sc, T_VAR, 2);
   set_vector_elem(slot0, 0, variable);
   set_vector_elem(slot0, 1, value);
-  _so_vector_metadata(slot0) = meta;
+  _so_vector_metadata(slot0) = mk_pointer(meta);
     
   nanoclj_val_t slot = mk_pointer(slot0);
   nanoclj_val_t x = _car(env);
@@ -2662,7 +2665,7 @@ static inline nanoclj_cell_t * new_slot_spec_in_env(nanoclj_t * sc, nanoclj_cell
     symbol_t * s = decode_symbol(variable);
     int location = s->hash % _size_unchecked(vec);
     set_vector_elem(vec, location, mk_pointer(cons(sc, slot, decode_pointer(vector_elem(vec, location)))));
-  } else {     
+  } else {
     _set_car(env, mk_pointer(cons(sc, slot, decode_pointer(_car(env)))));
   }
   return slot0;
@@ -2700,8 +2703,8 @@ static inline void new_slot_in_env(nanoclj_t * sc, nanoclj_val_t variable, nanoc
 static inline nanoclj_val_t set_slot_in_env(nanoclj_t * sc, nanoclj_cell_t * slot, nanoclj_val_t state, nanoclj_cell_t * meta) {
   nanoclj_val_t old_state = _cdr(slot);
   set_vector_elem(slot, 1, state);
-  if (meta) _so_vector_metadata(slot) = meta;
-  else meta = _so_vector_metadata(slot);
+  if (meta) _so_vector_metadata(slot) = mk_pointer(meta);
+  else meta = decode_pointer(_so_vector_metadata(slot));
   
   nanoclj_val_t watches0;
   if (get_elem(sc, meta, sc->WATCHES, &watches0)) {
@@ -3432,6 +3435,7 @@ static inline nanoclj_cell_t * get_port_object(nanoclj_t * sc, uint16_t type, na
   return NULL;
 }
 
+#if NANOCLJ_HAS_HTTP
 static inline int http_open_thread(nanoclj_t * sc, strview_t sv) {
   int pipefd[2];
   if (pipe(pipefd) == -1) {
@@ -3466,6 +3470,7 @@ static inline int http_open_thread(nanoclj_t * sc, strview_t sv) {
   
   return pipefd[0];
 }
+#endif
 
 static inline nanoclj_val_t port_rep_from_file(nanoclj_t * sc, uint16_t type, FILE * f, char * filename) {
   nanoclj_cell_t * p = get_port_object(sc, type, port_file);
@@ -3522,8 +3527,10 @@ static inline nanoclj_val_t port_from_filename(nanoclj_t * sc, uint16_t type, st
     f = stdin;
   } else if (strncmp(filename, "http://", 7) == 0 ||
 	     strncmp(filename, "https://", 8) == 0) {
+#if NANOCLJ_HAS_HTTP
     int fd = http_open_thread(sc, sv);
     f = fdopen(fd, mode);
+#endif
   } else if (strncmp(filename, "file://", 7) == 0) {
     f = fopen(filename + 7, mode);
   } else if (filename[0] == '|') {
@@ -3543,7 +3550,6 @@ static inline nanoclj_val_t port_from_filename(nanoclj_t * sc, uint16_t type, st
     }
     return mk_nil();
   }
-  
   return port_rep_from_file(sc, type, f, filename);
 }
 
@@ -4150,8 +4156,9 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
       case T_CLASS:
       case T_VAR:{
 	nanoclj_val_t ns_v = mk_nil(), name_v = mk_nil();
-	get_elem(sc, _cons_metadata(c), sc->NAME, &name_v);
-	get_elem(sc, _cons_metadata(c), sc->NS, &ns_v);
+	nanoclj_cell_t * md = get_metadata(c);
+	get_elem(sc, md, sc->NAME, &name_v);
+	get_elem(sc, md, sc->NS, &ns_v);
 	if (!is_nil(name_v)) {
 	  sv = to_strview(name_v);
 	  if (!is_nil(ns_v)) {
@@ -7355,7 +7362,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  nanoclj_val_t old_watches = second(sc, decode_pointer(vector_elem(md, wi)));
 	  set_vector_elem(md, wi, mk_mapentry(sc, sc->WATCHES, mk_pointer(cons(sc, arg2, decode_pointer(old_watches)))));
 	}
-	_so_vector_metadata(c) = md;
+	_so_vector_metadata(c) = mk_pointer(md);
 	s_return(sc, arg0);
       }
     }
@@ -7446,13 +7453,13 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     if (!unpack_args_1(sc, &arg0)) {
       return false;
     }
-#if NANOCLJ_HAS_CANVAS
     x = get_out_port(sc);
     if (is_writer(x) && port_type_unchecked(x) == port_canvas) {
-      double w = arg0.as_long == sc->HAIR.as_long ? 1 : to_double(arg0) * sc->window_scale_factor;
+#if NANOCLJ_HAS_CANVAS
+      double w = arg0.as_long == sc->HAIR.as_long ? 0 : to_double(arg0) * sc->window_scale_factor;
       canvas_set_line_width(rep_unchecked(x)->canvas.impl, w);
-    }
 #endif
+    }
     s_return(sc, mk_nil());
 
   case OP_MOVETO:
@@ -8366,8 +8373,10 @@ int main(int argc, const char **argv) {
     legal();
     return 1;
   }
-  
+
+#if NANOCLJ_HAS_HTTP
   http_init();
+#endif
 
   nanoclj_t sc;
   if (!nanoclj_init(&sc)) {

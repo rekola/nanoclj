@@ -4,6 +4,7 @@
 #include "nanoclj.h"
 
 #define NANOCLJ_SMALL_VEC_SIZE 2
+#define NANOCLJ_SMALL_LV_SIZE 3
 #define NANOCLJ_SMALL_STR_SIZE 24
 
 #ifndef STRBUFFSIZE
@@ -79,9 +80,11 @@ extern "C" {
     uint8_t flags;
     uint8_t so_size;
     union {
-      struct {
-	uint8_t data[NANOCLJ_SMALL_STR_SIZE];
-      } _small_bytearray;
+      union {
+	uint8_t bytes[NANOCLJ_SMALL_STR_SIZE];
+	nanoclj_val_t vals[NANOCLJ_SMALL_VEC_SIZE + 1];
+	long long longs[NANOCLJ_SMALL_LV_SIZE];
+      } _small_tensor;
       struct {
 	size_t offset, size;
 	nanoclj_tensor_t * tensor;
@@ -96,11 +99,6 @@ extern "C" {
 	uint32_t frame_offset, frame_count;
 	uint8_t channel_offset, channel_count;
       } _audio;
-      struct {
-        nanoclj_val_t data[NANOCLJ_SMALL_VEC_SIZE];
-	struct nanoclj_cell_t * meta;
-      } _small_collection;
-      long long _lvalue;
       struct pcre2_real_code_8 * _re;
       struct {
 	nanoclj_port_rep_t * rep;

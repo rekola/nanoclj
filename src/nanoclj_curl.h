@@ -1,6 +1,8 @@
 #ifndef _NANOCLJ_CURL_H_
 #define _NANOCLJ_CURL_H_
 
+#define NANOCLJ_HAS_HTTP 1
+
 #include <curl/curl.h>
 
 static size_t curl_write_data_func(void * buffer, size_t size, size_t nmemb, void * userp) {

@@ -39,8 +39,8 @@ E2:_setmark(p);
   case T_VAR:
   case T_RATIO:{
     if (_is_small(p)) {
-      nanoclj_cell_t * meta = _so_vector_metadata(p);
-      if (meta) mark(meta);
+      nanoclj_val_t md = _so_vector_metadata(p);
+      if (md.as_long != kNIL) mark(decode_pointer(md));
 
       size_t s = _sosize_unchecked(p);
       nanoclj_val_t * data = _smalldata_unchecked(p);
