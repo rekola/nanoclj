@@ -54,10 +54,6 @@ typedef struct nanoclj_cell_t nanoclj_cell_t;
 
   typedef struct nanoclj_s nanoclj_t;
   
-  typedef void *(*func_alloc) (size_t);
-  typedef void (*func_dealloc) (void *);
-  typedef void *(*func_realloc) (void *, size_t);
-  
   NANOCLJ_EXPORT nanoclj_t *nanoclj_init_new(void);
   NANOCLJ_EXPORT bool nanoclj_init(nanoclj_t * sc);
   NANOCLJ_EXPORT void nanoclj_deinit(nanoclj_t * sc);
@@ -85,7 +81,7 @@ typedef struct nanoclj_cell_t nanoclj_cell_t;
   nanoclj_val_t _cons(nanoclj_t * sc, nanoclj_val_t a, nanoclj_val_t b, int immutable);
   nanoclj_val_t mk_boolean(nanoclj_t * sc, int v);
   nanoclj_val_t mk_integer(nanoclj_t * sc, long long num);
-  nanoclj_val_t mk_real(nanoclj_t * sc, double num);
+  nanoclj_val_t mk_double(nanoclj_t * sc, double num);
   nanoclj_val_t mk_symbol(nanoclj_t * sc, const char *name);
   nanoclj_val_t gensym(nanoclj_t * sc);
   nanoclj_val_t mk_string(nanoclj_t * sc, const char *str);
@@ -99,7 +95,7 @@ typedef struct nanoclj_cell_t nanoclj_cell_t;
     nanoclj_val_t (*intern) (nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t symbol, nanoclj_val_t value);
     nanoclj_val_t (*cons) (nanoclj_t * sc, nanoclj_val_t head, nanoclj_val_t tail);
     nanoclj_val_t (*mk_integer) (nanoclj_t * sc, long long num);
-    nanoclj_val_t (*mk_real) (double num);
+    nanoclj_val_t (*mk_double) (double num);
     nanoclj_val_t (*mk_symbol) (nanoclj_t * sc, const char *name);
     nanoclj_val_t (*mk_string) (nanoclj_t * sc, const char *str);
     nanoclj_val_t (*mk_codepoint) (int c);

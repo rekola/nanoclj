@@ -59,11 +59,11 @@ static nanoclj_val_t System_exit(nanoclj_t * sc, nanoclj_cell_t * args) {
 }
 
 static nanoclj_val_t System_currentTimeMillis(nanoclj_t * sc, nanoclj_cell_t * args) {
-  return mk_integer(sc, system_time() / 1000);
+  return mk_long(sc, system_time() / 1000);
 }
 
 static nanoclj_val_t System_nanoTime(nanoclj_t * sc, nanoclj_cell_t * args) {
-  return mk_integer(sc, 1000 * system_time());
+  return mk_long(sc, 1000 * system_time());
 }
 
 static nanoclj_val_t System_gc(nanoclj_t * sc, nanoclj_cell_t * args) {
@@ -158,9 +158,9 @@ static nanoclj_val_t System_getSystemTimes(nanoclj_t * sc, nanoclj_cell_t * args
   GetSystemTimes(&idleTime, &kernelTime, &userTime);
   long long idle = filetime_to_msec(idleTime);
   r = mk_vector(sc, 3);
-  set_vector_elem(r, 0, mk_integer(sc, idle));
-  set_vector_elem(r, 1, mk_integer(sc, filetime_to_msec(kernelTime) - idle));
-  set_vector_elem(r, 2, mk_integer(sc, filetime_to_msec(userTime)));
+  set_vector_elem(r, 0, mk_long(sc, idle));
+  set_vector_elem(r, 1, mk_long(sc, filetime_to_msec(kernelTime) - idle));
+  set_vector_elem(r, 2, mk_long(sc, filetime_to_msec(userTime)));
 #else
   strview_t sv = to_strview(slurp(sc, T_READER, cons(sc, mk_string(sc, "/proc/stat"), NULL)));
   if (sc->pending_exception) return mk_nil();
@@ -172,9 +172,9 @@ static nanoclj_val_t System_getSystemTimes(nanoclj_t * sc, nanoclj_cell_t * args
     long long user, nice, system, idle;
     if (sscanf(p, "cpu  %lld %lld %lld %lld", &user, &nice, &system, &idle) == 4) {
       r = mk_vector(sc, 3);
-      set_vector_elem(r, 0, mk_integer(sc, idle));
-      set_vector_elem(r, 1, mk_integer(sc, system));
-      set_vector_elem(r, 2, mk_integer(sc, user));
+      set_vector_elem(r, 0, mk_long(sc, idle));
+      set_vector_elem(r, 1, mk_long(sc, system));
+      set_vector_elem(r, 2, mk_long(sc, user));
     }
   }
   free(b);
@@ -185,35 +185,35 @@ static nanoclj_val_t System_getSystemTimes(nanoclj_t * sc, nanoclj_cell_t * args
 /* Math */
 
 static nanoclj_val_t Math_sin(nanoclj_t * sc, nanoclj_cell_t * args) {
-  return mk_real(sin(to_double(first(sc, args))));
+  return mk_double(sin(to_double(first(sc, args))));
 }
 
 static nanoclj_val_t Math_cos(nanoclj_t * sc, nanoclj_cell_t * args) {
-  return mk_real(cos(to_double(first(sc, args))));
+  return mk_double(cos(to_double(first(sc, args))));
 }
 
 static nanoclj_val_t Math_exp(nanoclj_t * sc, nanoclj_cell_t * args) {
-  return mk_real(exp(to_double(first(sc, args))));
+  return mk_double(exp(to_double(first(sc, args))));
 }
 
 static nanoclj_val_t Math_log(nanoclj_t * sc, nanoclj_cell_t * args) {
-  return mk_real(log(to_double(first(sc, args))));
+  return mk_double(log(to_double(first(sc, args))));
 }
 
 static nanoclj_val_t Math_log10(nanoclj_t * sc, nanoclj_cell_t * args) {
-  return mk_real(log10(to_double(first(sc, args))));
+  return mk_double(log10(to_double(first(sc, args))));
 }
 
 static nanoclj_val_t Math_tan(nanoclj_t * sc, nanoclj_cell_t * args) {
-  return mk_real(tan(to_double(first(sc, args))));
+  return mk_double(tan(to_double(first(sc, args))));
 }
 
 static nanoclj_val_t Math_asin(nanoclj_t * sc, nanoclj_cell_t * args) {
-  return mk_real(asin(to_double(first(sc, args))));
+  return mk_double(asin(to_double(first(sc, args))));
 }
 
 static nanoclj_val_t Math_acos(nanoclj_t * sc, nanoclj_cell_t * args) {
-  return mk_real(acos(to_double(first(sc, args))));
+  return mk_double(acos(to_double(first(sc, args))));
 }
 
 static nanoclj_val_t Math_atan(nanoclj_t * sc, nanoclj_cell_t * args) {
@@ -221,34 +221,34 @@ static nanoclj_val_t Math_atan(nanoclj_t * sc, nanoclj_cell_t * args) {
   args = next(sc, args);
   if (args) {
     nanoclj_val_t y = first(sc, args);
-    return mk_real(atan2(to_double(x), to_double(y)));
+    return mk_double(atan2(to_double(x), to_double(y)));
   } else {
-    return mk_real(atan(to_double(x)));
+    return mk_double(atan(to_double(x)));
   }
 }
 
 static nanoclj_val_t Math_sqrt(nanoclj_t * sc, nanoclj_cell_t * args) {
-  return mk_real(sqrt(to_double(first(sc, args))));
+  return mk_double(sqrt(to_double(first(sc, args))));
 }
 
 static nanoclj_val_t Math_cbrt(nanoclj_t * sc, nanoclj_cell_t * args) {
-  return mk_real(cbrt(to_double(first(sc, args))));
+  return mk_double(cbrt(to_double(first(sc, args))));
 }
 
 static nanoclj_val_t Math_pow(nanoclj_t * sc, nanoclj_cell_t * args) {
-  return mk_real(pow(to_double(first(sc, args)), to_double(second(sc, args))));
+  return mk_double(pow(to_double(first(sc, args)), to_double(second(sc, args))));
 }
 
 static nanoclj_val_t Math_floor(nanoclj_t * sc, nanoclj_cell_t * args) {
-  return mk_real(floor(to_double(first(sc, args))));
+  return mk_double(floor(to_double(first(sc, args))));
 }
 
 static nanoclj_val_t Math_ceil(nanoclj_t * sc, nanoclj_cell_t * args) {
-  return mk_real(ceil(to_double(first(sc, args))));
+  return mk_double(ceil(to_double(first(sc, args))));
 }
 
 static nanoclj_val_t Math_round(nanoclj_t * sc, nanoclj_cell_t * args) {
-  return mk_real(round(to_double(first(sc, args))));
+  return mk_double(round(to_double(first(sc, args))));
 }
 
 /* clojure.math.numeric-tower */
@@ -306,7 +306,7 @@ static nanoclj_val_t numeric_tower_expt(nanoclj_t * sc, nanoclj_cell_t * args) {
       }
       long long num2, den2;
       if (!ipow_overflow(num, exp, &num2) && !ipow_overflow(den, exp, &den2)) {
-	if (den2 == 1) return mk_integer(sc, num2);
+	if (den2 == 1) return mk_long(sc, num2);
 	else return mk_ratio_long(sc, num2, den2);
       }
     }
@@ -314,15 +314,15 @@ static nanoclj_val_t numeric_tower_expt(nanoclj_t * sc, nanoclj_cell_t * args) {
     long long base = to_long(x), exp = to_long(y);
     long long res;
     if (base == 0 || base == 1) {
-      return mk_integer(sc, base);
+      return mk_long(sc, base);
     } else if (exp >= 0 && exp < 256 && !ipow_overflow(base, exp, &res)) {
-      return mk_integer(sc, res);
+      return mk_long(sc, res);
     } else if (exp > -256 && exp < 0 && !ipow_overflow(base, -exp, &res)) {
       return mk_ratio_long(sc, 1, res);
     }
   }
 
-  return mk_real(pow(to_double(x), to_double(y)));
+  return mk_double(pow(to_double(x), to_double(y)));
 }
 
 static inline nanoclj_val_t browse_url(nanoclj_t * sc, nanoclj_cell_t * args) {
@@ -373,7 +373,7 @@ static inline nanoclj_val_t Image_load(nanoclj_t * sc, nanoclj_cell_t * args) {
     return mk_nil();
   }
   nanoclj_cell_t * image = mk_image(sc, w, h, f, meta);
-  memcpy(_image_unchecked(image)->data, data, w * h * get_format_bpp(f));
+  memcpy(image->_image.tensor->data, data, w * h * get_format_bpp(f));
   stbi_image_free(data);
   return mk_pointer(image);
 }
@@ -390,7 +390,7 @@ static inline nanoclj_val_t Image_resize(nanoclj_t * sc, nanoclj_cell_t * args) 
   int channels = get_format_channels(iv.format);
 
   nanoclj_cell_t * target_image = mk_image(sc, target_w, target_h, iv.format, NULL);
-  nanoclj_tensor_t * img = _image_unchecked(target_image);
+  nanoclj_tensor_t * img = target_image->_image.tensor;
   uint8_t * target_ptr = img->data;
   
   stbir_resize_uint8_generic(iv.ptr, iv.width, iv.height, iv.stride, target_ptr, target_w, target_h, 0, channels, 0, STBIR_FLAG_ALPHA_PREMULTIPLIED, STBIR_EDGE_CLAMP, STBIR_FILTER_DEFAULT, STBIR_COLORSPACE_LINEAR, NULL);
@@ -405,7 +405,7 @@ static inline nanoclj_val_t Image_transpose(nanoclj_t * sc, nanoclj_cell_t * arg
   }
   int w = iv.width, h = iv.height, stride = iv.stride;
   nanoclj_cell_t * new_image = mk_image(sc, h, w, iv.format, NULL);
-  uint8_t * data = _image_unchecked(new_image)->data;
+  uint8_t * data = new_image->_image.tensor->data;
   size_t bpp = get_format_bpp(iv.format);
   
   for (int y = 0; y < h; y++) {
@@ -517,7 +517,7 @@ nanoclj_val_t Image_horizontalGaussianBlur(nanoclj_t * sc, nanoclj_cell_t * args
   for (int i = 0; i < kernel_size; i++) total += kernel[i];
   
   nanoclj_cell_t * r = mk_image(sc, w, h, iv.format, NULL);
-  uint8_t * output_data = _image_unchecked(r)->data;
+  uint8_t * output_data = r->_image.tensor->data;
     
   switch (iv.format) {
   case nanoclj_rgba8:
@@ -764,7 +764,7 @@ static inline nanoclj_val_t Geo_load(nanoclj_t * sc, nanoclj_cell_t * args) {
 	prop = conjoin(sc, prop, mk_mapentry(sc, name_v, mk_int(DBFReadIntegerAttribute(dbf, i, j))));
 	break;
       case FTDouble:
-	prop = conjoin(sc, prop, mk_mapentry(sc, name_v, mk_real(DBFReadDoubleAttribute(dbf, i, j))));
+	prop = conjoin(sc, prop, mk_mapentry(sc, name_v, mk_double(DBFReadDoubleAttribute(dbf, i, j))));
 	break;
       case FTLogical:
 	prop = conjoin(sc, prop, mk_mapentry(sc, name_v, mk_boolean(DBFReadLogicalAttribute(dbf, i, j))));
@@ -788,7 +788,7 @@ static inline nanoclj_val_t Geo_load(nanoclj_t * sc, nanoclj_cell_t * args) {
     set_vector_elem(feat, 1, mk_mapentry(sc, geom_key, mk_pointer(geom)));
     set_vector_elem(feat, 2, mk_mapentry(sc, prop_key, mk_pointer(prop)));
     set_vector_elem(feat, 3, mk_mapentry(sc, bbox_key, bbox));
-    set_vector_elem(feat, 4, mk_mapentry(sc, id_key, mk_integer(sc, o->nShapeId)));
+    set_vector_elem(feat, 4, mk_mapentry(sc, id_key, mk_long(sc, o->nShapeId)));
 
     r = cons(sc, mk_pointer(feat), r);
 
@@ -1248,8 +1248,8 @@ static inline void register_functions(nanoclj_t * sc) {
   intern_foreign_func(sc, Math, "ceil", Math_ceil, 1, 1);
   intern_foreign_func(sc, Math, "round", Math_round, 1, 1);
 
-  intern(sc, Math, def_symbol(sc, "E"), mk_real(M_E));
-  intern(sc, Math, def_symbol(sc, "PI"), mk_real(M_PI));
+  intern(sc, Math, def_symbol(sc, "E"), mk_double(M_E));
+  intern(sc, Math, def_symbol(sc, "PI"), mk_double(M_PI));
 
   intern_foreign_func(sc, numeric_tower, "expt", numeric_tower_expt, 2, 2);
 

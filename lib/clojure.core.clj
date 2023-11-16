@@ -43,13 +43,12 @@
 (def char nanoclj.core.Codepoint)
 (def double java.lang.Double)
 (def float java.lang.Double)
+(def byte java.lang.Byte)
+(def short java.lang.Short)
+(def int java.lang.Integer)
+(def long java.lang.Long)
 
 (def resolve ns-resolve)
-
-; Casts argument to Long
-(def short java.lang.Long)
-(def int java.lang.Long)
-(def long java.lang.Long)
 
 (defn inst-ms
   "Returns millisecond time of java.util.Date"

@@ -69,7 +69,6 @@ As well as printing images in block mode like the plot function does, they can a
 - Tail-call optimization
 - sort is not stable and doesn't throw on mismatching types
 - License is BSD 2-Clause License instead of EPL
-- No 32-bit floating point numbers or small integers
 - Symbols are interned and cannot have metadata
 - Primitives such as doubles and 32 bit integers are passed by value, and are in effect, interned
 - Strings are not interned: (identical? "abc" "abc") ;=> false
@@ -112,7 +111,7 @@ Windows support is in progress.
 - Transducers
 - Refs, Agents, Atoms, Validators
 - Reader Conditionals
-- BigInts, BigDecimals and Exotic numeric literals (e.g. 3N, 0.1M, hexadecimal floats)
+- BigInts, BigDecimals, 32-bit floats and Exotic numeric literals (e.g. 3N, 0.1M, hexadecimal floats)
 - Persistent data structures, Transient data structures, StructMaps
 - Unchecked operations
 - Autopromoting operations
