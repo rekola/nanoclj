@@ -40,8 +40,8 @@ E2:_setmark(p);
   case T_RATIO:{
     if (_is_small(p)) {
       nanoclj_val_t md = _so_vector_metadata(p);
-      if (md.as_long != kNIL) mark(decode_pointer(md));
-
+      if (is_cell(md) && !is_nil(md)) mark(decode_pointer(md));
+     
       size_t s = _sosize_unchecked(p);
       nanoclj_val_t * data = _smalldata_unchecked(p);
       if (s > 0 && is_cell(data[0]) && !is_nil(data[0])) mark(decode_pointer(data[0]));
