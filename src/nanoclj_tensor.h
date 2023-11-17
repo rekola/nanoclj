@@ -80,6 +80,10 @@ static inline double tensor_get_f64(nanoclj_tensor_t * tensor, int i) {
   return ((double *)tensor->data)[i];
 }
 
+static inline double tensor_get_f32_2d(nanoclj_tensor_t * tensor, int i, int j) {
+  return *(float *)((uint8_t *)tensor->data + i * tensor->nb[0] + j * tensor->nb[1]);
+}
+
 static inline nanoclj_val_t tensor_get(nanoclj_tensor_t * tensor, int i) {
   nanoclj_val_t v;
   v.as_double = tensor_get_f64(tensor, i);
@@ -203,6 +207,15 @@ static inline size_t tensor_mutate_append_bytes(nanoclj_tensor_t * s, const uint
 
 static inline void tensor_mutate_fill_i8(nanoclj_tensor_t * tensor, uint8_t v) {
   memset(tensor->data, v, tensor->nb[tensor->n_dims]);
+}
+
+static inline void tensor_mutate_append_vec(nanoclj_tensor_t * t, float * vec) {
+  if (t->ne[1] * t->nb[1] >= t->nb[2]) {
+    t->nb[2] = 2 * (t->ne[1] + 1) * t->nb[1];
+    t->data = realloc(t->data, t->nb[2]);
+  }
+  memcpy(t->data + t->ne[1] * t->nb[1], vec, t->nb[1]);
+  t->ne[1]++;
 }
 
 /* Appends codepoint to the end of an 1D tensor */

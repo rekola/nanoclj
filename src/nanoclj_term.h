@@ -171,6 +171,7 @@ static inline int convert_to_256color(nanoclj_color_t color) {
 }
 
 static inline void set_term_fg_color(FILE * fh, nanoclj_color_t color, nanoclj_colortype_t colors) {
+#ifndef WIN32
   if (isatty(fileno(fh))) {
     switch (colors) {
     case nanoclj_colortype_none:
@@ -184,9 +185,11 @@ static inline void set_term_fg_color(FILE * fh, nanoclj_color_t color, nanoclj_c
       break;
     }
   }
+#endif
 }
 
 static inline void set_term_bg_color(FILE * fh, nanoclj_color_t color, nanoclj_colortype_t colors) {
+#ifndef WIN32
   if (isatty(fileno(fh))) {
     switch (colors) {
     case nanoclj_colortype_none:
@@ -200,6 +203,7 @@ static inline void set_term_bg_color(FILE * fh, nanoclj_color_t color, nanoclj_c
       break;
     }
   }
+#endif
 }
 
 static inline void set_display_mode(FILE * fh, nanoclj_display_mode_t mode) {

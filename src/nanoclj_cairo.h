@@ -110,20 +110,15 @@ static inline void canvas_set_color(void * canvas, nanoclj_color_t color) {
   cairo_set_source_rgba((cairo_t *)canvas, color.red / 255.0, color.green / 255.0, color.blue / 255.0, color.alpha / 255.0);
 }
 
-static inline void canvas_set_linear_gradient(void * canvas, nanoclj_cell_t * p0, nanoclj_cell_t * p1, nanoclj_cell_t * colormap) {
-  cairo_pattern_t * pat = cairo_pattern_create_linear(to_double(vector_elem(p0, 0)), to_double(vector_elem(p0, 1)),
-						      to_double(vector_elem(p1, 0)), to_double(vector_elem(p1, 1)));
-  size_t n = get_size(colormap);
+static inline void canvas_set_linear_gradient(void * canvas, nanoclj_tensor_t * tensor, double x0, double y0, double x1, double y1) {
+  cairo_pattern_t * pat = cairo_pattern_create_linear(x0, y0, x1, y1);
+  size_t n = tensor->ne[1];
   for (size_t i = 0; i < n; i++) {
-    nanoclj_cell_t * e = decode_pointer(vector_elem(colormap, i));
-    double pos = to_double(vector_elem(e, 0));
-    nanoclj_cell_t * color = decode_pointer(vector_elem(e, 1));
-    cairo_pattern_add_color_stop_rgb(pat, pos,
-				     to_double(vector_elem(color, 0)),
-				     to_double(vector_elem(color, 1)),
-				     to_double(vector_elem(color, 2)));
+    float pos = tensor_get_f32_2d(tensor, 0, i), red = tensor_get_f32_2d(tensor, 1, i);
+    float green = tensor_get_f32_2d(tensor, 2, i), blue = tensor_get_f32_2d(tensor, 3, i);
+    float alpha = tensor_get_f32_2d(tensor, 4, i);
+    cairo_pattern_add_color_stop_rgba(pat, pos, red, green, blue, alpha);
   }
-
   cairo_set_source((cairo_t *)canvas, pat);
   cairo_pattern_destroy(pat);
 }

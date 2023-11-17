@@ -8,6 +8,7 @@
 (defn set? [x] (instance? clojure.lang.PersistentTreeSet x))
 (defn map? [x] (instance? clojure.lang.PersistentArrayMap x))
 (defn image? [x] (instance? nanoclj.core.Image x))
+(defn gradient? [x] (instance? nanoclj.core.Gradient x))
 (defn inst? [x] (instance? java.util.Date x))
 (defn uuid? [x] (instance? java.util.UUID x))
 (defn coll? [x] (is-any-of? (type x)
@@ -450,6 +451,9 @@
                                       (-pr (Image/resize x (* s w) wh)))
                                     (-pr x)
                                     ))
+                     (gradient? x) (do
+                                     (mode :inline)
+                                     (-pr (nanoclj.gradient/plot-gradient x)))
                      :else (print-fn nil x)))
 
 (defn ^:private pr-block

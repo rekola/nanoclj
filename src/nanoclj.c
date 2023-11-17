@@ -752,10 +752,12 @@ static inline double to_double(nanoclj_val_t p) {
     return p.as_double;
   case T_NIL: {
     nanoclj_cell_t * c = decode_pointer(p);
-    switch (_type(c)) {
-    case T_LONG:
-    case T_DATE: return (double)_lvalue_unchecked(c);
-    case T_RATIO: return to_double(vector_elem(c, 0)) / to_double(vector_elem(c, 1));
+    if (c) {
+      switch (_type(c)) {
+      case T_LONG:
+      case T_DATE: return (double)_lvalue_unchecked(c);
+      case T_RATIO: return to_double(vector_elem(c, 0)) / to_double(vector_elem(c, 1));
+      }
     }
   }
   }
@@ -1392,6 +1394,8 @@ static inline nanoclj_cell_t * mk_image_with_tensor(nanoclj_t * sc, nanoclj_tens
     retain(sc, x);
 #endif
     return x;
+  } else if (!tensor->refcnt) {
+    tensor_free(tensor);
   }
   sc->pending_exception = sc->OutOfMemoryError;
   return NULL;
@@ -1404,6 +1408,21 @@ static inline nanoclj_cell_t * mk_image(nanoclj_t * sc, int32_t width, int32_t h
   nanoclj_cell_t * img = mk_image_with_tensor(sc, tensor, meta);
   if (!img) tensor_free(tensor);
   return img;
+}
+
+static inline nanoclj_cell_t * mk_gradient_from_tensor(nanoclj_t * sc, nanoclj_tensor_t * tensor) {
+  nanoclj_cell_t * x = get_cell_x(sc, T_GRADIENT, T_GC_ATOM, NULL, NULL, NULL);
+  if (x) {
+    x->_collection.tensor = tensor;
+#ifdef RETAIN_ALLOCS
+    retain(sc, x);
+#endif
+    return x;
+  } else if (!tensor->refcnt) {
+    tensor_free(tensor);
+  }
+  sc->pending_exception = sc->OutOfMemoryError;
+  return NULL;
 }
 
 static inline nanoclj_cell_t * mk_audio(nanoclj_t * sc, size_t frames, uint8_t channels, int32_t sample_rate) {
@@ -2338,6 +2357,20 @@ static nanoclj_val_t fourth(nanoclj_t * sc, nanoclj_cell_t * a) {
       }
     } else if (t != T_NIL) {
       return first(sc, rest(sc, rest(sc, rest(sc, a))));
+    }
+  }
+  return mk_nil();
+}
+
+static nanoclj_val_t fifth(nanoclj_t * sc, nanoclj_cell_t * a) {
+  if (a) {
+    int t = _type(a);
+    if (is_vector_type(t)) {
+      if (get_size(a) >= 5) {
+	return vector_elem(a, 4);
+      }
+    } else if (t != T_NIL) {
+      return first(sc, rest(sc, rest(sc, rest(sc, rest(sc, a)))));
     }
   }
   return mk_nil();
@@ -3690,9 +3723,7 @@ static inline void set_color(nanoclj_t * sc, nanoclj_color_t color, nanoclj_val_
   switch (port_type_unchecked(out)) {
   case port_file:
     pr->stdio.fg = color;
-#ifndef WIN32
     set_term_fg_color(pr->stdio.file, color, sc->term_colors);
-#endif
     break;
   case port_callback:
     if (pr->callback.color) {
@@ -3723,16 +3754,19 @@ static inline void set_bg_color(nanoclj_t * sc, nanoclj_color_t color, nanoclj_v
   }
 }
 
-static inline void set_linear_gradient(nanoclj_t * sc, nanoclj_cell_t * p0, nanoclj_cell_t * p1, nanoclj_cell_t * colormap, nanoclj_val_t out) {
+static inline void set_linear_gradient(nanoclj_t * sc, nanoclj_tensor_t * tensor, nanoclj_cell_t * p0, nanoclj_cell_t * p1, nanoclj_val_t out) {
+  float f = sc->window_scale_factor;
   nanoclj_port_rep_t * pr = rep_unchecked(out);
   switch (port_type_unchecked(out)) {
   case port_file:
     break;
-#if NANOCLJ_HAS_CANVAS
   case port_canvas:
-    canvas_set_linear_gradient(pr->canvas.impl, p0, p1, colormap);
-    break;
+#if NANOCLJ_HAS_CANVAS
+    canvas_set_linear_gradient(pr->canvas.impl, tensor,
+			       to_double(vector_elem(p0, 0)) * f, to_double(vector_elem(p0, 1)) * f,
+			       to_double(vector_elem(p1, 0)) * f, to_double(vector_elem(p1, 1)) * f);
 #endif
+    break;
   }
 }
 
@@ -4941,8 +4975,21 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
 
   case T_TENSOR:
     return mk_pointer(mk_tensor(sc, args));
+
+  case T_GRADIENT:
+    {
+      int n = count(sc, args);
+      nanoclj_tensor_t * tensor = mk_tensor_2d(nanoclj_f32, 5, 0);
+      int i = 0;
+      while (args) {
+	nanoclj_color_t c = to_color(first(sc, args));
+	args = next(sc, args);
+	float v[] = { (float)i++ / (n - 1), c.red / 255.0f, c.green / 255.0f, c.blue / 255.0f, c.alpha / 255.0f };
+	tensor_mutate_append_vec(tensor, v);
+      }
+      return mk_pointer(mk_gradient_from_tensor(sc, tensor));
+    }
   }
-  
   return mk_nil();
 }
 
@@ -7400,7 +7447,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
     
   case OP_SET_COLOR:
-    if (!unpack_args_1(sc, &arg0)) {
+    if (!unpack_args_1_plus(sc, &arg0, &arg_next)) {
       return false;
     } else if (is_nil(arg0)) {
       nanoclj_throw(sc, sc->NullPointerException);
@@ -7410,6 +7457,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       if (!is_writer(x)) {
 	nanoclj_throw(sc, mk_illegal_arg_exception(sc, "Not a Writer"));
 	return false;
+      } else if (type(arg0) == T_GRADIENT) {
+	set_linear_gradient(sc, get_tensor(decode_pointer(arg0)), decode_pointer(first(sc, arg_next)), decode_pointer(second(sc, arg_next)), x);
       } else {
 	set_color(sc, to_color(arg0), x);
       }
@@ -7427,16 +7476,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
     s_return(sc, mk_nil());
 
-  case OP_SET_LINEAR_GRADIENT:
-    if (!unpack_args_3(sc, &arg0, &arg1, &arg2)) {
-      return false;
-    } else if (is_cell(arg0) && is_cell(arg1) && is_cell(arg2)) {
-      set_linear_gradient(sc, decode_pointer(arg0), decode_pointer(arg1), decode_pointer(arg2), get_out_port(sc));
-      s_return(sc, mk_nil());
-    }
-    nanoclj_throw(sc, mk_illegal_arg_exception(sc, "Invalid argument types"));
-    return false;
-        
   case OP_SET_FONT_SIZE:
     if (!unpack_args_1(sc, &arg0)) {
       return false;
