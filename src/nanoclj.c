@@ -7495,7 +7495,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     x = get_out_port(sc);
     if (is_writer(x) && port_type_unchecked(x) == port_canvas) {
 #if NANOCLJ_HAS_CANVAS
-      double w = arg0.as_long == sc->HAIR.as_long ? 0 : to_double(arg0) * sc->window_scale_factor;
+      double w = arg0.as_long == sc->HAIR.as_long ? 1 : to_double(arg0) * sc->window_scale_factor;
       canvas_set_line_width(rep_unchecked(x)->canvas.impl, w);
 #endif
     }
