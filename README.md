@@ -55,9 +55,11 @@ enabled. The following terminals have been tested:
 ![Plotting from nanoclj](https://user-images.githubusercontent.com/6755525/277504459-737b498e-005b-49ad-92b2-0917a1a10b7e.jpg "Plotting from nanoclj")
 *The plot function returns a canvas, which can be converted to an image, and then saved with Image/save or modified using other functions in the Image namespace.*
 
-As well as printing images in block mode like the plot function does, they can also be printed in inline mode which is shown in the following example:
+As well as printing images in block mode like the plot function does, they can also be printed in inline mode which is shown in the following examples:
 
 ![Inline images](https://user-images.githubusercontent.com/6755525/277514315-6b5f26a0-a1ab-4f66-95b7-4c976f288ff3.jpg "Inline images")
+
+![Inline gradients](https://user-images.githubusercontent.com/6755525/283999369-87e10299-9ab6-4f49-b5bb-62e653cba226.png "Inline gradients")
 
 ## Differences to Clojure:
 
@@ -111,7 +113,7 @@ Windows support is in progress.
 - Transducers
 - Refs, Agents, Atoms, Validators
 - Reader Conditionals
-- BigInts, BigDecimals, 32-bit floats and Exotic numeric literals (e.g. 3N, 0.1M, hexadecimal floats)
+- BigDecimals, 32-bit floats and Exotic numeric literals (e.g. 3N, 0.1M, hexadecimal floats)
 - Persistent data structures, Transient data structures, StructMaps
 - Unchecked operations
 - Autopromoting operations
