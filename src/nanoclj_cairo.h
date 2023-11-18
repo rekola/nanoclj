@@ -159,12 +159,20 @@ static inline void canvas_reset_clip(void * canvas) {
   cairo_reset_clip((cairo_t *)canvas);
 }
 
-static inline void canvas_stroke(void * canvas) {
-  cairo_stroke((cairo_t *)canvas);
+static inline void canvas_stroke(void * canvas, bool preserve) {
+  if (preserve) {
+    cairo_stroke_preserve((cairo_t *)canvas);
+  } else {
+    cairo_stroke((cairo_t *)canvas);
+  }
 }
 
-static inline void canvas_fill(void * canvas) {
-  cairo_fill((cairo_t *)canvas);
+static inline void canvas_fill(void * canvas, bool preserve) {
+  if (preserve) {
+    cairo_fill_preserve((cairo_t *)canvas);
+  } else {
+    cairo_fill((cairo_t *)canvas);
+  }
 }
 
 static inline void canvas_save(void * canvas) {

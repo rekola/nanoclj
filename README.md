@@ -113,7 +113,7 @@ Windows support is in progress.
 - Transducers
 - Refs, Agents, Atoms, Validators
 - Reader Conditionals
-- BigDecimals, 32-bit floats and Exotic numeric literals (e.g. 3N, 0.1M, hexadecimal floats)
+- BigDecimals, 32-bit floats and Exotic numeric literals (e.g. 0.1M, hexadecimal floats)
 - Persistent data structures, Transient data structures, StructMaps
 - Unchecked operations
 - Autopromoting operations

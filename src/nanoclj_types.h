@@ -12,6 +12,7 @@ typedef union {
 
 typedef enum {
   nanoclj_i8 = 1,
+  nanoclj_i16,
   nanoclj_i32,
   nanoclj_f32,
   nanoclj_f64 /* used for standard vectors */

@@ -48,6 +48,8 @@
 (def short java.lang.Short)
 (def int java.lang.Integer)
 (def long java.lang.Long)
+(def bigint clojure.lang.BigInt)
+(def biginteger clojure.lang.BigInt)
 
 (def resolve ns-resolve)
 
