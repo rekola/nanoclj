@@ -221,6 +221,12 @@
 
 ; Vectors
 
+(defn vector-of
+  "The function is given a type t for creating a homogenous vector of the given type.
+  The type, however, is ignored since homogenous vectors are not necessary in nanoclj."
+  ([t] (vector))
+  ([t & elements] (vec elements)))
+
 (def mapv
   "Returns a vector with each element mapped using f"
   (fn

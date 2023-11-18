@@ -76,6 +76,7 @@ As well as printing images in block mode like the plot function does, they can a
 - Strings are not interned: (identical? "abc" "abc") ;=> false
 - `rationalize` is exact and Ratios use the smallest suitable integer type for numerator and denominator
 - No chunked or buffered lazy sequences
+- No homogenous vectors (They are not necessary since most data types are unboxed by default)
 
 ## Dependencies
 
@@ -122,7 +123,6 @@ Windows support is in progress.
 - Multithreading, transactions and STM
 - monitor-enter, monitor-exit, and locking
 - Metadata reader macro, Threading macros (->, -->, some-> and some->>)
-- Homogenous vectors (vector-of)
 - Pre- and post-conditions for functions
 - Readers and Writers do not accept options such as :encoding or :append
 - Associative destructuring
