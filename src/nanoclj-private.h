@@ -11,11 +11,11 @@
 #define STRBUFFSIZE 256
 #endif
 
+#include <zlib.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <zlib.h>
 
 #include "nanoclj_types.h"
 #include "nanoclj_threads.h"

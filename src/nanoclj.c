@@ -299,12 +299,7 @@ static inline uint_fast16_t expand_type(nanoclj_val_t value, uint_fast16_t primi
 
 static inline uint_fast16_t type(nanoclj_val_t value) {
   uint_fast16_t type = prim_type_extended(value);
-  if (!type) {
-    nanoclj_cell_t * c = decode_pointer(value);
-    return _type(c);
-  } else {
-    return type;
-  }
+  return type ? type : _type(decode_pointer(value));
 }
 
 static inline bool is_list(nanoclj_val_t value) {
@@ -6245,6 +6240,12 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	} else {
 	  s_return(sc, mk_ratio_long(sc, num, den));
 	}
+      } else if (tx == T_BIGINT || ty == T_BIGINT) {
+	nanoclj_tensor_t * a = to_bigint(arg0), * b = to_bigint(arg1);
+	nanoclj_tensor_t * t = tensor_bigint_sub(a, b);
+	if (!a->refcnt) tensor_free(a);
+	if (!b->refcnt) tensor_free(b);
+	s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, t)));
       } else {
 	long long res;
 	if (__builtin_ssubll_overflow(to_long(arg0), to_long(arg1), &res) == false) {
