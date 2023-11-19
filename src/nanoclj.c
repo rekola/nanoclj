@@ -6092,6 +6092,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
     
   case OP_INC:
+  case OP_INCP:
     if (!unpack_args_1(sc, &arg0)) {
       return false;
     } else if (is_nil(arg0)) {
@@ -6109,6 +6110,10 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  long long v = _lvalue_unchecked(c);
 	  if (v < LLONG_MAX) {
 	    s_return(sc, mk_long(sc, v + 1));
+	  } else if (sc->op == OP_INCP) {
+	    nanoclj_tensor_t * tensor = mk_tensor_bigint(v);
+	    tensor_bigint_mutate_add_int(tensor, 1);
+	    s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, tensor)));
 	  } else {
 	    nanoclj_throw(sc, mk_arithmetic_exception(sc, "Integer overflow"));
 	    return false;
@@ -6133,6 +6138,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     return false;
 
   case OP_DEC:
+  case OP_DECP:
     if (!unpack_args_1(sc, &arg0)) {
       return false;
     } else if (is_nil(arg0)) {
@@ -6174,6 +6180,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     return false;
 
   case OP_ADD:                 /* add */
+  case OP_ADDP:
     if (!unpack_args_2(sc, &arg0, &arg1)) {
       return false;
     } else if (is_nil(arg0) || is_nil(arg1)) {
@@ -6209,6 +6216,12 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	long long res;
 	if (__builtin_saddll_overflow(to_long(arg0), to_long(arg1), &res) == false) {
 	  s_return(sc, mk_long(sc, res));
+	} else if (sc->op == OP_ADDP) {
+	  nanoclj_tensor_t * a = to_bigint(arg0), * b = to_bigint(arg1);
+	  nanoclj_tensor_t * t = tensor_bigint_add(a, b);
+	  if (!a->refcnt) tensor_free(a);
+	  if (!b->refcnt) tensor_free(b);
+	  s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, t)));
 	} else {
 	  nanoclj_throw(sc, mk_arithmetic_exception(sc, "Integer overflow"));
 	  return false;
@@ -6217,6 +6230,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
     
   case OP_SUB:                 /* minus */
+  case OP_SUBP:
     if (!unpack_args_2(sc, &arg0, &arg1)) {
       return false;
     } else if (is_nil(arg0) || is_nil(arg1)) {
@@ -6258,6 +6272,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
   
   case OP_MUL:                 /* multiply */
+  case OP_MULP:
     if (!unpack_args_2(sc, &arg0, &arg1)) {
       return false;
     } else if (is_nil(arg0) || is_nil(arg1)) {
@@ -6296,6 +6311,12 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	long long res;
 	if (__builtin_smulll_overflow(to_long(arg0), to_long(arg1), &res) == false) {
 	  s_return(sc, mk_long(sc, res));
+	} else if (sc->op == OP_MULP) {
+	  nanoclj_tensor_t * a = to_bigint(arg0), * b = to_bigint(arg1);
+	  nanoclj_tensor_t * t = tensor_bigint_mul(a, b);
+	  if (!a->refcnt) tensor_free(a);
+	  if (!b->refcnt) tensor_free(b);
+	  s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, t)));
 	} else {
 	  nanoclj_throw(sc, mk_arithmetic_exception(sc, "Integer overflow"));
 	  return false;

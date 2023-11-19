@@ -117,7 +117,6 @@ Windows support is in progress.
 - BigDecimals, 32-bit floats and Exotic numeric literals (e.g. 0.1M, hexadecimal floats)
 - Persistent data structures, Transient data structures, StructMaps
 - Unchecked operations
-- Autopromoting operations
 - Interfaces, Records, Protocols and Multi-methods
 - Locals cleaning
 - Multithreading, transactions and STM

@@ -216,7 +216,7 @@
 
 (def-macro (set! symbol value) `(-set ',symbol ,value))
 (def-macro (. instance symbol $ args) `(-dot ,instance ',symbol ,@args))
-             
+
 (defn create-ns [sym] (eval (if (defined? sym) sym (intern *ns* sym (clojure.lang.Namespace *ns* (str sym))))))
 (def-macro (ns name) `((create-ns ',name)))
 
@@ -260,22 +260,40 @@
   ([& args] (reduce #( if (lt %1 %2) %1 %2) args)))
 
 (defn +
-  "Returns the sum of the arguments"
+  "Returns the sum of the arguments. Doesn't auto-promote longs."
   ([x] x)
   ([x y] (add x y))
   ([x y & more] (reduce add (add x y) more)))
 
+(defn +'
+  "Returns the sum of the arguments. Supports arbitrary precision."
+  ([x] x)
+  ([x y] (add' x y))
+  ([x y & more] (reduce add' (add' x y) more)))
+
 (defn *
-  "Returns the product of the arguments"
+  "Returns the product of the arguments. Doesn't auto-promote longs."
   ([x] x)
   ([x y] (multiply x y))
   ([x y & more] (reduce multiply (multiply x y) more)))
 
+(defn *'
+  "Returns the product of the arguments. Supports arbitrary precision."
+  ([x] x)
+  ([x y] (multiply' x y))
+  ([x y & more] (reduce multiply' (multiply' x y) more)))
+
 (defn -
-  "Subtracts the arguments"
+  "Subtracts the arguments. Doesn't auto-promote longs."
   ([x] (minus 0 x))
   ([x y] (minus x y))
   ([x y & more] (reduce minus (minus x y) more)))
+
+(defn -'
+  "Subtracts the arguments. Supports arbitrary precision."
+  ([x] (minus' 0 x))
+  ([x y] (minus' x y))
+  ([x y & more] (reduce minus' (minus' x y) more)))
 
 (defn /
   "Divides the arguments"
