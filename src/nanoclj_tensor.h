@@ -514,6 +514,35 @@ static inline nanoclj_tensor_t * tensor_bigint_div(nanoclj_tensor_t * a, nanoclj
   return NULL;
 }
 
+static inline nanoclj_tensor_t * tensor_bigint_pow(const nanoclj_tensor_t * base0, uint64_t exp) {
+  if (!exp) {
+    return mk_tensor_bigint(1);
+  } else if (tensor_is_empty(base0)) {
+    return mk_tensor_bigint(0);
+  } else {
+    nanoclj_tensor_t * result = mk_tensor_bigint(1);
+    nanoclj_tensor_t * base = tensor_bigint_dup(base0);
+    if (exp & 1) {
+      nanoclj_tensor_t * tmp = tensor_bigint_mul(result, base);
+      tensor_free(result);
+      result = tmp;
+    }
+    exp >>= 1;
+    while (exp) {
+      nanoclj_tensor_t * tmp = tensor_bigint_mul(base, base);
+      tensor_free(base);
+      base = tmp;
+      if (exp & 1) {
+	tmp = tensor_bigint_mul(result, base);
+	tensor_free(result);
+	result = tmp;
+      }
+      exp >>= 1;
+    }
+    return result;
+  }
+}
+
 static inline nanoclj_tensor_t * mk_tensor_bigint_from_string(const char * s, size_t len, int radix) {
   nanoclj_tensor_t * tensor = mk_tensor_bigint(0);
   for (size_t i = 0; i < len; i++) {

@@ -776,7 +776,7 @@ static inline double to_double(nanoclj_val_t p) {
 
 static inline nanoclj_bignum_t mk_bignum(long long v) {
   int32_t sign = (v > 0) - (v < 0);
-  return (nanoclj_bignum_t){ mk_tensor_bigint(llabs(v)), sign, 0};
+  return (nanoclj_bignum_t){ mk_tensor_bigint(llabs(v)), NULL, sign, 0};
 }
 
 static inline nanoclj_bignum_t to_bignum(nanoclj_val_t p) {
@@ -803,43 +803,43 @@ static inline nanoclj_bignum_t to_bignum(nanoclj_val_t p) {
 	      ptr++;
 	      size--;
 	    }
-	    return (nanoclj_bignum_t){ mk_tensor_bigint_from_string(ptr, size, 10), sign, 0 };
+	    return (nanoclj_bignum_t){ mk_tensor_bigint_from_string(ptr, size, 10), NULL, sign, 0 };
 	  }
 	}
       }
     }
   }
-  return (nanoclj_bignum_t){ NULL, 1, 0 };
+  return (nanoclj_bignum_t){ NULL, NULL, 0, 0 };
 }
 
 static inline nanoclj_bignum_t bignum_add(nanoclj_bignum_t a, nanoclj_bignum_t b) {
   if (a.sign == b.sign) {
     nanoclj_tensor_t * c = tensor_bigint_add(a.tensor, b.tensor);
-    return (nanoclj_bignum_t){ c, a.sign, 0 };
+    return (nanoclj_bignum_t){ c, NULL, a.sign, 0 };
   } else if (tensor_cmp(a.tensor, b.tensor) > 0) {
     nanoclj_tensor_t * c = tensor_bigint_sub(a.tensor, b.tensor);
-    return (nanoclj_bignum_t){ c, a.sign, 0 };
+    return (nanoclj_bignum_t){ c, NULL, a.sign, 0 };
   } else {
     nanoclj_tensor_t * c = tensor_bigint_sub(b.tensor, a.tensor);
-    return (nanoclj_bignum_t){ c, b.sign, 0 };
+    return (nanoclj_bignum_t){ c, NULL, b.sign, 0 };
   }
 }
 
 static inline nanoclj_bignum_t bignum_sub(nanoclj_bignum_t a, nanoclj_bignum_t b) {
   int cmp = tensor_cmp(a.tensor, b.tensor);
   if (cmp == 0) {
-    return (nanoclj_bignum_t){ mk_tensor_bigint(0), 0, 0 };
+    return (nanoclj_bignum_t){ mk_tensor_bigint(0), NULL, 0, 0 };
   } else if (a.sign == b.sign) {
     if (cmp > 0) {
       nanoclj_tensor_t * c = tensor_bigint_sub(a.tensor, b.tensor);
-      return (nanoclj_bignum_t){ c, a.sign, 0 };
+      return (nanoclj_bignum_t){ c, NULL, a.sign, 0 };
     } else {
       nanoclj_tensor_t * c = tensor_bigint_sub(b.tensor, a.tensor);
-      return (nanoclj_bignum_t){ c, -a.sign, 0 };
+      return (nanoclj_bignum_t){ c, NULL, -a.sign, 0 };
     }
   } else {
     nanoclj_tensor_t * c = tensor_bigint_add(a.tensor, b.tensor);
-    return (nanoclj_bignum_t){ c, a.sign, 0 };
+    return (nanoclj_bignum_t){ c, NULL, a.sign, 0 };
   }
 }
 
@@ -1504,11 +1504,12 @@ static inline nanoclj_cell_t * mk_gradient_from_tensor(nanoclj_t * sc, nanoclj_t
   return NULL;
 }
 
-static inline nanoclj_cell_t * mk_bignum_from_tensor(nanoclj_t * sc, uint16_t type, int sign, nanoclj_tensor_t * tensor) {
+static inline nanoclj_cell_t * mk_bigint_from_tensor(nanoclj_t * sc, int sign, nanoclj_tensor_t * tensor) {
   if (tensor) {
-    nanoclj_cell_t * x = get_cell_x(sc, type, T_GC_ATOM, NULL, NULL, NULL);
+    nanoclj_cell_t * x = get_cell_x(sc, T_BIGINT, T_GC_ATOM, NULL, NULL, NULL);
     if (x) {
       x->_bignum.tensor = tensor;
+      x->_bignum.denominator = NULL;
       x->_bignum.sign = tensor_is_empty(tensor) ? 0 : sign;
       x->_bignum.scale = 0;
 #ifdef RETAIN_ALLOCS
@@ -3504,12 +3505,12 @@ static inline nanoclj_val_t mk_primitive(nanoclj_t * sc, const char *q) {
       double d = strtod(q, &end);
       if (end == actual_end) return mk_double(d);
     } else if (bigint_set) {
-      return mk_pointer(mk_bignum_from_tensor(sc, T_BIGINT, sign, mk_tensor_bigint_from_string(first_digit, strlen(first_digit) - 1, radix)));
+      return mk_pointer(mk_bigint_from_tensor(sc, sign, mk_tensor_bigint_from_string(first_digit, strlen(first_digit) - 1, radix)));
     } else {
       long long i = strtoll(q, &end, radix);
       if (end == actual_end) {
 	if ((i == LLONG_MIN || i == LLONG_MAX) && errno == ERANGE) {
-	  return mk_pointer(mk_bignum_from_tensor(sc, T_BIGINT, sign, mk_tensor_bigint_from_string(first_digit, strlen(first_digit), radix)));
+	  return mk_pointer(mk_bigint_from_tensor(sc, sign, mk_tensor_bigint_from_string(first_digit, strlen(first_digit), radix)));
 	} else {
 	  return mk_long(sc, i * (radix_set ? sign : 1));
 	}
@@ -5115,12 +5116,11 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
     }
 
   case T_BIGINT:
-  case T_BIGDECIMAL:
     if (!args) {
-      return mk_pointer(mk_bignum_from_tensor(sc, t, 0, mk_tensor_1d(nanoclj_i32, 0)));
+      return mk_pointer(mk_bigint_from_tensor(sc, 0, mk_tensor_1d(nanoclj_i32, 0)));
     } else {
       nanoclj_bignum_t bn = to_bignum(first(sc, args));
-      return mk_pointer(mk_bignum_from_tensor(sc, t, bn.sign, bn.tensor));
+      return mk_pointer(mk_bigint_from_tensor(sc, bn.sign, bn.tensor));
     }
   }
   return mk_nil();
@@ -6166,7 +6166,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  } else if (sc->op == OP_INCP) {
 	    nanoclj_tensor_t * tensor = mk_tensor_bigint(v);
 	    tensor_bigint_mutate_add_int(tensor, 1);
-	    s_return(sc, mk_pointer(mk_bignum_from_tensor(sc, T_BIGINT, 1, tensor)));
+	    s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, 1, tensor)));
 	  } else {
 	    nanoclj_throw(sc, mk_arithmetic_exception(sc, "Integer overflow"));
 	    return false;
@@ -6185,7 +6185,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       case T_BIGINT:
 	{
 	  nanoclj_tensor_t * tensor = c->_bignum.sign > 0 ? tensor_bigint_inc(c->_bignum.tensor) : tensor_bigint_dec(c->_bignum.tensor);
-	  s_return(sc, mk_pointer(mk_bignum_from_tensor(sc, T_BIGINT, c->_bignum.sign, tensor)));
+	  s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, c->_bignum.sign, tensor)));
 	}
       }
     }
@@ -6212,6 +6212,10 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  long long v = _lvalue_unchecked(c);
 	  if (v > LLONG_MIN) {
 	    s_return(sc, mk_long(sc, v - 1));
+	  } else if (sc->op == OP_DECP) {
+	    nanoclj_tensor_t * tensor = mk_tensor_bigint(llabs(v));
+	    tensor_bigint_mutate_add_int(tensor, 1);
+	    s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, -1, tensor)));
 	  } else {
 	    nanoclj_throw(sc, mk_arithmetic_exception(sc, "Integer overflow"));
 	    return false;
@@ -6230,7 +6234,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       case T_BIGINT:
 	{
 	  nanoclj_tensor_t * tensor = c->_bignum.sign > 0 ? tensor_bigint_dec(c->_bignum.tensor) : tensor_bigint_inc(c->_bignum.tensor);
-	  s_return(sc, mk_pointer(mk_bignum_from_tensor(sc, T_BIGINT, c->_bignum.sign, tensor)));
+	  s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, c->_bignum.sign, tensor)));
 	}
       }
     }
@@ -6279,7 +6283,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	nanoclj_bignum_t c = bignum_add(a, b);
 	if (!a.tensor->refcnt) tensor_free(a.tensor);
 	if (!b.tensor->refcnt) tensor_free(b.tensor);
-	s_return(sc, mk_pointer(mk_bignum_from_tensor(sc, T_BIGINT, c.sign, c.tensor)));
+	s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, c.sign, c.tensor)));
       }
     }
     
@@ -6322,7 +6326,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	nanoclj_bignum_t c = bignum_sub(a, b);
 	if (!a.tensor->refcnt) tensor_free(a.tensor);
 	if (!b.tensor->refcnt) tensor_free(b.tensor);
-	s_return(sc, mk_pointer(mk_bignum_from_tensor(sc, T_BIGINT, c.sign, c.tensor)));
+	s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, c.sign, c.tensor)));
       }
     }
   
@@ -6370,7 +6374,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	nanoclj_tensor_t * t = tensor_bigint_mul(a.tensor, b.tensor);
 	if (!a.tensor->refcnt) tensor_free(a.tensor);
 	if (!b.tensor->refcnt) tensor_free(b.tensor);
-	s_return(sc, mk_pointer(mk_bignum_from_tensor(sc, T_BIGINT, a.sign == b.sign ? 1 : -1, t)));
+	s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, a.sign == b.sign ? 1 : -1, t)));
       }
     }
     
@@ -6409,7 +6413,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	nanoclj_tensor_t * t = tensor_bigint_div(a.tensor, b.tensor);
 	if (!a.tensor->refcnt) tensor_free(a.tensor);
 	if (!b.tensor->refcnt) tensor_free(b.tensor);
-	s_return(sc, mk_pointer(mk_bignum_from_tensor(sc, T_BIGINT, a.sign == b.sign ? 1 : -1, t)));
+	s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, a.sign == b.sign ? 1 : -1, t)));
       } else {
 	long long divisor = to_long(arg1);
 	if (divisor == 0) {
@@ -6478,6 +6482,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       if (is_empty(sc, c)) {
 	nanoclj_throw(sc, mk_illegal_state_exception(sc, "Can't pop empty collection"));
 	return false;
+      } else if (_is_sequence(c)) {
+	s_return(sc, mk_pointer(rest(sc, c)));
       } else {
 	int t = _type(c);
 	if ((t == T_VECTOR || t == T_STRING) && !_is_sequence(c)) {
@@ -6495,13 +6501,17 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     } else if (is_cell(arg0)) {
       nanoclj_cell_t * c = decode_pointer(arg0);
       if (c) {
-	int t = _type(c);
-	if (t != T_QUEUE && is_vector_type(t)) {
-	  size_t s = get_size(c);
-	  if (s >= 1) s_return(sc, vector_elem(c, get_size(c) - 1));
-	  else s_return(sc, mk_nil());
-	} else if (is_seqable_type(t)) {
+	if (_is_sequence(c)) {
 	  s_return(sc, first(sc, c));
+	} else {
+	  int t = _type(c);
+	  if (t != T_QUEUE && is_vector_type(t)) {
+	    size_t s = get_size(c);
+	    if (s >= 1) s_return(sc, vector_elem(c, get_size(c) - 1));
+	    else s_return(sc, mk_nil());
+	  } else if (is_seqable_type(t)) {
+	    s_return(sc, first(sc, c));
+	  }
 	}
       }
     }
@@ -6512,7 +6522,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       return false;
     } else if (is_cell(arg0)) {
       nanoclj_cell_t * c = decode_pointer(arg0);
-      if (!c || is_seqable_type(_type(c))) {
+      if (!c || _is_sequence(c) || is_seqable_type(_type(c))) {
 	s_return(sc, first(sc, c));
       }
     }
@@ -6523,7 +6533,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       return false;
     } else if (is_cell(arg0)) {
       nanoclj_cell_t * c = decode_pointer(arg0);
-      if (!c || is_seqable_type(_type(c))) {
+      if (!c || _is_sequence(c) || is_seqable_type(_type(c))) {
 	s_return(sc, second(sc, c));
       }
     }
@@ -6535,7 +6545,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       return false;
     } else if (is_cell(arg0)) {
       nanoclj_cell_t * c = decode_pointer(arg0);
-      if (!c || is_seqable_type(_type(c))) {
+      if (!c || _is_sequence(c) || is_seqable_type(_type(c))) {
 	if (op == OP_NEXT) {
 	  s_return(sc, mk_pointer(next(sc, c)));
 	} else {
@@ -6597,7 +6607,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 		}
 	      }
 	      s_return(sc, mk_pointer(coll));
-	    } else if (is_seqable_type(_type(arg))) {
+	    } else if (_is_sequence(arg) || is_seqable_type(_type(arg))) {
 	      nanoclj_val_t key = first(sc, arg), val = second(sc, arg);
 	      size_t i = find_index(sc, coll, key);
 	      if (i != NPOS) {
@@ -6627,7 +6637,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  s_return(sc, mk_pointer(vec));
 	}
       }
-      if (is_seqable_type(_type(coll))) {
+      if (_is_sequence(coll) || is_seqable_type(_type(coll))) {
 	s_return(sc, mk_pointer(conjoin(sc, coll, arg1)));
       }
     }
@@ -6665,7 +6675,12 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     if (!unpack_args_1(sc, &arg0)) {
       return false;
     } else if (is_cell(arg0)) {
-      s_return(sc, mk_long(sc, count(sc, decode_pointer(arg0))));
+      nanoclj_cell_t * c = decode_pointer(arg0);
+      if (!c) {
+	s_return(sc, mk_int(0));
+      } else if (_is_sequence(c) || is_seqable_type(_type(c))) {
+	s_return(sc, mk_long(sc, count(sc, c)));
+      }
     }
     Error_0(sc, "No protocol method ICounted.-count defined for type");
     
@@ -6800,7 +6815,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	tensor_mutate_or(t, b.tensor);
 	if (!a.tensor->refcnt) tensor_free(a.tensor);
 	if (!b.tensor->refcnt) tensor_free(b.tensor);
-	s_return(sc, mk_pointer(mk_bignum_from_tensor(sc, T_BIGINT, 1, t)));
+	s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, 1, t)));
       } else {
 	s_return(sc, mk_long(sc, to_long(arg0) | to_long(arg1)));
       }
@@ -6832,7 +6847,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	nanoclj_tensor_t * t = tensor_bigint_dup(a.tensor);
 	tensor_mutate_lshift(t, to_long(arg1));
 	if (!a.tensor->refcnt) tensor_free(a.tensor);
-	s_return(sc, mk_pointer(mk_bignum_from_tensor(sc, T_BIGINT, a.sign, t)));
+	s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, a.sign, t)));
       } else {
 	s_return(sc, mk_long(sc, to_long(arg0) << to_long(arg1)));
       }
@@ -6854,7 +6869,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	nanoclj_tensor_t * t = tensor_bigint_dup(a.tensor);
 	tensor_mutate_rshift(t, to_long(arg1));
 	if (!a.tensor->refcnt) tensor_free(a.tensor);
-	s_return(sc, mk_pointer(mk_bignum_from_tensor(sc, T_BIGINT, a.sign, t)));
+	s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, a.sign, t)));
       } else {
 	s_return(sc, mk_long(sc, to_long(arg0) >> to_long(arg1)));
       }
@@ -6980,7 +6995,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	s_return(sc, sc->EMPTY);
       } else if (is_cell(sc->value)) {
 	nanoclj_cell_t * c2 = decode_pointer(sc->value);
-	if (is_seqable_type(_type(c2))) {
+	if (_is_sequence(c2) || is_seqable_type(_type(c2))) {
 	  _set_car(c, first(sc, c2));
 	  _set_cdr(c, mk_pointer(rest(sc, c2)));
 	  s_return(sc, sc->code);
@@ -7410,8 +7425,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       return false;
     } else if (is_cell(arg0)) {
       nanoclj_cell_t * c = decode_pointer(arg0);
-      if (!c) s_return(sc, mk_nil());
-      if (is_seqable_type(_type(c))) {
+      if (!c || _is_sequence(c)) {
+	s_return(sc, mk_pointer(c));
+      } else if (is_seqable_type(_type(c))) {
 	s_return(sc, mk_pointer(seq(sc, c)));
       }
     }
@@ -7438,7 +7454,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       nanoclj_cell_t * c = decode_pointer(arg0);
       if (!c) {
 	s_retbool(true);
-      } else if (is_seqable_type(_type(c))) {
+      } else if (_is_sequence(c) || is_seqable_type(_type(c))) {
 	s_retbool(is_empty(sc, c));
       }
     }

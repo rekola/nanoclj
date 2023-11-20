@@ -319,6 +319,11 @@ static nanoclj_val_t numeric_tower_expt(nanoclj_t * sc, nanoclj_cell_t * args) {
       return mk_long(sc, res);
     } else if (exp > -256 && exp < 0 && !ipow_overflow(base, -exp, &res)) {
       return mk_ratio_long(sc, 1, res);
+    } else if (exp >= 0) {
+      nanoclj_tensor_t * t0 = mk_tensor_bigint(llabs(base));
+      nanoclj_tensor_t * t = tensor_bigint_pow(t0, exp);
+      if (!t0->refcnt) tensor_free(t0);
+      return mk_pointer(mk_bigint_from_tensor(sc, base > 0 || (exp & 1) == 0 ? 1 : -1, t));
     }
   }
 
