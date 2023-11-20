@@ -289,9 +289,24 @@ static inline bool tensor_eq(const nanoclj_tensor_t * a, const nanoclj_tensor_t 
   return true;
 }
 
-/* BigInts */
+static inline int tensor_cmp(const nanoclj_tensor_t * a, const nanoclj_tensor_t * b) {
+  int64_t n = a->ne[0];
+  if (n < b->ne[0]) {
+    return -1;
+  } else if (n > b->ne[0]) {
+    return +1;
+  } else {
+    const uint32_t * a_limbs = a->data, * b_limbs = b->data;
+    while (n > 0) {
+      n--;
+      if (a_limbs[n] > b_limbs[n]) return 1;
+      else if (a_limbs[n] < b_limbs[n]) return -1;
+    }
+    return 0;
+  }
+}
 
-static inline void tensor_bigint_mutate_trim(nanoclj_tensor_t * tensor) {
+static inline void tensor_mutate_trim(nanoclj_tensor_t * tensor) {
   uint32_t * limbs = tensor->data;
   while (tensor->ne[0] > 0) {
     if (limbs[tensor->ne[0] - 1] > 0) {
@@ -301,34 +316,94 @@ static inline void tensor_bigint_mutate_trim(nanoclj_tensor_t * tensor) {
   }
 }
 
-static inline nanoclj_tensor_t * tensor_bigint_sub(const nanoclj_tensor_t * a, const nanoclj_tensor_t * b) {
+static inline void tensor_mutate_lshift(nanoclj_tensor_t * a, uint_fast8_t n) {
+  if (!n || tensor_is_empty(a)) return;
+  uint32_t * limbs = a->data;
+  uint32_t overflow = limbs[a->ne[0] - 1] >> (32 - n);
+  if (overflow) {
+    tensor_mutate_append_i32(a, overflow);
+  }
+  for (int64_t i = a->ne[0] - 1; i > 0; i--) {
+    limbs[i] = (limbs[i] << n) | (limbs[i - 1] >> (32 - n));
+  }
+  limbs[0] <<= n;
+}
+
+static inline void tensor_mutate_rshift(nanoclj_tensor_t * a, uint_fast8_t n) {
+  if (!n || tensor_is_empty(a)) return;
+  uint32_t * limbs = a->data;
+  for (int64_t i = 0; i < a->ne[0] - 1; i++) {
+    limbs[i] = (limbs[i] >> n) | (limbs[i + 1] << (32 - n));
+  }
+  limbs[a->ne[0] - 1] >>= n;
+  tensor_mutate_trim(a);
+}
+
+static inline void tensor_mutate_or(nanoclj_tensor_t * a, const nanoclj_tensor_t * b) {
+  while (a->ne[0] < b->ne[0]) {
+    tensor_mutate_append_i32(a, 0);
+  }
+  uint32_t * limbs_a = a->data;
+  const uint32_t * limbs_b = b->data;
+  for (int64_t i = 0; i < b->ne[0]; ++i) {
+    limbs_a[i] |= limbs_b[i];
+  }
+}
+
+/* BigInts */
+
+static inline nanoclj_tensor_t * mk_tensor_bigint(uint64_t v) {
+  nanoclj_tensor_t * tensor;
+  if (!v) {
+    tensor = mk_tensor_1d(nanoclj_i32, 0);
+  } else if (v < UINT32_MAX) {
+    tensor = mk_tensor_1d(nanoclj_i32, 1);
+    *(uint32_t*)tensor->data = v;
+  } else {
+    tensor = mk_tensor_1d(nanoclj_i32, 2);
+    ((uint32_t*)tensor->data)[0] = v & 0xffffffff;
+    ((uint32_t*)tensor->data)[1] = v >> 32;
+  }
+  return tensor;
+}
+
+static inline nanoclj_tensor_t * tensor_bigint_dup(const nanoclj_tensor_t * tensor) {
+  nanoclj_tensor_t * r = mk_tensor_1d(nanoclj_i32, tensor->ne[0]);
+  memcpy(r->data, tensor->data, tensor->nb[1]);
+  return r;
+}
+
+static inline void tensor_bigint_mutate_sub(nanoclj_tensor_t * a, const nanoclj_tensor_t * b) {
   int64_t n_a = a->ne[0], n_b = b->ne[0];
   if (n_a < n_b) {
-    return mk_tensor_1d(nanoclj_i32, 0); /* underflow */
+    tensor_mutate_clear(a); /* underflow */
+    return;
   }
-  nanoclj_tensor_t * tensor = mk_tensor_1d(nanoclj_i32, n_a);
-  tensor_mutate_fill_i8(tensor, 0);
-  const uint32_t * limbs_a = a->data, * limbs_b = b->data;
-  uint32_t * limbs_c = tensor->data;
-
+  uint32_t * limbs_a = a->data;
+  const uint32_t * limbs_b = b->data;
   int64_t i;
   uint_fast32_t borrow = 0;
   for (i = 0; i < n_b; i++) {
     uint64_t x = limbs_a[i] + (UINT64_C(1) << 32) - limbs_b[i] - borrow;
-    limbs_c[i] = x;
+    limbs_a[i] = x;
     borrow = x < (UINT64_C(1) << 32);
   }
   for (; i < n_a; i++) {
     uint64_t x = limbs_a[i] + (UINT64_C(1) << 32) - borrow;
-    limbs_c[i] = x;
+    limbs_a[i] = x;
     borrow = x < (UINT64_C(1) << 32);
   }
   if (borrow) {
-    tensor_mutate_clear(tensor); /* underflow */
+    tensor_mutate_clear(a); /* underflow */
   } else {
-    tensor_bigint_mutate_trim(tensor);
+    tensor_mutate_trim(a);
   }
-  return tensor;
+}
+
+static inline nanoclj_tensor_t * tensor_bigint_sub(const nanoclj_tensor_t * a, const nanoclj_tensor_t * b) {
+  nanoclj_tensor_t * c = tensor_bigint_dup(a);
+  tensor_bigint_mutate_sub(c, b);
+  return c;
 }
 
 static inline nanoclj_tensor_t * tensor_bigint_add(const nanoclj_tensor_t * a, const nanoclj_tensor_t * b) {
@@ -377,7 +452,7 @@ static inline nanoclj_tensor_t * tensor_bigint_mul(const nanoclj_tensor_t * a, c
     }
     if (t) limbs_c[i + n_b] = t;
   }
-  tensor_bigint_mutate_trim(tensor);
+  tensor_mutate_trim(tensor);
   return tensor;
 }
 
@@ -400,23 +475,8 @@ static inline uint32_t tensor_bigint_mutate_divmod(nanoclj_tensor_t * tensor, ui
     limbs[i] = x / divisor;
     x = x % divisor;
   }
-  tensor_bigint_mutate_trim(tensor);
+  tensor_mutate_trim(tensor);
   return x;
-}
-
-static inline nanoclj_tensor_t * mk_tensor_bigint(uint64_t v) {
-  nanoclj_tensor_t * tensor;
-  if (!v) {
-    tensor = mk_tensor_1d(nanoclj_i32, 0);
-  } else if (v < UINT32_MAX) {
-    tensor = mk_tensor_1d(nanoclj_i32, 1);
-    *(uint32_t*)tensor->data = v;
-  } else {
-    tensor = mk_tensor_1d(nanoclj_i32, 2);
-    ((uint32_t*)tensor->data)[0] = v & 0xffffffff;
-    ((uint32_t*)tensor->data)[1] = v >> 32;
-  }
-  return tensor;
 }
 
 static inline double tensor_bigint_to_double(const nanoclj_tensor_t * tensor) {
@@ -427,12 +487,6 @@ static inline double tensor_bigint_to_double(const nanoclj_tensor_t * tensor) {
     v += limbs[i];
   }
   return v;
-}
-
-static inline nanoclj_tensor_t * tensor_bigint_dup(const nanoclj_tensor_t * tensor) {
-  nanoclj_tensor_t * r = mk_tensor_1d(nanoclj_i32, tensor->ne[0]);
-  memcpy(r->data, tensor->data, tensor->nb[1]);
-  return r;
 }
 
 static inline nanoclj_tensor_t * tensor_bigint_inc(const nanoclj_tensor_t * tensor) {
@@ -448,7 +502,7 @@ static inline nanoclj_tensor_t * tensor_bigint_dec(const nanoclj_tensor_t * tens
     uint32_t tmp = d[i], res = tmp - 1;
     d[i] = res;
     if (!(res > tmp)) { /* finish if there is no underflow */
-      tensor_bigint_mutate_trim(r);
+      tensor_mutate_trim(r);
       return r;
     }
   }
@@ -456,8 +510,12 @@ static inline nanoclj_tensor_t * tensor_bigint_dec(const nanoclj_tensor_t * tens
   return r;
 }
 
+static inline nanoclj_tensor_t * tensor_bigint_div(nanoclj_tensor_t * a, nanoclj_tensor_t * b) {
+  return NULL;
+}
+
 static inline nanoclj_tensor_t * mk_tensor_bigint_from_string(const char * s, size_t len, int radix) {
-  nanoclj_tensor_t * tensor = mk_tensor_1d(nanoclj_i32, 0);
+  nanoclj_tensor_t * tensor = mk_tensor_bigint(0);
   for (size_t i = 0; i < len; i++) {
     int d = digit(s[i], radix);
     if (d == -1) {

@@ -85,9 +85,10 @@ extern "C" {
 	nanoclj_val_t vals[NANOCLJ_SMALL_VEC_SIZE + 1];
 	long long longs[NANOCLJ_SMALL_LV_SIZE];
       } _small_tensor;
+      nanoclj_bignum_t _bignum;
       struct {
-	size_t offset, size;
 	nanoclj_tensor_t * tensor;
+	size_t offset, size;
       } _collection;
       struct {
 	nanoclj_tensor_t * tensor;

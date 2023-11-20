@@ -39,6 +39,12 @@ typedef struct {
 } nanoclj_tensor_t;
 
 typedef struct {
+  nanoclj_tensor_t * tensor;
+  int32_t sign;
+  int32_t scale; /* for bigdecimals */
+} nanoclj_bignum_t;
+
+typedef struct {
   int n_dims;
   int64_t ne[NANOCLJ_MAX_DIMS];
   size_t nb[NANOCLJ_MAX_DIMS + 1];
