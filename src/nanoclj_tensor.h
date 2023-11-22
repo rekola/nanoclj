@@ -222,7 +222,7 @@ static inline void tensor_mutate_fill_i8(nanoclj_tensor_t * tensor, uint8_t v) {
 }
 
 static inline void tensor_mutate_append_vec(nanoclj_tensor_t * t, float * vec) {
-  if (t->ne[1] * t->nb[1] >= t->nb[2]) {
+  if ((t->ne[1] + 1) * t->nb[1] > t->nb[2]) {
     t->nb[2] = 2 * (t->ne[1] + 1) * t->nb[1];
     t->data = realloc(t->data, t->nb[2]);
   }
@@ -597,6 +597,7 @@ static inline nanoclj_tensor_t * tensor_bigint_pow(const nanoclj_tensor_t * base
       }
       exp >>= 1;
     }
+    tensor_free(base);
     return result;
   }
 }
@@ -617,24 +618,23 @@ static inline nanoclj_tensor_t * mk_tensor_bigint_from_string(const char * s, si
 
 static inline size_t tensor_bigint_to_string(const nanoclj_tensor_t * tensor0, char ** buff) {
   nanoclj_tensor_t * tensor = tensor_bigint_dup(tensor0);
-  size_t n = ((tensor->ne[0] * 32) >> 1) + 5;
-  char * tmp = malloc(n);
-  char *p = tmp + n;
+  nanoclj_tensor_t * digits = mk_tensor_1d_padded(nanoclj_i8, 0, 256);
   while (!tensor_is_empty(tensor)) {
     /* divide the bigint by 1e9 and put the remainder in r */
     uint64_t r = tensor_bigint_mutate_idivmod(tensor, 1000000000);
     /* print the remainder */
     for (int_fast8_t i = 0; i < 9 && (!tensor_is_empty(tensor) || r > 0); i++, r /= 10) {
-      *--p = '0' + (r % 10);
+      uint8_t c = '0' + (r % 10);
+      tensor_mutate_append_bytes(digits, &c, 1);
     }
   }
-  size_t real_n = tmp + n - p;
-  *buff = malloc(real_n + 1);
-  memcpy(*buff, p, real_n);
-  (*buff)[real_n] = 0;
-  free(tmp);
+  size_t n = digits->ne[0];
+  *buff = malloc(n + 1);
+  for (size_t i = 0; i < n; i++) (*buff)[n - 1 - i] = *((char *)digits->data + i);
+  (*buff)[n] = 0;
+  tensor_free(digits);
   tensor_free(tensor);
-  return real_n;
+  return n;
 }
 
 #endif
