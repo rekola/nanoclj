@@ -199,6 +199,7 @@ extern "C" {
     
     nanoclj_val_t TAG_HOOK;           /* *default-data-reader-fn* */
     nanoclj_val_t COMPILE_HOOK;       /* *compile-hook* */
+    nanoclj_val_t AUTOCOMPLETE_HOOK; /* *autocomplete-hook* */
     nanoclj_val_t IN_SYM;	  /* *in* */
     nanoclj_val_t OUT_SYM;	  /* *out* */
     nanoclj_val_t ERR;		  /* *err* */

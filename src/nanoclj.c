@@ -1034,15 +1034,20 @@ static inline tensorview_t to_tensorview(nanoclj_val_t p) {
 
 static inline nanoclj_color_t to_color(nanoclj_val_t p) {
   switch (type(p)) {
-  case T_STRING:{
-    strview_t sv = _to_strview(decode_pointer(p));
-    int red, green, blue;
-    if (sv.size == 7 && sscanf(sv.ptr, "#%2x%2x%2x", &red, &green, &blue) == 3) {
-      return mk_color3i(red, green, blue);
-    } else if (sv.size == 4 && sscanf(sv.ptr, "#%1x%1x%1x", &red, &green, &blue) == 3) {
-      return mk_color3i((red << 4) | red, (green << 4) | green, (blue << 4) | blue);
+  case T_STRING:
+    {
+      strview_t s = _to_strview(decode_pointer(p));
+      if (s.size > 1 && s.ptr[0] == '#') {
+	if (s.size == 7) {
+	  return mk_color3i(digit(s.ptr[1], 16) * 16 + digit(s.ptr[2], 16),
+			    digit(s.ptr[3], 16) * 16 + digit(s.ptr[4], 16),
+			    digit(s.ptr[5], 16) * 16 + digit(s.ptr[6], 16));
+	} else if (s.size == 4) {
+	  int r = digit(s.ptr[1], 16), g = digit(s.ptr[2], 16), b = digit(s.ptr[3], 16);
+	  return mk_color3i(r * 16 + r, g * 16 + g, b * 16 + b);
+	}
+      }
     }
-  }
     break;
 
   case T_BYTE:
@@ -1486,6 +1491,7 @@ static inline nanoclj_cell_t * mk_image(nanoclj_t * sc, int32_t width, int32_t h
 static inline nanoclj_cell_t * mk_gradient_from_tensor(nanoclj_t * sc, nanoclj_tensor_t * tensor) {
   nanoclj_cell_t * x = get_cell_x(sc, T_GRADIENT, T_GC_ATOM, NULL, NULL, NULL);
   if (x) {
+    tensor->refcnt++;
     x->_collection.tensor = tensor;
 #ifdef RETAIN_ALLOCS
     retain(sc, x);
@@ -8382,6 +8388,7 @@ bool nanoclj_init(nanoclj_t * sc) {
 
   sc->TAG_HOOK = def_symbol(sc, "*default-data-reader-fn*");
   sc->COMPILE_HOOK = def_symbol(sc, "*compile-hook*");
+  sc->AUTOCOMPLETE_HOOK = def_symbol(sc, "*autocomplete-hook*");
   sc->IN_SYM = def_symbol(sc, "*in*");
   sc->OUT_SYM = def_symbol(sc, "*out*");
   sc->ERR = def_symbol(sc, "*err*");
