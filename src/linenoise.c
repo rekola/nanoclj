@@ -138,6 +138,7 @@ static struct termios orig_termios; /* In order to restore at exit.*/
 static int maskmode = 0; /* Show "***" instead of input. For passwords. */
 static int rawmode = 0; /* For atexit() function to check if restore is needed*/
 static int mlmode = 0;  /* Multi line mode. Default is single line. */
+static int clearmode = 0; /* Clear output when finished */
 static int atexit_registered = 0; /* Register atexit just 1 time. */
 static int history_max_len = LINENOISE_DEFAULT_HISTORY_MAX_LEN;
 static int history_len = 0;
@@ -211,6 +212,10 @@ void linenoiseMaskModeDisable(void) {
 /* Set if to use or not the multi line mode. */
 void linenoiseSetMultiLine(int ml) {
     mlmode = ml;
+}
+
+void linenoiseSetClearOutput(int c) {
+    clearmode = c;
 }
 
 /* Return true if the terminal name is in the list of terminals we know are
@@ -1233,7 +1238,11 @@ void linenoiseEditStop(struct linenoiseState *l) {
 
     if (!isatty(l->ifd)) return;
     disableRawMode(l->ifd);
-    printf("\n");
+    if (clearmode) {
+        printf("\r\x1b[0K");
+    } else {
+        printf("\n");
+    }
 }
 
 /* This just implements a blocking loop for the multiplexed API.

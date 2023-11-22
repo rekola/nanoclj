@@ -1151,6 +1151,7 @@ static inline void init_linenoise(nanoclj_t * sc) {
   linenoise_sc = sc;
     
   linenoiseSetMultiLine(0);
+  linenoiseSetClearOutput(1);
   linenoiseSetupSigWinchHandler();
   linenoiseSetCompletionCallback(completion);
   linenoiseSetHintsCallback(hints);
