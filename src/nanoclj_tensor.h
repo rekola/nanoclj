@@ -518,10 +518,24 @@ static inline uint32_t tensor_bigint_mutate_idivmod(nanoclj_tensor_t * tensor, u
 
 static inline double tensor_bigint_to_double(const nanoclj_tensor_t * tensor) {
   double v = 0;
-  const uint32_t * limbs = tensor->data;
-  for (int64_t i = tensor->ne[0] - 1; i >= 0; i--) {
-    v *= 0xffffffff;
-    v += limbs[i];
+  if (!tensor_is_empty(tensor)) {
+    const uint32_t * limbs = tensor->data;
+    for (int64_t i = tensor->ne[0] - 1; i >= 0; i--) {
+      v *= 0xffffffff;
+      v += limbs[i];
+    }
+  }
+  return v;
+}
+
+static inline long long tensor_bigint_to_long(const nanoclj_tensor_t * tensor) {
+  long long v = 0;
+  if (!tensor_is_empty(tensor)) {
+    const uint32_t * limbs = tensor->data;
+    for (int64_t i = tensor->ne[0] - 1; i >= 0; i--) {
+      v *= 0xffffffff;
+      v += limbs[i];
+    }
   }
   return v;
 }

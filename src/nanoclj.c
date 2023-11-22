@@ -86,7 +86,7 @@
 #define SIGNATURE_PROC		(MASK_EXPONENT | MASK_QUIET | 4)
 #define SIGNATURE_KEYWORD	(MASK_EXPONENT | MASK_QUIET | 5)
 #define SIGNATURE_SYMBOL	(MASK_EXPONENT | MASK_QUIET | 6)
-// 7: unassigned
+#define SIGNATURE_UNASSIGNED	(MASK_EXPONENT | MASK_QUIET | 7)
 
 /* Parsing tokens */
 #define TOK_EOF		(-1)
@@ -240,6 +240,7 @@ static uint_fast16_t prim_type_extended(nanoclj_val_t value) {
   case SIGNATURE_PROC: return T_PROC;
   case SIGNATURE_KEYWORD: return T_KEYWORD;
   case SIGNATURE_SYMBOL: return T_SYMBOL;
+  case SIGNATURE_UNASSIGNED: return T_BOOLEAN; /* no type */
   }
   return T_DOUBLE;
 }
@@ -254,6 +255,7 @@ static uint_fast16_t prim_type(nanoclj_val_t value) {
   case SIGNATURE_PROC: return T_PROC;
   case SIGNATURE_KEYWORD: return T_KEYWORD;
   case SIGNATURE_SYMBOL: return T_SYMBOL;
+  case SIGNATURE_UNASSIGNED: return T_BOOLEAN; /* no type */
   }
   return T_DOUBLE;
 }
@@ -262,8 +264,12 @@ static inline bool is_cell(nanoclj_val_t v) {
   return (v.as_long >> 48) == SIGNATURE_CELL;
 }
 
+static inline bool is_unassigned(nanoclj_val_t v) {
+  return (v.as_long >> 48) == SIGNATURE_UNASSIGNED;
+}
+
 static inline bool is_primitive(nanoclj_val_t v) {
-  return !is_cell(v);
+  return !is_cell(v) && !is_unassigned(v);
 }
 
 static inline bool is_symbol(nanoclj_val_t v) {
@@ -557,6 +563,9 @@ static inline nanoclj_tensor_t * get_tensor(nanoclj_cell_t * c) {
     return c->_audio.tensor;
   case T_GRADIENT:
     return c->_collection.tensor;
+  case T_BIGINT:
+  case T_BIGDECIMAL:
+    return c->_bignum.tensor;
   }
   return NULL;
 }
@@ -695,6 +704,8 @@ static inline long long to_long_w_def(nanoclj_val_t p, long long def) {
 	  return get_size(c);
 	case T_CLASS:
 	  return c->type;
+	case T_BIGINT:
+	  return tensor_bigint_to_long(c->_bignum.tensor) * c->_bignum.sign;
 	}
       }
     }
@@ -708,32 +719,7 @@ static inline long long to_long(nanoclj_val_t p) {
 }
 
 static inline int32_t to_int(nanoclj_val_t p) {
-  switch (prim_type(p)) {
-  case T_BOOLEAN:
-  case T_CODEPOINT:
-  case T_PROC:
-  case T_LONG:
-    return decode_integer(p);
-  case T_DOUBLE:
-    return (int32_t)p.as_double;
-  case T_NIL:
-    {
-      nanoclj_cell_t * c = decode_pointer(p);
-      switch (_type(c)) {
-      case T_LONG:
-      case T_DATE:
-	return _lvalue_unchecked(c);
-      case T_VECTOR:
-      case T_SORTED_SET:
-      case T_ARRAYMAP:
-      case T_QUEUE:
-	return get_size(c);
-      case T_CLASS:
-	return c->type;
-      }
-    }
-  }
-  return 0;
+  return (int32_t)to_long(p);
 }
 
 static inline double to_double(nanoclj_val_t p) {
@@ -1228,6 +1214,9 @@ static inline void finalize_cell(nanoclj_t * sc, nanoclj_cell_t * a) {
       }
     }
     break;
+  case T_RATIO:
+    tensor_free(a->_bignum.denominator);
+    break;
   }
 }
 
@@ -1512,6 +1501,7 @@ static inline nanoclj_cell_t * mk_bigint_from_tensor(nanoclj_t * sc, int sign, n
   if (tensor) {
     nanoclj_cell_t * x = get_cell_x(sc, T_BIGINT, T_GC_ATOM, NULL, NULL, NULL);
     if (x) {
+      tensor->refcnt++;
       x->_bignum.tensor = tensor;
       x->_bignum.denominator = NULL;
       x->_bignum.sign = tensor_is_empty(tensor) ? 0 : sign;
@@ -1532,6 +1522,8 @@ static inline nanoclj_cell_t * mk_ratio_from_tensor(nanoclj_t * sc, int sign, na
   if (num && den) {
     nanoclj_cell_t * x = get_cell_x(sc, T_RATIO, T_GC_ATOM, NULL, NULL, NULL);
     if (x) {
+      num->refcnt++;
+      den->refcnt++;
       x->_bignum.tensor = num;
       x->_bignum.denominator = den;
       x->_bignum.sign = tensor_is_empty(num) ? 0 : sign;
@@ -2949,102 +2941,100 @@ static inline int compare(nanoclj_val_t a, nanoclj_val_t b) {
       symbol_t * sa = decode_symbol(a), * sb = decode_symbol(b);
       int i = strview_cmp(sa->ns, sb->ns);
       return i ? i : strview_cmp(sa->name, sb->name);
-    } else if (!type_a && !type_b) {
-      nanoclj_cell_t * a2 = decode_pointer(a), * b2 = decode_pointer(b);
-      type_a = _type(a2);
-      type_b = _type(b2);
-      if (type_a == type_b) {
-	switch (type_a) {
-	case T_STRING:
-	case T_CHAR_ARRAY:
-	case T_FILE:
-	case T_UUID:{
-	  strview_t sv1 = _to_strview(a2), sv2 = _to_strview(b2);
-	  const char * p1 = sv1.ptr, * p2 = sv2.ptr;
-	  const char * end1 = sv1.ptr + sv1.size, * end2 = sv2.ptr + sv2.size;
-	  while ( 1 ) {
-	    if (p1 >= end1 && p2 >= end2) return 0;
-	    else if (p1 >= end1) return -1;
-	    else if (p2 >= end2) return 1;
-	    int d = decode_utf8(p1) - decode_utf8(p2);
-	    if (d) return d;
-	    p1 = utf8_next(p1), p2 = utf8_next(p2);
-	  }
-	}
-	case T_LONG:
-	case T_DATE:{
-	  long long la = _lvalue_unchecked(a2), lb = _lvalue_unchecked(b2);
-	  if (la < lb) return -1;
-	  else if (la > lb) return +1;
-	  else return 0;
-	}
-	  
-	case T_VECTOR:
-	case T_SORTED_SET:
-	case T_MAPENTRY:
-	case T_VAR:
-	case T_QUEUE:{
-	  size_t la = get_size(a2), lb = get_size(b2);
-	  if (la < lb) return -1;
-	  else if (la > lb) return +1;
-	  else {
-	    for (size_t i = 0; i < la; i++) {
-	      int r = compare(vector_elem(a2, i), vector_elem(b2, i));
-	      if (r) return r;
-	    }
-	    return 0;
-	  }
-	}
-	  break;
-	  
-	case T_ARRAYMAP:{
-	  size_t la = get_size(a2), lb = get_size(b2);
-	  if (la < lb) return -1;
-	  else if (la > lb) return +1;
-	  else {
-	    /* TODO: implement map comparison */
-	    return 0;
-	  }
-	}
-
-	case T_CLASS:
-	  return (int)a2->type - (int)b2->type;
-	  
-	case T_LIST:
-	case T_CLOSURE:
-	case T_LAZYSEQ:
-	case T_MACRO:
-	case T_ENVIRONMENT:
-	  {
-	    int r = compare(_car(a2), _car(b2));
-	    if (r) return r;
-	    return compare(_cdr(a2), _cdr(b2));
-	  }
-
-	case T_BIGINT:
-	case T_BIGDECIMAL:
-	  if (a2->_bignum.sign < b2->_bignum.sign) return -1;
-	  if (a2->_bignum.sign > b2->_bignum.sign) return +1;
-	  return tensor_cmp(a2->_bignum.tensor, b2->_bignum.tensor) * a2->_bignum.sign;
-
-	case T_RATIO:
-	  if (a2->_bignum.sign < b2->_bignum.sign) return -1;
-	  if (a2->_bignum.sign > b2->_bignum.sign) return +1;
-	  {
-	    nanoclj_tensor_t * left = tensor_bigint_mul(a2->_bignum.tensor, b2->_bignum.denominator);
-	    nanoclj_tensor_t * right = tensor_bigint_mul(b2->_bignum.tensor, a2->_bignum.denominator);
-	    int cmp = tensor_cmp(left, right) * a2->_bignum.sign;
-	    tensor_free(left);
-	    tensor_free(right);
-	    return cmp;
-	  }
-	}
-      } else if (type_a == T_NIL) {
-	return -1;
-      } else if (type_b == T_NIL) {
-	return +1;
-      }
     } else {
+      if (!type_a && !type_b) {
+	nanoclj_cell_t * a2 = decode_pointer(a), * b2 = decode_pointer(b);
+	type_a = _type(a2);
+	type_b = _type(b2);
+	if (type_a == type_b) {
+	  switch (type_a) {
+	  case T_STRING:
+	  case T_CHAR_ARRAY:
+	  case T_FILE:
+	  case T_UUID:{
+	    strview_t sv1 = _to_strview(a2), sv2 = _to_strview(b2);
+	    const char * p1 = sv1.ptr, * p2 = sv2.ptr;
+	    const char * end1 = sv1.ptr + sv1.size, * end2 = sv2.ptr + sv2.size;
+	    while ( 1 ) {
+	      if (p1 >= end1 && p2 >= end2) return 0;
+	      else if (p1 >= end1) return -1;
+	      else if (p2 >= end2) return 1;
+	      int d = decode_utf8(p1) - decode_utf8(p2);
+	      if (d) return d;
+	      p1 = utf8_next(p1), p2 = utf8_next(p2);
+	    }
+	  }
+	  case T_LONG:
+	  case T_DATE:{
+	    long long la = _lvalue_unchecked(a2), lb = _lvalue_unchecked(b2);
+	    if (la < lb) return -1;
+	    else if (la > lb) return +1;
+	    else return 0;
+	  }
+	    
+	  case T_VECTOR:
+	  case T_SORTED_SET:
+	  case T_MAPENTRY:
+	  case T_VAR:
+	  case T_QUEUE:{
+	    size_t la = get_size(a2), lb = get_size(b2);
+	    if (la < lb) return -1;
+	    else if (la > lb) return +1;
+	    else {
+	      for (size_t i = 0; i < la; i++) {
+		int r = compare(vector_elem(a2, i), vector_elem(b2, i));
+		if (r) return r;
+	      }
+	      return 0;
+	    }
+	  }
+	    break;
+	    
+	  case T_ARRAYMAP:{
+	    size_t la = get_size(a2), lb = get_size(b2);
+	    if (la < lb) return -1;
+	    else if (la > lb) return +1;
+	    else {
+	      /* TODO: implement map comparison */
+	      return 0;
+	    }
+	  }
+	    
+	  case T_CLASS:
+	    return (int)a2->type - (int)b2->type;
+	    
+	  case T_LIST:
+	  case T_CLOSURE:
+	  case T_LAZYSEQ:
+	  case T_MACRO:
+	  case T_ENVIRONMENT:
+	    {
+	      int r = compare(_car(a2), _car(b2));
+	      if (r) return r;
+	      return compare(_cdr(a2), _cdr(b2));
+	    }
+	    
+	  case T_BIGINT:
+	  case T_BIGDECIMAL:
+	    if (a2->_bignum.sign < b2->_bignum.sign) return -1;
+	    if (a2->_bignum.sign > b2->_bignum.sign) return +1;
+	    return tensor_cmp(a2->_bignum.tensor, b2->_bignum.tensor) * a2->_bignum.sign;
+	    
+	  case T_RATIO:
+	    if (a2->_bignum.sign < b2->_bignum.sign) return -1;
+	    if (a2->_bignum.sign > b2->_bignum.sign) return +1;
+	    {
+	      nanoclj_tensor_t * left = tensor_bigint_mul(a2->_bignum.tensor, b2->_bignum.denominator);
+	      nanoclj_tensor_t * right = tensor_bigint_mul(b2->_bignum.tensor, a2->_bignum.denominator);
+	      int cmp = tensor_cmp(left, right) * a2->_bignum.sign;
+	      tensor_free(left);
+	      tensor_free(right);
+	      return cmp;
+	    }
+	  }
+	}
+      }
+
       type_a = expand_type(a, type_a);
       type_b = expand_type(b, type_b);
       if (type_a == T_RATIO || type_b == T_RATIO) {
@@ -7542,7 +7532,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	}
 	tensor_mutate_sort(vec, _compare);
 	nanoclj_cell_t * r = 0;
-	for (int i = (int)vec->ne[0] - 1; i >= 0; i--) {
+	for (int64_t i = vec->ne[0] - 1; i >= 0; i--) {
 	  r = conjoin(sc, r, tensor_get(vec, i));
 	}
 	tensor_free(vec);
