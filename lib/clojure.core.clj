@@ -107,11 +107,11 @@
 
 (defn numerator
   "Returns the numerator of a Ratio"
-  [n] (if (ratio? n) (first n) n))
+  [n] (if (ratio? n) (n 0) n))
 
 (defn denominator
   "Returns the denominator of a Ratio"
-  [n] (if (ratio? n) (second n) 1))
+  [n] (if (ratio? n) (n 1) 1))
 
 (defn quot
   "Returns the quotinent of dividing a by b"

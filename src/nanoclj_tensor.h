@@ -17,7 +17,7 @@ static inline size_t tensor_get_cell_size(nanoclj_tensor_type_t t) {
 }
 
 static inline void tensor_free(nanoclj_tensor_t * tensor) {
-  if (tensor && tensor->refcnt != 0 && --(tensor->refcnt) == 0) {
+  if (tensor && (tensor->refcnt == 0 || --(tensor->refcnt) == 0)) {
     free(tensor->data);
     free(tensor);
   }
@@ -271,20 +271,22 @@ static inline bool tensor_eq(const nanoclj_tensor_t * a, const nanoclj_tensor_t 
   int n = a->n_dims;
   if (n != b->n_dims) return false;
   switch (n) {
-  case 3: if (a->nb[3] != b->nb[3] || a->ne[2] != b->ne[2]) return false;
-  case 2: if (a->nb[2] != b->nb[2] || a->ne[1] != b->ne[1]) return false;
-  case 1: if (a->nb[1] != b->nb[1] || a->ne[0] != b->ne[0] ||
-	      a->nb[0] != b->nb[0]) return false;
+  case 3: if (a->ne[2] != b->ne[2]) return false;
+  case 2: if (a->ne[1] != b->ne[1]) return false;
+  case 1: if (a->ne[0] != b->ne[0]) return false;
   }
 
-  if (n == 1 && a->nb[0] == 4) {
-    int64_t ne = a->ne[0];
-    const uint32_t * ad = a->data, * bd = b->data;
-    for (int64_t i = 0; i < ne; i++) {
-      if (ad[i] != bd[i]) return false;
+  if (n > 0) {
+    if (a->nb[0] != b->nb[0]) return false;
+    if (n == 1 && a->nb[0] == 4) {
+      int64_t ne = a->ne[0];
+      const uint32_t * ad = a->data, * bd = b->data;
+      for (int64_t i = 0; i < ne; i++) {
+	if (ad[i] != bd[i]) return false;
+      }
+    } else {
+      /* TODO */
     }
-  } else {
-    /* TODO */
   }
   return true;
 }
@@ -317,16 +319,30 @@ static inline void tensor_mutate_trim(nanoclj_tensor_t * tensor) {
 }
 
 static inline void tensor_mutate_lshift(nanoclj_tensor_t * a, uint_fast8_t n) {
-  if (!n || tensor_is_empty(a)) return;
-  uint32_t * limbs = a->data;
-  uint32_t overflow = limbs[a->ne[0] - 1] >> (32 - n);
-  if (overflow) {
-    tensor_mutate_append_i32(a, overflow);
+  if (tensor_is_empty(a)) return;
+  if (n >= 32) {
+    int n2 = n / 32;
+    for (int i = 0; i < n2; i++) tensor_mutate_append_i32(a, 0);
+    uint32_t * limbs = a->data;
+    for (int i = a->ne[0] - 1; i >= n2; i--) {
+      limbs[i] = limbs[i - n2];
+    }
+    for (int i = 0; i < n2; i++) {
+      limbs[i] = 0;
+    }
+    n -= n2 * 32;
   }
-  for (int64_t i = a->ne[0] - 1; i > 0; i--) {
-    limbs[i] = (limbs[i] << n) | (limbs[i - 1] >> (32 - n));
+  if (n != 0) {
+    uint32_t * limbs = a->data;
+    uint32_t overflow = limbs[a->ne[0] - 1] >> (32 - n);
+    for (int64_t i = a->ne[0] - 1; i > 0; i--) {
+      limbs[i] = (limbs[i] << n) | (limbs[i - 1] >> (32 - n));
+    }
+    limbs[0] <<= n;
+    if (overflow) {
+      tensor_mutate_append_i32(a, overflow);
+    }
   }
-  limbs[0] <<= n;
 }
 
 static inline void tensor_mutate_rshift(nanoclj_tensor_t * a, uint_fast8_t n) {
@@ -425,15 +441,17 @@ static inline nanoclj_tensor_t * tensor_bigint_add(const nanoclj_tensor_t * a, c
 }
 
 static inline void tensor_bigint_mutate_add_int(nanoclj_tensor_t * tensor, uint32_t v) {
-  uint64_t x = v;
-  uint32_t * limbs = tensor->data;
-  for (int i = 0; i < tensor->ne[0]; i++) {
-    x += limbs[i];
-    limbs[i] = x;
-    x >>= 32;
-    if (!x) return;
+  if (v) {
+    uint64_t x = v;
+    uint32_t * limbs = tensor->data;
+    for (int i = 0; i < tensor->ne[0]; i++) {
+      x += limbs[i];
+      limbs[i] = x;
+      x >>= 32;
+      if (!x) return;
+    }
+    tensor_mutate_append_i32(tensor, x);
   }
-  tensor_mutate_append_i32(tensor, x);
 }
 
 static inline nanoclj_tensor_t * tensor_bigint_mul(const nanoclj_tensor_t * a, const nanoclj_tensor_t * b) {
@@ -457,17 +475,23 @@ static inline nanoclj_tensor_t * tensor_bigint_mul(const nanoclj_tensor_t * a, c
 }
 
 static inline void tensor_bigint_mutate_mul_int(nanoclj_tensor_t * tensor, uint32_t v) {
-  uint32_t * limbs = tensor->data;
-  uint64_t x = 0;
-  for (int64_t i = 0; i < tensor->ne[0]; i++) {
-    x += (uint64_t)v * limbs[i];
-    limbs[i] = x;
-    x >>= 32;
+  if (!tensor_is_empty(tensor)) {
+    if (v == 0) {
+      tensor_mutate_clear(tensor);
+    } else {
+      uint32_t * limbs = tensor->data;
+      uint64_t x = 0;
+      for (int64_t i = 0; i < tensor->ne[0]; i++) {
+	x += (uint64_t)v * limbs[i];
+	limbs[i] = x;
+	x >>= 32;
+      }
+      if (x) tensor_mutate_append_i32(tensor, x);
+    }
   }
-  if (x) tensor_mutate_append_i32(tensor, x);
 }
 
-static inline uint32_t tensor_bigint_mutate_divmod(nanoclj_tensor_t * tensor, uint32_t divisor) {
+static inline uint32_t tensor_bigint_mutate_idivmod(nanoclj_tensor_t * tensor, uint32_t divisor) {
   uint32_t * limbs = tensor->data;
   uint64_t x = 0;
   for (int64_t i = tensor->ne[0] - 1; i >= 0; i--) {
@@ -510,8 +534,15 @@ static inline nanoclj_tensor_t * tensor_bigint_dec(const nanoclj_tensor_t * tens
   return r;
 }
 
-static inline nanoclj_tensor_t * tensor_bigint_div(nanoclj_tensor_t * a, nanoclj_tensor_t * b) {
-  return NULL;
+static inline nanoclj_tensor_t * tensor_bigint_divmod(const nanoclj_tensor_t * a, const nanoclj_tensor_t * b, nanoclj_tensor_t * rem) {
+  if (b->ne[0] == 1) {
+    nanoclj_tensor_t * q = tensor_bigint_dup(a);
+    uint32_t r = tensor_bigint_mutate_idivmod(q, *(uint32_t*)b->data);
+    if (rem) rem = mk_tensor_bigint(r);
+    return q;
+  } else {
+    return NULL;
+  }
 }
 
 static inline nanoclj_tensor_t * tensor_bigint_pow(const nanoclj_tensor_t * base0, uint64_t exp) {
@@ -564,7 +595,7 @@ static inline size_t tensor_bigint_to_string(const nanoclj_tensor_t * tensor0, c
   char *p = tmp + n;
   while (!tensor_is_empty(tensor)) {
     /* divide the bigint by 1e9 and put the remainder in r */
-    uint64_t r = tensor_bigint_mutate_divmod(tensor, 1000000000);
+    uint64_t r = tensor_bigint_mutate_idivmod(tensor, 1000000000);
     /* print the remainder */
     for (int_fast8_t i = 0; i < 9 && (!tensor_is_empty(tensor) || r > 0); i++, r /= 10) {
       *--p = '0' + (r % 10);

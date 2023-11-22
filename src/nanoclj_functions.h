@@ -295,19 +295,18 @@ static nanoclj_val_t numeric_tower_expt(nanoclj_t * sc, nanoclj_cell_t * args) {
 
   if (tx == T_RATIO && ty == T_LONG) {
     long exp = to_long(y);
-    if (exp > -256 && exp < 256) {
-      long long den;
-      long long num = get_ratio(x, &den);
-      if (exp < 0) {
-	exp = -exp;
-	long long tmp = den;
-	den = num;
-	num = tmp;
-      }
-      long long num2, den2;
-      if (!ipow_overflow(num, exp, &num2) && !ipow_overflow(den, exp, &den2)) {
-	if (den2 == 1) return mk_long(sc, num2);
-	else return mk_ratio_long(sc, num2, den2);
+    if (exp == 0) {
+      return mk_int(1);
+    } else {
+      uint64_t exp2 = llabs(exp);
+      nanoclj_cell_t * c = decode_pointer(x);
+      int sign = c->_bignum.sign == 1 || (exp & 1) == 0 ? 1 : -1;
+      nanoclj_tensor_t * a = tensor_bigint_pow(c->_bignum.tensor, exp2);
+      nanoclj_tensor_t * b = tensor_bigint_pow(c->_bignum.denominator, exp2);
+      if (exp > 0) {
+	return mk_pointer(mk_ratio_from_tensor(sc, sign, a, b));
+      } else {
+	return mk_pointer(mk_ratio_from_tensor(sc, sign, b, a));
       }
     }
   } else if (tx == T_LONG && ty == T_LONG) {
@@ -318,7 +317,7 @@ static nanoclj_val_t numeric_tower_expt(nanoclj_t * sc, nanoclj_cell_t * args) {
     } else if (exp >= 0 && exp < 256 && !ipow_overflow(base, exp, &res)) {
       return mk_long(sc, res);
     } else if (exp > -256 && exp < 0 && !ipow_overflow(base, -exp, &res)) {
-      return mk_ratio_long(sc, 1, res);
+      return mk_pointer(mk_ratio_long(sc, 1, res));
     } else if (exp >= 0) {
       nanoclj_tensor_t * t0 = mk_tensor_bigint(llabs(base));
       nanoclj_tensor_t * t = tensor_bigint_pow(t0, exp);
