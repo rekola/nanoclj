@@ -77,8 +77,7 @@ extern "C" {
   typedef struct nanoclj_cell_t {
     int32_t hasheq;
     uint16_t type;
-    uint8_t flags;
-    uint8_t so_size;
+    uint16_t flags;
     union {
       union {
 	uint8_t bytes[NANOCLJ_SMALL_STR_SIZE];

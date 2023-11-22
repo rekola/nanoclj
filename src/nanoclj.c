@@ -219,16 +219,17 @@ typedef struct {
   int fd;
 } http_load_t;
 
-#define T_TYPE	         1	/* 00000001 */
-#define T_HASHED         2      /* 00000010 */
-#define T_SEQUENCE       4	/* 00000100 */
-#define T_REALIZED       8	/* 00001000 */
-#define T_REVERSE       16      /* 00010000 */
-#define T_SMALL         32      /* 00100000 */
-#define T_GC_ATOM       64      /* 01000000 */    /* only for gc */
-#define CLR_GC_ATOM    191      /* 10111111 */    /* only for gc */
-#define MARK           128      /* 10000000 */
-#define UNMARK         127      /* 01111111 */
+#define T_NEGATIVE     128	/* 00000000100xxxxx */
+#define T_TYPE	       256	/* 00000001000xxxxx */
+#define T_HASHED       512      /* 00000010000xxxxx */
+#define T_SEQUENCE    1024	/* 00000100000xxxxx */
+#define T_REALIZED    2048	/* 00001000000xxxxx */
+#define T_REVERSE     4096      /* 00010000000xxxxx */
+#define T_SMALL       8192      /* 00100000000xxxxx */
+#define T_GC_ATOM    16384      /* 01000000000xxxxx */    /* only for gc */
+#define CLR_GC_ATOM  49151      /* 1011111111111111 */    /* only for gc */
+#define MARK         32768      /* 10000000000xxxxx */
+#define UNMARK       32767      /* 0111111111111111 */
 
 static uint_fast16_t prim_type_extended(nanoclj_val_t value) {
   uint64_t signature = value.as_long >> 48;
@@ -406,7 +407,7 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define _max_arity_unchecked(p)	  ((p)->_ff.max_arity)
 
 #define _smallstrvalue_unchecked(p)      (&((p)->_small_tensor.bytes[0]))
-#define _sosize_unchecked(p)      ((p)->so_size)
+#define _sosize_unchecked(p)      ((p)->flags & 31)
 
 #define _graph_unchecked(p)	  ((p)->_graph.rep)
 #define _num_nodes_unchecked(p)	  ((p)->_graph.num_nodes)
@@ -1224,7 +1225,7 @@ static inline void finalize_cell(nanoclj_t * sc, nanoclj_cell_t * a) {
 
 /* get new cell.  parameter a, b is marked by gc. */
 
-static inline nanoclj_cell_t * get_cell_x(nanoclj_t * sc, uint16_t type_id, uint8_t flags, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_cell_t * c) {
+static inline nanoclj_cell_t * get_cell_x(nanoclj_t * sc, uint16_t type_id, uint16_t flags, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_cell_t * c) {
   nanoclj_shared_context_t * context = sc->context;
 
   if (!context->free_cell) {
@@ -1274,7 +1275,7 @@ static inline void retain_value(nanoclj_t * sc, nanoclj_val_t recent) {
   }
 }
 
-static inline nanoclj_cell_t * get_cell(nanoclj_t * sc, uint16_t type, uint8_t flags,
+static inline nanoclj_cell_t * get_cell(nanoclj_t * sc, uint16_t type, uint16_t flags,
 					nanoclj_val_t head, nanoclj_cell_t * tail, nanoclj_cell_t * meta) {
   if (!tail) tail = &(sc->_EMPTY);
   nanoclj_cell_t * cell = get_cell_x(sc, type, flags, is_cell(head) ? decode_pointer(head) : NULL, tail, meta);
@@ -1577,8 +1578,7 @@ static inline void initialize_collection(nanoclj_cell_t * c, size_t offset, size
     _size_unchecked(c) = size;
     _offset_unchecked(c) = offset;
   } else {
-    c->flags |= T_SMALL;
-    c->so_size = size;
+    c->flags = T_GC_ATOM | T_SMALL | size;
     if (is_vector_type(c->type)) {
       _so_vector_metadata(c) = mk_nil();
     }
@@ -1628,7 +1628,7 @@ static inline nanoclj_val_t mk_string_fmt(nanoclj_t * sc, char *fmt, ...) {
   va_end(ap);
 
   if (n < NANOCLJ_SMALL_STR_SIZE) {
-    r->so_size = n; /* Set the small string size */
+    r->flags |= n; /* Set the small string size */
   } else { /* Reserve 1-byte padding for the 0-marker */
     nanoclj_tensor_t * tensor = mk_tensor_1d_padded(nanoclj_i8, n, 1);
     if (!tensor) return mk_nil();
@@ -1847,7 +1847,7 @@ static inline bool resize_vector(nanoclj_t * sc, nanoclj_cell_t * vec, size_t ne
       tensor_free(_tensor_unchecked(vec));
       vec->flags = T_SMALL | T_GC_ATOM;
     }
-    vec->so_size = new_size;
+    vec->flags = (vec->flags & ~31) | new_size;
   } else {
     if (_is_small(vec)) {
       nanoclj_tensor_t * new_store = mk_tensor_1d(nanoclj_f64, new_size);

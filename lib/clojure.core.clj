@@ -30,7 +30,7 @@
 
 (defn seq?
   "Returns true if coll is a Sequence"
-  [coll] (or (instance? clojure.lang.Cons coll) (instance? clojure.lang.LazySeq coll) (equals? (-bit-and (-get-cell-flags coll) 4) 4)))
+  [coll] (or (instance? clojure.lang.Cons coll) (instance? clojure.lang.LazySeq coll) (equals? (-bit-and (-get-cell-flags coll) 1024) 1024)))
 
 (defn seqable?
   "Returns true if coll supportes seq"
@@ -38,7 +38,7 @@
 
 (defn realized?
   "Returns true if Delay or LazySeq has been realized"
-  [x] (equals? (-bit-and (-get-cell-flags x) 8) 8))
+  [x] (equals? (-bit-and (-get-cell-flags x) 2048) 2048))
 
 (def keyword clojure.lang.Keyword)
 (def char nanoclj.core.Codepoint)
