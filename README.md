@@ -7,7 +7,12 @@
 ## A Tiny Clojure Interpreter
 
 This is a small Clojure language implementation written in C
-language. It is based on TinyScheme which was based on MiniScheme.
+language. It is based on TinyScheme which was based on MiniScheme. The
+project is in the early stages yet, and much functionality is still
+missing. The project has two main goals:
+
+1. Provide data visualization capabilities for the REPL in a terminal or GUI.
+2. Provide an embedded Clojure interpreter for C++ applications as an alternative for Lua and other scripting languages.
 
 ## Features
 
@@ -17,6 +22,7 @@ language. It is based on TinyScheme which was based on MiniScheme.
 - REPL output is colored by type
 - Callback Writer for printing into a GUI instead of stdout
 - Class and namespace names try to imitate Java and Clojure names when possible (e.g. `(type 1) ;=> java.lang.Long`)
+- BigInts and Ratios
 - Tensors are used for representing most data structures. For example, a vector is a 1D tensor of doubles (with NaN-packing for other data types).
 
 ### 2D Graphics
@@ -73,8 +79,8 @@ As well as printing images in block mode like the plot function does, they can a
 - License is BSD 2-Clause License instead of EPL
 - Symbols are interned and cannot have metadata
 - Primitives such as doubles and 32 bit integers are passed by value, and are in effect, interned
-- Strings are not interned: (identical? "abc" "abc") ;=> false
-- `rationalize` is exact and Ratios use the smallest suitable integer type for numerator and denominator
+- Strings are not interned: `(identical? "abc" "abc") ;=> false`
+- `rationalize` returns exact result for doubles: `(rationalize 0.1) ;=> 3602879701896397/36028797018963968`
 - No chunked or buffered lazy sequences
 - No homogenous vectors (They are not necessary since most data types are unboxed by default)
 
@@ -114,15 +120,16 @@ Windows support is in progress.
 - Transducers
 - Refs, Agents, Atoms, Validators
 - Reader Conditionals
-- BigDecimals, 32-bit floats and Exotic numeric literals (e.g. 0.1M, hexadecimal floats)
+- BigDecimals, 32-bit floats and hexadecimal floating point literals
 - Persistent data structures, Transient data structures, StructMaps
 - Unchecked operations
 - Interfaces, Records, Protocols and Multi-methods
 - Locals cleaning
 - Multithreading, transactions and STM
 - monitor-enter, monitor-exit, and locking
-- Metadata reader macro, Threading macros (->, -->, some-> and some->>)
+- Metadata reader macro
 - Pre- and post-conditions for functions
+- Namespace import and aliases
 - Readers and Writers do not accept options such as :encoding or :append
 - Associative destructuring
 - `*print-length*`, `*print-level*`, `*file*`, `*flush-on-newline*`, `*clojure-version*`, `*load-tests*`, `*print-meta*`
@@ -131,7 +138,8 @@ Windows support is in progress.
   - bit-and-not
   - sort-by, sorted-set-by, sorted-map, hash-set, hash-map
   - update-in, merge-with
-  - cast, doto
+  - cast, num
+  - doto, ->, -->, some->, some->>
   - parse-long, parse-double, parse-uuid
   - map-indexed, mapcat, zipmap, lazy-cat
   - partition-by
@@ -141,7 +149,7 @@ Windows support is in progress.
   - condp
   - when-let, letfn, if-let, if-some
   - reduced, reduced?
-  - with-local-vars, var-set, find-var, alter-var-root, declare, binding, with-bindings
+  - with-local-vars, var-set, find-var, alter-var-root, declare, binding, with-bindings, ns-name
   - as-url, resource
   - sequence
   - make-hierarchy, ancestors, supers, bases
@@ -153,7 +161,8 @@ Windows support is in progress.
   - make-parents
   - with-open
   - with-meta, vary-meta, alter-meta!, reset-meta!
-  - int-array, long-array, float-array, double-array, byte-array, short-array, aget, aset-int, aset, aset-int, aset-double, alength, aset, amap, areduce, aclone, into-array, make-array, to-array-2d, to-array
+  - int-array, long-array, float-array, double-array, byte-array, short-array, aset-int, aset-double, object-array
+  - aget, aset, alength, amap, areduce, aclone, into-array, make-array, to-array-2d, to-array
 - clojure.core.async
   - thread, thread-call
 - clojure.core.reducers
