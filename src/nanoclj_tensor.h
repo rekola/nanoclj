@@ -37,7 +37,7 @@ static inline void tensor_mutate_pop(nanoclj_tensor_t * tensor) {
   if (tensor->ne[0] > 0) tensor->ne[0]--;
 }
 
-/* Assuments tenso is 1-dimensional and adds an element */
+/* Assuments tensor is 1-dimensional and adds an element */
 static inline void tensor_mutate_push(nanoclj_tensor_t * tensor, nanoclj_val_t val) {
   if (tensor->ne[0] * tensor->nb[0] >= tensor->nb[1]) {
     tensor->nb[1] = 2 * (sizeof(nanoclj_val_t) + tensor->nb[1]);
@@ -78,7 +78,7 @@ static inline void tensor_set_f64(nanoclj_tensor_t * tensor, int i, double v) {
   ((double *)tensor->data)[i] = v;
 }
 
-static inline double tensor_get_f64(const nanoclj_tensor_t * tensor, int i) {
+static inline double tensor_get_f64(const nanoclj_tensor_t * tensor, int64_t i) {
   return ((double *)tensor->data)[i];
 }
 
@@ -86,7 +86,7 @@ static inline double tensor_get_f32_2d(const nanoclj_tensor_t * tensor, int i, i
   return *(float *)((uint8_t *)tensor->data + i * tensor->nb[0] + j * tensor->nb[1]);
 }
 
-static inline nanoclj_val_t tensor_get(const nanoclj_tensor_t * tensor, int i) {
+static inline nanoclj_val_t tensor_get(const nanoclj_tensor_t * tensor, int64_t i) {
   nanoclj_val_t v;
   v.as_double = tensor_get_f64(tensor, i);
   return v;
@@ -361,9 +361,22 @@ static inline void tensor_mutate_or(nanoclj_tensor_t * a, const nanoclj_tensor_t
   }
   uint32_t * limbs_a = a->data;
   const uint32_t * limbs_b = b->data;
-  for (int64_t i = 0; i < b->ne[0]; ++i) {
+  for (int64_t i = 0; i < b->ne[0]; i++) {
     limbs_a[i] |= limbs_b[i];
   }
+}
+
+static inline void tensor_mutate_and(nanoclj_tensor_t * a, const nanoclj_tensor_t * b) {
+  if (a->ne[0] > b->ne[0]) a->ne[0] = b->ne[0];
+  uint32_t * limbs_a = a->data;
+  const uint32_t * limbs_b = b->data;
+  for (int64_t i = 0; i < a->ne[0]; i++) {
+    limbs_a[i] &= limbs_b[i];
+  }
+}
+
+static inline void tensor_mutate_sort(nanoclj_tensor_t * tensor, int (*compar)(const void *a, const void *b)) {
+  if (tensor->ne[0] >= 2) qsort(tensor->data, tensor->ne[0], tensor->nb[0], compar);
 }
 
 /* BigInts */

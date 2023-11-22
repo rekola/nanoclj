@@ -6812,7 +6812,20 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       nanoclj_throw(sc, sc->NullPointerException);
       return false;
     } else {
-      s_return(sc, mk_long(sc, to_long(arg0) & to_long(arg1)));
+      uint16_t tx = type(arg0), ty = type(arg1);
+      if (!is_numeric_type(tx) || !is_numeric_type(ty)) {
+      	nanoclj_throw(sc, mk_class_cast_exception(sc, "Argument cannot be cast to java.lang.Number"));
+	return false;
+      } else if (tx == T_BIGINT || ty == T_BIGINT) {
+	nanoclj_bignum_t a = to_bigint(arg0), b = to_bigint(arg1);
+	nanoclj_tensor_t * t = tensor_bigint_dup(a.tensor);
+	tensor_mutate_and(t, b.tensor);
+	if (!a.tensor->refcnt) tensor_free(a.tensor);
+	if (!b.tensor->refcnt) tensor_free(b.tensor);
+	s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, 1, t)));
+      } else {
+	s_return(sc, mk_long(sc, to_long(arg0) & to_long(arg1)));
+      }
     }
 
   case OP_BIT_OR:
@@ -7516,26 +7529,25 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_SORT:{
     if (!unpack_args_1(sc, &arg0)) {
       return false;
-    }
-    x = arg0;
-    if (!is_cell(x)) {
+    } else if (!is_cell(arg0)) {
       s_return(sc, x);
-    }
-    nanoclj_cell_t * seq = decode_pointer(x);
-    size_t l = seq_length(sc, seq);
-    if (l == 0) {
-      s_return(sc, sc->EMPTY);
     } else {
-      nanoclj_cell_t * vec = mk_vector(sc, l);
-      for (size_t i = 0; i < l; i++, seq = rest(sc, seq)) {
-	set_vector_elem(vec, i, first(sc, seq));
+      nanoclj_cell_t * s = seq(sc, decode_pointer(arg0));
+      if (!s) {
+	s_return(sc, sc->EMPTY);
+      } else {
+	nanoclj_tensor_t * vec = mk_tensor_1d(nanoclj_f64, 0);
+	for ( ; s; s = next(sc, s)) {
+	  tensor_mutate_push(vec, first(sc, s));
+	}
+	tensor_mutate_sort(vec, _compare);
+	nanoclj_cell_t * r = 0;
+	for (int i = (int)vec->ne[0] - 1; i >= 0; i--) {
+	  r = conjoin(sc, r, tensor_get(vec, i));
+	}
+	tensor_free(vec);
+	s_return(sc, mk_pointer(r));
       }
-      sort_vector_in_place(vec);
-      nanoclj_cell_t * r = 0;
-      for (int i = (int)l - 1; i >= 0; i--) {
-	r = conjoin(sc, r, vector_elem(vec, i));
-      }
-      s_return(sc, mk_pointer(r));
     }
   }
 
