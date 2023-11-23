@@ -5143,6 +5143,7 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
 	    tensor = mk_canvas_backing_tensor((int)(to_double(x) * sc->window_scale_factor),
 					      (int)(to_double(y) * sc->window_scale_factor),
 					      channels);
+	    tensor->refcnt++;
 	    canvas = mk_canvas(tensor, sc->fg_color, fill_color);
 	  } else if (pdf_fn.size) {
 	    canvas = mk_canvas_pdf((int)(to_double(x)),
