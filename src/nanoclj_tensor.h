@@ -427,14 +427,14 @@ static inline void tensor_bigint_assign(nanoclj_tensor_t * tensor, uint64_t v) {
 
 static inline nanoclj_tensor_t * mk_tensor_bigint_abs(int64_t v) {
   if (v == LLONG_MIN) {
-    return tensor_mutate_lshift(mk_tensor_bigint(1), 64);
+    return tensor_mutate_lshift(mk_tensor_bigint(1), 63);
   } else {
     return mk_tensor_bigint(llabs(v));
   }
 }
 static inline nanoclj_tensor_t * tensor_bigint_dup(const nanoclj_tensor_t * tensor) {
   nanoclj_tensor_t * r = mk_tensor_1d(nanoclj_i32, tensor->ne[0]);
-  memcpy(r->data, tensor->data, tensor->nb[1]);
+  memcpy(r->data, tensor->data, r->nb[1]);
   return r;
 }
 
