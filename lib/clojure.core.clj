@@ -72,7 +72,7 @@
 
 (defn even?
   "Returns true if the argument is even"
-  [n] (zero? (mod n 2)))
+  [n] (zero? (rem n 2)))
 
 (defn odd?
   "Returns true if the argument is odd"
@@ -88,10 +88,12 @@
 (defn NaN? [n] (identical? n ##NaN))
 (defn infinite? [n] (or (== n ##Inf) (== n ##-Inf)))
 
-(defn mod [num div] (let [m (rem num div)] 
-                      (if (or (zero? m) (= (pos? num) (pos? div)))
-                        m
-                        (+ m div))))
+(defn mod
+  "Modulus of num and div. Not the same as C's % operator (which is rem) but Knuth's mod (truncating towards negativity)."
+  [num div] (let [m (rem num div)]
+              (if (or (zero? m) (= (pos? num) (pos? div)))
+                m
+                (+ m div))))
 
 (defn abs
   "Returns the absolute value of n"
