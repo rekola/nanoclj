@@ -28,7 +28,7 @@ E2:_setmark(p);
   }
   case T_FOREIGN_FUNCTION:{
     nanoclj_cell_t * meta = _ff_metadata(p);
-    if (meta)  mark(meta);
+    if (meta) mark(meta);
     break;
   }
   case T_VECTOR:
@@ -36,12 +36,10 @@ E2:_setmark(p);
   case T_SORTED_SET:
   case T_QUEUE:
   case T_MAPENTRY:
-  case T_VAR:
-  case T_RATIO:{
+  case T_VAR:{
     if (_is_small(p)) {
       nanoclj_val_t md = _so_vector_metadata(p);
       if (is_cell(md) && !is_nil(md)) mark(decode_pointer(md));
-     
       size_t s = _sosize_unchecked(p);
       nanoclj_val_t * data = _smalldata_unchecked(p);
       if (s > 0 && is_cell(data[0]) && !is_nil(data[0])) mark(decode_pointer(data[0]));
