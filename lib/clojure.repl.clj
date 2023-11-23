@@ -51,25 +51,25 @@
                      (do
                        (linenoise/history-append line hfn)
                        (print prompt)
-                       (try (let [ast (read-string line)
-                                  r (eval ast)]
+                       (try (let [ast (read-string line)]
                               (prn ast)
-                              (prn r)
-                              (when (defined? '*2) (def *3 *2))
-                              (when (defined? '*1) (def *2 *1))
-                              (def *1 r)
-                              (recur))
-                            (catch java.lang.Throwable e
-                              (set! *out* prev-out)
-                              (def *e e)
-                              (save)
-                              (set-color [ 0.85 0.41 0.3 ])
-                              (println line)
-                              (set-color [ 0.85 0.31 0.3 ])
-                              (println e)
-                              (restore)
-                              (newline)
-                              (recur)))
+                              (let [r (eval ast)]
+                                (prn r)
+                                (when (defined? '*2) (def *3 *2))
+                                (when (defined? '*1) (def *2 *1))
+                                (def *1 r)
+                                (recur)))
+                              (catch java.lang.Throwable e
+                                (set! *out* prev-out)
+                                (def *e e)
+                                (save)
+                                (set-color [ 0.85 0.41 0.3 ])
+                                (println line)
+                                (set-color [ 0.85 0.31 0.3 ])
+                                (println e)
+                                (restore)
+                                (newline)
+                                (recur)))
                        nil))))]
     (linenoise/history-load hfn)
     (f)
