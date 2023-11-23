@@ -74,6 +74,25 @@ static inline bool tensor_is_empty(const nanoclj_tensor_t * tensor) {
   return false;
 }
 
+/* Returns true if the tensor is an identity object (e.g. 1) */
+static inline bool tensor_is_identity(const nanoclj_tensor_t * tensor) {
+  if ((tensor->n_dims == 1 && tensor->ne[0] == 1) ||
+      (tensor->n_dims == 2 && tensor->ne[0] == 1 && tensor->ne[1] == 1) ||
+      (tensor->n_dims == 3 && tensor->ne[0] == 1 && tensor->ne[1] == 1 && tensor->ne[2] == 1)) {
+    /* Simple one-element object */
+    switch (tensor->type) {
+    case nanoclj_i8: return *(uint8_t*)tensor->data == 1;
+    case nanoclj_i16: return *(uint16_t*)tensor->data == 1;
+    case nanoclj_i32: return *(uint32_t*)tensor->data == 1;
+    case nanoclj_f32: return *(float*)tensor->data == 1.0f;
+    case nanoclj_f64: return *(double*)tensor->data == 1.0;
+    }
+  } else {
+    /* TODO */
+  }
+  return false;
+}
+
 static inline void tensor_set_f64(nanoclj_tensor_t * tensor, int i, double v) {
   ((double *)tensor->data)[i] = v;
 }
@@ -398,6 +417,14 @@ static inline nanoclj_tensor_t * mk_tensor_bigint(uint64_t v) {
   return tensor;
 }
 
+static inline void tensor_bigint_assign(nanoclj_tensor_t * tensor, uint64_t v) {
+  tensor_mutate_clear(tensor);
+  if (v) {
+    tensor_mutate_append_i32(tensor, v & 0xffffffff);
+    if (v >= UINT32_MAX) tensor_mutate_append_i32(tensor, v >> 32);
+  }
+}
+
 static inline nanoclj_tensor_t * mk_tensor_bigint_abs(int64_t v) {
   if (v == LLONG_MIN) {
     return tensor_mutate_lshift(mk_tensor_bigint(1), 64);
@@ -570,12 +597,13 @@ static inline nanoclj_tensor_t * tensor_bigint_dec(const nanoclj_tensor_t * tens
   return r;
 }
 
-static inline nanoclj_tensor_t * tensor_bigint_divmod(const nanoclj_tensor_t * a, const nanoclj_tensor_t * b, nanoclj_tensor_t ** rem) {
+static inline void tensor_bigint_divmod(const nanoclj_tensor_t * a, const nanoclj_tensor_t * b, nanoclj_tensor_t ** q, nanoclj_tensor_t ** rem) {
   if (b->ne[0] == 1) {
-    nanoclj_tensor_t * q = tensor_bigint_dup(a);
-    uint32_t r = tensor_bigint_mutate_idivmod(q, *(uint32_t*)b->data);
+    nanoclj_tensor_t * c = tensor_bigint_dup(a);
+    uint32_t r = tensor_bigint_mutate_idivmod(c, *(uint32_t*)b->data);
+    if (q) *q = c;
+    else tensor_free(c);
     if (rem) *rem = mk_tensor_bigint(r);
-    return q;
   } else {
     nanoclj_tensor_t * c = mk_tensor_bigint(0);
     nanoclj_tensor_t * current = mk_tensor_bigint(1);
@@ -606,7 +634,39 @@ static inline nanoclj_tensor_t * tensor_bigint_divmod(const nanoclj_tensor_t * a
     tensor_free(current);
     tensor_free(denom);
     tensor_free(tmp);
-    return c;
+
+    if (q) *q = c;
+    else tensor_free(c);
+  }
+}
+
+static inline void tensor_bigint_mutate_div(nanoclj_tensor_t * a, const nanoclj_tensor_t * b) {
+  if (b->ne[0] == 1) {
+    tensor_bigint_mutate_idivmod(a, *(uint32_t*)b->data);
+  } else {
+    nanoclj_tensor_t * current = mk_tensor_bigint(1);
+    nanoclj_tensor_t * denom = tensor_bigint_dup(b);
+    nanoclj_tensor_t * tmp = tensor_bigint_dup(a);
+    tensor_bigint_assign(a, 0);
+    
+    while (tensor_cmp(denom, tmp) != 1) {
+      tensor_mutate_lshift(current, 1);
+      tensor_mutate_lshift(denom, 1);
+    }
+    tensor_mutate_rshift(denom, 1);
+    tensor_mutate_rshift(current, 1);
+    while (!tensor_is_empty(current)) {
+      if (tensor_cmp(tmp, denom) != -1) {
+	tensor_bigint_mutate_sub(tmp, denom);
+	tensor_mutate_or(a, current);
+      }
+      tensor_mutate_rshift(current, 1);
+      tensor_mutate_rshift(denom, 1);
+    }
+
+    tensor_free(current);
+    tensor_free(denom);
+    tensor_free(tmp);
   }
 }
 
@@ -637,6 +697,25 @@ static inline nanoclj_tensor_t * tensor_bigint_pow(const nanoclj_tensor_t * base
     }
     tensor_free(base);
     return result;
+  }
+}
+
+static inline nanoclj_tensor_t * tensor_bigint_gcd(const nanoclj_tensor_t * a0, const nanoclj_tensor_t * b0) {
+  if (tensor_is_empty(b0)) {
+    return tensor_bigint_dup(a0);
+  } else {
+    nanoclj_tensor_t * rem;
+    tensor_bigint_divmod(a0, b0, NULL, &rem);
+    nanoclj_tensor_t * a = tensor_bigint_dup(b0);
+    nanoclj_tensor_t * b = rem;
+    while (!tensor_is_empty(b)) {
+      tensor_bigint_divmod(a, b, NULL, &rem);
+      tensor_free(a);
+      a = b;
+      b = rem;
+    }
+    tensor_free(b);
+    return a;
   }
 }
 

@@ -709,9 +709,10 @@ static inline long long to_long_w_def(nanoclj_val_t p, long long def) {
 	  return (long)tensor_bigint_to_uint64(c->_bignum.tensor) * c->_bignum.sign;
 	case T_RATIO:
 	  {
-	    nanoclj_tensor_t * t = tensor_bigint_divmod(c->_bignum.tensor, c->_bignum.denominator, NULL);
-	    long long v = c->_bignum.sign * tensor_bigint_to_uint64(t);
-	    tensor_free(t);
+	    nanoclj_tensor_t * q;
+	    tensor_bigint_divmod(c->_bignum.tensor, c->_bignum.denominator, &q, NULL);
+	    long long v = c->_bignum.sign * tensor_bigint_to_uint64(q);
+	    tensor_free(q);
 	    return v;
 	  }
 	}
@@ -746,16 +747,16 @@ static inline double to_double(nanoclj_val_t p) {
       case T_BIGINT: return c->_bignum.sign * tensor_bigint_to_double(c->_bignum.tensor);
       case T_RATIO:
 	{
-	  nanoclj_tensor_t * rem;
-	  nanoclj_tensor_t * t = tensor_bigint_divmod(c->_bignum.tensor, c->_bignum.denominator, &rem);
+	  nanoclj_tensor_t * q, * rem;
+	  tensor_bigint_divmod(c->_bignum.tensor, c->_bignum.denominator, &q, &rem);
 	  double v;
 	  if (tensor_is_empty(rem)) {
-	    v = c->_bignum.sign * tensor_bigint_to_double(t);
+	    v = c->_bignum.sign * tensor_bigint_to_double(q);
 	  } else {
-	    v = c->_bignum.sign * (tensor_bigint_to_double(t) + tensor_bigint_to_double(rem) / tensor_bigint_to_double(c->_bignum.denominator));
+	    v = c->_bignum.sign * (tensor_bigint_to_double(q) + tensor_bigint_to_double(rem) / tensor_bigint_to_double(c->_bignum.denominator));
 	  }
+	  tensor_free(q);
 	  tensor_free(rem);
-	  tensor_free(t);
 	  return v;
 	}
       case T_STRING:
@@ -1448,16 +1449,6 @@ static inline nanoclj_cell_t * mk_graph(nanoclj_t * sc, uint16_t type, uint32_t 
   return x;
 }
 
-static inline long long gcd_int64(long long a, long long b) {
-  long long temp;
-  while (b != 0) {
-    temp = a % b;
-    a = b;
-    b = temp;
-  }
-  return a;
-}
-
 /* signs are not normalized since LLONG_MIN/-1 would otherwise lead to overflow */
 static inline long long normalize_ratio_long(long long num, long long den, long long * output_den) {
   assert(den != 0);
@@ -1477,6 +1468,18 @@ static inline long long normalize_ratio_long(long long num, long long den, long 
     }
     *output_den = den;
     return num;
+  }
+}
+
+static inline void normalize_ratio_mutate(nanoclj_tensor_t * num, nanoclj_tensor_t * den) {
+  if (tensor_is_empty(den)) {
+    if (!tensor_is_empty(num)) tensor_bigint_assign(num, 1);
+  } else if (tensor_is_empty(num)) {
+    tensor_bigint_assign(den, 1);
+  } else {
+    nanoclj_tensor_t * g = tensor_bigint_gcd(num, den);
+    tensor_bigint_mutate_div(num, g);
+    tensor_bigint_mutate_div(den, g);
   }
 }
 
@@ -1545,6 +1548,11 @@ static inline nanoclj_cell_t * mk_bigint_from_tensor(nanoclj_t * sc, int sign, n
 
 static inline nanoclj_cell_t * mk_ratio_from_tensor(nanoclj_t * sc, int sign, nanoclj_tensor_t * num, nanoclj_tensor_t * den) {
   if (num && den) {
+    if (tensor_is_identity(den)) {
+      tensor_free(den);
+      return mk_bigint_from_tensor(sc, sign, num);
+    }
+
     nanoclj_cell_t * x = get_cell_x(sc, T_RATIO, T_GC_ATOM, NULL, NULL, NULL);
     if (x) {
       num->refcnt++;
@@ -3556,6 +3564,7 @@ static inline nanoclj_val_t mk_primitive(nanoclj_t * sc, const char *q) {
   if (div) {
     nanoclj_tensor_t * num = mk_tensor_bigint_from_string(first_digit, div - first_digit, 10);
     nanoclj_tensor_t * den = mk_tensor_bigint_from_string(div + 1, strlen(div + 1), 10);
+    normalize_ratio_mutate(num, den);
     return mk_pointer(mk_ratio_from_tensor(sc, sign, num, den));
   } else {
     char * end;
@@ -6421,6 +6430,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	if (!a.denominator->refcnt) tensor_free(a.denominator);
 	if (!b.tensor->refcnt) tensor_free(b.tensor);
 	if (!b.denominator->refcnt) tensor_free(b.denominator);
+	normalize_ratio_mutate(num, den);
 	s_return(sc, mk_pointer(mk_ratio_from_tensor(sc, a.sign == b.sign ? 1 : -1, num, den)));
       } else {
 	if (tx != T_BIGINT && ty != T_BIGINT) {
@@ -6458,33 +6468,17 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	if (!a.denominator->refcnt) tensor_free(a.denominator);
 	if (!b.tensor->refcnt) tensor_free(b.tensor);
 	if (!b.denominator->refcnt) tensor_free(b.denominator);
+	normalize_ratio_mutate(num, den);
 	s_return(sc, mk_pointer(mk_ratio_from_tensor(sc, a.sign == b.sign ? 1 : -1, num, den)));
-      } else if (tx == T_BIGINT) {
+      } else if (tx == T_BIGINT || ty == T_BIGINT) {
 	nanoclj_bignum_t a = to_bigint(arg0);
-	if (prim_type(arg1) == T_LONG) {
-	  nanoclj_tensor_t * t = tensor_bigint_dup(a.tensor);
-	  int32_t div = decode_integer(arg1);
-	  uint32_t m = tensor_bigint_mutate_idivmod(t, llabs(div));
-	  if (m == 0) {
-	    s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, a.sign == (div > 0) - (div < 0) ? 1 : -1, t)));
-	  } else {
-	    tensor_free(t);
-	  }
-	}
 	nanoclj_bignum_t b = to_bigint(arg1);
-	nanoclj_tensor_t * rem;
-	nanoclj_tensor_t * q = tensor_bigint_divmod(a.tensor, b.tensor, &rem);
-	if (tensor_is_empty(rem)) {
-	  if (!a.tensor->refcnt) tensor_free(a.tensor);
-	  if (!b.tensor->refcnt) tensor_free(b.tensor);
-	  tensor_free(rem);
-	  s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, a.sign == b.sign ? 1 : -1, q)));
-	} else {
-	  tensor_free(rem);
-	  tensor_free(q);
-	  /* TODO: normalize */
-	  s_return(sc, mk_pointer(mk_ratio_from_tensor(sc, a.sign == b.sign ? 1 : -1, a.tensor, b.tensor)));
-	}
+	nanoclj_tensor_t * num = tensor_bigint_dup(a.tensor);
+	nanoclj_tensor_t * den = tensor_bigint_dup(b.tensor);
+	if (!a.tensor->refcnt) tensor_free(a.tensor);
+	if (!b.tensor->refcnt) tensor_free(b.tensor);
+	normalize_ratio_mutate(num, den);
+	s_return(sc, mk_pointer(mk_ratio_from_tensor(sc, a.sign == b.sign ? 1 : -1, num, den)));
       } else {
 	long long divisor = to_long(arg1);
 	if (divisor == 0) {
@@ -6527,7 +6521,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, a.sign == (div > 0) - (div < 0) ? 1 : -1, t)));
 	} else {
 	  nanoclj_bignum_t b = to_bigint(arg1);
-	  nanoclj_tensor_t * q = tensor_bigint_divmod(a.tensor, b.tensor, NULL);
+	  nanoclj_tensor_t * q;
+	  tensor_bigint_divmod(a.tensor, b.tensor, &q, NULL);
 	  if (!a.tensor->refcnt) tensor_free(a.tensor);
 	  if (!b.tensor->refcnt) tensor_free(b.tensor);
 	  s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, a.sign == b.sign ? 1 : -1, q)));
@@ -6565,10 +6560,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	if (!tensor_is_empty(b.tensor)) {
 	  nanoclj_bignum_t a = to_bigint(arg0);
 	  nanoclj_tensor_t * rem;
-	  nanoclj_tensor_t * q = tensor_bigint_divmod(a.tensor, b.tensor, &rem);
+	  tensor_bigint_divmod(a.tensor, b.tensor, NULL, &rem);
 	  if (!a.tensor->refcnt) tensor_free(a.tensor);
 	  if (!b.tensor->refcnt) tensor_free(b.tensor);
-	  tensor_free(q);
 	  s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, a.sign, rem)));
 	}
       } else {

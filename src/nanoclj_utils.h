@@ -110,5 +110,14 @@ static inline uint8_t * convert_imageview(imageview_t iv, nanoclj_internal_forma
   return output;
 }
 
+static inline long long gcd_int64(long long a, long long b) {
+  while (b != 0) {
+    long long temp = a % b;
+    a = b;
+    b = temp;
+  }
+  return a;
+}
+
 #endif
 
