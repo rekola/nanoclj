@@ -290,7 +290,6 @@ static nanoclj_val_t numeric_tower_expt(nanoclj_t * sc, nanoclj_cell_t * args) {
   if (is_nil(x) || is_nil(y)) {
     return nanoclj_throw(sc, sc->NullPointerException);
   }
-  
   int tx = type(x), ty = type(y);
 
   if (tx == T_RATIO && ty == T_RATIO) {
@@ -329,6 +328,32 @@ static nanoclj_val_t numeric_tower_expt(nanoclj_t * sc, nanoclj_cell_t * args) {
   }
 
   return mk_double(pow(to_double(x), to_double(y)));
+}
+
+static nanoclj_val_t numeric_tower_gcd(nanoclj_t * sc, nanoclj_cell_t * args) {
+  nanoclj_val_t x = first(sc, args);
+  nanoclj_val_t y = second(sc, args);
+
+  if (is_nil(x) || is_nil(y)) {
+    return nanoclj_throw(sc, sc->NullPointerException);
+  }
+  int tx = type(x), ty = type(y);
+
+  if (tx == T_DOUBLE || ty == T_DOUBLE) {
+    /* TODO */
+  } else if (tx == T_RATIO || ty == T_RATIO) {
+    /* TODO */
+  } else if (tx == T_BIGINT || ty == T_BIGINT) {
+    nanoclj_bignum_t a = to_bigint(x), b = to_bigint(y);
+    nanoclj_tensor_t * g = tensor_bigint_gcd(a.tensor, b.tensor);
+    if (!a.tensor->refcnt) tensor_free(a.tensor);
+    if (!b.tensor->refcnt) tensor_free(b.tensor);
+    return mk_pointer(mk_bigint_from_tensor(sc, a.sign == b.sign ? a.sign : 1, g));
+  } else {
+    return mk_long(sc, gcd_int64(to_long(x), to_long(y)));
+  }
+
+  return mk_int(1);
 }
 
 static inline nanoclj_val_t browse_url(nanoclj_t * sc, nanoclj_cell_t * args) {
@@ -1210,6 +1235,7 @@ static inline void register_functions(nanoclj_t * sc) {
   intern(sc, Math, def_symbol(sc, "PI"), mk_double(M_PI));
 
   intern_foreign_func(sc, numeric_tower, "expt", numeric_tower_expt, 2, 2);
+  intern_foreign_func(sc, numeric_tower, "gcd", numeric_tower_gcd, 2, 2);
 
   intern_foreign_func(sc, browse, "browse-url", browse_url, 1, 1);
 
