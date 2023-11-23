@@ -184,6 +184,10 @@ static nanoclj_val_t System_getSystemTimes(nanoclj_t * sc, nanoclj_cell_t * args
 
 /* Math */
 
+static nanoclj_val_t Math_abs(nanoclj_t * sc, nanoclj_cell_t * args) {
+  return mk_double(fabs(to_double(first(sc, args))));
+}
+
 static nanoclj_val_t Math_sin(nanoclj_t * sc, nanoclj_cell_t * args) {
   return mk_double(sin(to_double(first(sc, args))));
 }
@@ -1215,6 +1219,7 @@ static inline void register_functions(nanoclj_t * sc) {
   intern_foreign_func(sc, System, "setProperty", System_setProperty, 0, 1);
   intern_foreign_func(sc, System, "glob", System_glob, 1, 1);
   intern_foreign_func(sc, System, "getSystemTimes", System_getSystemTimes, 0, 0);
+  intern_foreign_func(sc, Math, "abs", Math_abs, 1, 1);
   intern_foreign_func(sc, Math, "sin", Math_sin, 1, 1);
   intern_foreign_func(sc, Math, "cos", Math_cos, 1, 1);
   intern_foreign_func(sc, Math, "exp", Math_exp, 1, 1);
