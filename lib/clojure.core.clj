@@ -95,10 +95,6 @@
                 m
                 (+ m div))))
 
-(defn abs
-  "Returns the absolute value of n"
-  [n] (if (>= n 0) n (- n)))
-
 (defn ratio?
   "Returns true if n is a Ratio"
   [n] (instance? clojure.lang.Ratio n))
@@ -114,10 +110,6 @@
 (defn denominator
   "Returns the denominator of a Ratio"
   [n] (if (ratio? n) (n 1) 1))
-
-(defn quot
-  "Returns the quotinent of dividing a by b"
-  [a b] (long (/ a b)))
 
 ; Miscellaneous
 

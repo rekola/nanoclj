@@ -706,7 +706,7 @@ static inline long long to_long_w_def(nanoclj_val_t p, long long def) {
 	case T_CLASS:
 	  return c->type;
 	case T_BIGINT:
-	  return tensor_bigint_to_uint64(c->_bignum.tensor) * c->_bignum.sign;
+	  return (long)tensor_bigint_to_uint64(c->_bignum.tensor) * c->_bignum.sign;
 	case T_RATIO:
 	  {
 	    nanoclj_tensor_t * t = tensor_bigint_divmod(c->_bignum.tensor, c->_bignum.denominator, NULL);
@@ -1458,6 +1458,7 @@ static inline long long gcd_int64(long long a, long long b) {
   return a;
 }
 
+/* signs are not normalized since LLONG_MIN/-1 would otherwise lead to overflow */
 static inline long long normalize_ratio_long(long long num, long long den, long long * output_den) {
   assert(den != 0);
   if (den == 0) {
@@ -1470,12 +1471,9 @@ static inline long long normalize_ratio_long(long long num, long long den, long 
     return 0;
   } else {
     long long g = gcd_int64(num, den);
-    num /= g;
-    den /= g;
-    /* Ensure that the denominator is positive */
-    if (den < 0) {
-      num = -num;
-      den = -den;
+    if (g != -1) {
+      num /= g;
+      den /= g;
     }
     *output_den = den;
     return num;
@@ -1570,7 +1568,8 @@ static inline nanoclj_cell_t * mk_ratio_from_tensor(nanoclj_t * sc, int sign, na
 
 static inline nanoclj_cell_t * mk_ratio_long(nanoclj_t * sc, long long num, long long den) {
   int sign = (num < 0 && den > 0) || (num > 0 && den < 0) ? -1 : 1;
-  return mk_ratio_from_tensor(sc, sign, mk_tensor_bigint(llabs(num)), mk_tensor_bigint(llabs(den)));
+  return mk_ratio_from_tensor(sc, sign, mk_tensor_bigint_abs(num), mk_tensor_bigint_abs(den));
+  
 }
 
 static inline nanoclj_cell_t * mk_audio(nanoclj_t * sc, size_t frames, uint8_t channels, int32_t sample_rate) {
@@ -5228,6 +5227,15 @@ static inline bool unpack_args_1(nanoclj_t * sc, nanoclj_val_t * arg0) {
   return false;
 }
 
+static inline bool unpack_args_1_not_nil(nanoclj_t * sc, nanoclj_val_t * arg0) {
+  if (!unpack_args_1(sc, arg0)) return false;
+  if (is_nil(*arg0)) {
+    nanoclj_throw(sc, sc->NullPointerException);
+    return false;
+  }
+  return true;
+}
+
 static inline bool unpack_args_1_plus(nanoclj_t * sc, nanoclj_val_t * arg0, nanoclj_cell_t ** arg_next) {
   if (sc->args) {
     *arg0 = first(sc, sc->args);
@@ -5255,6 +5263,15 @@ static inline bool unpack_args_2(nanoclj_t * sc, nanoclj_val_t * arg0, nanoclj_v
   const char * fn = dispatch_table[(int)sc->op].name;
   nanoclj_throw(sc, mk_arity_exception(sc, seq_length(sc, sc->args), ns, mk_string(sc, fn)));
   return false;
+}
+
+static inline bool unpack_args_2_not_nil(nanoclj_t * sc, nanoclj_val_t * arg0, nanoclj_val_t * arg1) {
+  if (!unpack_args_2(sc, arg0, arg1)) return false;
+  if (is_nil(*arg0) || is_nil(*arg1)) {
+    nanoclj_throw(sc, sc->NullPointerException);
+    return false;
+  }
+  return true;
 }
 
 static inline bool unpack_args_3(nanoclj_t * sc, nanoclj_val_t * arg0, nanoclj_val_t * arg1, nanoclj_val_t * arg2) {
@@ -6182,7 +6199,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       fprintf(stderr, "no handler found\n");
       return false;
     }
-      
+    
   case OP_PAPPLY:              /* apply* */
     if (!unpack_args_2(sc, &arg0, &arg1)) {
       return false;
@@ -6207,13 +6224,37 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     } else {
       s_return(sc, arg0);
     }
-    
+
+  case OP_ABS:
+    if (!unpack_args_1_not_nil(sc, &arg0)) {
+      return false;
+    }
+    switch (prim_type(arg0)) {
+    case T_LONG: s_return(sc, mk_long(sc, abs(decode_integer(arg0))));
+    case T_DOUBLE: s_return(sc, mk_double(fabs(arg0.as_double)));
+    case T_NIL: {
+      nanoclj_cell_t * c = decode_pointer(arg0);
+      switch (_type(c)) {
+      case T_LONG:
+	{
+	  long long v = _lvalue_unchecked(c);
+	  /* Clojure returns LLONG_MIN for (abs LLONG_MIN) */
+	  if (v == LLONG_MIN) s_return(sc, arg0);
+	  else mk_long(sc, llabs(v));
+	}
+      case T_RATIO:
+	s_return(sc, mk_pointer(mk_ratio_from_tensor(sc, 1, c->_bignum.tensor, c->_bignum.denominator)));
+      case T_BIGINT:
+	s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, 1, c->_bignum.tensor)));
+      }
+    }
+    }
+    nanoclj_throw(sc, mk_class_cast_exception(sc, "Argument cannot be cast to java.lang.Number"));
+    return false;
+
   case OP_INC:
   case OP_INCP:
-    if (!unpack_args_1(sc, &arg0)) {
-      return false;
-    } else if (is_nil(arg0)) {
-      nanoclj_throw(sc, sc->NullPointerException);
+    if (!unpack_args_1_not_nil(sc, &arg0)) {
       return false;
     }
     switch (prim_type(arg0)) {
@@ -6256,10 +6297,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 
   case OP_DEC:
   case OP_DECP:
-    if (!unpack_args_1(sc, &arg0)) {
-      return false;
-    } else if (is_nil(arg0)) {
-      nanoclj_throw(sc, sc->NullPointerException);
+    if (!unpack_args_1_not_nil(sc, &arg0)) {
       return false;
     }
     switch (prim_type(arg0)) {
@@ -6302,10 +6340,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 
   case OP_ADD:                 /* add */
   case OP_ADDP:
-    if (!unpack_args_2(sc, &arg0, &arg1)) {
-      return false;
-    } else if (is_nil(arg0) || is_nil(arg1)) {
-      nanoclj_throw(sc, sc->NullPointerException);
+    if (!unpack_args_2_not_nil(sc, &arg0, &arg1)) {
       return false;
     } else {
       uint16_t tx = type(arg0), ty = type(arg1);
@@ -6338,10 +6373,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     
   case OP_SUB:                 /* minus */
   case OP_SUBP:
-    if (!unpack_args_2(sc, &arg0, &arg1)) {
-      return false;
-    } else if (is_nil(arg0) || is_nil(arg1)) {
-      nanoclj_throw(sc, sc->NullPointerException);
+    if (!unpack_args_2_not_nil(sc, &arg0, &arg1)) {
       return false;
     } else {
       uint16_t tx = type(arg0), ty = type(arg1);
@@ -6372,10 +6404,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   
   case OP_MUL:                 /* multiply */
   case OP_MULP:
-    if (!unpack_args_2(sc, &arg0, &arg1)) {
-      return false;
-    } else if (is_nil(arg0) || is_nil(arg1)) {
-      nanoclj_throw(sc, sc->NullPointerException);
+    if (!unpack_args_2_not_nil(sc, &arg0, &arg1)) {
       return false;
     } else {
       uint16_t tx = type(arg0), ty = type(arg1);
@@ -6412,10 +6441,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
     
   case OP_DIV:                 /* divide */
-    if (!unpack_args_2(sc, &arg0, &arg1)) {
-      return false;
-    } else if (is_nil(arg0) || is_nil(arg1)) {
-      nanoclj_throw(sc, sc->NullPointerException);
+    if (!unpack_args_2_not_nil(sc, &arg0, &arg1)) {
       return false;
     } else {
       uint16_t tx = type(arg0), ty = type(arg1);
@@ -6441,6 +6467,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  uint32_t m = tensor_bigint_mutate_idivmod(t, llabs(div));
 	  if (m == 0) {
 	    s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, a.sign == (div > 0) - (div < 0) ? 1 : -1, t)));
+	  } else {
+	    tensor_free(t);
 	  }
 	}
 	nanoclj_bignum_t b = to_bigint(arg1);
@@ -6465,9 +6493,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	} else {
 	  long long dividend = to_long(arg0);
 	  if (dividend == LLONG_MIN && divisor == -1) {
-	    nanoclj_tensor_t * t = mk_tensor_bigint(LLONG_MAX);
-	    tensor_bigint_mutate_add_int(t, 1);
-	    s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, divisor, t)));
+	    nanoclj_tensor_t * t = mk_tensor_bigint_abs(dividend);
+	    s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, 1, t)));
 	  } else if (dividend % divisor == 0) {
 	    s_return(sc, mk_long(sc, dividend / divisor));
 	  } else {
@@ -6478,12 +6505,52 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	}
       }
     }
+
+  case OP_QUOT:                 /* quot */
+    if (!unpack_args_2_not_nil(sc, &arg0, &arg1)) {
+      return false;
+    } else {
+      uint16_t tx = type(arg0), ty = type(arg1);
+      if (!is_numeric_type(tx) || !is_numeric_type(ty)) {
+      	nanoclj_throw(sc, mk_class_cast_exception(sc, "Argument cannot be cast to java.lang.Number"));
+	return false;
+      } else if (tx == T_DOUBLE || ty == T_DOUBLE) {
+	s_return(sc, mk_double(trunc(to_double(arg0) / to_double(arg1))));
+      } else if (tx == T_RATIO || ty == T_RATIO) {
+	s_return(sc, mk_nil());
+      } else if (tx == T_BIGINT) {
+	nanoclj_bignum_t a = to_bigint(arg0);
+	if (prim_type(arg1) == T_LONG) {
+	  nanoclj_tensor_t * t = tensor_bigint_dup(a.tensor);
+	  int32_t div = decode_integer(arg1);
+	  tensor_bigint_mutate_idivmod(t, llabs(div));
+	  s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, a.sign == (div > 0) - (div < 0) ? 1 : -1, t)));
+	} else {
+	  nanoclj_bignum_t b = to_bigint(arg1);
+	  nanoclj_tensor_t * q = tensor_bigint_divmod(a.tensor, b.tensor, NULL);
+	  if (!a.tensor->refcnt) tensor_free(a.tensor);
+	  if (!b.tensor->refcnt) tensor_free(b.tensor);
+	  s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, a.sign == b.sign ? 1 : -1, q)));
+	}
+      } else {
+	long long divisor = to_long(arg1);
+	if (divisor == 0) {
+	  nanoclj_throw(sc, mk_arithmetic_exception(sc, "Divide by zero"));
+	  return false;
+	} else {
+	  long long dividend = to_long(arg0);
+	  if (dividend == LLONG_MIN && divisor == -1) {
+	    nanoclj_tensor_t * t = mk_tensor_bigint_abs(dividend);
+	    s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, 1, t)));
+	  } else {
+	    s_return(sc, mk_long(sc, dividend / divisor));
+	  }
+	}
+      }
+    }
     
   case OP_REM:                 /* rem */
-    if (!unpack_args_2(sc, &arg0, &arg1)) {
-      return false;
-    } else if (is_nil(arg0) || is_nil(arg1)) {
-      nanoclj_throw(sc, sc->NullPointerException);
+    if (!unpack_args_2_not_nil(sc, &arg0, &arg1)) {
       return false;
     } else {
       uint16_t tx = type(arg0), ty = type(arg1);
@@ -6786,10 +6853,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     s_retbool(is_false(arg0));
     
   case OP_EQUIV:                  /* equiv */
-    if (!unpack_args_2(sc, &arg0, &arg1)) {
-      return false;
-    } else if (is_nil(arg0) || is_nil(arg1)) {
-      nanoclj_throw(sc, sc->NullPointerException);
+    if (!unpack_args_2_not_nil(sc, &arg0, &arg1)) {
       return false;
     } else if (!is_number(arg0) || !is_number(arg1)) {
       nanoclj_throw(sc, mk_class_cast_exception(sc, "Argument cannot be cast to java.lang.Number"));
@@ -6829,10 +6893,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     s_retbool(equals(sc, arg0, arg1));
 
   case OP_BIT_AND:
-    if (!unpack_args_2(sc, &arg0, &arg1)) {
-      return false;
-    } else if (is_nil(arg0) || is_nil(arg1)) {
-      nanoclj_throw(sc, sc->NullPointerException);
+    if (!unpack_args_2_not_nil(sc, &arg0, &arg1)) {
       return false;
     } else {
       uint16_t tx = type(arg0), ty = type(arg1);
@@ -6852,10 +6913,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
 
   case OP_BIT_OR:
-    if (!unpack_args_2(sc, &arg0, &arg1)) {
-      return false;
-    } else if (is_nil(arg0) || is_nil(arg1)) {
-      nanoclj_throw(sc, sc->NullPointerException);
+    if (!unpack_args_2_not_nil(sc, &arg0, &arg1)) {
       return false;
     } else {
       uint16_t tx = type(arg0), ty = type(arg1);
@@ -6875,20 +6933,14 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
 
   case OP_BIT_XOR:
-    if (!unpack_args_2(sc, &arg0, &arg1)) {
-      return false;
-    } else if (is_nil(arg0) || is_nil(arg1)) {
-      nanoclj_throw(sc, sc->NullPointerException);
+    if (!unpack_args_2_not_nil(sc, &arg0, &arg1)) {
       return false;
     } else {
       s_return(sc, mk_long(sc, to_long(arg0) ^ to_long(arg1)));
     }
 
   case OP_BIT_SHIFT_LEFT:
-    if (!unpack_args_2(sc, &arg0, &arg1)) {
-      return false;
-    } else if (is_nil(arg0) || is_nil(arg1)) {
-      nanoclj_throw(sc, sc->NullPointerException);
+    if (!unpack_args_2_not_nil(sc, &arg0, &arg1)) {
       return false;
     } else if (is_numeric_type(type(arg1))) {
       long long n = to_long(arg1);
@@ -6915,14 +6967,11 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  }
 	}
       }
-      nanoclj_throw(sc, mk_class_cast_exception(sc, "Argument cannot be cast to java.lang.Number"));
     }
+    nanoclj_throw(sc, mk_class_cast_exception(sc, "Argument cannot be cast to java.lang.Number"));
 
   case OP_BIT_SHIFT_RIGHT:
-    if (!unpack_args_2(sc, &arg0, &arg1)) {
-      return false;
-    } else if (is_nil(arg0) || is_nil(arg1)) {
-      nanoclj_throw(sc, sc->NullPointerException);
+    if (!unpack_args_2_not_nil(sc, &arg0, &arg1)) {
       return false;
     } else {
       uint16_t tx = type(arg0), ty = type(arg1);
@@ -6941,10 +6990,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
 
   case OP_UNSIGNED_BIT_SHIFT_RIGHT:
-    if (!unpack_args_2(sc, &arg0, &arg1)) {
-      return false;
-    } else if (is_nil(arg0) || is_nil(arg1)) {
-      nanoclj_throw(sc, sc->NullPointerException);
+    if (!unpack_args_2_not_nil(sc, &arg0, &arg1)) {
       return false;
     } else {
       s_return(sc, mk_long(sc, (unsigned long long)to_long(arg0) >> to_long(arg1)));
@@ -7118,10 +7164,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
     
   case OP_CLOSEM:        /* .close */
-    if (!unpack_args_1(sc, &arg0)) {
-      return false;
-    } else if (is_nil(arg0)) {
-      nanoclj_throw(sc, sc->NullPointerException);
+    if (!unpack_args_1_not_nil(sc, &arg0)) {
       return false;
     } else if (is_cell(arg0)) {
       nanoclj_cell_t * c = decode_pointer(arg0);
@@ -7765,10 +7808,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     s_return(sc, mk_nil());
 
   case OP_SET_BG_COLOR:
-    if (!unpack_args_1(sc, &arg0)) {
-      return false;
-    } else if (is_nil(arg0)) {
-      nanoclj_throw(sc, sc->NullPointerException);
+    if (!unpack_args_1_not_nil(sc, &arg0)) {
       return false;
     } else {
       set_bg_color(sc, to_color(arg0), get_out_port(sc));

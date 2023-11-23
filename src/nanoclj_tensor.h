@@ -318,31 +318,33 @@ static inline void tensor_mutate_trim(nanoclj_tensor_t * tensor) {
   }
 }
 
-static inline void tensor_mutate_lshift(nanoclj_tensor_t * a, uint_fast8_t n) {
-  if (tensor_is_empty(a)) return;
-  if (n >= 32) {
-    int n2 = n / 32;
-    for (int i = 0; i < n2; i++) tensor_mutate_append_i32(a, 0);
-    uint32_t * limbs = a->data;
-    for (int i = a->ne[0] - 1; i >= n2; i--) {
-      limbs[i] = limbs[i - n2];
+static inline nanoclj_tensor_t * tensor_mutate_lshift(nanoclj_tensor_t * a, uint_fast8_t n) {
+  if (!tensor_is_empty(a)) {
+    if (n >= 32) {
+      int n2 = n / 32;
+      for (int i = 0; i < n2; i++) tensor_mutate_append_i32(a, 0);
+      uint32_t * limbs = a->data;
+      for (int i = a->ne[0] - 1; i >= n2; i--) {
+	limbs[i] = limbs[i - n2];
+      }
+      for (int i = 0; i < n2; i++) {
+	limbs[i] = 0;
+      }
+      n -= n2 * 32;
     }
-    for (int i = 0; i < n2; i++) {
-      limbs[i] = 0;
+    if (n != 0) {
+      uint32_t * limbs = a->data;
+      uint32_t overflow = limbs[a->ne[0] - 1] >> (32 - n);
+      for (int64_t i = a->ne[0] - 1; i > 0; i--) {
+	limbs[i] = (limbs[i] << n) | (limbs[i - 1] >> (32 - n));
+      }
+      limbs[0] <<= n;
+      if (overflow) {
+	tensor_mutate_append_i32(a, overflow);
+      }
     }
-    n -= n2 * 32;
   }
-  if (n != 0) {
-    uint32_t * limbs = a->data;
-    uint32_t overflow = limbs[a->ne[0] - 1] >> (32 - n);
-    for (int64_t i = a->ne[0] - 1; i > 0; i--) {
-      limbs[i] = (limbs[i] << n) | (limbs[i - 1] >> (32 - n));
-    }
-    limbs[0] <<= n;
-    if (overflow) {
-      tensor_mutate_append_i32(a, overflow);
-    }
-  }
+  return a;
 }
 
 static inline void tensor_mutate_rshift(nanoclj_tensor_t * a, uint_fast8_t n) {
@@ -396,6 +398,13 @@ static inline nanoclj_tensor_t * mk_tensor_bigint(uint64_t v) {
   return tensor;
 }
 
+static inline nanoclj_tensor_t * mk_tensor_bigint_abs(int64_t v) {
+  if (v == LLONG_MIN) {
+    return tensor_mutate_lshift(mk_tensor_bigint(1), 64);
+  } else {
+    return mk_tensor_bigint(llabs(v));
+  }
+}
 static inline nanoclj_tensor_t * tensor_bigint_dup(const nanoclj_tensor_t * tensor) {
   nanoclj_tensor_t * r = mk_tensor_1d(nanoclj_i32, tensor->ne[0]);
   memcpy(r->data, tensor->data, tensor->nb[1]);
