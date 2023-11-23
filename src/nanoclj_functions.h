@@ -293,11 +293,13 @@ static nanoclj_val_t numeric_tower_expt(nanoclj_t * sc, nanoclj_cell_t * args) {
   
   int tx = type(x), ty = type(y);
 
-  if (tx == T_RATIO && ty == T_LONG) {
+  if (tx == T_RATIO && ty == T_RATIO) {
+    /* TODO */
+  } else {
     long exp = to_long(y);
     if (exp == 0) {
       return mk_int(1);
-    } else {
+    } else if (tx == T_RATIO) {
       uint64_t exp2 = llabs(exp);
       nanoclj_cell_t * c = decode_pointer(x);
       int sign = c->_bignum.sign == 1 || (exp & 1) == 0 ? 1 : -1;
@@ -308,22 +310,22 @@ static nanoclj_val_t numeric_tower_expt(nanoclj_t * sc, nanoclj_cell_t * args) {
       } else {
 	return mk_pointer(mk_ratio_from_tensor(sc, sign, b, a));
       }
+    } else if (tx == T_LONG && ty == T_LONG) {
+      long long base = to_long(x);
+      long long res;
+      if (base == 0 || base == 1) {
+	return mk_long(sc, base);
+      } else if (exp >= 0 && exp < 256 && !ipow_overflow(base, exp, &res)) {
+	return mk_long(sc, res);
+      } else if (exp > -256 && exp < 0 && !ipow_overflow(base, -exp, &res)) {
+	return mk_pointer(mk_ratio_long(sc, 1, res));
+      }
     }
-  } else if (tx == T_LONG && ty == T_LONG) {
-    long long base = to_long(x), exp = to_long(y);
-    long long res;
-    if (base == 0 || base == 1) {
-      return mk_long(sc, base);
-    } else if (exp >= 0 && exp < 256 && !ipow_overflow(base, exp, &res)) {
-      return mk_long(sc, res);
-    } else if (exp > -256 && exp < 0 && !ipow_overflow(base, -exp, &res)) {
-      return mk_pointer(mk_ratio_long(sc, 1, res));
-    } else if (exp >= 0) {
-      nanoclj_tensor_t * t0 = mk_tensor_bigint(llabs(base));
-      nanoclj_tensor_t * t = tensor_bigint_pow(t0, exp);
-      if (!t0->refcnt) tensor_free(t0);
-      return mk_pointer(mk_bigint_from_tensor(sc, base > 0 || (exp & 1) == 0 ? 1 : -1, t));
-    }
+    
+    nanoclj_bignum_t base = to_bigint(x);
+    nanoclj_tensor_t * t = tensor_bigint_pow(base.tensor, exp);
+    if (!base.tensor->refcnt) tensor_free(base.tensor);
+    return mk_pointer(mk_bigint_from_tensor(sc, base.sign > 0 || !(exp & 1) ? 1 : -1, t));
   }
 
   return mk_double(pow(to_double(x), to_double(y)));
@@ -1039,56 +1041,14 @@ static inline nanoclj_val_t clojure_data_csv_read_csv(nanoclj_t * sc, nanoclj_ce
 #define MAX_COMPLETION_SYMBOLS 65535
 
 static nanoclj_t * linenoise_sc = NULL;
-static int num_completion_symbols = 0;
-static const char * completion_symbols[MAX_COMPLETION_SYMBOLS];
- 
+
 static inline void completion(const char *input, linenoiseCompletions *lc) {
-  int i, n = strlen(input);
-  bool is_in_string = false;
-  for (i = 0; i < n; i++) {
-    if (input[i] == '"') {
-      is_in_string = !is_in_string;
-    } else if (input[i] == '\\' && i + 1 < n && input[i + 1] == '"') {
-      i++;
-    }
-  }
-  
-  if (is_in_string) {
-    // TODO: auto-complete urls and paths
-  } else {
-    if (!num_completion_symbols) {
-      const char * expr = "(ns-interns *ns*)";
-      nanoclj_val_t sym = nanoclj_eval_string(linenoise_sc, expr, strlen(expr));
-      for ( ; sym.as_long != linenoise_sc->EMPTY.as_long && num_completion_symbols < MAX_COMPLETION_SYMBOLS; sym = cdr(sym)) {
-	nanoclj_val_t v = car(sym);
-	if (is_symbol(v)) {
-	  completion_symbols[num_completion_symbols++] = decode_symbol(v)->name.ptr;
-	} else if (is_mapentry(v)) {
-	  completion_symbols[num_completion_symbols++] = decode_symbol(car(v))->name.ptr;
-	}
-      }
-    }
-    
-    for (i = n; i > 0 && !(isspace(input[i - 1]) ||
-			   input[i - 1] == '(' ||
-			   input[i - 1] == '[' ||
-			   input[i - 1] == '{'); i--) { }
-    char buffer[1024];
-    int prefix_len = 0;
-    if (i > 0) {
-      prefix_len = i;
-      strncpy(buffer, input, i);
-      buffer[prefix_len] = 0;
-      input += i;
-      n -= i;
-    }
-    for (i = 0; i < num_completion_symbols; i++) {
-      const char * s = completion_symbols[i];
-      if (strncmp(input, s, n) == 0) {
-	strncpy(buffer + prefix_len, s, 1024 - prefix_len);
-	buffer[1023] = 0;
-	linenoiseAddCompletion(lc, buffer);
-      }
+  nanoclj_cell_t * f = find_slot_in_env(linenoise_sc, linenoise_sc->envir, linenoise_sc->AUTOCOMPLETE_HOOK, true);
+  if (f) {
+    nanoclj_val_t hook = slot_value_in_env(f);
+    if (!is_nil(hook)) {
+      nanoclj_val_t line = mk_string(linenoise_sc, input);
+      
     }
   }
 }
@@ -1149,7 +1109,6 @@ static inline void on_window_size() {
 
 static inline void init_linenoise(nanoclj_t * sc) {
   linenoise_sc = sc;
-    
   linenoiseSetMultiLine(0);
   linenoiseSetClearOutput(1);
   linenoiseSetupSigWinchHandler();
@@ -1164,12 +1123,6 @@ static inline void init_linenoise(nanoclj_t * sc) {
 }
 
 static inline nanoclj_val_t linenoise_readline(nanoclj_t * sc, nanoclj_cell_t * args) {
-  nanoclj_val_t out = get_out_port(sc);
-  if (is_cell(out)) {
-    nanoclj_cell_t * o = decode_pointer(out);
-    if (is_writable(o)) _line_unchecked(o)++;
-  }
-  
   strview_t prompt = to_strview(first(sc, args));
   char * line = linenoise(prompt.ptr, prompt.size);
   if (line == NULL) return mk_nil();

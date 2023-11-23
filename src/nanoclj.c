@@ -706,7 +706,14 @@ static inline long long to_long_w_def(nanoclj_val_t p, long long def) {
 	case T_CLASS:
 	  return c->type;
 	case T_BIGINT:
-	  return tensor_bigint_to_long(c->_bignum.tensor) * c->_bignum.sign;
+	  return tensor_bigint_to_uint64(c->_bignum.tensor) * c->_bignum.sign;
+	case T_RATIO:
+	  {
+	    nanoclj_tensor_t * t = tensor_bigint_divmod(c->_bignum.tensor, c->_bignum.denominator, NULL);
+	    long long v = c->_bignum.sign * tensor_bigint_to_uint64(t);
+	    tensor_free(t);
+	    return v;
+	  }
 	}
       }
     }
@@ -737,7 +744,20 @@ static inline double to_double(nanoclj_val_t p) {
       case T_LONG:
       case T_DATE: return (double)_lvalue_unchecked(c);
       case T_BIGINT: return c->_bignum.sign * tensor_bigint_to_double(c->_bignum.tensor);
-      case T_RATIO: return c->_bignum.sign * tensor_bigint_to_double(c->_bignum.tensor) / tensor_bigint_to_double(c->_bignum.denominator);
+      case T_RATIO:
+	{
+	  nanoclj_tensor_t * rem;
+	  nanoclj_tensor_t * t = tensor_bigint_divmod(c->_bignum.tensor, c->_bignum.denominator, &rem);
+	  double v;
+	  if (tensor_is_empty(rem)) {
+	    v = c->_bignum.sign * tensor_bigint_to_double(t);
+	  } else {
+	    v = c->_bignum.sign * (tensor_bigint_to_double(t) + tensor_bigint_to_double(rem) / tensor_bigint_to_double(c->_bignum.denominator));
+	  }
+	  tensor_free(rem);
+	  tensor_free(t);
+	  return v;
+	}
       case T_STRING:
 	{
 	  size_t n = get_size(c);
@@ -6424,8 +6444,19 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  }
 	}
 	nanoclj_bignum_t b = to_bigint(arg1);
-	/* TODO: normalize */
-	s_return(sc, mk_pointer(mk_ratio_from_tensor(sc, a.sign == b.sign ? 1 : -1, a.tensor, b.tensor)));
+	nanoclj_tensor_t * rem;
+	nanoclj_tensor_t * q = tensor_bigint_divmod(a.tensor, b.tensor, &rem);
+	if (tensor_is_empty(rem)) {
+	  if (!a.tensor->refcnt) tensor_free(a.tensor);
+	  if (!b.tensor->refcnt) tensor_free(b.tensor);
+	  tensor_free(rem);
+	  s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, a.sign == b.sign ? 1 : -1, q)));
+	} else {
+	  tensor_free(rem);
+	  tensor_free(q);
+	  /* TODO: normalize */
+	  s_return(sc, mk_pointer(mk_ratio_from_tensor(sc, a.sign == b.sign ? 1 : -1, a.tensor, b.tensor)));
+	}
       } else {
 	long long divisor = to_long(arg1);
 	if (divisor == 0) {
@@ -6460,31 +6491,27 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       	nanoclj_throw(sc, mk_class_cast_exception(sc, "Argument cannot be cast to java.lang.Number"));
 	return false;
       } else if (tx == T_DOUBLE || ty == T_DOUBLE) {
-	double a = to_double(arg0), b = to_double(arg1);
-	if (b == 0.0) {
-	  nanoclj_throw(sc, mk_arithmetic_exception(sc, "Division by zero"));
-	  return false;
+	double b = to_double(arg1);
+	if (b != 0.0) s_return(sc, mk_double(fmod(to_double(arg0), b)));
+      } else if (tx == T_BIGINT || ty == T_BIGINT) {
+	nanoclj_bignum_t b = to_bigint(arg1);
+	if (!tensor_is_empty(b.tensor)) {
+	  nanoclj_bignum_t a = to_bigint(arg0);
+	  nanoclj_tensor_t * rem;
+	  nanoclj_tensor_t * q = tensor_bigint_divmod(a.tensor, b.tensor, &rem);
+	  if (!a.tensor->refcnt) tensor_free(a.tensor);
+	  if (!b.tensor->refcnt) tensor_free(b.tensor);
+	  tensor_free(q);
+	  s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, a.sign, rem)));
 	}
-	double res = fmod(a, b);
-	/* set remainder sign the same as the first arg */
-	if (res > 0 && a < 0) res -= fabs(b);
-	else if (res < 0 && a > 0) res += fabs(b);
-	
-	s_return(sc, mk_double(res));
       } else {
-	long long a = to_long(arg0), b = to_long(arg1);
-	if (b == 0) {
-	  nanoclj_throw(sc, mk_arithmetic_exception(sc, "Division by zero"));
-	  return false;
-	} else {
-	  long long res = a % b;
-	  /* set remainder sign the same as the first arg */
-	  if (res > 0 && a < 0) res -= labs(b);
-	  else if (res < 0 && a > 0) res += labs(b);
-	  
-	  s_return(sc, mk_long(sc, res));
+	long long b = to_long(arg1);
+	if (b != 0) {
+	  s_return(sc, mk_long(sc, to_long(arg0) % b));
 	}
       }
+      nanoclj_throw(sc, mk_arithmetic_exception(sc, "Division by zero"));
+      return false;
     }
 
   case OP_POP:

@@ -521,19 +521,19 @@ static inline double tensor_bigint_to_double(const nanoclj_tensor_t * tensor) {
   if (!tensor_is_empty(tensor)) {
     const uint32_t * limbs = tensor->data;
     for (int64_t i = tensor->ne[0] - 1; i >= 0; i--) {
-      v *= 0xffffffff;
+      v *= 0x100000000;
       v += limbs[i];
     }
   }
   return v;
 }
 
-static inline long long tensor_bigint_to_long(const nanoclj_tensor_t * tensor) {
-  long long v = 0;
+static inline uint64_t tensor_bigint_to_uint64(const nanoclj_tensor_t * tensor) {
+  uint64_t v = 0;
   if (!tensor_is_empty(tensor)) {
     const uint32_t * limbs = tensor->data;
     for (int64_t i = tensor->ne[0] - 1; i >= 0; i--) {
-      v *= 0xffffffff;
+      v <<= 32;
       v += limbs[i];
     }
   }
@@ -561,14 +561,43 @@ static inline nanoclj_tensor_t * tensor_bigint_dec(const nanoclj_tensor_t * tens
   return r;
 }
 
-static inline nanoclj_tensor_t * tensor_bigint_divmod(const nanoclj_tensor_t * a, const nanoclj_tensor_t * b, nanoclj_tensor_t * rem) {
+static inline nanoclj_tensor_t * tensor_bigint_divmod(const nanoclj_tensor_t * a, const nanoclj_tensor_t * b, nanoclj_tensor_t ** rem) {
   if (b->ne[0] == 1) {
     nanoclj_tensor_t * q = tensor_bigint_dup(a);
     uint32_t r = tensor_bigint_mutate_idivmod(q, *(uint32_t*)b->data);
-    if (rem) rem = mk_tensor_bigint(r);
+    if (rem) *rem = mk_tensor_bigint(r);
     return q;
   } else {
-    return NULL;
+    nanoclj_tensor_t * c = mk_tensor_bigint(0);
+    nanoclj_tensor_t * current = mk_tensor_bigint(1);
+    nanoclj_tensor_t * denom = tensor_bigint_dup(b);
+    nanoclj_tensor_t * tmp = tensor_bigint_dup(a);
+    
+    while (tensor_cmp(denom, a) != 1) {
+      tensor_mutate_lshift(current, 1);
+      tensor_mutate_lshift(denom, 1);
+    }
+    tensor_mutate_rshift(denom, 1);
+    tensor_mutate_rshift(current, 1);
+    while (!tensor_is_empty(current)) {
+      if (tensor_cmp(tmp, denom) != -1) {
+	tensor_bigint_mutate_sub(tmp, denom);
+	tensor_mutate_or(c, current);
+      }
+      tensor_mutate_rshift(current, 1);
+      tensor_mutate_rshift(denom, 1);
+    }
+
+    if (rem) {
+      *rem = tensor_bigint_dup(a);
+      nanoclj_tensor_t * tmp = tensor_bigint_mul(b, c);
+      *rem = tensor_bigint_sub(*rem, tmp);
+      tensor_free(tmp);
+    }
+    tensor_free(current);
+    tensor_free(denom);
+    tensor_free(tmp);
+    return c;
   }
 }
 
