@@ -16,9 +16,9 @@ missing. The project has two main goals:
 
 ## Features
 
-- Terminal graphics (*Kitty* or *Sixel* protocols)
+- Terminal graphics (*Kitty* or *Sixel* protocols) with HiDPI support
 - Image, audio, Shapefile, XML, CSV and GraphML loading
-- Simple image operations (blur, transpose etc.) and 2D canvas, with HiDPI support
+- Simple image operations (blur, transpose etc.) and 2D canvas
 - REPL output is colored by type
 - Callback Writer for printing into a GUI instead of stdout
 - Class and namespace names try to imitate Java and Clojure names when possible (e.g. `(type 1) ;=> java.lang.Long`)
@@ -83,6 +83,7 @@ As well as printing images in block mode like the plot function does, they can a
 - `rationalize` returns exact result for doubles: `(rationalize 0.1) ;=> 3602879701896397/36028797018963968`
 - No chunked or buffered lazy sequences
 - No homogenous vectors (They are not necessary since most data types are unboxed by default)
+- No persistent data structures: Vectors are flat, and they are optimized for reading
 
 ## Dependencies
 
@@ -116,29 +117,26 @@ Windows support is in progress.
 
 ## Missing functionality
 
-- Custom types
+- Interfaces, Records, StructMaps, Protocols and Multi-methods
+- Transient data structures and dynamic variables
 - Transducers
 - Refs, Agents, Atoms, Validators
-- Reader Conditionals
+- Reader Conditionals and Metadata reader macro
 - BigDecimals, 32-bit floats and hexadecimal floating point literals
-- Persistent data structures, Transient data structures, StructMaps
 - Unchecked operations
-- Interfaces, Records, Protocols and Multi-methods
 - Locals cleaning
-- Multithreading, transactions and STM
-- monitor-enter, monitor-exit, and locking
-- Metadata reader macro
+- Multithreading, transactions, STM and locking
 - Pre- and post-conditions for functions
 - Namespace import and aliases
 - Readers and Writers do not accept options such as :encoding or :append
 - Associative destructuring
-- `*print-length*`, `*print-level*`, `*file*`, `*flush-on-newline*`, `*clojure-version*`, `*load-tests*`, `*print-meta*`
+- Map namespace syntax
+- `*print-length*`, `*print-level*`, `*clojure-version*`, `*load-tests*`
 - Missing core functions and macros
   - doseq, for, dotimes
   - bit-and-not
   - sort-by, sorted-set-by, sorted-map, hash-set, hash-map
   - update-in, merge-with
-  - cast, num
   - doto, ->, -->, some->, some->>
   - parse-long, parse-double, parse-uuid
   - map-indexed, mapcat, zipmap, lazy-cat
@@ -163,6 +161,7 @@ Windows support is in progress.
   - with-meta, vary-meta, alter-meta!, reset-meta!
   - int-array, long-array, float-array, double-array, byte-array, short-array, aset-int, aset-double, object-array
   - aget, aset, alength, amap, areduce, aclone, into-array, make-array, to-array-2d, to-array
+- clojure.math
 - clojure.core.async
   - thread, thread-call
 - clojure.core.reducers
