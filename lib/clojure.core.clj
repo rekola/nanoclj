@@ -452,7 +452,7 @@
                                     ))
                      (gradient? x) (do
                                      (mode :inline)
-                                     (-pr (nanoclj.gradient/plot-gradient x)))
+                                     (-pr (nanoclj.art/plot-gradient x)))
                      :else (print-fn nil x)))
 
 (defn ^:private pr-meta

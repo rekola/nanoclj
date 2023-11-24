@@ -19,4 +19,4 @@
 (load-file "nanoclj.graph.clj")
 (load-file "nanoclj.image.clj")
 (load-file "nanoclj.audio.clj")
-(load-file "nanoclj.gradient.clj")
+(load-file "nanoclj.art.clj")
