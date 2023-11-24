@@ -57,10 +57,6 @@
   "Returns millisecond time of java.util.Date"
   [x] (long x))
 
-(defn num
-  "Casts argument to number"
-  [x] (if (number? x) x (long x)))
-
 (defn vec [coll] (reduce -conj [] coll))
 (defn set [coll] (reduce -conj #() coll))
 
@@ -371,6 +367,7 @@
                       nil))
 
 (def *print-length* nil)
+(def *print-meta* false)
 
 (def ^:private print-styles {:scalar [ 0.5 0.62 0.5 ]
                              :boolean [ 0.86 0.55 0.76 ]
@@ -458,22 +455,30 @@
                                      (-pr (nanoclj.gradient/plot-gradient x)))
                      :else (print-fn nil x)))
 
+(defn ^:private pr-meta
+  [print-fn x sep] (when *print-meta*
+                     (let [m (meta x)]
+                       (when m (print \^) (pr-inline print-fn m) (print sep)))))
+
 (defn ^:private pr-block
-  [print-fn x] (if (image? x) (let [ws *window-size*
-                                    f *window-scale-factor*
-                                    w (x :width)
-                                    h (x :height)
-                                    ww (* (ws 0) f)
-                                    wh (* (ws 1) f)
-                                    s (/ ww w )
-                                    ]
-                                (if (> w wh)
-                                  (do
-                                    (mode :block)
-                                    (-pr (Image/resize x ww (* s h))))
-                                  (-pr x)
-                                  ))
-                   (pr-inline print-fn x)))
+  [print-fn x]
+  (if (image? x) (let [ws *window-size*
+                       f *window-scale-factor*
+                       w (x :width)
+                       h (x :height)
+                       ww (* (ws 0) f)
+                       wh (* (ws 1) f)
+                       s (/ ww w )
+                       ]
+                   (pr-meta print-fn x \newline)
+                   (if (> w wh)
+                     (do
+                       (mode :block)
+                       (-pr (Image/resize x ww (* s h))))
+                     (-pr x)
+                     ))
+      (do (pr-meta print-fn x \space)
+          (pr-inline print-fn x))))
 
 (defn print
   "Prints args into *out* for human reading"
@@ -720,6 +725,14 @@
   [] (System/getProperty "nanoclj.version"))
 
 (def isa? instance?)
+
+(defn cast
+  "Returns x if it is an instance of class c, otherwise throws an exception"
+  [c x] (if (isa? c x) x (throw "Wrong class")))
+
+(defn num
+  "Returns x if it is a number, otherwise throws an exception"
+  [x] (if (isa? java.lang.Number x) x (throw "Not a number")))
 
 (defn parents
   "Returns a set with the immmediate parents of the provided object"
