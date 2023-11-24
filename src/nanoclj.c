@@ -321,7 +321,6 @@ static inline nanoclj_val_t mk_pointer(nanoclj_cell_t * ptr) {
 }
 
 static inline nanoclj_val_t mk_symbol(nanoclj_t * sc, uint16_t t, strview_t ns, strview_t name, int_fast16_t syntax) {
-  /* mk_symbol allocations are leaked intentionally for now */
   char * ns_str = malloc(ns.size);
   memcpy(ns_str, ns.ptr, ns.size);
 
@@ -353,6 +352,13 @@ static inline nanoclj_val_t mk_symbol(nanoclj_t * sc, uint16_t t, strview_t ns, 
   s->ns_sym = s->name_sym = mk_nil();
 
   return (nanoclj_val_t)((t == T_SYMBOL ? (SIGNATURE_SYMBOL << 48) : (SIGNATURE_KEYWORD << 48)) | (uint64_t)s);
+}
+
+static inline void free_symbol(symbol_t * s) {
+  free((char *)s->ns.ptr);
+  free((char *)s->name.ptr);
+  free((char *)s->full_name.ptr);
+  free(s);
 }
 
 static inline bool is_nil(nanoclj_val_t v) {
@@ -3191,23 +3197,17 @@ static inline void ok_to_freely_gc(nanoclj_t * sc) {
 
 /* ========== oblist implementation  ========== */
 
-static inline nanoclj_cell_t * oblist_initial_value(nanoclj_t * sc) {
-  nanoclj_cell_t * vec = mk_vector(sc, 727);
-  fill_vector(vec, mk_nil());
-  return vec;
-}
-
 static inline nanoclj_val_t oblist_add_item(nanoclj_t * sc, strview_t ns, strview_t name, nanoclj_val_t v) {
   uint_fast32_t h = murmur3_hash_qualified_string(ns.ptr, ns.size, name.ptr, name.size);
-  uint_fast32_t location = h % _size_unchecked(sc->oblist);
-  set_vector_elem(sc->oblist, location, mk_pointer(cons(sc, v, decode_pointer(vector_elem(sc->oblist, location)))));
+  uint_fast32_t location = h % sc->oblist->ne[0];
+  tensor_set(sc->oblist, location, mk_pointer(cons(sc, v, decode_pointer(tensor_get(sc->oblist, location)))));
   return v;
 }
 
 static inline nanoclj_val_t oblist_find_item(nanoclj_t * sc, uint16_t type, strview_t ns, strview_t name) {
   uint_fast32_t h = murmur3_hash_qualified_string(ns.ptr, ns.size, name.ptr, name.size);
-  uint_fast32_t location = h % _size_unchecked(sc->oblist);
-  nanoclj_val_t x = vector_elem(sc->oblist, location);
+  uint_fast32_t location = h % sc->oblist->ne[0];
+  nanoclj_val_t x = tensor_get(sc->oblist, location);
   if (!is_nil(x)) {
     for (; x.as_long != sc->EMPTY.as_long; x = cdr(x)) {
       nanoclj_val_t y = car(x);
@@ -8460,7 +8460,8 @@ bool nanoclj_init(nanoclj_t * sc) {
   _set_cdr(&(sc->_EMPTY), sc->EMPTY);
   _cons_metadata(&(sc->_EMPTY)) = NULL;
   
-  sc->oblist = oblist_initial_value(sc);
+  sc->oblist = mk_tensor_1d(nanoclj_f64, 727);
+  tensor_mutate_fill_val(sc->oblist, mk_nil());
   
   assign_syntax(sc, "fn", OP_LAMBDA);
   assign_syntax(sc, "quote", OP_QUOTE);
@@ -8699,7 +8700,6 @@ void nanoclj_set_external_data(nanoclj_t * sc, void *p) {
 }
 
 void nanoclj_deinit(nanoclj_t * sc) {
-  sc->oblist = NULL;
   sc->root_env = sc->user_env = sc->global_env = NULL;
   dump_stack_free(sc);
   sc->envir = NULL;
@@ -8710,13 +8710,17 @@ void nanoclj_deinit(nanoclj_t * sc) {
   sc->recur = mk_nil();
 #endif
   sc->save_inport = mk_nil();
-  
-  tensor_mutate_clear(sc->load_stack);
 
-  gc(sc, NULL, NULL, NULL);
+  tensor_free(sc->rdbuff);
+  tensor_free(sc->load_stack);
+  tensor_free(sc->types);
+  sc->rdbuff = sc->load_stack = sc->types = NULL;
 }
 
 void nanoclj_deinit_shared(nanoclj_t * sc, nanoclj_shared_context_t * ctx) {
+  ctx->properties = NULL;
+  gc(sc, NULL, NULL, NULL);
+
   nanoclj_mutex_destroy(&(ctx->mutex));
   for (int i = 0; i <= sc->context->last_cell_seg; i++) {
     free(ctx->alloc_seg[i]);
@@ -8727,7 +8731,18 @@ void nanoclj_deinit_shared(nanoclj_t * sc, nanoclj_shared_context_t * ctx) {
 }
 
 void nanoclj_deinit_oblist(nanoclj_t * sc) {
-
+  for (int64_t i = 0; i < sc->oblist->ne[0]; i++) {
+    nanoclj_val_t x = tensor_get(sc->oblist, i);
+    if (!is_nil(x)) {
+      for (; x.as_long != sc->EMPTY.as_long; x = cdr(x)) {
+	nanoclj_val_t y = car(x);
+	symbol_t * s = decode_symbol(y);
+	free_symbol(s);
+      }
+    }
+  }
+  tensor_free(sc->oblist);
+  sc->oblist = NULL;
 }
 
 bool nanoclj_load_named_file(nanoclj_t * sc, const char *filename) {
@@ -8861,9 +8876,9 @@ int main(int argc, const char **argv) {
     rv = 1;
   }
 
+  nanoclj_deinit_oblist(&sc);
   nanoclj_deinit(&sc);
   nanoclj_deinit_shared(&sc, sc.context);
-  nanoclj_deinit_oblist(&sc);
 
   return rv;
 }

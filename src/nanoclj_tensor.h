@@ -240,6 +240,12 @@ static inline void tensor_mutate_fill_i8(nanoclj_tensor_t * tensor, uint8_t v) {
   memset(tensor->data, v, tensor->nb[tensor->n_dims]);
 }
 
+static inline void tensor_mutate_fill_val(nanoclj_tensor_t * tensor, nanoclj_val_t v) {
+  for (size_t i = 0; i < tensor->ne[0]; i++) {
+    ((nanoclj_val_t*)tensor->data)[i] = v;
+  }
+}
+
 static inline void tensor_mutate_append_vec(nanoclj_tensor_t * t, float * vec) {
   if ((t->ne[1] + 1) * t->nb[1] > t->nb[2]) {
     t->nb[2] = 2 * (t->ne[1] + 1) * t->nb[1];

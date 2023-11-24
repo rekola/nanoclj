@@ -137,8 +137,10 @@ static void mark_thread(nanoclj_t * sc) {
   mark_value(sc->value);
   mark_value(sc->save_inport);
 
-  for (size_t i = 0; i < sc->load_stack->ne[0]; i++) {
-    mark_value(tensor_get(sc->load_stack, i));
+  if (sc->load_stack) {
+    for (size_t i = 0; i < sc->load_stack->ne[0]; i++) {
+      mark_value(tensor_get(sc->load_stack, i));
+    }
   }
   
   /* Exceptions */
@@ -159,7 +161,6 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_c
 #endif
   
   /* mark system globals */
-  if (sc->oblist) mark(sc->oblist);
   if (sc->root_env) mark(sc->root_env);
   
   if (ctx->properties) mark(ctx->properties);
@@ -167,13 +168,21 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_c
   mark(sc->OutOfMemoryError);
   mark(sc->NullPointerException);
 
-  /* Mark types */  
-  for (size_t i = 0; i < sc->types->ne[0]; i++) {
-    mark_value(tensor_get(sc->types, i));
+  /* Mark types */
+  if (sc->types) {
+    for (int64_t i = 0; i < sc->types->ne[0]; i++) {
+      mark_value(tensor_get(sc->types, i));
+    }
+  }
+  /* Mark oblist */
+  if (sc->oblist) {
+    for (int64_t i = 0; i < sc->oblist->ne[0]; i++) {
+      mark_value(tensor_get(sc->oblist, i));
+    }
   }
   
   mark_thread(sc);
-    
+  
   /* mark variables a, b, c */
   if (a) mark(a);
   if (b) mark(b);
@@ -183,7 +192,7 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_c
   clrmark(sc->EMPTY);
   ctx->fcells = 0;
   nanoclj_cell_t * free_cell = decode_pointer(sc->EMPTY);
-	
+  
   /* free-list is kept sorted by address so as to maintain consecutive
      ranges, if possible, for use with vectors. Here we scan the cells
      (which are also kept sorted by address) downwards to build the
@@ -193,8 +202,8 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_c
   for (int_fast32_t i = ctx->last_cell_seg; i >= 0; i--) {
     nanoclj_cell_t * min_p = decode_pointer(ctx->cell_seg[i]);
     nanoclj_cell_t * p = min_p + CELL_SEGSIZE;
-      
-    while (--p >= min_p) {      
+    
+    while (--p >= min_p) {
       if (_is_mark(p)) {
 	_clrmark(p);
       } else {
