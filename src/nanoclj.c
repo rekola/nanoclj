@@ -198,8 +198,9 @@ enum nanoclj_types {
   T_GRAPH_NODE = 55,
   T_GRAPH_EDGE = 56,
   T_GRADIENT = 57,
-  T_TABLE = 58,
-  T_LAST_SYSTEM_TYPE = 59
+  T_SHAPE = 58,
+  T_TABLE = 59,
+  T_LAST_SYSTEM_TYPE = 60
 };
 
 typedef struct {
@@ -482,6 +483,8 @@ static inline bool is_seqable_type(uint_fast16_t t) {
   case T_GRAPH_NODE:
   case T_GRAPH_EDGE:
   case T_TABLE:
+  case T_GRADIENT:
+  case T_SHAPE:
     return true;
   }
   return false;
@@ -560,6 +563,8 @@ static inline nanoclj_tensor_t * get_tensor(nanoclj_cell_t * c) {
   case T_CHAR_ARRAY:
   case T_FILE:
   case T_UUID:
+  case T_GRADIENT:
+  case T_SHAPE:
     if (!_is_small(c)) {
       return c->_collection.tensor;
     }
@@ -568,8 +573,6 @@ static inline nanoclj_tensor_t * get_tensor(nanoclj_cell_t * c) {
     return c->_image.tensor;
   case T_AUDIO:
     return c->_audio.tensor;
-  case T_GRADIENT:
-    return c->_collection.tensor;
   case T_BIGINT:
   case T_BIGDECIMAL:
     return c->_bignum.tensor;
@@ -1515,8 +1518,8 @@ static inline nanoclj_cell_t * mk_image(nanoclj_t * sc, int32_t width, int32_t h
   return img;
 }
 
-static inline nanoclj_cell_t * mk_gradient_from_tensor(nanoclj_t * sc, nanoclj_tensor_t * tensor) {
-  nanoclj_cell_t * x = get_cell_x(sc, T_GRADIENT, T_GC_ATOM, NULL, NULL, NULL);
+static inline nanoclj_cell_t * mk_object_from_tensor(nanoclj_t * sc, uint16_t type, nanoclj_tensor_t * tensor) {
+  nanoclj_cell_t * x = get_cell_x(sc, type, T_GC_ATOM, NULL, NULL, NULL);
   if (x) {
     tensor->refcnt++;
     x->_collection.tensor = tensor;
@@ -2287,6 +2290,30 @@ static inline bool is_empty(nanoclj_t * sc, nanoclj_cell_t * coll) {
     return _num_edges_unchecked(coll) == 0;
   }
 
+  return false;
+}
+
+static inline bool is_zero(nanoclj_val_t p) {
+  switch (prim_type(p)) {
+  case T_LONG:
+    return decode_integer(p) == 0;
+  case T_DOUBLE:
+    return p.as_double == 0.0;
+  case T_NIL:
+    {
+      nanoclj_cell_t * c = decode_pointer(p);
+      if (c) {
+	switch (_type(c)) {
+	case T_LONG:
+	  return _lvalue_unchecked(c) == 0;
+	case T_BIGINT:
+	case T_RATIO:
+	case T_BIGDECIMAL:
+	  return tensor_is_empty(c->_bignum.tensor);
+	}
+      }
+    }
+  }
   return false;
 }
 
@@ -5223,7 +5250,24 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
 	float v[] = { (float)i++ / (n - 1), c.red / 255.0f, c.green / 255.0f, c.blue / 255.0f, c.alpha / 255.0f };
 	tensor_mutate_append_vec(tensor, v);
       }
-      return mk_pointer(mk_gradient_from_tensor(sc, tensor));
+      return mk_pointer(mk_object_from_tensor(sc, T_GRADIENT, tensor));
+    }
+
+  case T_SHAPE:
+    {
+      nanoclj_tensor_t * tensor = mk_tensor_2d(nanoclj_f32, 2, 0);
+      while (args) {
+	nanoclj_val_t v0 = first(sc, args);
+	if (!is_cell(v0)) {
+	  return mk_nil();
+	} else {
+	  nanoclj_cell_t * c = decode_pointer(v0);
+	  args = next(sc, args);
+	  float v[] = { to_double(first(sc, c)), to_double(second(sc, c)) };
+	  tensor_mutate_append_vec(tensor, v);
+	}
+      }
+      return mk_pointer(mk_object_from_tensor(sc, T_GRADIENT, tensor));
     }
 
   case T_BIGINT:
@@ -6494,6 +6538,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       if (!is_numeric_type(tx) || !is_numeric_type(ty)) {
       	nanoclj_throw(sc, mk_class_cast_exception(sc, "Argument cannot be cast to java.lang.Number"));
 	return false;
+      } else if (is_zero(arg1)) {
+	nanoclj_throw(sc, mk_arithmetic_exception(sc, "Divide by zero"));
+	return false;
       } else if (tx == T_DOUBLE || ty == T_DOUBLE) {
 	s_return(sc, mk_double(to_double(arg0) / to_double(arg1)));
       } else if (tx == T_RATIO || ty == T_RATIO) {
@@ -6516,22 +6563,17 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	normalize_ratio_mutate(num, den);
 	s_return(sc, mk_pointer(mk_ratio_from_tensor(sc, a.sign == b.sign ? 1 : -1, num, den)));
       } else {
+	long long dividend = to_long(arg0);
 	long long divisor = to_long(arg1);
-	if (divisor == 0) {
-	  nanoclj_throw(sc, mk_arithmetic_exception(sc, "Divide by zero"));
-	  return false;
+	if (dividend == LLONG_MIN && divisor == -1) {
+	  nanoclj_tensor_t * t = mk_tensor_bigint_abs(dividend);
+	  s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, 1, t)));
+	} else if (dividend % divisor == 0) {
+	  s_return(sc, mk_long(sc, dividend / divisor));
 	} else {
-	  long long dividend = to_long(arg0);
-	  if (dividend == LLONG_MIN && divisor == -1) {
-	    nanoclj_tensor_t * t = mk_tensor_bigint_abs(dividend);
-	    s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, 1, t)));
-	  } else if (dividend % divisor == 0) {
-	    s_return(sc, mk_long(sc, dividend / divisor));
-	  } else {
-	    long long den;
-	    long long num = normalize_ratio_long(dividend, divisor, &den);
-	    s_return(sc, mk_pointer(mk_ratio_long(sc, num, den)));
-	  }
+	  long long den;
+	  long long num = normalize_ratio_long(dividend, divisor, &den);
+	  s_return(sc, mk_pointer(mk_ratio_long(sc, num, den)));
 	}
       }
     }
@@ -6543,6 +6585,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       uint16_t tx = type(arg0), ty = type(arg1);
       if (!is_numeric_type(tx) || !is_numeric_type(ty)) {
       	nanoclj_throw(sc, mk_class_cast_exception(sc, "Argument cannot be cast to java.lang.Number"));
+	return false;
+      } else if (is_zero(arg1)) {
+	nanoclj_throw(sc, mk_arithmetic_exception(sc, "Divide by zero"));
 	return false;
       } else if (tx == T_DOUBLE || ty == T_DOUBLE) {
 	s_return(sc, mk_double(trunc(to_double(arg0) / to_double(arg1))));
@@ -6564,18 +6609,13 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, a.sign == b.sign ? 1 : -1, q)));
 	}
       } else {
+	long long dividend = to_long(arg0);
 	long long divisor = to_long(arg1);
-	if (divisor == 0) {
-	  nanoclj_throw(sc, mk_arithmetic_exception(sc, "Divide by zero"));
-	  return false;
+	if (dividend == LLONG_MIN && divisor == -1) {
+	  nanoclj_tensor_t * t = mk_tensor_bigint_abs(dividend);
+	  s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, 1, t)));
 	} else {
-	  long long dividend = to_long(arg0);
-	  if (dividend == LLONG_MIN && divisor == -1) {
-	    nanoclj_tensor_t * t = mk_tensor_bigint_abs(dividend);
-	    s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, 1, t)));
-	  } else {
-	    s_return(sc, mk_long(sc, dividend / divisor));
-	  }
+	  s_return(sc, mk_long(sc, dividend / divisor));
 	}
       }
     }
@@ -6588,27 +6628,27 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       if (!is_numeric_type(tx) || !is_numeric_type(ty)) {
       	nanoclj_throw(sc, mk_class_cast_exception(sc, "Argument cannot be cast to java.lang.Number"));
 	return false;
+      } else if (is_zero(arg1)) {
+	nanoclj_throw(sc, mk_arithmetic_exception(sc, "Divide by zero"));
+	return false;
       } else if (tx == T_DOUBLE || ty == T_DOUBLE) {
-	double b = to_double(arg1);
-	if (b != 0.0) s_return(sc, mk_double(fmod(to_double(arg0), b)));
+	s_return(sc, mk_double(fmod(to_double(arg0), to_double(arg1))));
       } else if (tx == T_BIGINT || ty == T_BIGINT) {
+	nanoclj_bignum_t a = to_bigint(arg0);
 	nanoclj_bignum_t b = to_bigint(arg1);
-	if (!tensor_is_empty(b.tensor)) {
-	  nanoclj_bignum_t a = to_bigint(arg0);
-	  nanoclj_tensor_t * rem;
-	  tensor_bigint_divmod(a.tensor, b.tensor, NULL, &rem);
-	  if (!a.tensor->refcnt) tensor_free(a.tensor);
-	  if (!b.tensor->refcnt) tensor_free(b.tensor);
-	  s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, a.sign, rem)));
-	}
+	nanoclj_tensor_t * rem;
+	tensor_bigint_divmod(a.tensor, b.tensor, NULL, &rem);
+	if (!a.tensor->refcnt) tensor_free(a.tensor);
+	if (!b.tensor->refcnt) tensor_free(b.tensor);
+	s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, a.sign, rem)));
       } else {
-	long long b = to_long(arg1);
-	if (b != 0) {
-	  s_return(sc, mk_long(sc, to_long(arg0) % b));
+	long long x = to_long(arg0), y = to_long(arg1);
+	if (x == LLONG_MIN && y == -1) {
+	  s_return(sc, mk_long(sc, 0));
+	} else {
+	  s_return(sc, mk_long(sc, x % y));
 	}
       }
-      nanoclj_throw(sc, mk_arithmetic_exception(sc, "Division by zero"));
-      return false;
     }
 
   case OP_POP:
@@ -8628,6 +8668,7 @@ bool nanoclj_init(nanoclj_t * sc) {
   mk_class(sc, "nanoclj.core.CharArray", T_CHAR_ARRAY, sc->Object);
   sc->Image = mk_class(sc, "nanoclj.core.Image", T_IMAGE, sc->Object);
   sc->Gradient = mk_class(sc, "nanoclj.core.Gradient", T_GRADIENT, sc->Object);
+  mk_class(sc, "nanoclj.core.Shape", T_SHAPE, sc->Object);
   sc->Audio = mk_class(sc, "nanoclj.core.Audio", T_AUDIO, sc->Object);
   mk_class(sc, "nanoclj.core.Tensor", T_TENSOR, sc->Object);
   mk_class(sc, "nanoclj.core.EmptyList", T_NIL, sc->Object);
