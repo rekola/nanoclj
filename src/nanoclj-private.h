@@ -200,10 +200,12 @@ extern "C" {
     nanoclj_val_t TAG_HOOK;           /* *default-data-reader-fn* */
     nanoclj_val_t COMPILE_HOOK;       /* *compile-hook* */
     nanoclj_val_t AUTOCOMPLETE_HOOK; /* *autocomplete-hook* */
+    nanoclj_val_t FLUSH_ON_NEWLINE; /* *flush-on-newline* */
     nanoclj_val_t IN_SYM;	  /* *in* */
     nanoclj_val_t OUT_SYM;	  /* *out* */
     nanoclj_val_t ERR;		  /* *err* */
     nanoclj_val_t CURRENT_NS;	  /* *ns* */
+    nanoclj_val_t CURRENT_FILE;   /* *file* */
     nanoclj_val_t ENV;	  	  /* *env* */
     nanoclj_val_t CELL_SIZE;      /* *cell-size* */
     nanoclj_val_t WINDOW_SIZE;    /* *window-size* */

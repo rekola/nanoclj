@@ -1804,7 +1804,7 @@ static inline void update_cursor(int32_t c, nanoclj_cell_t * p, int line_len) {
 	while (_column_unchecked(p) >= line_len) {
 	  _column_unchecked(p) -= line_len;
 	  _line_unchecked(p)++;
-	}	
+	}
       }
     }
   }
@@ -1975,7 +1975,7 @@ static inline nanoclj_cell_t * mk_ratio_from_double(nanoclj_t * sc, nanoclj_val_
     return mk_ratio_long(sc, 0, 0);
   } else if (!isfinite(a.as_double)) {
     return mk_ratio_long(sc, a.as_double < 0 ? -1 : 1, 0);
-  } else if (a.as_double == 0) {
+  } else if (a.as_double == 0.0) {
     return mk_ratio_long(sc, 0, 1);
   }
   int sign = a.as_double < 0 ? -1 : 1;
@@ -3412,7 +3412,11 @@ static inline nanoclj_val_t def_symbol_or_keyword(nanoclj_t * sc, const char *na
 	name_sv = mk_strview(name);
       }
     }
-    return def_symbol_from_sv(sc, t, ns_sv, name_sv);
+    if (name_sv.size == 0) {
+      return mk_nil();
+    } else {
+      return def_symbol_from_sv(sc, t, ns_sv, name_sv);
+    }
   }
 }
 
@@ -3481,11 +3485,30 @@ static inline int gentypeid(nanoclj_t * sc) {
   return id;
 }
 
-/* make symbol or number literal from string */
-static inline nanoclj_val_t mk_primitive(nanoclj_t * sc, const char *q) {
+static inline bool is_numeric_token(const char * q) {
+  char c = *q++;
+  if (digit(c, 10) != -1) return true;
+  if (c == '+' || c == '-') {
+    c = *q++;
+    if (digit(c, 10) != -1) return true;
+    if (c == '.') {
+      c = *q++;
+      if (digit(c, 10) != -1) return true;
+    }
+    return false;
+  }
+  if (c == '.') {
+    c = *q++;
+    if (digit(c, 10) != -1) return true;
+  }
+  return false;
+}
+
+/* make number literal from string */
+static inline nanoclj_val_t mk_numeric_primitive(nanoclj_t * sc, const char *q) {
   bool has_dec_point = false, has_fp_exp = false;
   int sign = 1, radix = 0;
-  const char * p = q, * div = 0; 
+  const char * p = q, * div = 0;
 
   const char * first_digit = q;
   char c = *p++;
@@ -3504,7 +3527,7 @@ static inline nanoclj_val_t mk_primitive(nanoclj_t * sc, const char *q) {
   
   if (has_dec_point) {
     if (digit(c, 10) == -1) {
-      return def_symbol_or_keyword(sc, q);
+      return mk_nil();
     }
   } else if (c == '0') {
     if (*p == 'x') {
@@ -3518,7 +3541,7 @@ static inline nanoclj_val_t mk_primitive(nanoclj_t * sc, const char *q) {
   } else {
     int b1 = digit(c, 10);
     if (b1 == -1) {
-      return def_symbol_or_keyword(sc, q);
+      return mk_nil();
     } else {
       if (*p == 'r') {
 	radix = b1;
@@ -3703,6 +3726,12 @@ static inline nanoclj_val_t port_rep_from_file(nanoclj_t * sc, uint16_t type, FI
   pr->stdio.mode = nanoclj_mode_unknown;
   pr->stdio.fg = sc->fg_color;
   pr->stdio.bg = sc->bg_color;
+
+  nanoclj_val_t v = slot_value_in_env(find_slot_in_env(sc, sc->envir, sc->FLUSH_ON_NEWLINE, true));
+  if (is_true(v)) {
+    setlinebuf(f);
+  }
+
   return mk_pointer(p);
 }
 
@@ -5025,7 +5054,7 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
   case T_DOUBLE:
     {
       double v = to_double(first(sc, args));
-      if (v == NAN) nanoclj_throw(sc, mk_number_format_exception(sc, mk_string(sc, "Unable to convert to Double")));
+      if (isnan(v)) nanoclj_throw(sc, mk_number_format_exception(sc, mk_string(sc, "Unable to convert to Double")));
       return mk_double(v);
     }
 
@@ -5518,8 +5547,21 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_EVAL:                /* main part of evaluation */
     switch (prim_type(sc->code)) {
     case T_SYMBOL:
-      if (sc->code.as_long == sc->CURRENT_NS.as_long) { /* special symbols */
+      nanoclj_cell_t * c = resolve(sc, sc->envir, sc->code);
+      if (sc->pending_exception) {
+	return false;
+      } else if (c) {
+	s_return(sc, slot_value_in_env(c));
+      } else if (sc->code.as_long == sc->CURRENT_NS.as_long) { /* special symbols */
 	s_return(sc, mk_pointer(sc->global_env));
+      } else if (sc->code.as_long == sc->CURRENT_FILE.as_long) {
+	nanoclj_cell_t * p = decode_pointer(tensor_peek(sc->load_stack));
+	if (p && _port_type_unchecked(p) == port_file) {
+	  nanoclj_port_rep_t * pr = _rep_unchecked(p);
+	  s_return(sc, mk_string(sc, pr->stdio.filename));
+	} else {
+	  s_return(sc, mk_nil());
+	}
       } else if (sc->code.as_long == sc->ENV.as_long) {
 	s_return(sc, mk_pointer(sc->envir));
 #ifdef USE_RECUR_REGISTER
@@ -5527,17 +5569,10 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	s_return(sc, sc->recur);
 #endif
       } else {
-	nanoclj_cell_t * c = resolve(sc, sc->envir, sc->code);
-	if (sc->pending_exception) {
-	  return false;
-	} else if (c) {
-	  s_return(sc, slot_value_in_env(c));
-	} else {
-	  symbol_t * s = decode_symbol(sc->code);
-	  nanoclj_val_t msg = mk_string_fmt(sc, "Use of undeclared Var %.*s", (int)s->full_name.size, s->full_name.ptr);
-	  nanoclj_throw(sc, mk_runtime_exception(sc, msg));
-	  return false;
-	}
+	symbol_t * s = decode_symbol(sc->code);
+	nanoclj_val_t msg = mk_string_fmt(sc, "Use of undeclared Var %.*s", (int)s->full_name.size, s->full_name.ptr);
+	nanoclj_throw(sc, mk_runtime_exception(sc, msg));
+	return false;
       }
     case T_NIL:{
       nanoclj_cell_t * code_cell = decode_pointer(sc->code);
@@ -7269,12 +7304,22 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  s_goto(sc, OP_RD_SEXPR);
 	case TOK_PRIMITIVE:
 	  s = readstr_upto(sc, DELIMITERS, inport, false);
-	  x = mk_primitive(sc, s);
-	  if (is_nil(x)) {
-	    nanoclj_throw(sc, mk_number_format_exception(sc, mk_string_fmt(sc, "Invalid number format [%s]", s)));
-	    return false;
+	  if (is_numeric_token(s)) {
+	    x = mk_numeric_primitive(sc, s);
+	    if (is_nil(x)) {
+	      nanoclj_throw(sc, mk_number_format_exception(sc, mk_string_fmt(sc, "Invalid number format [%s]", s)));
+	      return false;
+	    } else {
+	      s_return(sc, x);
+	    }
 	  } else {
-	    s_return(sc, x);
+	    x = def_symbol_or_keyword(sc, s);
+	    if (is_nil(x)) {
+	      nanoclj_throw(sc, mk_runtime_exception(sc, mk_string_fmt(sc, "Invalid token [%s]", s)));
+	      return false;
+	    } else {
+	      s_return(sc, x);
+	    }
 	  }
 	case TOK_DQUOTE:
 	  x = readstrexp(sc, inport, false);
@@ -7332,7 +7377,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	}
 
 	case TOK_DOT:{
- 	  nanoclj_val_t m = mk_primitive(sc, readstr_upto(sc, DELIMITERS, inport, false));
+ 	  nanoclj_val_t m = def_symbol_or_keyword(sc, readstr_upto(sc, DELIMITERS, inport, false));
 	  strview_t sv = to_strview(m);
 	  s_save(sc, OP_RD_DOT, NULL, m);
 	  sc->tok = token(sc, inport);
@@ -8451,10 +8496,12 @@ bool nanoclj_init(nanoclj_t * sc) {
   sc->TAG_HOOK = def_symbol(sc, "*default-data-reader-fn*");
   sc->COMPILE_HOOK = def_symbol(sc, "*compile-hook*");
   sc->AUTOCOMPLETE_HOOK = def_symbol(sc, "*autocomplete-hook*");
+  sc->FLUSH_ON_NEWLINE = def_symbol(sc, "*flush-on-newline*");
   sc->IN_SYM = def_symbol(sc, "*in*");
   sc->OUT_SYM = def_symbol(sc, "*out*");
   sc->ERR = def_symbol(sc, "*err*");
   sc->CURRENT_NS = def_symbol(sc, "*ns*");
+  sc->CURRENT_FILE = def_symbol(sc, "*file*");
   sc->ENV = def_symbol(sc, "*env*");
   sc->CELL_SIZE = def_symbol(sc, "*cell-size*");
   sc->WINDOW_SIZE = def_symbol(sc, "*window-size*");
@@ -8679,6 +8726,10 @@ void nanoclj_deinit_shared(nanoclj_t * sc, nanoclj_shared_context_t * ctx) {
   sc->context = NULL;
 }
 
+void nanoclj_deinit_oblist(nanoclj_t * sc) {
+
+}
+
 bool nanoclj_load_named_file(nanoclj_t * sc, const char *filename) {
   dump_stack_reset(sc);
 
@@ -8695,7 +8746,7 @@ bool nanoclj_load_named_file(nanoclj_t * sc, const char *filename) {
 
 nanoclj_val_t nanoclj_eval_string(nanoclj_t * sc, const char *cmd, size_t len) {
   dump_stack_reset(sc);
-
+  
   nanoclj_val_t p = port_from_string(sc, T_READER, (strview_t){ cmd, len });
   
   sc->envir = sc->global_env;
@@ -8812,6 +8863,7 @@ int main(int argc, const char **argv) {
 
   nanoclj_deinit(&sc);
   nanoclj_deinit_shared(&sc, sc.context);
+  nanoclj_deinit_oblist(&sc);
 
   return rv;
 }
