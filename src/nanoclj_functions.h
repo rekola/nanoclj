@@ -296,8 +296,8 @@ static nanoclj_val_t numeric_tower_expt(nanoclj_t * sc, nanoclj_cell_t * args) {
   }
   int tx = type(x), ty = type(y);
 
-  if (tx == T_RATIO && ty == T_RATIO) {
-    /* TODO */
+  if (tx == T_DOUBLE || ty == T_DOUBLE || ty == T_RATIO) {
+    /* default */
   } else {
     long exp = to_long(y);
     if (exp == 0) {
