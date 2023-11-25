@@ -87,7 +87,7 @@ As well as printing images in block mode like the plot function does, they can a
 
 ## Dependencies
 
-- linenoise (included, utf8 support added)
+- linenoise (included, extra functionality such as UTF8 support and brace highlighting added)
 - stb_image, stb_image_resize, stb_image_write (included)
 - dr_wav (included)
 - zlib

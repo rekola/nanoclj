@@ -562,6 +562,49 @@ void refreshShowHints(struct abuf *ab, struct linenoiseState *l, int plen) {
     }
 }
 
+static int findHighlight(const char * buf, int len, int start_pos, char ic, int dir) {
+    char nesting[1024];
+    int ni = 0;
+    char fc;
+    if (ic == '"') fc = '"';
+    else if (dir == 1) {
+        switch (ic) {
+	case '(': fc = ')'; break;
+	case '[': fc = ']'; break;
+	case '{': fc = '}'; break;
+	default: return -1;
+	}
+    } else {
+        switch (ic) {
+	case ')': fc = '('; break;
+	case ']': fc = '['; break;
+	case '}': fc = '{'; break;
+	default: return -1;
+	}
+    }
+    for (int i = start_pos; i >= 0 && i < len; i += dir) {
+        if (!ni && buf[i] == fc) return i;
+        else if (ni && nesting[ni-1] == buf[i]) ni--;
+	else if (ni < 1024) {
+	    if (buf[i] == '"') nesting[ni++] = '"';
+	    else if (dir == 1) {
+	        switch (buf[i]) {
+		case '(': nesting[ni++] = ')'; break;
+		case '[': nesting[ni++] = ']'; break;
+		case '{': nesting[ni++] = '}'; break;
+		}
+	    } else {
+	        switch (buf[i]) {
+		case ')': nesting[ni++] = '('; break;
+		case ']': nesting[ni++] = '['; break;
+		case '}': nesting[ni++] = '{'; break;
+		}
+	    }
+	}
+    }
+    return -1;
+}
+
 /* Single line low level line refresh.
  *
  * Rewrite the currently edited line accordingly to the buffer content,
@@ -593,11 +636,21 @@ static void refreshSingleLine(struct linenoiseState *l, int flags) {
     abAppend(&ab,seq,strlen(seq));
 
     if (flags & REFRESH_WRITE) {
+        int highlight_pos = -1;
+	if (pos < len) highlight_pos = findHighlight(buf, len, pos + 1, buf[pos], 1);
+        if (highlight_pos == -1 && pos > 1) highlight_pos = findHighlight(buf, len, pos - 2, buf[pos - 1], -1);
+
         /* Write the prompt and the current buffer content */
         abAppend(&ab,l->prompt,l->plen);
         if (maskmode == 1) {
             while (len--) abAppend(&ab,"*",1);
-        } else {
+        } else if (highlight_pos != -1) {
+	    abAppend(&ab,buf,highlight_pos);
+	    abAppend(&ab,"\033[97;100m", 9);
+	    abAppend(&ab,buf+highlight_pos,1);
+	    abAppend(&ab,"\033[0m",4);
+	    abAppend(&ab,buf+highlight_pos+1,len-highlight_pos-1);
+	} else {
             abAppend(&ab,buf,len);
         }
         /* Show hits if any. */
