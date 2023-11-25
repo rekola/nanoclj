@@ -31,9 +31,13 @@
 (defn linspace
   "Creates an evenly spaced vector from a to b with n points"
   ([a b] (linspace a b 100))
-  ([a b n] (loop [a a n (double n) acc []]
-             (if (< n 0) acc
-                 (recur (+ a (/ (- b a) n)) (dec n) (conj acc a))))))
+  ([a b n] (let [n (dec n)
+                 step (/ (- b a) (double n))
+                 ]
+             (loop [a (+ a step) n (dec n) acc [a]]
+               (if (> n 0)
+                 (recur (+ a step) (dec n) (conj acc a))
+                 (conj acc b))))))
 
 (defn graph-plot
   "Plots a map"
