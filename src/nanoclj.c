@@ -3402,6 +3402,12 @@ static inline nanoclj_cell_t * conjoin(nanoclj_t * sc, nanoclj_cell_t * coll, na
   int t = _type(coll);
   if (_is_sequence(coll) || t == T_NIL || t == T_LIST || t == T_LAZYSEQ) {
     return get_cell(sc, T_LIST, 0, new_value, coll, NULL);
+  } else if (t == T_HASHSET) {
+    if (!get_elem(sc, coll, new_value, NULL)) {
+      return vector_conjoin(sc, coll, new_value);
+    } else {
+      return coll;
+    }
   } else if (is_vector_type(t)) {
     return vector_conjoin(sc, coll, new_value);
   } else if (is_string_type(t)) {
