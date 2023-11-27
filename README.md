@@ -83,7 +83,9 @@ As well as printing images in block mode like the plot function does, they can a
 - `rationalize` returns exact result for doubles: `(rationalize 0.1) ;=> 3602879701896397/36028797018963968`
 - No chunked or buffered lazy sequences
 - No homogenous vectors (They are not necessary since most data types are unboxed by default)
-- No persistent data structures: Vectors are flat, and they are optimized for reading
+- No persistent data structures: Vectors are flat, and they are optimized for fast reading
+- No sorted-set or sorted-map
+- Only 64 bit systems are supported
 
 ## Dependencies
 
@@ -149,7 +151,7 @@ Windows support is in progress.
   - reduced, reduced?
   - with-local-vars, var-set, find-var, alter-var-root, declare, binding, with-bindings, ns-name
   - as-url, resource
-  - sequence
+  - sequence, subseq, rsubseq
   - make-hierarchy, ancestors, supers, bases
   - bound?
   - random-uuid
