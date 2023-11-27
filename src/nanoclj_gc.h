@@ -33,7 +33,8 @@ E2:_setmark(p);
   }
   case T_VECTOR:
   case T_ARRAYMAP:
-  case T_SORTED_SET:
+  case T_HASHSET:
+  case T_HASHMAP:
   case T_QUEUE:
   case T_MAPENTRY:
   case T_VAR:{
@@ -44,6 +45,14 @@ E2:_setmark(p);
       nanoclj_val_t * data = _smalldata_unchecked(p);
       if (s > 0 && is_cell(data[0]) && !is_nil(data[0])) mark(decode_pointer(data[0]));
       if (s > 1 && is_cell(data[1]) && !is_nil(data[1])) mark(decode_pointer(data[1]));
+    } else if (_type(p) == T_HASHSET || _type(p) == T_HASHMAP) {
+      nanoclj_tensor_t * tensor = p->_collection.tensor;
+      int64_t num_cells = tensor->nb[1] / sizeof(nanoclj_val_t);
+      nanoclj_val_t * data = (nanoclj_val_t *)tensor->data;
+      for (int64_t i = 0; i < num_cells; i++) {
+	nanoclj_val_t v = data[i];
+	if (!is_unassigned(v) && is_cell(v) && !is_nil(v)) mark(decode_pointer(v));
+      }
     } else {
       size_t offset = _offset_unchecked(p);
       size_t num = _size_unchecked(p);
@@ -74,7 +83,7 @@ E2:_setmark(p);
   
   /* E4: down car */
   q0 = _car(p);
-  if (!is_primitive(q0) && !is_nil(q0) && !is_mark(q0)) {
+  if (is_cell(q0) && !is_nil(q0) && !is_mark(q0)) {
     _set_gc_atom(p);                 /* a note that we have moved car */
     _set_car(p, mk_pointer(t));
     t = p;
@@ -82,7 +91,7 @@ E2:_setmark(p);
     goto E2;
   }
 E5:q0 = _cdr(p);                 /* down cdr */
-  if (!is_primitive(q0) && !is_nil(q0) && !is_mark(q0)) {
+  if (is_cell(q0) && !is_nil(q0) && !is_mark(q0)) {
     _set_cdr(p, mk_pointer(t));
     t = p;
     p = decode_pointer(q0);

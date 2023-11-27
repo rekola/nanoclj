@@ -69,25 +69,6 @@
 #include "nanoclj_utf8.h"
 #include "nanoclj_tensor.h"
 
-/* Masks for NaN packing */
-#define MASK_SIGN		UINT64_C(0x8000)
-#define MASK_EXPONENT		UINT64_C(0x7ff0)
-#define MASK_QUIET		UINT64_C(0x0008)
-#define MASK_TYPE		UINT64_C(0x0007)
-
-#define MASK_PAYLOAD		0x0000ffffffffffff
-
-/* Signatures for primitive types */
-#define SIGNATURE_CELL		(MASK_EXPONENT | MASK_QUIET | MASK_SIGN)
-#define SIGNATURE_NAN		(MASK_EXPONENT | MASK_QUIET | 0)
-#define SIGNATURE_BOOLEAN	(MASK_EXPONENT | MASK_QUIET | 1)
-#define SIGNATURE_INTEGER	(MASK_EXPONENT | MASK_QUIET | 2)
-#define SIGNATURE_CODEPOINT	(MASK_EXPONENT | MASK_QUIET | 3)
-#define SIGNATURE_PROC		(MASK_EXPONENT | MASK_QUIET | 4)
-#define SIGNATURE_KEYWORD	(MASK_EXPONENT | MASK_QUIET | 5)
-#define SIGNATURE_SYMBOL	(MASK_EXPONENT | MASK_QUIET | 6)
-#define SIGNATURE_UNASSIGNED	(MASK_EXPONENT | MASK_QUIET | 7)
-
 /* Parsing tokens */
 #define TOK_EOF		(-1)
 #define TOK_LPAREN  	0
@@ -170,37 +151,38 @@ enum nanoclj_types {
   T_CLASS = 27,
   T_MAPENTRY = 28,
   T_ARRAYMAP = 29,
-  T_SORTED_SET = 30,
-  T_VAR = 31,
-  T_FOREIGN_OBJECT = 32,
-  T_BIGINT = 33,
-  T_BIGDECIMAL = 34,
-  T_REGEX = 35,
-  T_DELAY = 36,
-  T_IMAGE = 37,
-  T_VIDEO = 38,
-  T_AUDIO = 39,
-  T_FILE = 40,
-  T_DATE = 41,
-  T_UUID = 42,
-  T_QUEUE = 43,
-  T_RUNTIME_EXCEPTION = 44,
-  T_ARITY_EXCEPTION = 45,
-  T_ILLEGAL_ARG_EXCEPTION = 46,
-  T_NUM_FMT_EXCEPTION = 47,
-  T_ARITHMETIC_EXCEPTION = 48,
-  T_CLASS_CAST_EXCEPTION = 49,
-  T_ILLEGAL_STATE_EXCEPTION = 50,
-  T_FILE_NOT_FOUND_EXCEPTION = 51,
-  T_INDEX_EXCEPTION = 52,
-  T_TENSOR = 53,
-  T_GRAPH = 54,
-  T_GRAPH_NODE = 55,
-  T_GRAPH_EDGE = 56,
-  T_GRADIENT = 57,
-  T_SHAPE = 58,
-  T_TABLE = 59,
-  T_LAST_SYSTEM_TYPE = 60
+  T_HASHMAP = 30,
+  T_HASHSET = 31,
+  T_VAR = 32,
+  T_FOREIGN_OBJECT = 33,
+  T_BIGINT = 34,
+  T_BIGDECIMAL = 35,
+  T_REGEX = 36,
+  T_DELAY = 37,
+  T_IMAGE = 38,
+  T_VIDEO = 39,
+  T_AUDIO = 40,
+  T_FILE = 41,
+  T_DATE = 42,
+  T_UUID = 43,
+  T_QUEUE = 44,
+  T_RUNTIME_EXCEPTION = 45,
+  T_ARITY_EXCEPTION = 46,
+  T_ILLEGAL_ARG_EXCEPTION = 47,
+  T_NUM_FMT_EXCEPTION = 48,
+  T_ARITHMETIC_EXCEPTION = 49,
+  T_CLASS_CAST_EXCEPTION = 50,
+  T_ILLEGAL_STATE_EXCEPTION = 51,
+  T_FILE_NOT_FOUND_EXCEPTION = 52,
+  T_INDEX_EXCEPTION = 53,
+  T_TENSOR = 54,
+  T_GRAPH = 55,
+  T_GRAPH_NODE = 56,
+  T_GRAPH_EDGE = 57,
+  T_GRADIENT = 58,
+  T_SHAPE = 59,
+  T_TABLE = 60,
+  T_LAST_SYSTEM_TYPE = 61
 };
 
 typedef struct {
@@ -260,18 +242,6 @@ static uint_fast16_t prim_type(nanoclj_val_t value) {
   case SIGNATURE_UNASSIGNED: return T_BOOLEAN; /* no type */
   }
   return T_DOUBLE;
-}
-
-static inline bool is_cell(nanoclj_val_t v) {
-  return (v.as_long >> 48) == SIGNATURE_CELL;
-}
-
-static inline bool is_unassigned(nanoclj_val_t v) {
-  return (v.as_long >> 48) == SIGNATURE_UNASSIGNED;
-}
-
-static inline bool is_primitive(nanoclj_val_t v) {
-  return !is_cell(v) && !is_unassigned(v);
 }
 
 static inline bool is_symbol(nanoclj_val_t v) {
@@ -473,7 +443,8 @@ static inline bool is_seqable_type(uint_fast16_t t) {
   case T_FILE:
   case T_VECTOR:
   case T_ARRAYMAP:
-  case T_SORTED_SET:
+  case T_HASHMAP:
+  case T_HASHSET:
   case T_CLASS:
   case T_MAPENTRY:
   case T_CLOSURE:
@@ -497,7 +468,8 @@ static inline bool is_coll_type(uint_fast16_t t) {
   case T_VECTOR:
   case T_MAPENTRY:
   case T_ARRAYMAP:
-  case T_SORTED_SET:
+  case T_HASHMAP:
+  case T_HASHSET:
   case T_LAZYSEQ:
   case T_QUEUE:
     return true;
@@ -510,7 +482,7 @@ static inline bool is_string_type(uint_fast16_t t) {
 }
 
 static inline bool is_vector_type(uint_fast16_t t) {
-  return t == T_VECTOR || t == T_ARRAYMAP || t == T_SORTED_SET || t == T_MAPENTRY || t == T_VAR || t == T_QUEUE;
+  return t == T_VECTOR || t == T_ARRAYMAP || t == T_HASHMAP || t == T_HASHSET || t == T_MAPENTRY || t == T_VAR || t == T_QUEUE;
 }
 
 static inline nanoclj_val_t vector_elem(nanoclj_cell_t * vec, size_t ielem) {
@@ -529,7 +501,7 @@ static inline void set_vector_elem(nanoclj_cell_t * vec, size_t ielem, nanoclj_v
   }
 }
 
-/* Size of vector or string */
+/* Size of a tensor backed data structure (e.g. string, vector) */
 static inline size_t get_size(nanoclj_cell_t * c) {
   return _is_small(c) ? _sosize_unchecked(c) : _size_unchecked(c);
 }
@@ -556,7 +528,8 @@ static inline nanoclj_tensor_t * get_tensor(nanoclj_cell_t * c) {
   switch (_type(c)) {
   case T_VECTOR:
   case T_ARRAYMAP:
-  case T_SORTED_SET:
+  case T_HASHMAP:
+  case T_HASHSET:
   case T_VAR:
   case T_QUEUE:
   case T_STRING:
@@ -584,7 +557,7 @@ static inline nanoclj_cell_t * get_metadata(nanoclj_cell_t * c) {
   switch (_type(c)) {
   case T_VECTOR:
   case T_ARRAYMAP:
-  case T_SORTED_SET:
+  case T_HASHMAP:
   case T_VAR:
   case T_QUEUE:
     if (_is_small(c)) {
@@ -612,7 +585,7 @@ static inline void set_metadata(nanoclj_cell_t * c, nanoclj_cell_t * meta) {
   switch (_type(c)) {
   case T_VECTOR:
   case T_ARRAYMAP:
-  case T_SORTED_SET:
+  case T_HASHMAP:
   case T_VAR:
   case T_QUEUE:
     if (_is_small(c)) {
@@ -707,11 +680,6 @@ static inline long long to_long_w_def(nanoclj_val_t p, long long def) {
 	case T_LONG:
 	case T_DATE:
 	  return _lvalue_unchecked(c);
-	case T_VECTOR:
-	case T_SORTED_SET:
-	case T_ARRAYMAP:
-	case T_QUEUE:
-	  return get_size(c);
 	case T_CLASS:
 	  return c->type;
 	case T_BIGINT:
@@ -1875,7 +1843,11 @@ static inline nanoclj_cell_t * cons(nanoclj_t * sc, nanoclj_val_t head, nanoclj_
 static inline nanoclj_cell_t * get_vector_object(nanoclj_t * sc, int_fast16_t t, size_t size) {
   nanoclj_tensor_t * store = NULL;
   if (size > NANOCLJ_SMALL_VEC_SIZE) {
-    store = mk_tensor_1d(nanoclj_f64, size);
+    if (t == T_HASHSET || t == T_HASHMAP) {
+      store = mk_tensor_hash(727);
+    } else {
+      store = mk_tensor_1d(nanoclj_f64, size);
+    }
     if (!store) return NULL;
   }
   return get_collection_object(sc, t, 0, size, store);
@@ -2224,7 +2196,8 @@ static inline nanoclj_cell_t * seq(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_UUID:
   case T_VECTOR:
   case T_ARRAYMAP:
-  case T_SORTED_SET:
+  case T_HASHMAP:
+  case T_HASHSET:
   case T_QUEUE:
     if (get_size(coll) == 0) {
       return NULL;
@@ -2277,7 +2250,8 @@ static inline bool is_empty(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_UUID:
   case T_VECTOR:
   case T_ARRAYMAP:
-  case T_SORTED_SET:
+  case T_HASHMAP:
+  case T_HASHSET:
   case T_MAPENTRY:
   case T_QUEUE:
     return get_size(coll) == 0;
@@ -2336,7 +2310,6 @@ static inline nanoclj_cell_t * rest(nanoclj_t * sc, nanoclj_cell_t * coll) {
       return decode_pointer(_cdr(coll));
     case T_VECTOR:
     case T_ARRAYMAP:
-    case T_SORTED_SET:
     case T_STRING:
     case T_CHAR_ARRAY:
     case T_FILE:
@@ -2351,6 +2324,23 @@ static inline nanoclj_cell_t * rest(nanoclj_t * sc, nanoclj_cell_t * coll) {
 	}
 	/* In the case of multi-byte utf8 character, the string can be empty */
 	return get_size(coll) ? coll : &(sc->_EMPTY);
+      }
+      break;
+
+    case T_HASHSET:
+    case T_HASHMAP:
+      if (!_is_small(coll)) {
+	nanoclj_tensor_t * tensor = coll->_collection.tensor;
+	size_t offset = tensor_hash_rest(tensor, _offset_unchecked(coll), _size_unchecked(coll));
+	if (tensor_is_valid_offset(tensor, offset)) {
+	  coll = get_collection_object(sc, typ, offset, _size_unchecked(coll), tensor);
+	  _set_seq(coll);
+	  return coll;
+	}
+      } else if (get_size(coll) >= 2) {
+	coll = remove_prefix(sc, coll, 1);
+	_set_seq(coll);
+	return coll;
       }
       break;
 
@@ -2410,7 +2400,6 @@ static inline nanoclj_val_t first(nanoclj_t * sc, nanoclj_cell_t * coll) {
     return _car(coll);
   case T_VECTOR:
   case T_ARRAYMAP:
-  case T_SORTED_SET:
   case T_MAPENTRY:
   case T_VAR:
   case T_QUEUE:
@@ -2422,6 +2411,13 @@ static inline nanoclj_val_t first(nanoclj_t * sc, nanoclj_cell_t * coll) {
       }
     }
     break;
+  case T_HASHSET:
+  case T_HASHMAP:
+    if (!_is_small(coll)) {
+      return tensor_hash_first(coll->_collection.tensor, coll->_collection.offset, get_size(coll));
+    } else if (get_size(coll) > 0) {
+      return vector_elem(coll, 0);
+    }
   case T_STRING:
   case T_CHAR_ARRAY:
   case T_FILE:
@@ -2477,10 +2473,17 @@ static inline size_t count(nanoclj_t * sc, nanoclj_cell_t * coll) {
     
   case T_VECTOR:
   case T_ARRAYMAP:
-  case T_SORTED_SET:
   case T_MAPENTRY:
   case T_QUEUE:
     return get_size(coll);
+
+  case T_HASHMAP:
+  case T_HASHSET:
+    if (_is_small(coll)) {
+      return _sosize_unchecked(coll);
+    } else {
+      return tensor_hash_count(coll->_collection.tensor, coll->_collection.offset, _size_unchecked(coll));
+    }
 
   case T_GRAPH:
   case T_GRAPH_NODE:
@@ -2549,6 +2552,99 @@ static nanoclj_val_t fifth(nanoclj_t * sc, nanoclj_cell_t * a) {
   return mk_nil();
 }
 
+static uint32_t hasheq(nanoclj_t * sc, nanoclj_val_t v) {
+  switch (prim_type(v)) {
+  case T_CODEPOINT: /* Clojure doesn't use murmur3 for characters */
+  case T_PROC:
+    return murmur3_hash_int(decode_integer(v));
+
+  case T_BOOLEAN:
+    return v.as_long == kFALSE ? 1237 : 1231;
+
+  case T_LONG:
+    return murmur3_hash_long(decode_integer(v));
+
+  case T_DOUBLE:
+    if (v.as_double == 0.0) return 0;
+    else return (int)v.as_long ^ (int)(v.as_long >> 32);
+
+  case T_SYMBOL:
+  case T_KEYWORD:
+    return decode_symbol(v)->hash;
+
+  case T_NIL:
+    {
+      nanoclj_cell_t * c = decode_pointer(v);
+      if (!c) return 0;
+      switch (_type(c)) {
+      case T_LONG:
+	return murmur3_hash_long(_lvalue_unchecked(c));
+
+      case T_DATE:
+	return (int)_lvalue_unchecked(c) ^ (int)(_lvalue_unchecked(c) >> 32);
+
+      case T_STRING:
+      case T_CHAR_ARRAY:
+      case T_FILE:
+      case T_UUID:{
+	strview_t sv = _to_strview(c);
+	return murmur3_hash_int(get_string_hashcode(sv.ptr, sv.size));
+      }
+
+      case T_MAPENTRY:
+      case T_VECTOR:
+      case T_VAR:
+      case T_QUEUE:
+	{
+	  uint32_t hash = 1;
+	  size_t n = get_size(c);
+	  for (size_t i = 0; i < n; i++) {
+	    hash = 31 * hash + hasheq(sc, vector_elem(c, i));
+	  }
+	  return murmur3_hash_coll(hash, n);
+	}
+
+      case T_ARRAYMAP:
+	{
+	  uint32_t hash = 0;
+	  size_t n = get_size(c);
+	  for (size_t i = 0; i < n; i++) {
+	    hash += hasheq(sc, vector_elem(c, i));
+	  }
+	  return murmur3_hash_coll(hash, n);
+	}
+
+      case T_HASHSET:
+	{
+	  uint32_t hash = 1;
+	  size_t n = 0;
+	  for ( ; c; c = next(sc, c), n++) {
+	    hash += hasheq(sc, first(sc, c));
+	  }
+	  return murmur3_hash_coll(hash, n);
+	}
+
+      case T_TYPE:
+	return murmur3_hash_int(c->type);
+
+      case T_NIL:
+	c = NULL;
+      case T_LIST:
+      case T_LAZYSEQ:
+	{
+	  uint32_t hash = 1;
+	  size_t n = 0;
+	  for ( ; c; c = next(sc, c), n++) {
+	    hash = 31 * hash + hasheq(sc, first(sc, c));
+	  }
+	  return murmur3_hash_coll(hash, n);
+	}
+      }
+    }
+  }
+  return 0;
+}
+
 static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
   /* Test primitive equality and nils */
   if (a0.as_long == b0.as_long) {
@@ -2580,7 +2676,6 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
     case T_DATE:
       return _lvalue_unchecked(a) == _lvalue_unchecked(b);
     case T_VECTOR:
-    case T_SORTED_SET:
     case T_VAR:
     case T_MAPENTRY:
     case T_QUEUE:{
@@ -2613,6 +2708,81 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
       }
     }
       break;
+    case T_HASHSET:
+      if (!_is_small(a)) {
+	if ((_is_small(b) && a->_collection.size != _sosize_unchecked(b)) ||
+	    (!_is_small(b) && a->_collection.size != b->_collection.size)) {
+	  return false;
+	}
+	int64_t cursor = 0;
+	nanoclj_tensor_t * ta = a->_collection.tensor;
+	while (tensor_is_valid_offset(ta, cursor)) {
+	  nanoclj_val_t v = tensor_hash_first(ta, cursor, a->_collection.size);
+	  cursor = tensor_hash_rest(ta, cursor, a->_collection.size);
+	  bool found = false;
+	  if (_is_small(b)) {
+	    for (size_t i = 0; i < _sosize_unchecked(b); i++) {
+	      if (equals(sc, v, vector_elem(b, i))) {
+		found = true;
+		break;
+	      }
+	    }
+	  } else {
+	    nanoclj_tensor_t * tb = b->_collection.tensor;
+	    int64_t num_cells = tb->nb[1] / sizeof(nanoclj_val_t);
+	    int64_t location = hasheq(sc, v);
+	    while ( 1 ) {
+	      nanoclj_val_t stored = ((nanoclj_val_t *)tb->data)[location % num_cells];
+	      if (is_unassigned(stored)) {
+		break;
+	      } else if (equals(sc, stored, v)) {
+		found = true;
+		break;
+	      } else {
+		location++;
+	      }
+	    }
+	  }
+	  if (!found) return false;
+	}
+	return true;
+      } else {
+	if ((_is_small(b) && _sosize_unchecked(a) != _sosize_unchecked(b)) ||
+	    (!_is_small(b) && _sosize_unchecked(a) != b->_collection.size)) {
+	  return false;
+	}
+	for (size_t i = 0; i < _sosize_unchecked(a); i++) {
+	  nanoclj_val_t v = vector_elem(a, i);
+	  bool found = false;
+	  if (_is_small(b)) {
+	    for (size_t j = 0; j < _sosize_unchecked(b); j++) {
+	      if (equals(sc, v, vector_elem(b, j))) {
+		found = true;
+		break;
+	      }
+	    }
+	  } else {
+	    nanoclj_tensor_t * tb = b->_collection.tensor;
+	    int64_t num_cells = tb->nb[1] / sizeof(nanoclj_val_t);
+	    int64_t location = hasheq(sc, v);
+	    while ( 1 ) {
+	      nanoclj_val_t stored = ((nanoclj_val_t *)tb->data)[location % num_cells];
+	      if (is_unassigned(stored)) {
+		break;
+	      } else if (equals(sc, stored, v)) {
+		found = true;
+		break;
+	      } else {
+		location++;
+	      }
+	    }
+	  }
+	  if (!found) return false;
+	}
+	return true;
+      }
+      break;
+      
     case T_LIST:
     case T_CLOSURE:
     case T_LAZYSEQ:
@@ -2733,24 +2903,43 @@ static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t
     }
     break;
     
-  case T_ARRAYMAP:{
-    nanoclj_cell_t * e = find(sc, coll, key);
-    if (e) {
-      if (result) *result = vector_elem(e, 1);
-      return true;
-    }
-  }
-    
-  case T_SORTED_SET:{
-    size_t size = get_size(coll);
-    for (int i = 0; i < size; i++) {
-      nanoclj_val_t value = vector_elem(coll, i);
-      if (equals(sc, key, value)) {
-	if (result) *result = value;
+  case T_ARRAYMAP:
+    {
+      nanoclj_cell_t * e = find(sc, coll, key);
+      if (e) {
+	if (result) *result = vector_elem(e, 1);
 	return true;
       }
     }
-  }
+    break;
+
+  case T_HASHSET:
+    if (_is_small(coll)) {
+      size_t size = get_size(coll);
+      for (int i = 0; i < size; i++) {
+	nanoclj_val_t value = vector_elem(coll, i);
+	if (equals(sc, key, value)) {
+	  if (result) *result = value;
+	  return true;
+	}
+      }
+    } else {
+      nanoclj_tensor_t * tensor = coll->_collection.tensor;
+      int64_t num_cells = tensor->nb[1] / sizeof(nanoclj_val_t);
+      int64_t location = hasheq(sc, key);
+      while ( 1 ) {
+	nanoclj_val_t stored = ((nanoclj_val_t *)tensor->data)[location % num_cells];
+	if (is_unassigned(stored)) {
+	  break;
+	} else if (equals(sc, stored, key)) {
+	  if (result) *result = stored;
+	  return true;
+	} else {
+	  location++;
+	}
+      }
+    }
+    break;
 
   case T_IMAGE:{
     nanoclj_tensor_t * image = coll->_image.tensor;
@@ -3039,7 +3228,6 @@ static inline int compare(nanoclj_val_t a, nanoclj_val_t b) {
 	  }
 	    
 	  case T_VECTOR:
-	  case T_SORTED_SET:
 	  case T_MAPENTRY:
 	  case T_VAR:
 	  case T_QUEUE:{
@@ -3132,92 +3320,6 @@ static inline int _compare(const void * a, const void * b) {
   return compare(*(const nanoclj_val_t*)a, *(const nanoclj_val_t*)b);
 }
 
-static inline void sort_vector_in_place(nanoclj_cell_t * vec) {
-  size_t s = get_size(vec);
-  if (s >= 2) qsort(get_ptr(vec), s, sizeof(nanoclj_val_t), _compare);
-}
-
-static int32_t hasheq(nanoclj_t * sc, nanoclj_val_t v) { 
-  switch (prim_type(v)) {
-  case T_CODEPOINT: /* Clojure doesn't use murmur3 for characters */
-  case T_PROC:
-    return murmur3_hash_int(decode_integer(v));
-
-  case T_BOOLEAN:
-    return v.as_long == kFALSE ? 1237 : 1231;
-    
-  case T_LONG:
-    return murmur3_hash_long(decode_integer(v));
-
-  case T_DOUBLE:
-    if (v.as_double == 0.0) return 0;
-    else return (int)v.as_long ^ (int)(v.as_long >> 32);
-
-  case T_SYMBOL:
-  case T_KEYWORD:
-    return decode_symbol(v)->hash;
-
-  case T_NIL:{
-    nanoclj_cell_t * c = decode_pointer(v);
-    if (!c) return 0;
-    
-    switch (_type(c)) {
-    case T_LONG:
-      return murmur3_hash_long(_lvalue_unchecked(c));
-
-    case T_DATE:
-      return (int)_lvalue_unchecked(c) ^ (int)(_lvalue_unchecked(c) >> 32);
-
-    case T_STRING:
-    case T_CHAR_ARRAY:
-    case T_FILE:
-    case T_UUID:{
-      strview_t sv = _to_strview(c);
-      return murmur3_hash_int(get_string_hashcode(sv.ptr, sv.size));
-    }
-
-    case T_MAPENTRY:
-    case T_VECTOR:
-    case T_VAR:
-    case T_QUEUE:{
-      uint32_t hash = 1;
-      size_t n = get_size(c);
-      for (size_t i = 0; i < n; i++) {
-	hash = 31 * hash + (uint32_t)hasheq(sc, vector_elem(c, i));
-      }
-      return murmur3_hash_coll(hash, n);
-    }
-
-    case T_SORTED_SET:
-    case T_ARRAYMAP:{
-      uint32_t hash = 0;
-      size_t n = get_size(c);
-      for (size_t i = 0; i < n; i++) {
-	hash += (uint32_t)hasheq(sc, vector_elem(c, i));
-      }
-      return murmur3_hash_coll(hash, n);
-    }
-
-    case T_TYPE:
-      return murmur3_hash_int(c->type);
-
-    case T_NIL:
-      c = NULL;
-    case T_LIST:
-    case T_LAZYSEQ:{
-      uint32_t hash = 1;
-      size_t n = 0;
-      for ( ; c; c = next(sc, c), n++) {
-	hash = 31 * hash + (uint32_t)hasheq(sc, first(sc, c));
-      }
-      return murmur3_hash_coll(hash, n);
-    }
-    }
-  }
-  }
-  return 0;
-}
-
 static inline void ok_to_freely_gc(nanoclj_t * sc) {
   _set_car(&(sc->sink), sc->EMPTY);
 }
@@ -3270,9 +3372,22 @@ static inline nanoclj_cell_t * vector_conjoin(nanoclj_t * sc, nanoclj_cell_t * v
   uint16_t t = _type(vec);
   if (_is_small(vec)) {
     nanoclj_cell_t * new_vec = get_vector_object(sc, t, old_size + 1);
-    memcpy(get_ptr(new_vec), _smalldata_unchecked(vec), old_size * sizeof(nanoclj_val_t));
-    set_vector_elem(new_vec, old_size, new_value);
+    if (t == T_HASHSET && !_is_small(new_vec)) {
+      nanoclj_tensor_t * tensor = new_vec->_collection.tensor;
+      for (size_t i = 0; i < old_size; i++) {
+	nanoclj_val_t v = vector_elem(vec, i);
+	tensor_hash_mutate_set(tensor, hasheq(sc, v), i, v);
+      }
+      tensor_hash_mutate_set(tensor, hasheq(sc, new_value), old_size, new_value);
+    } else {
+      memcpy(get_ptr(new_vec), _smalldata_unchecked(vec), old_size * sizeof(nanoclj_val_t));
+      set_vector_elem(new_vec, old_size, new_value);
+    }
     return new_vec;
+  } else if (t == T_HASHSET) {
+    nanoclj_tensor_t * tensor = vec->_collection.tensor;
+    tensor = tensor_hash_mutate_set(tensor, hasheq(sc, new_value), old_size, new_value);
+    return get_collection_object(sc, t, _offset_unchecked(vec), old_size + 1, tensor);
   } else {
     size_t old_offset = _offset_unchecked(vec);
     nanoclj_tensor_t * tensor = tensor_push(_tensor_unchecked(vec), old_offset + old_size, new_value);
@@ -3287,13 +3402,6 @@ static inline nanoclj_cell_t * conjoin(nanoclj_t * sc, nanoclj_cell_t * coll, na
   int t = _type(coll);
   if (_is_sequence(coll) || t == T_NIL || t == T_LIST || t == T_LAZYSEQ) {
     return get_cell(sc, T_LIST, 0, new_value, coll, NULL);
-  } else if (t == T_SORTED_SET) {
-    if (!get_elem(sc, coll, new_value, NULL)) {
-      coll = vector_conjoin(sc, coll, new_value);
-      coll = copy_vector(sc, coll);
-      sort_vector_in_place(coll);
-    }
-    return coll;
   } else if (is_vector_type(t)) {
     return vector_conjoin(sc, coll, new_value);
   } else if (is_string_type(t)) {
@@ -3315,10 +3423,6 @@ static inline nanoclj_cell_t * conjoin(nanoclj_t * sc, nanoclj_cell_t * coll, na
   } else {
     return NULL;
   }
-}
-
-static inline nanoclj_cell_t * mk_sorted_set(nanoclj_t * sc, int len) {
-  return get_vector_object(sc, T_SORTED_SET, len);
 }
 
 static inline nanoclj_cell_t * mk_arraymap(nanoclj_t * sc, size_t len) {
@@ -4611,50 +4715,9 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
   putchars(sc, sv.ptr, sv.size, out);
 }
 
-static inline size_t seq_length(nanoclj_t * sc, nanoclj_cell_t * a) {
-  if (!a) {
-    return 0;
-  }
-  size_t i = 0;  
-  switch (_type(a)) {
-  case T_NIL:
-    return 0;
-        
-  case T_VECTOR:
-  case T_ARRAYMAP:
-  case T_SORTED_SET:
-  case T_QUEUE:
-  case T_STRING:
-  case T_CHAR_ARRAY:
-  case T_FILE:
-  case T_MAPENTRY:
-  case T_VAR:
-    return get_size(a);
-
-  case T_LIST:
-    for (; a; a = next(sc, a), i++) { }
-    return i;
-
-  case T_LAZYSEQ:
-#if 1
-    for (a = seq(sc, a); a; a = next(sc, a), i++) { }
-    return i;
-#else
-    while ( 1 ) {
-      if (a == &(sc->_EMPTY)) return i;
-      nanoclj_val_t b = _cdr(a);
-      if (!is_cell(b)) return i;
-      a = decode_pointer(b);
-      i++;
-    }
-#endif
-  }
-  return 1;
-}
-
 /* Creates a collection, args are seqed */
 static inline nanoclj_cell_t * mk_collection(nanoclj_t * sc, int type, nanoclj_cell_t * args) {
-  size_t len = seq_length(sc, args);
+  size_t len = count(sc, args);
 
   if (type == T_ARRAYMAP) len /= 2;
   
@@ -4670,9 +4733,6 @@ static inline nanoclj_cell_t * mk_collection(nanoclj_t * sc, int type, nanoclj_c
     } else {
       for (size_t i = 0; i < len; args = rest(sc, args), i++) {
 	set_vector_elem(coll, i, first(sc, args));
-      }
-      if (type == T_SORTED_SET) {
-	sort_vector_in_place(coll);
       }
     }
   }
@@ -4931,7 +4991,7 @@ static inline bool destructure(nanoclj_t * sc, nanoclj_cell_t * binding, nanoclj
     if (e.as_long == sc->AMP.as_long) {
       if (++i < n) {
 	e = vector_elem(binding, i);
-	if (is_primitive(e)) {
+	if (!is_cell(e)) {
 	  new_slot_in_env(sc, e, mk_pointer(y));
 	} else {
 	  if (!destructure(sc, decode_pointer(e), seq(sc, y), 0, false)) {
@@ -4944,7 +5004,7 @@ static inline bool destructure(nanoclj_t * sc, nanoclj_cell_t * binding, nanoclj
     } else if (!first_level || y) {
       if (e.as_long == sc->UNDERSCORE.as_long) {
 	/* ignore argument */
-      } else if (is_primitive(e)) {
+      } else if (!is_cell(e)) {
 	new_slot_in_env(sc, e, first(sc, y));
       } else {
 	nanoclj_val_t y2 = first(sc, y);
@@ -4968,7 +5028,7 @@ static inline bool destructure(nanoclj_t * sc, nanoclj_cell_t * binding, nanoclj
 static inline bool destructure_value(nanoclj_t * sc, nanoclj_val_t e, nanoclj_val_t arg) {
   if (e.as_long == sc->UNDERSCORE.as_long) {
     /* ignore argument */
-  } else if (is_primitive(e)) {
+  } else if (!is_cell(e)) {
     new_slot_in_env(sc, e, arg);
   } else if (!is_cell(arg)) {
     return false;
@@ -5021,7 +5081,8 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
 
   case T_VECTOR:
   case T_ARRAYMAP:
-  case T_SORTED_SET:
+  case T_HASHMAP:
+  case T_HASHSET:
   case T_QUEUE:
     return mk_pointer(mk_collection(sc, t, args));
 
@@ -5287,7 +5348,7 @@ static inline bool unpack_args_0(nanoclj_t * sc) {
   } else {
     nanoclj_val_t ns = mk_string(sc, "nanoclj.core");
     const char * fn = dispatch_table[(int)sc->op].name;
-    nanoclj_throw(sc, mk_arity_exception(sc, seq_length(sc, sc->args), ns, mk_string(sc, fn)));
+    nanoclj_throw(sc, mk_arity_exception(sc, count(sc, sc->args), ns, mk_string(sc, fn)));
     return false;
   }
 }
@@ -5306,7 +5367,7 @@ static inline bool unpack_args_1(nanoclj_t * sc, nanoclj_val_t * arg0) {
   }
   nanoclj_val_t ns = mk_string(sc, "nanoclj.core");
   const char * fn = dispatch_table[(int)sc->op].name;
-  nanoclj_throw(sc, mk_arity_exception(sc, seq_length(sc, sc->args), ns, mk_string(sc, fn)));
+  nanoclj_throw(sc, mk_arity_exception(sc, count(sc, sc->args), ns, mk_string(sc, fn)));
   return false;
 }
 
@@ -5327,7 +5388,7 @@ static inline bool unpack_args_1_plus(nanoclj_t * sc, nanoclj_val_t * arg0, nano
   }
   nanoclj_val_t ns = mk_string(sc, "nanoclj.core");
   const char * fn = dispatch_table[(int)sc->op].name;
-  nanoclj_throw(sc, mk_arity_exception(sc, seq_length(sc, sc->args), ns, mk_string(sc, fn)));
+  nanoclj_throw(sc, mk_arity_exception(sc, count(sc, sc->args), ns, mk_string(sc, fn)));
   return false;
 }
 
@@ -5344,7 +5405,7 @@ static inline bool unpack_args_2(nanoclj_t * sc, nanoclj_val_t * arg0, nanoclj_v
   }
   nanoclj_val_t ns = mk_string(sc, "nanoclj.core");
   const char * fn = dispatch_table[(int)sc->op].name;
-  nanoclj_throw(sc, mk_arity_exception(sc, seq_length(sc, sc->args), ns, mk_string(sc, fn)));
+  nanoclj_throw(sc, mk_arity_exception(sc, count(sc, sc->args), ns, mk_string(sc, fn)));
   return false;
 }
 
@@ -5374,7 +5435,7 @@ static inline bool unpack_args_3(nanoclj_t * sc, nanoclj_val_t * arg0, nanoclj_v
   }
   nanoclj_val_t ns = mk_string(sc, "nanoclj.core");
   const char * fn = dispatch_table[(int)sc->op].name;
-  nanoclj_throw(sc, mk_arity_exception(sc, seq_length(sc, sc->args), ns, mk_string(sc, fn)));
+  nanoclj_throw(sc, mk_arity_exception(sc, count(sc, sc->args), ns, mk_string(sc, fn)));
   return false;
 }
 
@@ -5404,7 +5465,7 @@ static inline bool unpack_args_5(nanoclj_t * sc, nanoclj_val_t * arg0, nanoclj_v
   }
   nanoclj_val_t ns = mk_string(sc, "nanoclj.core");
   const char * fn = dispatch_table[(int)sc->op].name;
-  nanoclj_throw(sc, mk_arity_exception(sc, seq_length(sc, sc->args), ns, mk_string(sc, fn)));
+  nanoclj_throw(sc, mk_arity_exception(sc, count(sc, sc->args), ns, mk_string(sc, fn)));
   return false;
 }
 
@@ -5420,7 +5481,7 @@ static inline bool unpack_args_2_plus(nanoclj_t * sc, nanoclj_val_t * arg0, nano
   }
   nanoclj_val_t ns = mk_string(sc, "nanoclj.core");
   const char * fn = dispatch_table[(int)sc->op].name;
-  nanoclj_throw(sc, mk_arity_exception(sc, seq_length(sc, sc->args), ns, mk_string(sc, fn)));
+  nanoclj_throw(sc, mk_arity_exception(sc, count(sc, sc->args), ns, mk_string(sc, fn)));
   return false;
 }
 
@@ -5741,7 +5802,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	/* Keep nested calls from GC'ing the arglist */
 	retain(sc, sc->args);
 	if (_min_arity_unchecked(code_cell) > 0 || _max_arity_unchecked(code_cell) != -1) {
-	  int n = seq_length(sc, sc->args);
+	  int64_t n = count(sc, sc->args);
 	  if (n < _min_arity_unchecked(code_cell) || n > _max_arity_unchecked(code_cell)) {
 	    nanoclj_val_t ns_v = mk_nil(), name_v = mk_nil();
 	    get_elem(sc, _ff_metadata(code_cell), sc->NS, &ns_v);
@@ -5759,7 +5820,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       }
       case T_VECTOR:
       case T_ARRAYMAP:
-      case T_SORTED_SET:
+      case T_HASHMAP:
+      case T_HASHSET:
       case T_IMAGE:
       case T_AUDIO:
       case T_STRING:
@@ -5801,7 +5863,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	params = decode_pointer(params0);
 
 	if (_type(params) == T_VECTOR) { /* Clojure style arguments */
-	  int n = seq_length(sc, sc->args);
+	  int64_t n = count(sc, sc->args);
 	  if (!destructure(sc, params, sc->args, n, true)) {
 	    nanoclj_val_t ns_v = mk_nil(), name_v = mk_nil();
 	    get_elem(sc, _cons_metadata(code_cell), sc->NS, &ns_v);
@@ -5811,7 +5873,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  }
 	  sc->code = cdr(x);
 	} else if (_type(params) == T_LIST && is_vector(_car(params))) { /* Clojure style multi-arity arguments */
-	  size_t needed_args = seq_length(sc, sc->args);
+	  size_t needed_args = count(sc, sc->args);
 	  bool found_match = false;
 	  for ( ; x.as_long != sc->EMPTY.as_long; x = cdr(x)) {
 	    nanoclj_val_t vec = caar(x);
@@ -5838,7 +5900,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	      nanoclj_val_t ns_v = mk_nil(), name_v = mk_nil();
 	      get_elem(sc, _cons_metadata(code_cell), sc->NS, &ns_v);
 	      get_elem(sc, _cons_metadata(code_cell), sc->NAME, &name_v);
-	      nanoclj_throw(sc, mk_arity_exception(sc, seq_length(sc, sc->args), ns_v, name_v));
+	      nanoclj_throw(sc, mk_arity_exception(sc, count(sc, sc->args), ns_v, name_v));
 	      return false;
 	    } else {
 	      new_slot_in_env(sc, car(x), first(sc, yy));
@@ -6827,23 +6889,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       nanoclj_cell_t * c = decode_pointer(arg0);
       if (!c) {
 	s_return(sc, mk_nil());
-      } else if (_type(c) == T_SORTED_SET) {
-	size_t i = find_index(sc, c, arg1);
-	if (i == NPOS) {
-	  s_return(sc, arg0);
-	} else {
-	  size_t n = get_size(c);
-	  nanoclj_cell_t * new_set;
-	  if (i == 0) {
-	    new_set = subvec(sc, c, 1, n);
-	  } else {
-	    new_set = subvec(sc, c, 0, i);
-	    for (i++; i < n; i++) {
-	      new_set = conjoin(sc, new_set, vector_elem(c, i));
-	    }
-	  }
-	  s_return(sc, mk_pointer(new_set));
-	}
       }
     }
     Error_0(sc, "No protocol method ICollection.-disjoin defined for type");
@@ -7577,9 +7622,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     
   case OP_RD_SET:
     if (sc->value.as_long == sc->EMPTY.as_long) {
-      s_return(sc, mk_pointer(mk_sorted_set(sc, 0)));
+      s_return(sc, mk_pointer(get_vector_object(sc, T_HASHSET, 0)));
     } else {
-      s_return(sc, mk_pointer(cons(sc, sc->SORTED_SET, decode_pointer(sc->value))));
+      s_return(sc, mk_pointer(cons(sc, sc->HASH_SET, decode_pointer(sc->value))));
     }
     
   case OP_RD_MAP:
@@ -7629,7 +7674,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       if (c) {
 	int t = _type(c);
 	if (is_string_type(t) || is_vector_type(t)) {
-	  s_return(sc, mk_pointer(rseq(sc, c)));	
+	  s_return(sc, mk_pointer(rseq(sc, c)));
 	}
       }
     }
@@ -7651,8 +7696,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_HASH:
     if (!unpack_args_1(sc, &arg0)) {
       return false;
-    } else if (is_primitive(arg0)) {    
-      s_return(sc, mk_int(hasheq(sc, arg0)));
+    } else if (!is_cell(arg0)) {
+      s_return(sc, mk_int((int32_t)hasheq(sc, arg0)));
     } else {
       nanoclj_cell_t * c = decode_pointer(arg0);
       if (!c) {
@@ -7662,7 +7707,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  c->hasheq = hasheq(sc, arg0);
 	  c->flags &= T_HASHED;
 	}
-	s_return(sc, mk_int(c->hasheq));
+	s_return(sc, mk_int((int32_t)c->hasheq));
       }
     }
 
@@ -8290,9 +8335,9 @@ static void set_vector_elem_checked(nanoclj_val_t vec, size_t ielem, nanoclj_val
   }
 }
 
-static size_t size_checked(nanoclj_t * sc, nanoclj_val_t coll) {
+static size_t count_checked(nanoclj_t * sc, nanoclj_val_t coll) {
   if (is_cell(coll)) {
-    return seq_length(sc, decode_pointer(coll));
+    return count(sc, decode_pointer(coll));
   } else {
     return 0;
   }
@@ -8321,7 +8366,7 @@ static struct nanoclj_interface vtbl = {
   to_double,
   to_int,
   is_vector,
-  size_checked,
+  count_checked,
   fill_vector_checked,
   vector_elem_checked,
   set_vector_elem_checked,
@@ -8579,7 +8624,8 @@ bool nanoclj_init(nanoclj_t * sc) {
   sc->DATA = def_keyword(sc, "data");
   sc->HAIR = def_keyword(sc, "hair");
   
-  sc->SORTED_SET = def_symbol(sc, "sorted-set");
+  sc->HASH_SET = def_symbol(sc, "hash-set");
+  sc->HASH_MAP = def_symbol(sc, "hash-map");
   sc->ARRAY_MAP = def_symbol(sc, "array-map");
   sc->DOT = def_symbol(sc, ".");
   sc->CATCH = def_symbol(sc, "catch");
@@ -8640,10 +8686,10 @@ bool nanoclj_init(nanoclj_t * sc) {
   nanoclj_cell_t * Obj = mk_class(sc, "clojure.lang.Obj", gentypeid(sc), sc->Object);
   nanoclj_cell_t * ASeq = mk_class(sc, "clojure.lang.ASeq", gentypeid(sc), Obj);
   nanoclj_cell_t * PersistentVector = mk_class(sc, "clojure.lang.PersistentVector", T_VECTOR, AFn);
-  
-  mk_class(sc, "clojure.lang.PersistentTreeSet", T_SORTED_SET, AFn);
+  mk_class(sc, "clojure.lang.PersistentHashSet", T_HASHSET, AFn);
   mk_class(sc, "clojure.lang.PersistentArrayMap", T_ARRAYMAP, AFn);
-  mk_class(sc, "clojure.lang.Symbol", T_SYMBOL, AFn);  
+  mk_class(sc, "clojure.lang.PersistentHashMap", T_HASHMAP, AFn);
+  mk_class(sc, "clojure.lang.Symbol", T_SYMBOL, AFn);
   mk_class(sc, "clojure.lang.Keyword", T_KEYWORD, AFn); /* non-standard parent */
   mk_class(sc, "clojure.lang.BigInt", T_BIGINT, Number);
   mk_class(sc, "clojure.lang.BigDecimal", T_BIGDECIMAL, Number);

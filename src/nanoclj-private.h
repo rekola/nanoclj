@@ -75,7 +75,7 @@ extern "C" {
 
 /* cell structure */
   typedef struct nanoclj_cell_t {
-    int32_t hasheq;
+    uint32_t hasheq;
     uint16_t type;
     uint16_t flags;
     union {
@@ -242,7 +242,8 @@ extern "C" {
     nanoclj_val_t DATA;		  /* :data */
     nanoclj_val_t HAIR;	          /* :hair */
     
-    nanoclj_val_t SORTED_SET;	  /* sorted-set */
+    nanoclj_val_t HASH_SET;	  /* hash-set */
+    nanoclj_val_t HASH_MAP;	  /* hash-map */
     nanoclj_val_t ARRAY_MAP;	  /* array-map */
     nanoclj_val_t DOT;		  /* . */
     nanoclj_val_t CATCH;

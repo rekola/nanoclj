@@ -5,7 +5,7 @@
 (defn delay? [x] (instance? clojure.lang.Delay x))
 (defn lazy-seq? [x] (instance? clojure.lang.LazySeq x))
 (defn map-entry? [x] (instance? clojure.lang.MapEntry x))
-(defn set? [x] (instance? clojure.lang.PersistentTreeSet x))
+(defn set? [x] (instance? clojure.lang.PersistentHashSet x))
 (defn map? [x] (instance? clojure.lang.PersistentArrayMap x))
 (defn image? [x] (instance? nanoclj.core.Image x))
 (defn gradient? [x] (instance? nanoclj.core.Gradient x))

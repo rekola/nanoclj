@@ -94,7 +94,7 @@
   (fn [x] (instance? clojure.lang.AFn x)))
 
 (def defined? (fn [sym] (boolean (ns-resolve sym))))
-                        
+
 (def list
   "Creates a list from the given args"
   (fn [& args] args))
@@ -405,9 +405,9 @@
   ([x y] (not (equals? x y)))
   ([x y & more] (not (apply equals? x y more))))
 
-(def sorted-set
-  "Creates a sorted set from the arguments"
-  (fn [& keys] (reduce -conj #{} keys)))
+(def hash-set
+  "Creates a hash set from the arguments"
+  (fn [& keys] (reduce -conj (clojure.lang.PersistentHashSet) keys)))
 
 (def array-map
   "Creates an array-map from the arguments"
@@ -422,6 +422,20 @@
                        (rest (rest seq))
                        )))]
       (f {} keyvals))))
+
+(def hash-map
+  "Creates an array-map from the arguments"
+  (fn [& keyvals]
+    (let [f (fn [val seq]
+              (if (empty? seq)
+                val
+                (recur (-conj val
+                              (map-entry
+                               (first seq)
+                               (first (rest seq))))
+                       (rest (rest seq))
+                       )))]
+      (f (clojure.lang.PersistentHashMap) keyvals))))
 
 (defn boolean?
   "Returns true if argument is a boolean"
