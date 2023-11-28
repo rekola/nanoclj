@@ -83,7 +83,7 @@
 
 (def sorted?
   "Returns true if coll is a sorted collection"
-  (fn [x] (instance? clojure.lang.PersistentTreeSet x)))
+  (fn [x] false))
 
 (def class?
   "Returns true if x is a Class"

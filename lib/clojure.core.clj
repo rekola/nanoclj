@@ -6,27 +6,27 @@
 (defn lazy-seq? [x] (instance? clojure.lang.LazySeq x))
 (defn map-entry? [x] (instance? clojure.lang.MapEntry x))
 (defn set? [x] (instance? clojure.lang.PersistentHashSet x))
-(defn map? [x] (instance? clojure.lang.PersistentArrayMap x))
+(defn map? [x] (instance? clojure.lang.APersistentMap x))
 (defn image? [x] (instance? nanoclj.core.Image x))
 (defn gradient? [x] (instance? nanoclj.core.Gradient x))
 (defn inst? [x] (instance? java.util.Date x))
 (defn uuid? [x] (instance? java.util.UUID x))
 (defn coll? [x] (is-any-of? (type x)
-                            clojure.lang.PersistentTreeSet
-                            clojure.lang.PersistentArrayMap
+                            clojure.lang.PersistentHashSet
+                            clojure.lang.APersistentMap
                             clojure.lang.PersistentVector
                             clojure.lang.Cons
                             ))
 (defn associative? [coll] (is-any-of? (type x)
                                       clojure.lang.PersistentVector
-                                      clojure.lang.PersistentArrayMap))
+                                      clojure.lang.APersistentMap))
 (defn sequential?
   "Returns true if coll is sequential (ordered)"
   [coll] (is-any-of? (type coll) clojure.lang.PersistentVector clojure.lang.Cons))
 
 (defn counted?
   "Returns true if coll implements count in constant time"
-  [coll] (is-any-of? (type coll) clojure.lang.PersistentTreeSet clojure.lang.PersistentArrayMap clojure.lang.PersistentVector))
+  [coll] (is-any-of? (type coll) clojure.lang.PersistentHashSet clojure.lang.APersistentMap clojure.lang.PersistentVector))
 
 (defn seq?
   "Returns true if coll is a Sequence"
@@ -34,7 +34,7 @@
 
 (defn seqable?
   "Returns true if coll supportes seq"
-  [coll] (is-any-of? (type coll) java.lang.String clojure.lang.LazySeq clojure.lang.PersistentVector clojure.lang.Cons clojure.lang.PersistentTreeSet clojure.lang.PersistentArrayMap))
+  [coll] (is-any-of? (type coll) java.lang.String clojure.lang.LazySeq clojure.lang.PersistentVector clojure.lang.Cons clojure.lang.PersistentHashSet clojure.lang.APersistentMap))
 
 (defn realized?
   "Returns true if Delay or LazySeq has been realized"
