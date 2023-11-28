@@ -2450,10 +2450,12 @@ static inline nanoclj_val_t first(nanoclj_t * sc, nanoclj_cell_t * coll) {
 
 static inline size_t count(nanoclj_t * sc, nanoclj_cell_t * coll) {
   if (!coll) return 0;
+#if 0
   else if (_type(coll) == T_LAZYSEQ) {
     coll = deref(sc, coll);
     if (!coll) return 0;
   }
+#endif
 
   switch (_type(coll)) {
   case T_NIL:
@@ -2463,14 +2465,22 @@ static inline size_t count(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_LAZYSEQ:
   case T_ENVIRONMENT:
   case T_CLASS:
+#if 1
+    {
+      size_t n = 1;
+      for (coll = next(sc, coll); coll; coll = next(sc, coll), n++) { }
+      return n;
+    }
+#else
     return 1 + count(sc, next(sc, coll));
-    
+#endif
+
   case T_STRING:
   case T_CHAR_ARRAY:
   case T_FILE:
   case T_UUID:
     return utf8_num_codepoints(get_ptr(coll), get_size(coll));
-    
+
   case T_VECTOR:
   case T_ARRAYMAP:
   case T_MAPENTRY:
@@ -2481,6 +2491,8 @@ static inline size_t count(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_HASHSET:
     if (_is_small(coll)) {
       return _sosize_unchecked(coll);
+    } else if (coll->_collection.offset == 0) {
+      return coll->_collection.size;
     } else {
       return tensor_hash_count(coll->_collection.tensor, coll->_collection.offset, _size_unchecked(coll));
     }
@@ -2488,7 +2500,7 @@ static inline size_t count(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_GRAPH:
   case T_GRAPH_NODE:
     return _num_nodes_unchecked(coll);
-    
+
   case T_GRAPH_EDGE:
     return _num_edges_unchecked(coll);
   }
@@ -2729,10 +2741,9 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
 	    }
 	  } else {
 	    nanoclj_tensor_t * tb = b->_collection.tensor;
-	    int64_t num_cells = tb->nb[1] / sizeof(nanoclj_val_t);
 	    int64_t location = hasheq(sc, v);
 	    while ( 1 ) {
-	      nanoclj_val_t stored = ((nanoclj_val_t *)tb->data)[location % num_cells];
+	      nanoclj_val_t stored = tensor_hash_get(tb, location);
 	      if (is_unassigned(stored)) {
 		break;
 	      } else if (equals(sc, stored, v)) {
@@ -2763,10 +2774,9 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
 	    }
 	  } else {
 	    nanoclj_tensor_t * tb = b->_collection.tensor;
-	    int64_t num_cells = tb->nb[1] / sizeof(nanoclj_val_t);
 	    int64_t location = hasheq(sc, v);
 	    while ( 1 ) {
-	      nanoclj_val_t stored = ((nanoclj_val_t *)tb->data)[location % num_cells];
+	      nanoclj_val_t stored = tensor_hash_get(tb, location);
 	      if (is_unassigned(stored)) {
 		break;
 	      } else if (equals(sc, stored, v)) {
@@ -2925,10 +2935,9 @@ static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t
       }
     } else {
       nanoclj_tensor_t * tensor = coll->_collection.tensor;
-      int64_t num_cells = tensor->nb[1] / sizeof(nanoclj_val_t);
       int64_t location = hasheq(sc, key);
       while ( 1 ) {
-	nanoclj_val_t stored = ((nanoclj_val_t *)tensor->data)[location % num_cells];
+	nanoclj_val_t stored = tensor_hash_get(tensor, location);
 	if (is_unassigned(stored)) {
 	  break;
 	} else if (equals(sc, stored, key)) {

@@ -146,16 +146,12 @@ static inline nanoclj_tensor_t * mk_tensor_1d_padded(nanoclj_tensor_type_t t, in
   return NULL;
 }
 
-/* Creates a 1D tensor */
-static inline nanoclj_tensor_t * mk_tensor_1d(nanoclj_tensor_type_t t, int64_t size) {
-  return mk_tensor_1d_padded(t, size, 0);
-}
-
-static inline nanoclj_tensor_t * mk_tensor_2d(nanoclj_tensor_type_t t, int64_t d0, int64_t d1) {
+static inline nanoclj_tensor_t * mk_tensor_2d_padded(nanoclj_tensor_type_t t, int64_t d0, int64_t d1, int64_t padding) {
   size_t type_size = tensor_get_cell_size(t);
   if (!type_size) return NULL;
 
-  void * data = malloc(d0 * d1 * type_size);
+  size_t size = d0 * (d1 + padding) * type_size;
+  void * data = malloc(size);
   if (data) {
     nanoclj_tensor_t * tensor = malloc(sizeof(nanoclj_tensor_t));
     if (!tensor) {
@@ -168,13 +164,22 @@ static inline nanoclj_tensor_t * mk_tensor_2d(nanoclj_tensor_type_t t, int64_t d
       tensor->ne[1] = d1;
       tensor->nb[0] = type_size;
       tensor->nb[1] = d0 * type_size;
-      tensor->nb[2] = d0 * d1 * type_size;
+      tensor->nb[2] = size;
       tensor->refcnt = 0;
       tensor->meta = NULL;
       return tensor;
     }
   }
   return NULL;
+}
+
+/* Creates a 1D tensor */
+static inline nanoclj_tensor_t * mk_tensor_1d(nanoclj_tensor_type_t t, int64_t size) {
+  return mk_tensor_1d_padded(t, size, 0);
+}
+
+static inline nanoclj_tensor_t * mk_tensor_2d(nanoclj_tensor_type_t t, int64_t d0, int64_t d1) {
+  return mk_tensor_2d_padded(t, d0, d1, 0);
 }
 
 static inline nanoclj_tensor_t * mk_tensor_3d(nanoclj_tensor_type_t t, int64_t d0, size_t stride0,
@@ -773,7 +778,7 @@ static inline nanoclj_tensor_t * mk_tensor_hash(size_t initial_size) {
 
 static inline nanoclj_tensor_t * tensor_hash_mutate_set(nanoclj_tensor_t * tensor, uint32_t location, uint32_t val_index, nanoclj_val_t val) {
   if (val_index * 10 * sizeof(nanoclj_val_t) / tensor->nb[1] >= 7) { /* load factor more than 70% */
-    
+
   } else if (val_index < tensor->ne[0]) {
     nanoclj_tensor_t * old_tensor = tensor;
     tensor = mk_tensor_1d_padded(nanoclj_f64, val_index, tensor->nb[1] / sizeof(nanoclj_val_t) - val_index);
@@ -837,6 +842,15 @@ static inline size_t tensor_hash_count(nanoclj_tensor_t * tensor, int64_t offset
 
 static inline bool tensor_is_valid_offset(nanoclj_tensor_t * tensor, uint64_t offset) {
   return offset * sizeof(nanoclj_val_t) < tensor->nb[1];
+}
+
+static inline int64_t tensor_hash_get_bucket_count(nanoclj_tensor_t * tensor) {
+  return tensor->nb[1] / sizeof(nanoclj_val_t);
+}
+
+static inline nanoclj_val_t tensor_hash_get(nanoclj_tensor_t * tensor, int64_t location) {
+  int64_t num_cells = tensor_hash_get_bucket_count(tensor);
+  return ((nanoclj_val_t *)tensor->data)[location % num_cells];
 }
 
 #endif
