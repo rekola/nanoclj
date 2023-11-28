@@ -403,10 +403,6 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define port_flags_unchecked(p)	  _port_flags_unchecked(decode_pointer(p))
 #define nesting_unchecked(p)      _nesting_unchecked(decode_pointer(p))
 
-static inline int32_t decode_integer(nanoclj_val_t value) {
-  return (uint32_t)(value.as_long & 0xffffffff);
-}
-
 static inline bool is_string(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
   nanoclj_cell_t * c = decode_pointer(p);
@@ -1342,18 +1338,6 @@ static inline nanoclj_val_t mk_date(nanoclj_t * sc, long long num) {
   return mk_pointer(x);
 }
 
-static inline nanoclj_val_t mk_byte(int8_t n) {
-  return (nanoclj_val_t)((SIGNATURE_INTEGER << 48) | (UINT64_C(0) << 32) | (uint8_t)n);
-}
-
-static inline nanoclj_val_t mk_short(int16_t n) {
-  return (nanoclj_val_t)((SIGNATURE_INTEGER << 48) | (UINT64_C(1) << 32) | (uint16_t)n);
-}
-
-static inline nanoclj_val_t mk_int(int num) {
-  return (nanoclj_val_t)((SIGNATURE_INTEGER << 48) | (UINT64_C(2) << 32) | (uint32_t)num);
-}
-
 /* get number atom (integer) */
 static inline nanoclj_val_t mk_long(nanoclj_t * sc, long long num) {
   if (num >= INT_MIN && num <= INT_MAX) {
@@ -1844,7 +1828,7 @@ static inline nanoclj_cell_t * get_vector_object(nanoclj_t * sc, int_fast16_t t,
   nanoclj_tensor_t * store = NULL;
   if (size > NANOCLJ_SMALL_VEC_SIZE) {
     if (t == T_HASHSET || t == T_HASHMAP) {
-      store = mk_tensor_hash(727);
+      store = mk_tensor_hash(size * 2);
     } else {
       store = mk_tensor_1d(nanoclj_f64, size);
     }
@@ -2743,14 +2727,16 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
 	    nanoclj_tensor_t * tb = b->_collection.tensor;
 	    int64_t location = hasheq(sc, v);
 	    while ( 1 ) {
-	      nanoclj_val_t stored = tensor_hash_get(tb, location);
-	      if (is_unassigned(stored)) {
-		break;
-	      } else if (equals(sc, stored, v)) {
-		found = true;
+	      if (tensor_hash_is_unassigned(tb, location)) {
 		break;
 	      } else {
-		location++;
+		nanoclj_val_t stored = tensor_hash_get(tb, location, b->_collection.size);
+		if (equals(sc, stored, v)) {
+		  found = true;
+		  break;
+		} else {
+		  location++;
+		}
 	      }
 	    }
 	  }
@@ -2776,14 +2762,16 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
 	    nanoclj_tensor_t * tb = b->_collection.tensor;
 	    int64_t location = hasheq(sc, v);
 	    while ( 1 ) {
-	      nanoclj_val_t stored = tensor_hash_get(tb, location);
-	      if (is_unassigned(stored)) {
-		break;
-	      } else if (equals(sc, stored, v)) {
-		found = true;
+	      if (tensor_hash_is_unassigned(tb, location)) {
 		break;
 	      } else {
-		location++;
+		nanoclj_val_t stored = tensor_hash_get(tb, location, b->_collection.size);
+		if (equals(sc, stored, v)) {
+		  found = true;
+		  break;
+		} else {
+		  location++;
+		}
 	      }
 	    }
 	  }
@@ -2937,14 +2925,16 @@ static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t
       nanoclj_tensor_t * tensor = coll->_collection.tensor;
       int64_t location = hasheq(sc, key);
       while ( 1 ) {
-	nanoclj_val_t stored = tensor_hash_get(tensor, location);
-	if (is_unassigned(stored)) {
+	if (tensor_hash_is_unassigned(tensor, location)) {
 	  break;
-	} else if (equals(sc, stored, key)) {
-	  if (result) *result = stored;
-	  return true;
 	} else {
-	  location++;
+	  nanoclj_val_t stored = tensor_hash_get(tensor, location, coll->_collection.size);
+	  if (equals(sc, stored, key)) {
+	    if (result) *result = stored;
+	    return true;
+	  } else {
+	    location++;
+	  }
 	}
       }
     }

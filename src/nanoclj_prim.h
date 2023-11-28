@@ -41,4 +41,20 @@ static inline nanoclj_val_t mk_unassigned() {
   return (nanoclj_val_t)(SIGNATURE_UNASSIGNED << 48);
 }
 
+static inline nanoclj_val_t mk_byte(int8_t n) {
+  return (nanoclj_val_t)((SIGNATURE_INTEGER << 48) | (UINT64_C(0) << 32) | (uint8_t)n);
+}
+
+static inline nanoclj_val_t mk_short(int16_t n) {
+  return (nanoclj_val_t)((SIGNATURE_INTEGER << 48) | (UINT64_C(1) << 32) | (uint16_t)n);
+}
+
+static inline nanoclj_val_t mk_int(int num) {
+  return (nanoclj_val_t)((SIGNATURE_INTEGER << 48) | (UINT64_C(2) << 32) | (uint32_t)num);
+}
+
+static inline int32_t decode_integer(nanoclj_val_t value) {
+  return (uint32_t)(value.as_long & 0xffffffff);
+}
+
 #endif
