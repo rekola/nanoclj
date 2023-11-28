@@ -776,8 +776,15 @@ static inline nanoclj_tensor_t * mk_tensor_hash(size_t initial_size) {
   return t;
 }
 
+static inline nanoclj_tensor_t * mk_tensor_associative_hash(size_t initial_size) {
+  nanoclj_tensor_t * t = mk_tensor_2d_padded(nanoclj_f64, 4, 0, initial_size);
+  nanoclj_val_t * data = t->data;
+  for (size_t i = 0; i < 4 * initial_size; i++) data[i] = mk_unassigned();
+  return t;
+}
+
 static inline int64_t tensor_hash_get_bucket_count(nanoclj_tensor_t * tensor) {
-  return tensor->nb[2] / (3 * sizeof(nanoclj_val_t));
+  return tensor->nb[2] / tensor->nb[1];
 }
 
 static inline nanoclj_tensor_t * tensor_hash_mutate_set(nanoclj_tensor_t * tensor, uint32_t location, uint32_t val_index, nanoclj_val_t val) {

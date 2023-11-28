@@ -1827,8 +1827,10 @@ static inline nanoclj_cell_t * cons(nanoclj_t * sc, nanoclj_val_t head, nanoclj_
 static inline nanoclj_cell_t * get_vector_object(nanoclj_t * sc, int_fast16_t t, size_t size) {
   nanoclj_tensor_t * store = NULL;
   if (size > NANOCLJ_SMALL_VEC_SIZE) {
-    if (t == T_HASHSET || t == T_HASHMAP) {
+    if (t == T_HASHSET) {
       store = mk_tensor_hash(size * 2);
+    } else if (t == T_HASHMAP) {
+      store = mk_tensor_associative_hash(size * 2);
     } else {
       store = mk_tensor_1d(nanoclj_f64, size);
     }
@@ -2572,20 +2574,28 @@ static uint32_t hasheq(nanoclj_t * sc, nanoclj_val_t v) {
     {
       nanoclj_cell_t * c = decode_pointer(v);
       if (!c) return 0;
+      if (c->flags & T_HASHED) {
+	return c->hasheq;
+      }
+      int32_t h = 0;
       switch (_type(c)) {
       case T_LONG:
-	return murmur3_hash_long(_lvalue_unchecked(c));
+	h = murmur3_hash_long(_lvalue_unchecked(c));
+	break;
 
       case T_DATE:
-	return (int)_lvalue_unchecked(c) ^ (int)(_lvalue_unchecked(c) >> 32);
+	h = (int)_lvalue_unchecked(c) ^ (int)(_lvalue_unchecked(c) >> 32);
+	break;
 
       case T_STRING:
       case T_CHAR_ARRAY:
       case T_FILE:
-      case T_UUID:{
-	strview_t sv = _to_strview(c);
-	return murmur3_hash_int(get_string_hashcode(sv.ptr, sv.size));
-      }
+      case T_UUID:
+	{
+	  strview_t sv = _to_strview(c);
+	  h = murmur3_hash_int(get_string_hashcode(sv.ptr, sv.size));
+	}
+	break;
 
       case T_MAPENTRY:
       case T_VECTOR:
@@ -2597,8 +2607,9 @@ static uint32_t hasheq(nanoclj_t * sc, nanoclj_val_t v) {
 	  for (size_t i = 0; i < n; i++) {
 	    hash = 31 * hash + hasheq(sc, vector_elem(c, i));
 	  }
-	  return murmur3_hash_coll(hash, n);
+	  h = murmur3_hash_coll(hash, n);
 	}
+	break;
 
       case T_ARRAYMAP:
 	{
@@ -2607,21 +2618,24 @@ static uint32_t hasheq(nanoclj_t * sc, nanoclj_val_t v) {
 	  for (size_t i = 0; i < n; i++) {
 	    hash += hasheq(sc, vector_elem(c, i));
 	  }
-	  return murmur3_hash_coll(hash, n);
+	  h = murmur3_hash_coll(hash, n);
 	}
+	break;
 
       case T_HASHSET:
 	{
 	  uint32_t hash = 1;
 	  size_t n = 0;
-	  for ( ; c; c = next(sc, c), n++) {
-	    hash += hasheq(sc, first(sc, c));
+	  for ( nanoclj_cell_t * p = c; p; p = next(sc, p), n++) {
+	    hash += hasheq(sc, first(sc, p));
 	  }
-	  return murmur3_hash_coll(hash, n);
+	  h = murmur3_hash_coll(hash, n);
 	}
+	break;
 
       case T_TYPE:
-	return murmur3_hash_int(c->type);
+	h = murmur3_hash_int(c->type);
+	break;
 
       case T_NIL:
 	c = NULL;
@@ -2630,12 +2644,17 @@ static uint32_t hasheq(nanoclj_t * sc, nanoclj_val_t v) {
 	{
 	  uint32_t hash = 1;
 	  size_t n = 0;
-	  for ( ; c; c = next(sc, c), n++) {
-	    hash = 31 * hash + hasheq(sc, first(sc, c));
+	  for ( nanoclj_cell_t * p = c; p; p = next(sc, p), n++) {
+	    hash = 31 * hash + hasheq(sc, first(sc, p));
 	  }
-	  return murmur3_hash_coll(hash, n);
+	  h = murmur3_hash_coll(hash, n);
 	}
+	break;
       }
+
+      c->hasheq = h;
+      c->flags |= T_HASHED;
+      return h;
     }
   }
   return 0;
@@ -7701,21 +7720,10 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_HASH:
     if (!unpack_args_1(sc, &arg0)) {
       return false;
-    } else if (!is_cell(arg0)) {
-      s_return(sc, mk_int((int32_t)hasheq(sc, arg0)));
     } else {
-      nanoclj_cell_t * c = decode_pointer(arg0);
-      if (!c) {
-	s_return(sc, mk_nil());
-      } else {
-	if (!(c->flags & T_HASHED)) {
-	  c->hasheq = hasheq(sc, arg0);
-	  c->flags &= T_HASHED;
-	}
-	s_return(sc, mk_int((int32_t)c->hasheq));
-      }
+      s_return(sc, mk_int((int32_t)hasheq(sc, arg0)));
     }
-
+    
   case OP_COMPARE:
     if (!unpack_args_2(sc, &arg0, &arg1)) {
       return false;
@@ -8691,9 +8699,10 @@ bool nanoclj_init(nanoclj_t * sc) {
   nanoclj_cell_t * Obj = mk_class(sc, "clojure.lang.Obj", gentypeid(sc), sc->Object);
   nanoclj_cell_t * ASeq = mk_class(sc, "clojure.lang.ASeq", gentypeid(sc), Obj);
   nanoclj_cell_t * PersistentVector = mk_class(sc, "clojure.lang.PersistentVector", T_VECTOR, AFn);
+  nanoclj_cell_t * APersistentMap = mk_class(sc, "clojure.lang.APersistentMap", gentypeid(sc), AFn);
   mk_class(sc, "clojure.lang.PersistentHashSet", T_HASHSET, AFn);
-  mk_class(sc, "clojure.lang.PersistentArrayMap", T_ARRAYMAP, AFn);
-  mk_class(sc, "clojure.lang.PersistentHashMap", T_HASHMAP, AFn);
+  mk_class(sc, "clojure.lang.PersistentArrayMap", T_ARRAYMAP, APersistentMap);
+  mk_class(sc, "clojure.lang.PersistentHashMap", T_HASHMAP, APersistentMap);
   mk_class(sc, "clojure.lang.Symbol", T_SYMBOL, AFn);
   mk_class(sc, "clojure.lang.Keyword", T_KEYWORD, AFn); /* non-standard parent */
   mk_class(sc, "clojure.lang.BigInt", T_BIGINT, Number);
