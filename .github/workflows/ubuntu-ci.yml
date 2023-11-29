@@ -29,7 +29,7 @@ jobs:
       - name: Compilation test
         run: |
           sudo apt update
-          sudo apt install libutf8proc-dev libsixel-dev libpcre2-dev libcairo2-dev libshp-dev libcurl4-gnutls-dev libxml2-dev libz-dev libavcodec-dev
+          sudo apt install libutf8proc-dev libsixel-dev libpcre2-dev libcairo2-dev libshp-dev libcurl4-gnutls-dev libxml2-dev libz-dev
           mkdir build
           cd build
           cmake ..

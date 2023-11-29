@@ -77,11 +77,6 @@ else()
   find_package(CURL REQUIRED)
   target_link_libraries(nanoclj CURL::libcurl)
   include_directories(${CURL_INCLUDE_DIR})
-
-  find_path(AVCODEC_INCLUDE_DIR libavcodec/avcodec.h)
-  find_library(AVCODEC_LIBRARY avcodec)
-  target_include_directories(nanoclj PRIVATE ${AVCODEC_INCLUDE_DIR} )
-  target_link_libraries(nanoclj ${AVCODEC_LIBRARY})
 endif()
 
 configure_file(lib/init.clj init.clj @ONLY)

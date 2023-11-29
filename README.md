@@ -78,13 +78,12 @@ As well as printing images in block mode like the plot function does, they can a
 - sort is not stable and doesn't throw on mismatching types
 - License is BSD 2-Clause License instead of EPL
 - Symbols are interned and cannot have metadata
-- Primitives such as doubles and 32 bit integers are passed by value, and are in effect, interned
+- Primitives such as doubles and small integers are passed by value, and are in effect, interned
 - Strings are not interned: `(identical? "abc" "abc") ;=> false`
 - `rationalize` returns exact result for doubles: `(rationalize 0.1) ;=> 3602879701896397/36028797018963968`
 - No chunked or buffered lazy sequences
 - No homogenous vectors (They are not necessary since most data types are unboxed by default)
-- No persistent data structures: Vectors are flat, and they are optimized for fast reading
-- No sorted-set or sorted-map
+- Persistent data structures are flat, and while vectors, maps and sets provide fast reading and insertion, deletion and modification is slow.
 - Vectors, maps and sets cannot have metadata
 - Only 64 bit systems are supported
 
@@ -107,7 +106,7 @@ As well as printing images in block mode like the plot function does, they can a
 ### Ubuntu
 
 ```
-sudo apt install libutf8proc-dev libsixel-dev libpcre2-dev libcairo2-dev libshp-dev libcurl4-gnutls-dev libxml2-dev libz-dev libavcodec-dev
+sudo apt install libutf8proc-dev libsixel-dev libpcre2-dev libcairo2-dev libshp-dev libcurl4-gnutls-dev libxml2-dev libz-dev
 mkdir build
 cd build
 cmake ..
@@ -138,7 +137,7 @@ Windows support is in progress.
 - Missing core functions and macros
   - doseq, for, dotimes
   - bit-and-not
-  - sort-by, sorted-set-by, sorted-map, hash-set, hash-map
+  - sort-by, sorted-set-by, sorted-set, sorted-map
   - update-in, merge-with
   - doto, ->, -->, some->, some->>
   - parse-long, parse-double, parse-uuid
