@@ -247,10 +247,12 @@ static inline void tensor_mutate_fill_i8(nanoclj_tensor_t * tensor, uint8_t v) {
   memset(tensor->data, v, tensor->nb[tensor->n_dims]);
 }
 
+/* fill the tensor data with value (also the padding is filled) */
 static inline void tensor_mutate_fill_val(nanoclj_tensor_t * tensor, nanoclj_val_t v) {
-  for (size_t i = 0; i < tensor->ne[0]; i++) {
-    ((nanoclj_val_t*)tensor->data)[i] = v;
-  }
+  size_t n = 0;
+  if (tensor->n_dims == 1) n = tensor->nb[1] / sizeof(nanoclj_val_t);
+  else if (tensor->n_dims == 2) n = tensor->nb[2] / sizeof(nanoclj_val_t);
+  for (size_t i = 0; i < n; i++) ((nanoclj_val_t*)tensor->data)[i] = v;
 }
 
 static inline void tensor_mutate_append_vec(nanoclj_tensor_t * t, float * vec) {
@@ -411,6 +413,15 @@ static inline void tensor_mutate_and(nanoclj_tensor_t * a, const nanoclj_tensor_
 
 static inline void tensor_mutate_sort(nanoclj_tensor_t * tensor, int (*compar)(const void *a, const void *b)) {
   if (tensor->ne[0] >= 2) qsort(tensor->data, tensor->ne[0], tensor->nb[0], compar);
+}
+
+static inline uint32_t tensor_hashcode(nanoclj_tensor_t * tensor) {
+  uint32_t h = 0;
+  uint32_t * data = tensor->data;
+  for (int64_t i = 0; i < tensor->ne[0]; i++) {
+    h = 31 * h + data[i];
+  }
+  return h;
 }
 
 /* BigInts */
@@ -771,15 +782,13 @@ static inline size_t tensor_bigint_to_string(const nanoclj_tensor_t * tensor0, c
 
 static inline nanoclj_tensor_t * mk_tensor_hash(size_t initial_size) {
   nanoclj_tensor_t * t = mk_tensor_2d_padded(nanoclj_f64, 3, 0, initial_size);
-  nanoclj_val_t * data = t->data;
-  for (size_t i = 0; i < 3 * initial_size; i++) data[i] = mk_unassigned();
+  tensor_mutate_fill_val(t, mk_unassigned());
   return t;
 }
 
 static inline nanoclj_tensor_t * mk_tensor_associative_hash(size_t initial_size) {
   nanoclj_tensor_t * t = mk_tensor_2d_padded(nanoclj_f64, 4, 0, initial_size);
-  nanoclj_val_t * data = t->data;
-  for (size_t i = 0; i < 4 * initial_size; i++) data[i] = mk_unassigned();
+  tensor_mutate_fill_val(t, mk_unassigned());
   return t;
 }
 
@@ -798,9 +807,9 @@ static inline nanoclj_tensor_t * tensor_hash_mutate_set(nanoclj_tensor_t * tenso
     nanoclj_tensor_t * old_tensor = tensor;
     int64_t old_num_cells = tensor_hash_get_bucket_count(old_tensor);
     int64_t num_cells = (overload ? 2 : 1) * old_num_cells;
-    tensor = mk_tensor_2d_padded(nanoclj_f64, 3, 0, num_cells);
+    tensor = mk_tensor_2d_padded(nanoclj_f64, old_tensor->ne[0], 0, num_cells);
     if (!tensor) return NULL;
-    for (size_t i = 0; i < 3 * num_cells; i++) ((nanoclj_val_t*)tensor->data)[i] = mk_unassigned();
+    tensor_mutate_fill_val(tensor, mk_unassigned());
     nanoclj_val_t * old_data = old_tensor->data;
     for (int64_t offset = 0; offset < old_num_cells; offset++) {
       nanoclj_val_t val = old_data[3 * offset + 0];

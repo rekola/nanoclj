@@ -2587,6 +2587,14 @@ static uint32_t hasheq(nanoclj_t * sc, nanoclj_val_t v) {
 	h = (int)_lvalue_unchecked(c) ^ (int)(_lvalue_unchecked(c) >> 32);
 	break;
 
+      case T_BIGINT:
+	h = c->_bignum.sign * (int32_t)tensor_hashcode(c->_bignum.tensor);
+	break;
+
+      case T_RATIO:
+	h = c->_bignum.sign * (int32_t)tensor_hashcode(c->_bignum.tensor) ^ (int32_t)tensor_hashcode(c->_bignum.denominator);
+	break;
+
       case T_STRING:
       case T_CHAR_ARRAY:
       case T_FILE:
@@ -2602,34 +2610,32 @@ static uint32_t hasheq(nanoclj_t * sc, nanoclj_val_t v) {
       case T_VAR:
       case T_QUEUE:
 	{
-	  uint32_t hash = 1;
+	  h = 1;
 	  size_t n = get_size(c);
 	  for (size_t i = 0; i < n; i++) {
-	    hash = 31 * hash + hasheq(sc, vector_elem(c, i));
+	    h = 31 * h + hasheq(sc, vector_elem(c, i));
 	  }
-	  h = murmur3_hash_coll(hash, n);
+	  h = murmur3_hash_coll(h, n);
 	}
 	break;
 
       case T_ARRAYMAP:
 	{
-	  uint32_t hash = 0;
 	  size_t n = get_size(c);
 	  for (size_t i = 0; i < n; i++) {
-	    hash += hasheq(sc, vector_elem(c, i));
+	    h += hasheq(sc, vector_elem(c, i));
 	  }
-	  h = murmur3_hash_coll(hash, n);
+	  h = murmur3_hash_coll(h, n);
 	}
 	break;
 
       case T_HASHSET:
 	{
-	  uint32_t hash = 1;
 	  size_t n = 0;
 	  for ( nanoclj_cell_t * p = c; p; p = next(sc, p), n++) {
-	    hash += hasheq(sc, first(sc, p));
+	    h += hasheq(sc, first(sc, p));
 	  }
-	  h = murmur3_hash_coll(hash, n);
+	  h = murmur3_hash_coll(h, n);
 	}
 	break;
 
@@ -2642,12 +2648,12 @@ static uint32_t hasheq(nanoclj_t * sc, nanoclj_val_t v) {
       case T_LIST:
       case T_LAZYSEQ:
 	{
-	  uint32_t hash = 1;
+	  h = 1;
 	  size_t n = 0;
 	  for ( nanoclj_cell_t * p = c; p; p = next(sc, p), n++) {
-	    hash = 31 * hash + hasheq(sc, first(sc, p));
+	    h = 31 * h + hasheq(sc, first(sc, p));
 	  }
-	  h = murmur3_hash_coll(hash, n);
+	  h = murmur3_hash_coll(h, n);
 	}
 	break;
       }
