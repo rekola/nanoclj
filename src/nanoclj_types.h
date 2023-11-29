@@ -32,9 +32,9 @@ typedef struct {
   int n_dims;
   int64_t ne[NANOCLJ_MAX_DIMS]; /* number of elements */
   size_t nb[NANOCLJ_MAX_DIMS + 1]; /* stride in bytes */
+  int64_t * sparse_indices;
   void * data;
   nanoclj_tensor_type_t type;
-  struct nanoclj_cell_t * meta;
   size_t refcnt;
 } nanoclj_tensor_t;
 

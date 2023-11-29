@@ -85,6 +85,7 @@ As well as printing images in block mode like the plot function does, they can a
 - No homogenous vectors (They are not necessary since most data types are unboxed by default)
 - No persistent data structures: Vectors are flat, and they are optimized for fast reading
 - No sorted-set or sorted-map
+- Vectors, maps and sets cannot have metadata
 - Only 64 bit systems are supported
 
 ## Dependencies

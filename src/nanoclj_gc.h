@@ -31,27 +31,37 @@ E2:_setmark(p);
     if (meta) mark(meta);
     break;
   }
+  case T_IMAGE:
+    {
+      nanoclj_cell_t * meta = p->_image.meta;
+      if (meta) mark(meta);
+    }
+    break;
+  case T_VAR:
   case T_VECTOR:
   case T_ARRAYMAP:
   case T_HASHSET:
   case T_HASHMAP:
   case T_QUEUE:
   case T_MAPENTRY:
-  case T_VAR:{
     if (_is_small(p)) {
-      nanoclj_val_t md = _so_vector_metadata(p);
-      if (is_cell(md) && !is_nil(md)) mark(decode_pointer(md));
       size_t s = _sosize_unchecked(p);
       nanoclj_val_t * data = _smalldata_unchecked(p);
-      if (s > 0 && is_cell(data[0]) && !is_nil(data[0])) mark(decode_pointer(data[0]));
-      if (s > 1 && is_cell(data[1]) && !is_nil(data[1])) mark(decode_pointer(data[1]));
+      for (int64_t i = 0; i < s; i++) {
+	nanoclj_val_t v = data[i];
+	if (is_cell(v) && !is_nil(v)) mark(decode_pointer(v));
+      }
     } else if (_type(p) == T_HASHSET || _type(p) == T_HASHMAP) {
+      size_t s = _size_unchecked(p);
       nanoclj_tensor_t * tensor = p->_collection.tensor;
       int64_t num_cells = tensor->nb[1] / sizeof(nanoclj_val_t);
       nanoclj_val_t * data = (nanoclj_val_t *)tensor->data;
-      for (int64_t i = 0; i < num_cells; i++) {
-	nanoclj_val_t v = data[i];
-	if (!is_unassigned(v) && is_cell(v) && !is_nil(v)) mark(decode_pointer(v));
+      for (int64_t offset = 0; offset < num_cells; offset++) {
+	int64_t i = tensor->sparse_indices[offset];
+	if (i >= 0 && i < s) {
+	  nanoclj_val_t v = data[offset];
+	  if (is_cell(v) && !is_nil(v)) mark(decode_pointer(v));
+	}
       }
     } else {
       size_t offset = _offset_unchecked(p);
@@ -63,7 +73,6 @@ E2:_setmark(p);
 	if (is_cell(v) && !is_nil(v)) mark(decode_pointer(v));
       }
     }
-  }
     break;
 
   case T_GRAPH:

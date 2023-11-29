@@ -128,17 +128,17 @@ static inline nanoclj_tensor_t * mk_tensor_1d_padded(nanoclj_tensor_type_t t, in
   void * data = malloc(size);
   
   if (data) {
-    nanoclj_tensor_t * s = malloc(sizeof(nanoclj_tensor_t));
-    if (s) {
-      s->data = data;
-      s->n_dims = 1;
-      s->type = t;
-      s->ne[0] = len;
-      s->nb[0] = type_size;
-      s->nb[1] = size;
-      s->refcnt = 0;
-      s->meta = NULL;
-      return s;
+    nanoclj_tensor_t * tensor = malloc(sizeof(nanoclj_tensor_t));
+    if (tensor) {
+      tensor->data = data;
+      tensor->sparse_indices = NULL;
+      tensor->n_dims = 1;
+      tensor->type = t;
+      tensor->ne[0] = len;
+      tensor->nb[0] = type_size;
+      tensor->nb[1] = size;
+      tensor->refcnt = 0;
+      return tensor;
     } else {
       free(data);
     }
@@ -159,6 +159,7 @@ static inline nanoclj_tensor_t * mk_tensor_2d_padded(nanoclj_tensor_type_t t, in
     } else {
       tensor->type = t;
       tensor->data = data;
+      tensor->sparse_indices = NULL;
       tensor->n_dims = 2;
       tensor->ne[0] = d0;
       tensor->ne[1] = d1;
@@ -166,7 +167,6 @@ static inline nanoclj_tensor_t * mk_tensor_2d_padded(nanoclj_tensor_type_t t, in
       tensor->nb[1] = d0 * type_size;
       tensor->nb[2] = size;
       tensor->refcnt = 0;
-      tensor->meta = NULL;
       return tensor;
     }
   }
@@ -195,6 +195,7 @@ static inline nanoclj_tensor_t * mk_tensor_3d(nanoclj_tensor_type_t t, int64_t d
     } else {
       tensor->type = t;
       tensor->data = data;
+      tensor->sparse_indices = NULL;
       tensor->n_dims = 3;
       tensor->ne[0] = d0;
       tensor->ne[1] = d1;
@@ -204,7 +205,6 @@ static inline nanoclj_tensor_t * mk_tensor_3d(nanoclj_tensor_type_t t, int64_t d
       tensor->nb[2] = stride1;
       tensor->nb[3] = d2 * stride1;
       tensor->refcnt = 0;
-      tensor->meta = NULL;
       return tensor;
     }
   }
@@ -780,23 +780,18 @@ static inline size_t tensor_bigint_to_string(const nanoclj_tensor_t * tensor0, c
 
 /* Hashes */
 
-static inline nanoclj_tensor_t * mk_tensor_hash(size_t initial_size) {
-  nanoclj_tensor_t * t = mk_tensor_2d_padded(nanoclj_f64, 3, 0, initial_size);
-  tensor_mutate_fill_val(t, mk_unassigned());
+static inline nanoclj_tensor_t * mk_tensor_hash(int64_t data_dims, size_t initial_size) {
+  nanoclj_tensor_t * t = mk_tensor_2d_padded(nanoclj_f64, data_dims, 0, initial_size);
+  t->sparse_indices = malloc(initial_size * sizeof(int64_t));
+  for (int64_t i = 0; i < initial_size; i++) t->sparse_indices[i] = -1;
   return t;
 }
 
-static inline nanoclj_tensor_t * mk_tensor_associative_hash(size_t initial_size) {
-  nanoclj_tensor_t * t = mk_tensor_2d_padded(nanoclj_f64, 4, 0, initial_size);
-  tensor_mutate_fill_val(t, mk_unassigned());
-  return t;
-}
-
-static inline int64_t tensor_hash_get_bucket_count(nanoclj_tensor_t * tensor) {
+static inline int64_t tensor_hash_get_bucket_count(const nanoclj_tensor_t * tensor) {
   return tensor->nb[2] / tensor->nb[1];
 }
 
-static inline nanoclj_tensor_t * tensor_hash_mutate_set(nanoclj_tensor_t * tensor, uint32_t location, uint32_t val_index, nanoclj_val_t val) {
+static inline nanoclj_tensor_t * tensor_hash_mutate_set(nanoclj_tensor_t * tensor, uint32_t hash, int64_t val_index, nanoclj_val_t val) {
   bool rebuild = false, overload = false;
   if (val_index * 10 / tensor_hash_get_bucket_count(tensor) >= 7) { /* load factor more than 70% */
     rebuild = overload = true;
@@ -805,32 +800,32 @@ static inline nanoclj_tensor_t * tensor_hash_mutate_set(nanoclj_tensor_t * tenso
   }
   if (rebuild) {
     nanoclj_tensor_t * old_tensor = tensor;
-    int64_t old_num_cells = tensor_hash_get_bucket_count(old_tensor);
-    int64_t num_cells = (overload ? 2 : 1) * old_num_cells;
-    tensor = mk_tensor_2d_padded(nanoclj_f64, old_tensor->ne[0], 0, num_cells);
+    int64_t old_num_buckets = tensor_hash_get_bucket_count(old_tensor);
+    int64_t num_buckets = (overload ? 2 : 1) * old_num_buckets;
+    tensor = mk_tensor_hash(old_tensor->ne[0], num_buckets);
     if (!tensor) return NULL;
-    tensor_mutate_fill_val(tensor, mk_unassigned());
     nanoclj_val_t * old_data = old_tensor->data;
-    for (int64_t offset = 0; offset < old_num_cells; offset++) {
-      nanoclj_val_t val = old_data[3 * offset + 0];
-      if (!is_unassigned(val)) {
-	int32_t idx = decode_integer(old_data[3 * offset + 1]);
-	int32_t hash = decode_integer(old_data[3 * offset + 2]);
-	if (idx < val_index) {
-	  tensor_hash_mutate_set(tensor, hash, tensor->ne[1], val);
-	}
+    int64_t * old_sparse_indices = old_tensor->sparse_indices;
+    for (int64_t offset = 0; offset < old_num_buckets; offset++) {
+      int64_t i = old_sparse_indices[offset];
+      if (i >= 0 && i < val_index) {
+	nanoclj_val_t val = old_data[2 * offset + 0];
+	int32_t hash = decode_integer(old_data[2 * offset + 1]);
+	tensor_hash_mutate_set(tensor, hash, tensor->ne[1], val);
       }
     }
   }
-  
-  int64_t num_cells = tensor_hash_get_bucket_count(tensor);
+
+  int64_t num_buckets = tensor_hash_get_bucket_count(tensor);
+  int64_t * sparse_indices = tensor->sparse_indices;
+  nanoclj_val_t * data = tensor->data;
+  int64_t location = hash;
   while ( 1 ) {
-    int64_t offset = location % num_cells;
-    nanoclj_val_t old = ((nanoclj_val_t *)tensor->data)[3 * offset + 0];
-    if (is_unassigned(old)) {
-      ((nanoclj_val_t *)tensor->data)[3 * offset + 0] = val;
-      ((nanoclj_val_t *)tensor->data)[3 * offset + 1] = mk_int(val_index);
-      ((nanoclj_val_t *)tensor->data)[3 * offset + 2] = mk_int(location);
+    int64_t offset = location % num_buckets;
+    if (sparse_indices[offset] == -1) {
+      sparse_indices[offset] = val_index;
+      data[2 * offset + 0] = val;
+      data[2 * offset + 1] = mk_int(hash);
       break;
     } else {
       location++;
@@ -840,67 +835,62 @@ static inline nanoclj_tensor_t * tensor_hash_mutate_set(nanoclj_tensor_t * tenso
   return tensor;
 }
 
-static inline nanoclj_val_t tensor_hash_first(nanoclj_tensor_t * tensor, int64_t offset, int64_t limit) {
-  nanoclj_val_t * data = tensor->data;
-  int64_t num_cells = tensor->nb[2] / (3 * sizeof(nanoclj_val_t));
-  while ( offset < num_cells ) {
-    nanoclj_val_t v = data[3 * offset];
-    if (!is_unassigned(v)) {
-      int val_index = decode_integer(data[3 * offset + 1]);
-      if (val_index < limit) return v;
-    }
+static inline nanoclj_val_t tensor_hash_first(const nanoclj_tensor_t * tensor, int64_t offset, int64_t limit) {
+  int64_t num_buckets = tensor_hash_get_bucket_count(tensor);
+  int64_t * sparse_indices = tensor->sparse_indices;
+  while ( offset < num_buckets ) {
+    int64_t i = sparse_indices[offset];
+    if (i >= 0 && i < limit) return ((nanoclj_val_t *)tensor->data)[2 * offset];
     offset++;
   }
   return mk_nil();
 }
 
-static inline int64_t tensor_hash_rest(nanoclj_tensor_t * tensor, int64_t offset, int64_t limit) {
-  nanoclj_val_t * data = tensor->data;
-  int64_t num_cells = tensor_hash_get_bucket_count(tensor);
-  while ( offset < num_cells && is_unassigned(data[3 * offset]) ) {
+static inline int64_t tensor_hash_rest(const nanoclj_tensor_t * tensor, int64_t offset, int64_t limit) {
+  int64_t num_buckets = tensor_hash_get_bucket_count(tensor);
+  int64_t * sparse_indices = tensor->sparse_indices;
+  while ( offset < num_buckets && sparse_indices[offset] == -1 ) {
     offset++;
   }
-  if (offset >= num_cells) return num_cells;
-  offset++;
-  while ( offset < num_cells ) {
-    if (!is_unassigned(data[3 * offset])) {
-      int val_index = decode_integer(data[3 * offset + 1]);
-      if (val_index < limit) return offset;
+  if (offset < num_buckets) {
+    offset++;
+    while ( offset < num_buckets ) {
+      int64_t i = sparse_indices[offset];
+      if (i >= 0 && i < limit) break;
+      offset++;
     }
-    offset++;
   }
-  return num_cells;
+  return offset;
 }
 
-static inline size_t tensor_hash_count(nanoclj_tensor_t * tensor, int64_t offset, int64_t limit) {
-  nanoclj_val_t * data = tensor->data;
-  int64_t num_cells = tensor->nb[1] / sizeof(nanoclj_val_t);
-  while ( offset < num_cells && is_unassigned(data[3 * offset]) ) {
+static inline size_t tensor_hash_count(const nanoclj_tensor_t * tensor, int64_t offset, int64_t limit) {
+  int64_t num_buckets = tensor->nb[1] / sizeof(nanoclj_val_t);
+  int64_t * sparse_indices = tensor->sparse_indices;
+  while ( offset < num_buckets && sparse_indices[offset] == -1 ) {
     offset++;
   }
   size_t count = 0;
-  for (; offset < num_cells; offset++) {
-    if (!is_unassigned(data[3 * offset]) && decode_integer(data[3 * offset + 1]) < limit) count++;
+  for (; offset < num_buckets; offset++) {
+    int64_t i = sparse_indices[offset];
+    if (i >= 0 && i < limit) count++;
   }
   return count;
 }
 
-static inline bool tensor_is_valid_offset(nanoclj_tensor_t * tensor, uint64_t offset) {
-  return offset * 3 * sizeof(nanoclj_val_t) < tensor->nb[2];
+static inline bool tensor_is_valid_offset(const nanoclj_tensor_t * tensor, uint64_t offset) {
+  return offset * tensor->nb[1] < tensor->nb[2];
 }
 
-static inline bool tensor_hash_is_unassigned(nanoclj_tensor_t * tensor, int64_t location) {
-  int64_t num_cells = tensor_hash_get_bucket_count(tensor);
-  nanoclj_val_t v = ((nanoclj_val_t *)tensor->data)[3 * (location % num_cells)];
-  return is_unassigned(v);
+static inline bool tensor_hash_is_unassigned(const nanoclj_tensor_t * tensor, int64_t hash) {
+  return tensor->sparse_indices[hash % tensor_hash_get_bucket_count(tensor)] == -1;
 }
 
-static inline nanoclj_val_t tensor_hash_get(nanoclj_tensor_t * tensor, int64_t location, int64_t limit) {
-  int64_t num_cells = tensor_hash_get_bucket_count(tensor);
-  nanoclj_val_t v = ((nanoclj_val_t *)tensor->data)[3 * (location % num_cells)];
-  int64_t val_index = decode_integer(((nanoclj_val_t *)tensor->data)[3 * (location % num_cells) + 1]);
-  if (val_index < limit) return v;
-  else return mk_unassigned();
+static inline nanoclj_val_t tensor_hash_get(const nanoclj_tensor_t * tensor, int64_t hash, int64_t limit) {
+  int64_t num_buckets = tensor_hash_get_bucket_count(tensor);
+  size_t location = hash % num_buckets;
+  int64_t val_index = tensor->sparse_indices[location];
+  if (val_index > 0 && val_index < limit) return ((nanoclj_val_t *)tensor->data)[2 * location];
+  else return mk_nil();
 }
 
 #endif

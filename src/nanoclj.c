@@ -224,7 +224,6 @@ static uint_fast16_t prim_type_extended(nanoclj_val_t value) {
   case SIGNATURE_PROC: return T_PROC;
   case SIGNATURE_KEYWORD: return T_KEYWORD;
   case SIGNATURE_SYMBOL: return T_SYMBOL;
-  case SIGNATURE_UNASSIGNED: return T_BOOLEAN; /* no type */
   }
   return T_DOUBLE;
 }
@@ -239,7 +238,6 @@ static uint_fast16_t prim_type(nanoclj_val_t value) {
   case SIGNATURE_PROC: return T_PROC;
   case SIGNATURE_KEYWORD: return T_KEYWORD;
   case SIGNATURE_SYMBOL: return T_SYMBOL;
-  case SIGNATURE_UNASSIGNED: return T_BOOLEAN; /* no type */
   }
   return T_DOUBLE;
 }
@@ -346,11 +344,9 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define set_car(p, v)         	  _car(decode_pointer(p)) = v
 #define set_cdr(p, v)         	  _cdr(decode_pointer(p)) = v
 
-#define _so_vector_metadata(p)	  ((p)->_small_tensor.vals[2])
 #define _cons_metadata(p)	  ((p)->_cons.meta)
 #define _ff_metadata(p)		  ((p)->_ff.meta)
 #define _image_metadata(p)	  ((p)->_image.meta)
-#define _audio_metadata(p)	  ((p)->_audio.tensor->meta)
 
 #define _is_realized(p)           (p->flags & T_REALIZED)
 #define _set_realized(p)          (p->flags |= T_REALIZED)
@@ -551,15 +547,9 @@ static inline nanoclj_tensor_t * get_tensor(nanoclj_cell_t * c) {
 
 static inline nanoclj_cell_t * get_metadata(nanoclj_cell_t * c) {
   switch (_type(c)) {
-  case T_VECTOR:
-  case T_ARRAYMAP:
-  case T_HASHMAP:
   case T_VAR:
-  case T_QUEUE:
     if (_is_small(c)) {
-      return decode_pointer(_so_vector_metadata(c));
-    } else {
-      return _tensor_unchecked(c)->meta;
+      return decode_pointer(c->_small_tensor.vals[2]);
     }
   case T_LIST:
   case T_CLOSURE:
@@ -571,23 +561,15 @@ static inline nanoclj_cell_t * get_metadata(nanoclj_cell_t * c) {
     return _ff_metadata(c);
   case T_IMAGE:
     return _image_metadata(c);
-  case T_AUDIO:
-    return _audio_metadata(c);
   }
   return NULL;
 }
 
 static inline void set_metadata(nanoclj_cell_t * c, nanoclj_cell_t * meta) {
   switch (_type(c)) {
-  case T_VECTOR:
-  case T_ARRAYMAP:
-  case T_HASHMAP:
   case T_VAR:
-  case T_QUEUE:
     if (_is_small(c)) {
-      _so_vector_metadata(c) = mk_pointer(meta);
-    } else {
-      _tensor_unchecked(c)->meta = meta;
+      c->_small_tensor.vals[2] = mk_pointer(meta);
     }
     break;
   case T_LIST:
@@ -600,9 +582,6 @@ static inline void set_metadata(nanoclj_cell_t * c, nanoclj_cell_t * meta) {
     break;
   case T_IMAGE:
     _image_metadata(c) = meta;
-    break;
-  case T_AUDIO:
-    _audio_metadata(c) = meta;
     break;
   }
 }
@@ -1573,9 +1552,6 @@ static inline void initialize_collection(nanoclj_cell_t * c, size_t offset, size
     _offset_unchecked(c) = offset;
   } else {
     c->flags = T_GC_ATOM | T_SMALL | size;
-    if (is_vector_type(c->type)) {
-      _so_vector_metadata(c) = mk_nil();
-    }
   }
 }
 
@@ -1828,9 +1804,9 @@ static inline nanoclj_cell_t * get_vector_object(nanoclj_t * sc, int_fast16_t t,
   nanoclj_tensor_t * store = NULL;
   if (size > NANOCLJ_SMALL_VEC_SIZE) {
     if (t == T_HASHSET) {
-      store = mk_tensor_hash(size * 2);
+      store = mk_tensor_hash(2, size * 2);
     } else if (t == T_HASHMAP) {
-      store = mk_tensor_associative_hash(size * 2);
+      store = mk_tensor_hash(3, size * 2);
     } else {
       store = mk_tensor_1d(nanoclj_f64, size);
     }
@@ -3093,11 +3069,11 @@ static inline void new_frame_in_env(nanoclj_t * sc, nanoclj_cell_t * old_env) {
 static inline nanoclj_cell_t * new_slot_spec_in_env(nanoclj_t * sc, nanoclj_cell_t * env,
 						    nanoclj_val_t variable, nanoclj_val_t value,
 						    nanoclj_cell_t * meta) {
-  nanoclj_cell_t * slot0 = get_vector_object(sc, T_VAR, 2);
+  nanoclj_cell_t * slot0 = get_vector_object(sc, T_VAR, 3);
   set_vector_elem(slot0, 0, variable);
   set_vector_elem(slot0, 1, value);
-  _so_vector_metadata(slot0) = mk_pointer(meta);
-    
+  set_vector_elem(slot0, 2, mk_pointer(meta));
+  
   nanoclj_val_t slot = mk_pointer(slot0);
   nanoclj_val_t x = _car(env);
   
@@ -3145,8 +3121,8 @@ static inline void new_slot_in_env(nanoclj_t * sc, nanoclj_val_t variable, nanoc
 static inline nanoclj_val_t set_slot_in_env(nanoclj_t * sc, nanoclj_cell_t * slot, nanoclj_val_t state, nanoclj_cell_t * meta) {
   nanoclj_val_t old_state = _cdr(slot);
   set_vector_elem(slot, 1, state);
-  if (meta) _so_vector_metadata(slot) = mk_pointer(meta);
-  else meta = decode_pointer(_so_vector_metadata(slot));
+  if (meta) slot->_small_tensor.vals[2] = mk_pointer(meta);
+  else meta = decode_pointer(slot->_small_tensor.vals[2]);
   
   nanoclj_val_t watches0;
   if (get_elem(sc, meta, sc->WATCHES, &watches0)) {
@@ -7895,7 +7871,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  nanoclj_val_t old_watches = second(sc, decode_pointer(vector_elem(md, wi)));
 	  set_vector_elem(md, wi, mk_mapentry(sc, sc->WATCHES, mk_pointer(cons(sc, arg2, decode_pointer(old_watches)))));
 	}
-	_so_vector_metadata(c) = mk_pointer(md);
+	c->_small_tensor.vals[2] = mk_pointer(md);
 	s_return(sc, arg0);
       }
     }

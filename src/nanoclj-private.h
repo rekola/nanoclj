@@ -3,7 +3,7 @@
 
 #include "nanoclj.h"
 
-#define NANOCLJ_SMALL_VEC_SIZE 2
+#define NANOCLJ_SMALL_VEC_SIZE 3
 #define NANOCLJ_SMALL_LV_SIZE 3
 #define NANOCLJ_SMALL_STR_SIZE 24
 

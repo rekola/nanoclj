@@ -18,7 +18,7 @@
 #define SIGNATURE_PROC		(MASK_EXPONENT | MASK_QUIET | 4)
 #define SIGNATURE_KEYWORD	(MASK_EXPONENT | MASK_QUIET | 5)
 #define SIGNATURE_SYMBOL	(MASK_EXPONENT | MASK_QUIET | 6)
-#define SIGNATURE_UNASSIGNED	(MASK_EXPONENT | MASK_QUIET | 7)
+/* 7: unassigned */
 
 /* Predefined primitive values */
 #define kNIL	UINT64_C(18444492273895866368)
@@ -31,14 +31,6 @@ static inline nanoclj_val_t mk_nil() {
 
 static inline bool is_cell(nanoclj_val_t v) {
   return (v.as_long >> 48) == SIGNATURE_CELL;
-}
-
-static inline bool is_unassigned(nanoclj_val_t v) {
-  return (v.as_long >> 48) == SIGNATURE_UNASSIGNED;
-}
-
-static inline nanoclj_val_t mk_unassigned() {
-  return (nanoclj_val_t)(SIGNATURE_UNASSIGNED << 48);
 }
 
 static inline nanoclj_val_t mk_byte(int8_t n) {
