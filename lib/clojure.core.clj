@@ -5,14 +5,14 @@
 (defn delay? [x] (instance? clojure.lang.Delay x))
 (defn lazy-seq? [x] (instance? clojure.lang.LazySeq x))
 (defn map-entry? [x] (instance? clojure.lang.MapEntry x))
-(defn set? [x] (instance? clojure.lang.PersistentHashSet x))
+(defn set? [x] (instance? clojure.lang.APersistentSet x))
 (defn map? [x] (instance? clojure.lang.APersistentMap x))
 (defn image? [x] (instance? nanoclj.core.Image x))
 (defn gradient? [x] (instance? nanoclj.core.Gradient x))
 (defn inst? [x] (instance? java.util.Date x))
 (defn uuid? [x] (instance? java.util.UUID x))
 (defn coll? [x] (is-any-of? (type x)
-                            clojure.lang.PersistentHashSet
+                            clojure.lang.APersistentSet
                             clojure.lang.APersistentMap
                             clojure.lang.PersistentVector
                             clojure.lang.Cons
@@ -26,7 +26,7 @@
 
 (defn counted?
   "Returns true if coll implements count in constant time"
-  [coll] (is-any-of? (type coll) clojure.lang.PersistentHashSet clojure.lang.APersistentMap clojure.lang.PersistentVector))
+  [coll] (is-any-of? (type coll) clojure.lang.APersistentSet clojure.lang.APersistentMap clojure.lang.PersistentVector))
 
 (defn seq?
   "Returns true if coll is a Sequence"
@@ -34,7 +34,7 @@
 
 (defn seqable?
   "Returns true if coll supportes seq"
-  [coll] (is-any-of? (type coll) java.lang.String clojure.lang.LazySeq clojure.lang.PersistentVector clojure.lang.Cons clojure.lang.PersistentHashSet clojure.lang.APersistentMap))
+  [coll] (is-any-of? (type coll) java.lang.String clojure.lang.LazySeq clojure.lang.PersistentVector clojure.lang.Cons clojure.lang.APersistentSet clojure.lang.APersistentMap))
 
 (defn realized?
   "Returns true if Delay or LazySeq has been realized"
@@ -360,7 +360,7 @@
 
 (defn newline [] (-print \newline))
 
-(defn warn [& more] (let [prev-out *out*]                          
+(defn warn [& more] (let [prev-out *out*]
                       (set! *out* *err*)
 	              (apply println more)
                       (set! *out* prev-out)
