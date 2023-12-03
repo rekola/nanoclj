@@ -41,8 +41,28 @@ static inline nanoclj_val_t mk_short(int16_t n) {
   return (nanoclj_val_t)((SIGNATURE_INTEGER << 48) | (UINT64_C(1) << 32) | (uint16_t)n);
 }
 
-static inline nanoclj_val_t mk_int(int num) {
+static inline nanoclj_val_t mk_int(int32_t num) {
   return (nanoclj_val_t)((SIGNATURE_INTEGER << 48) | (UINT64_C(2) << 32) | (uint32_t)num);
+}
+
+/* Creates a primitive for utf8 codepoint */
+static inline nanoclj_val_t mk_codepoint(int c) {
+  return (nanoclj_val_t)((SIGNATURE_CODEPOINT << 48) | (uint32_t)c);
+}
+
+static inline nanoclj_val_t mk_proc(enum nanoclj_opcode op) {
+  return (nanoclj_val_t)((SIGNATURE_PROC << 48) | (uint32_t)op);
+}
+
+static inline nanoclj_val_t mk_boolean(bool b) {
+  nanoclj_val_t v;
+  v.as_long = b ? kTRUE : kFALSE;
+  return v;
+}
+
+static inline nanoclj_val_t mk_double(double n) {
+  /* Canonize all kinds of NaNs such as -NaN to ##NaN */
+  return (nanoclj_val_t)(isnan(n) ? NAN : n);
 }
 
 static inline int32_t decode_integer(nanoclj_val_t value) {

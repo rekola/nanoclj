@@ -51,26 +51,28 @@ E2:_setmark(p);
 	nanoclj_val_t v = data[i];
 	if (is_cell(v) && !is_nil(v)) mark(decode_pointer(v));
       }
-    } else if (_type(p) == T_HASHSET || _type(p) == T_HASHMAP) {
-      size_t s = _size_unchecked(p);
+    } else {
       nanoclj_tensor_t * tensor = p->_collection.tensor;
-      int64_t num_cells = tensor->nb[1] / sizeof(nanoclj_val_t);
       nanoclj_val_t * data = (nanoclj_val_t *)tensor->data;
-      for (int64_t offset = 0; offset < num_cells; offset++) {
-	int64_t i = tensor->sparse_indices[offset];
-	if (i >= 0 && i < s) {
-	  nanoclj_val_t v = data[offset];
+      size_t num = _size_unchecked(p);
+      if (tensor_is_sparse(tensor)) {
+	int64_t num_buckets = tensor_hash_get_bucket_count(tensor);
+	for (int64_t offset = 0; offset < num_buckets; offset++) {
+	  int64_t idx = tensor->sparse_indices[offset];
+	  if (idx >= 0 && idx < num) {
+	    for (int64_t i = 0; i < tensor->ne[0]; i++) {
+	      nanoclj_val_t v = tensor_get_2d(tensor, i, offset);
+	      if (is_cell(v) && !is_nil(v)) mark(decode_pointer(v));
+	    }
+	  }
+	}
+      } else {
+	size_t offset = _offset_unchecked(p);
+	for (size_t i = 0; i < num; i++) {
+	  /* Vector cells will be treated like ordinary cells */
+	  nanoclj_val_t v = data[offset + i];
 	  if (is_cell(v) && !is_nil(v)) mark(decode_pointer(v));
 	}
-      }
-    } else {
-      size_t offset = _offset_unchecked(p);
-      size_t num = _size_unchecked(p);
-      nanoclj_val_t * data = _tensor_unchecked(p)->data;
-      for (size_t i = 0; i < num; i++) {
-	/* Vector cells will be treated like ordinary cells */
-	nanoclj_val_t v = data[offset + i];
-	if (is_cell(v) && !is_nil(v)) mark(decode_pointer(v));
       }
     }
     break;
