@@ -45,7 +45,7 @@ E2:_setmark(p);
   case T_QUEUE:
   case T_MAPENTRY:
     if (_is_small(p)) {
-      size_t s = _sosize_unchecked(p);
+      size_t s = _sodim0_unchecked(p) * _sodim1_unchecked(p);
       nanoclj_val_t * data = _smalldata_unchecked(p);
       for (int64_t i = 0; i < s; i++) {
 	nanoclj_val_t v = data[i];

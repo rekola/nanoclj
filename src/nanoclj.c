@@ -205,19 +205,19 @@ typedef struct {
   int fd;
 } http_load_t;
 
-#define T_NEGATIVE     128	/* 00000000100xxxxx */
-#define T_TYPE	       256	/* 00000001000xxxxx */
-#define T_HASHED       512      /* 00000010000xxxxx */
-#define T_SEQUENCE    1024	/* 00000100000xxxxx */
-#define T_REALIZED    2048	/* 00001000000xxxxx */
-#define T_REVERSE     4096      /* 00010000000xxxxx */
-#define T_SMALL       8192      /* 00100000000xxxxx */
-#define T_GC_ATOM    16384      /* 01000000000xxxxx */    /* only for gc */
+#define T_NEGATIVE     128	/* 000000001yyxxxxx */
+#define T_TYPE	       256	/* 000000010yyxxxxx */
+#define T_HASHED       512      /* 000000100yyxxxxx */
+#define T_SEQUENCE    1024	/* 000001000yyxxxxx */
+#define T_REALIZED    2048	/* 000010000yyxxxxx */
+#define T_REVERSE     4096      /* 000100000yyxxxxx */
+#define T_SMALL       8192      /* 001000000yyxxxxx */
+#define T_GC_ATOM    16384      /* 010000000yyxxxxx */    /* only for gc */
 #define CLR_GC_ATOM  49151      /* 1011111111111111 */    /* only for gc */
-#define MARK         32768      /* 10000000000xxxxx */
+#define MARK         32768      /* 100000000yyxxxxx */
 #define UNMARK       32767      /* 0111111111111111 */
 
-static uint_fast16_t prim_type_extended(nanoclj_val_t value) {
+static uint_fast16_t prim_type_extended(const nanoclj_val_t value) {
   uint64_t signature = value.as_long >> 48;
   switch (signature) {
   case SIGNATURE_CELL: return T_NIL;
@@ -231,7 +231,7 @@ static uint_fast16_t prim_type_extended(nanoclj_val_t value) {
   return T_DOUBLE;
 }
 
-static uint_fast16_t prim_type(nanoclj_val_t value) {
+static uint_fast16_t prim_type(const nanoclj_val_t value) {
   uint64_t signature = value.as_long >> 48;
   switch (signature) {
   case SIGNATURE_CELL: return T_NIL;
@@ -245,16 +245,16 @@ static uint_fast16_t prim_type(nanoclj_val_t value) {
   return T_DOUBLE;
 }
 
-static inline bool is_symbol(nanoclj_val_t v) {
+static inline bool is_symbol(const nanoclj_val_t v) {
   return (v.as_long >> 48) == SIGNATURE_SYMBOL;
 }
 
-static inline bool is_keyword(nanoclj_val_t v) {
+static inline bool is_keyword(const nanoclj_val_t v) {
   return (v.as_long >> 48) == SIGNATURE_KEYWORD;
 }
 
 /* returns the type of a, a must not be NULL */
-static inline uint_fast16_t _type(nanoclj_cell_t * a) {
+static inline uint_fast16_t _type(const nanoclj_cell_t * a) {
   if (a->flags & T_TYPE) return T_CLASS;
   return a->type;
 }
@@ -267,7 +267,7 @@ static inline symbol_t * decode_symbol(nanoclj_val_t value) {
   return (symbol_t *)(value.as_long & MASK_PAYLOAD);
 }
 
-static inline bool is_type(nanoclj_val_t value) {
+static inline bool is_type(const nanoclj_val_t value) {
   if (!is_cell(value)) return false;
   return decode_pointer(value)->flags & T_TYPE;
 }
@@ -288,7 +288,7 @@ static inline bool is_list(nanoclj_val_t value) {
   return c && _type(c) == T_LIST;
 }
 
-static inline nanoclj_val_t mk_pointer(nanoclj_cell_t * ptr) {
+static inline nanoclj_val_t mk_pointer(const nanoclj_cell_t * ptr) {
   return (nanoclj_val_t)((SIGNATURE_CELL << 48) | (uint64_t)ptr);
 }
 
@@ -383,6 +383,8 @@ static inline bool is_nil(nanoclj_val_t v) {
 #define _max_arity_unchecked(p)	  ((p)->_ff.max_arity)
 
 #define _smallstrvalue_unchecked(p)      (&((p)->_small_tensor.bytes[0]))
+#define _sodim0_unchecked(p)      ((p)->flags & 31)
+#define _sodim1_unchecked(p)      (((p)->flags >> 5) & 3)
 #define _sosize_unchecked(p)      ((p)->flags & 31)
 
 #define _graph_unchecked(p)	  ((p)->_graph.rep)
@@ -492,6 +494,10 @@ static inline bool is_map_type(uint_fast16_t t) {
   return t == T_HASHMAP || t == T_SORTED_HASHMAP || t == T_ARRAYMAP;
 }
 
+static inline bool is_set_type(uint_fast16_t t) {
+  return t == T_HASHSET || t == T_SORTED_HASHSET;
+}
+
 static inline nanoclj_val_t get_indexed_elem(nanoclj_cell_t * coll, int64_t ielem) {
   switch (_type(coll)) {
   case T_HASHMAP:
@@ -502,6 +508,30 @@ static inline nanoclj_val_t get_indexed_elem(nanoclj_cell_t * coll, int64_t iele
       return tensor_get_2d(coll->_collection.tensor, 0, ielem);
     }
     break;
+  default:
+    if (_is_small(coll)) {
+      return _smalldata_unchecked(coll)[ielem];
+    } else {
+      return tensor_get(_tensor_unchecked(coll), _offset_unchecked(coll) + ielem);
+    }
+  }
+}
+
+static inline nanoclj_val_t get_indexed_key(nanoclj_cell_t * coll, int64_t ielem) {
+  switch (_type(coll)) {
+  case T_HASHMAP:
+  case T_SORTED_HASHMAP:
+    if (_is_small(coll)) {
+      return _smalldata_unchecked(coll)[0];
+    } else {
+      return tensor_get_2d(coll->_collection.tensor, 0, ielem);
+    }
+    break;
+  case T_ARRAYMAP:
+    {
+      nanoclj_val_t e = get_indexed_elem(coll, ielem);
+      return get_indexed_elem(decode_pointer(e), 0);
+    }
   default:
     if (_is_small(coll)) {
       return _smalldata_unchecked(coll)[ielem];
@@ -544,8 +574,16 @@ static inline void set_vector_elem(nanoclj_cell_t * vec, size_t ielem, nanoclj_v
 }
 
 /* Size of a tensor backed data structure (e.g. string, vector) */
-static inline size_t get_size(nanoclj_cell_t * c) {
-  return _is_small(c) ? _sosize_unchecked(c) : _size_unchecked(c);
+static inline size_t get_size(const nanoclj_cell_t * c) {
+  if (_is_small(c)) {
+    if (_type(c) == T_HASHMAP || _type(c) == T_SORTED_HASHMAP) {
+      return _sodim1_unchecked(c);
+    } else {
+      return _sodim0_unchecked(c);
+    }
+  } else {
+    return _size_unchecked(c);
+  }
 }
 
 /* Pointer to the data of vector or string */
@@ -668,7 +706,7 @@ static inline bool is_numeric_type(uint16_t t) {
 }
 
 /* Returns true if argument is number */
-static inline bool is_number(nanoclj_val_t p) {
+static inline bool is_number(const nanoclj_val_t p) {
   switch (prim_type(p)) {
   case T_DOUBLE:
   case T_LONG:
@@ -1608,8 +1646,10 @@ static inline void initialize_collection(nanoclj_cell_t * c, size_t offset, size
     _tensor_unchecked(c) = store;
     _size_unchecked(c) = size;
     _offset_unchecked(c) = offset;
+  } else if (_type(c) == T_HASHMAP || _type(c) == T_SORTED_HASHMAP) {
+    c->flags = T_GC_ATOM | T_SMALL | (size << 5) | 2;
   } else {
-    c->flags = T_GC_ATOM | T_SMALL | size;
+    c->flags = T_GC_ATOM | T_SMALL | (1 << 5) | size;
   }
 }
 
@@ -2782,7 +2822,6 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
     nanoclj_cell_t * a = decode_pointer(a0), * b = decode_pointer(b0);
     size_t l = get_size(a);
     if (l != get_size(b)) return false;
-    bool is_ordered = false;
 
     switch (t_a) {
     case T_ARRAYMAP:
@@ -2802,7 +2841,6 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
       }
       break;
     case T_SORTED_HASHMAP:
-      is_ordered = true;
     case T_HASHMAP:
       if (!_is_small(a)) {
 	int64_t cursor = 0;
@@ -2853,12 +2891,8 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
     }
     case T_HASHSET:
     case T_SORTED_HASHSET:
+      if (get_size(a) != get_size(b)) return false;
       if (!_is_small(a)) {
-	if ((_is_small(b) && a->_collection.size != _sosize_unchecked(b)) ||
-	    (!_is_small(b) && a->_collection.size != b->_collection.size)) {
-	  return false;
-	}
-	bool is_ordered = t_a == T_SORTED_HASHSET;
 	int64_t cursor = 0;
 	nanoclj_tensor_t * ta = a->_collection.tensor;
 	while (tensor_is_valid_offset(ta, cursor)) {
@@ -2868,11 +2902,6 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
 	}
 	return true;
       } else {
-	if ((_is_small(b) && _sosize_unchecked(a) != _sosize_unchecked(b)) ||
-	    (!_is_small(b) && _sosize_unchecked(a) != b->_collection.size)) {
-	  return false;
-	}
-	bool is_ordered = t_a == T_SORTED_HASHSET;
 	for (size_t i = 0; i < _sosize_unchecked(a); i++) {
 	  nanoclj_val_t v = get_indexed_elem(a, i);
 	  if (find_index(sc, b, v) == NPOS) return false;
@@ -2919,31 +2948,22 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
   return false;
 }
 
-static inline nanoclj_cell_t * find(nanoclj_t * sc, nanoclj_cell_t * map, nanoclj_val_t key) {
-  size_t size = get_size(map);
-  for (size_t i = 0; i < size; i++) {
-    nanoclj_cell_t * entry = decode_pointer(get_indexed_elem(map, i));
-    if (equals(sc, key, get_indexed_elem(entry, 0))) {
-      return entry;
-    }
-  }
-  return NULL;
-}
-
 static size_t find_index(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t key) {
   bool is_ordered = false;
-  size_t i = 0, size = get_size(coll);
+  size_t size = get_size(coll);
   switch (_type(coll)) {
   case T_VECTOR:
+  case T_MAPENTRY:
+  case T_VAR:
     {
       long long index = to_long_w_def(key, -1);
-      if (index >= 0 && index < get_size(coll)) {
+      if (index >= 0 && index < size) {
        	return index;
       }
     }
     break;
   case T_ARRAYMAP:
-    for ( ; i < size; i++) {
+    for (size_t i = 0 ; i < size; i++) {
       nanoclj_cell_t * entry = decode_pointer(get_indexed_elem(coll, i));
       if (equals(sc, key, get_indexed_elem(entry, 0))) {
 	return i;
@@ -2956,7 +2976,6 @@ static size_t find_index(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t ke
   case T_HASHSET:
   case T_HASHMAP:
     if (_is_small(coll)) {
-      size_t size = get_size(coll);
       for (size_t i = 0; i < size; i++) {
 	nanoclj_val_t stored_key = coll->_small_tensor.vals[i];
 	if (equals(sc, key, stored_key)) return i;
@@ -2970,9 +2989,7 @@ static size_t find_index(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t ke
 	  break;
 	} else {
 	  nanoclj_val_t stored = tensor_hash_get(tensor, location, coll->_collection.size);
-	  fprintf(stderr, "found some key\n");
 	  if (equals(sc, stored, key)) {
-	    fprintf(stderr, " correct\n");
 	    return location;
 	  } else if (++location == num_buckets) {
 	    if (is_ordered) break;
@@ -2983,7 +3000,7 @@ static size_t find_index(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t ke
     }
     break;
   default:
-    for ( ; i < size; i++) {
+    for (size_t i = 0; i < size; i++) {
       nanoclj_val_t v = get_indexed_elem(coll, i);
       if (equals(sc, key, v)) {
 	return i;
@@ -3017,16 +3034,6 @@ static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t
   uint16_t t = _type(coll);
   long long index;
   switch (t) {
-  case T_VECTOR:
-  case T_MAPENTRY:
-  case T_VAR:
-    index = to_long_w_def(key, -1);
-    if (index >= 0 && index < get_size(coll)) {
-      if (result) *result = get_indexed_elem(coll, index);
-      return true;
-    }
-    break;
-
   case T_STRING:
   case T_CHAR_ARRAY:
   case T_FILE:
@@ -3046,33 +3053,24 @@ static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t
     }
     break;
     
-  case T_ARRAYMAP:
-    {
-      nanoclj_cell_t * e = find(sc, coll, key);
-      if (e) {
-	if (result) *result = get_indexed_elem(e, 1);
-	return true;
-      }
-    }
-    break;
-
   case T_SORTED_HASHSET:
   case T_HASHSET:
   case T_HASHMAP:
   case T_SORTED_HASHMAP:
+  case T_ARRAYMAP:
+  case T_VECTOR:
+  case T_MAPENTRY:
+  case T_VAR:
     index = find_index(sc, coll, key);
     if (index != NPOS) {
-      fprintf(stderr, "found index %lld\n", index);
       if (result) {
-	if (t == T_HASHMAP || t == T_SORTED_HASHMAP) {
-	  *result = get_indexed_value(coll, index);
-	} else {
+	if (is_set_type(t)) {
 	  *result = key;
+	} else {
+	  *result = get_indexed_value(coll, index);
 	}
       }
       return true;
-    } else {
-      fprintf(stderr, "no index found\n");
     }
     break;
 
@@ -3558,7 +3556,7 @@ static inline nanoclj_cell_t * associative_conjoin(nanoclj_t * sc, nanoclj_cell_
     nanoclj_tensor_t * tensor = NULL;
     bool is_ordered = t == T_SORTED_HASHMAP;
     if (_is_small(coll)) {
-      if (_sosize_unchecked(coll) == 0) {
+      if (_sodim1_unchecked(coll) == 0) {
 	coll = get_vector_object(sc, t, 1);
 	coll->_small_tensor.vals[0] = key;
 	coll->_small_tensor.vals[1] = value;
@@ -7012,8 +7010,11 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       return false;
     } else if (is_cell(arg0)) {
       nanoclj_cell_t * coll = decode_pointer(arg0);
-      if (coll && _type(coll) == T_ARRAYMAP) {
-	s_return(sc, mk_pointer(find(sc, coll, arg1)));
+      if (coll && is_map_type(_type(coll))) {
+	size_t idx = find_index(sc, coll, arg1);
+	if (idx != NPOS) {
+	  s_return(sc, mk_mapentry(sc, get_indexed_key(coll, idx), get_indexed_value(coll, idx)));
+	}
       }
     }
     s_return(sc, mk_nil());
