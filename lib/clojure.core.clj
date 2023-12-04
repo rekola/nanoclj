@@ -696,6 +696,20 @@
           nil)
         (throw "Not a string")))
 
+(defn parse-long
+  "Parses a long"
+  [s] (try (long s)
+           (catch NumberFormatException e nil)))
+
+(defn parse-double
+  "Parses a double"
+  [s] (try (double s)
+           (catch NumberFormatException e nil)))
+
+(defn parse-uuid
+  "Parses an UUID"
+  [s] (java.util.UUID s))
+
 ; Functional
 
 (defn partial

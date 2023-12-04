@@ -137,10 +137,9 @@ Windows support is in progress.
 - Missing core functions and macros
   - doseq, for, dotimes
   - bit-and-not
-  - sort-by, sorted-set-by, sorted-set, sorted-map
+  - sort-by, sorted-set-by, sorted-set, sorted-map, sorted-map-by
   - update-in, merge-with
   - doto, ->, -->, some->, some->>
-  - parse-long, parse-double, parse-uuid
   - map-indexed, mapcat, zipmap, lazy-cat
   - partition-by
   - juxt
