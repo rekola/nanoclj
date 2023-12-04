@@ -117,9 +117,8 @@ static nanoclj_val_t System_setProperty(nanoclj_t * sc, nanoclj_cell_t * args) {
   nanoclj_val_t key = first(sc, args);
   nanoclj_val_t val = second(sc, args);
 
-  /* TODO: Implement */
-
-  return mk_nil();  
+  sc->context->properties = associative_conjoin(sc, sc->context->properties, key, val);
+  return mk_nil();
 }
 
 static inline nanoclj_val_t System_glob(nanoclj_t * sc, nanoclj_cell_t * args) {
@@ -850,6 +849,10 @@ static inline nanoclj_val_t Graph_updateLayout(nanoclj_t * sc, nanoclj_cell_t * 
   return mk_nil();
 }
 
+static void XMLCDECL silent_error_handler(void *ctx, const char *msg, ...) {
+  
+}
+  
 static inline nanoclj_val_t Graph_load(nanoclj_t * sc, nanoclj_cell_t * args) {
   nanoclj_val_t src = first(sc, args);
   strview_t sv = to_strview(slurp(sc, T_READER, args));
@@ -859,6 +862,7 @@ static inline nanoclj_val_t Graph_load(nanoclj_t * sc, nanoclj_cell_t * args) {
   if (is_file(src) || is_string(src)) {
     fn = alloc_c_str(to_strview(src));
   }
+  xmlSetGenericErrorFunc(NULL, silent_error_handler);
   xmlDoc * doc = xmlReadMemory(sv.ptr, sv.size, fn, NULL, 0);
   if (doc == NULL) {
     nanoclj_cell_t * e = mk_runtime_exception(sc, mk_string_fmt(sc, "Could not parse GraphML file [%s]", fn ? fn : ""));
@@ -1003,6 +1007,7 @@ static inline nanoclj_val_t clojure_xml_parse(nanoclj_t * sc, nanoclj_cell_t * a
   if (is_file(src) || is_string(src)) {
     fn = alloc_c_str(to_strview(src));
   }
+  xmlSetGenericErrorFunc(NULL, silent_error_handler);
   xmlDoc * doc = xmlReadMemory(sv.ptr, sv.size, fn, NULL, 0);
   if (doc == NULL) {
     nanoclj_cell_t * e = mk_runtime_exception(sc, mk_string_fmt(sc, "Could not parse xml file [%s]", fn ? fn : ""));
@@ -1216,7 +1221,7 @@ static inline void register_functions(nanoclj_t * sc) {
   intern_foreign_func(sc, System, "gc", System_gc, 0, 0);
   intern_foreign_func(sc, System, "getenv", System_getenv, 0, 1);
   intern_foreign_func(sc, System, "getProperty", System_getProperty, 0, 1);
-  intern_foreign_func(sc, System, "setProperty", System_setProperty, 0, 1);
+  intern_foreign_func(sc, System, "setProperty", System_setProperty, 2, 2);
   intern_foreign_func(sc, System, "glob", System_glob, 1, 1);
   intern_foreign_func(sc, System, "getSystemTimes", System_getSystemTimes, 0, 0);
   intern_foreign_func(sc, Math, "abs", Math_abs, 1, 1);
