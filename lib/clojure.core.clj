@@ -581,12 +581,12 @@
   (fn
     ([coll index]
      (cond (vector? coll) (coll index)
-     	   (string? coll) (recur (seq coll) index)
+     	   (string? coll) (coll index)
      	   (or (< index 0) (empty? coll)) (throw "ERROR - Index out of bounds")
            (if (zero? index) (first coll) (recur (next coll) (dec index)))))
     ([coll index not-found]
      (cond (vector? coll) (coll index not-found)
-     	   (string? coll) (recur (seq coll) index not-found)
+     	   (string? coll) (coll index not-found)
      	   (or (< index 0) (empty? coll)) not-found
      	   :else (if (zero? index) (first coll) (recur (next coll) (dec index) not-found))))))
 
