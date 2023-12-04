@@ -172,6 +172,8 @@ extern "C" {
     nanoclj_cell_t * Throwable;
     nanoclj_cell_t * IOException;
     nanoclj_cell_t * FileNotFoundException;
+    nanoclj_cell_t * AccessDeniedException;
+    nanoclj_cell_t * CharacterCodingException;
     
     nanoclj_cell_t sink;	      /* when mem. alloc. fails */
     nanoclj_cell_t _EMPTY;

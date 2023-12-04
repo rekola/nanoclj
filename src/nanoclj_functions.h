@@ -1035,7 +1035,7 @@ static inline nanoclj_val_t clojure_data_csv_read_csv(nanoclj_t * sc, nanoclj_ce
   int32_t delimiter = ',';
   
   while ( 1 ) {
-    int32_t c = inchar(rdr);
+    int32_t c = inchar(sc, rdr);
     if (c == -1) break;
     if (c == '\r') continue;
     if (!is_quoted) {

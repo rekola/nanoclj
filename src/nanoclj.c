@@ -1812,6 +1812,11 @@ static inline nanoclj_cell_t * mk_number_format_exception(nanoclj_t * sc, nanocl
   return get_cell(sc, T_NUM_FMT_EXCEPTION, 0, msg, NULL, NULL);
 }
 
+static inline nanoclj_val_t nanoclj_throw(nanoclj_t * sc, nanoclj_cell_t * e) {
+  sc->pending_exception = e;
+  return mk_nil();
+}
+
 static inline int32_t inchar_raw(nanoclj_cell_t * p) {
   nanoclj_port_rep_t * pr = _rep_unchecked(p);
   switch (_port_type_unchecked(p)) {
@@ -1832,6 +1837,8 @@ static inline int32_t inchar_utf8(nanoclj_cell_t * p) {
   if (c < 0) return EOF;
   uint32_t codepoint = c;
   switch (utf8_sequence_length(c)) {
+  case 0:
+    return 0;
   case 2:
     codepoint = ((codepoint << 6) & 0x7ff) + (inchar_raw(p) & 0x3f);
     break;
@@ -1881,7 +1888,7 @@ static inline void update_cursor(int32_t c, nanoclj_cell_t * p, int line_len) {
 }
 
 /* get new codepoint from input file */
-static inline int32_t inchar(nanoclj_cell_t * p) {
+static inline int32_t inchar(nanoclj_t * sc, nanoclj_cell_t * p) {
   if (_port_flags_unchecked(p) & PORT_SAW_EOF) {
     return EOF;
   }
@@ -1889,6 +1896,9 @@ static inline int32_t inchar(nanoclj_cell_t * p) {
   switch (_type(p)) {
   case T_READER: /* Text */
     c = inchar_utf8(p);
+    if (!c) {
+      nanoclj_throw(sc, mk_exception(sc, sc->CharacterCodingException, "Invalid UTF8"));
+    }
     break;
   default:
     c = inchar_raw(p);
@@ -2127,11 +2137,6 @@ static inline nanoclj_val_t eval(nanoclj_t * sc, const nanoclj_cell_t * obj) {
 
   Eval_Cycle(sc, OP_EVAL);
   return sc->value;
-}
-
-static inline nanoclj_val_t nanoclj_throw(nanoclj_t * sc, nanoclj_cell_t * e) {
-  sc->pending_exception = e;
-  return mk_nil();
 }
 
 /* Sequence handling */
@@ -3636,6 +3641,15 @@ static inline nanoclj_cell_t * conjoin(nanoclj_t * sc, nanoclj_cell_t * coll, na
   }
 }
 
+static inline nanoclj_cell_t * disj(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t key) {
+  uint16_t t = _type(coll);
+  size_t j = find_index(sc, coll, key);
+  if (j == NPOS) return coll;
+
+  
+  return coll;
+}
+
 static inline nanoclj_cell_t * mk_arraymap(nanoclj_t * sc, size_t len) {
   return get_vector_object(sc, T_ARRAYMAP, len);
 }
@@ -4132,15 +4146,21 @@ static inline nanoclj_val_t port_from_filename(nanoclj_t * sc, uint16_t type, st
     f = fopen(filename, mode);
   }
   if (!f) {
-    free(filename);
+    char * msg = strerror(errno);
     switch (errno) {
     case ENOENT:
-      nanoclj_throw(sc, mk_exception(sc, sc->FileNotFoundException, "File not found"));
+      nanoclj_throw(sc, mk_exception(sc, sc->FileNotFoundException, msg));
+      break;
+    case EACCES:
+      nanoclj_throw(sc, mk_exception(sc, sc->AccessDeniedException, msg));
+      break;
+    case ENOMEM:
+      nanoclj_throw(sc, sc->OutOfMemoryError);
       break;
     default:
-      nanoclj_throw(sc, mk_exception(sc, sc->IOException, "Unknown IO error"));
-      break;
+      nanoclj_throw(sc, mk_exception(sc, sc->IOException, msg));
     }
+    free(filename);
     return mk_nil();
   }
   return port_rep_from_file(sc, type, f, filename);
@@ -4200,7 +4220,7 @@ static inline nanoclj_val_t slurp(nanoclj_t * sc, uint16_t t, nanoclj_cell_t * a
     size_t size = 0;
     while ( 1 ) {
       if (t == T_READER) {
-	int32_t c = inchar(rdr);
+	int32_t c = inchar(sc, rdr);
 	if (c < 0) break;
 	size += tensor_mutate_append_codepoint(array, c);
       } else {
@@ -4343,8 +4363,8 @@ static inline char *readstr_upto(nanoclj_t * sc, char *delim, nanoclj_cell_t * i
   tensor_mutate_clear(rdbuff);
   
   while (1) {
-    int c = inchar(inport);
-    if (c == EOF) break;
+    int c = inchar(sc, inport);
+    if (c == EOF || sc->pending_exception) break;
 
     tensor_mutate_append_codepoint(rdbuff, c);
     
@@ -4419,8 +4439,8 @@ static inline nanoclj_val_t readstrexp(nanoclj_t * sc, nanoclj_cell_t * inport, 
   bool fin = false;
 
   do {
-    int c = inchar(inport);
-    if (c == EOF) {
+    int c = inchar(sc, inport);
+    if (c == EOF || sc->pending_exception) {
       return mk_nil();
     }
     int radix = 16;
@@ -4519,7 +4539,8 @@ static inline nanoclj_val_t readstrexp(nanoclj_t * sc, nanoclj_cell_t * inport, 
 /* skip white space characters, returns the first non-whitespace character */
 static inline int32_t skipspace(nanoclj_t * sc, nanoclj_cell_t * inport) {
   while ( 1 ) {
-    int32_t c = inchar(inport);
+    int32_t c = inchar(sc, inport);
+    if (sc->pending_exception) return 0;
     int cat = utf8proc_category(c);
     if (cat != UTF8PROC_CATEGORY_ZS &&
 	cat != UTF8PROC_CATEGORY_ZL &&
@@ -4550,7 +4571,7 @@ static inline int token(nanoclj_t * sc, nanoclj_cell_t * inport) {
   case '(':
     c = skipspace(sc, inport);
     if (c == '.') {
-      int c2 = inchar(inport);
+      int c2 = inchar(sc, inport);
       backchar(c2, inport);
       if (is_one_of(" \n\t", c2)) {
 	backchar(c, inport);
@@ -4564,7 +4585,7 @@ static inline int token(nanoclj_t * sc, nanoclj_cell_t * inport) {
     } 
 
   case '$':
-    c = inchar(inport);
+    c = inchar(sc, inport);
     if (is_one_of(" \n\t", c)) {
       return TOK_OLD_DOT;
     } else {
@@ -4574,7 +4595,7 @@ static inline int token(nanoclj_t * sc, nanoclj_cell_t * inport) {
     }
 
   case ';':
-    while ((c = inchar(inport)) != '\n' && c != EOF) { }
+    while ((c = inchar(sc, inport)) != '\n' && c != EOF) { }
     if (c == EOF) {
       return TOK_EOF;
     } else {
@@ -4582,7 +4603,7 @@ static inline int token(nanoclj_t * sc, nanoclj_cell_t * inport) {
     }
 
   case ',':
-    if ((c = inchar(inport)) == '@') {
+    if ((c = inchar(sc, inport)) == '@') {
       return TOK_ATMARK;
     } else if (is_one_of("\n\r ", c)) {
       backchar(c, inport);
@@ -4593,7 +4614,7 @@ static inline int token(nanoclj_t * sc, nanoclj_cell_t * inport) {
     }
     
   case '#':
-    c = inchar(inport);
+    c = inchar(sc, inport);
     if (c == '(') {
       return TOK_FN;
     } else if (c == '{') {
@@ -4608,7 +4629,7 @@ static inline int token(nanoclj_t * sc, nanoclj_cell_t * inport) {
       return TOK_SHARP_CONST;
     } else if (c == '!') {
       /* This is a shebang line, so skip it */
-      while ((c = inchar(inport)) != '\n' && c != EOF) { }
+      while ((c = inchar(sc, inport)) != '\n' && c != EOF) { }
 
       if (c == EOF) {
         return TOK_EOF;
@@ -5826,7 +5847,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       }
       /* NOTREACHED */
     }
-    
+
     /* Set up another iteration of REPL */
     sc->save_inport = get_in_port(sc);
     intern(sc, sc->root_env, sc->IN_SYM, tensor_peek(sc->load_stack));
@@ -5862,7 +5883,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     } else if (is_cell(arg0)) {
       nanoclj_cell_t * p = decode_pointer(arg0);
       if (is_readable(p)) {
-	s_return(sc, mk_codepoint(inchar(p)));
+	s_return(sc, mk_codepoint(inchar(sc, p)));
       }
     }
     Error_0(sc, "Not a reader");
@@ -8873,8 +8894,10 @@ bool nanoclj_init(nanoclj_t * sc) {
   mk_class(sc, "java.util.regex.Pattern", T_REGEX, sc->Object);
   mk_class(sc, "java.lang.ArithmeticException", T_ARITHMETIC_EXCEPTION, RuntimeException);
   mk_class(sc, "java.lang.IndexOutOfBoundsException", T_INDEX_EXCEPTION, RuntimeException);
-  sc->FileNotFoundException = mk_class(sc, "java.io.FileNotFoundException", T_FILE_NOT_FOUND_EXCEPTION, sc->IOException);
-  
+  sc->FileNotFoundException = mk_class(sc, "java.io.FileNotFoundException", gentypeid(sc), sc->IOException);
+  sc->AccessDeniedException = mk_class(sc, "java.nio.file.AccessDeniedException", gentypeid(sc), sc->IOException);
+  sc->CharacterCodingException = mk_class(sc, "java.nio.charset.CharacterCodingException", gentypeid(sc), sc->IOException);
+
   /* Clojure types */
   nanoclj_cell_t * AReference = mk_class(sc, "clojure.lang.AReference", gentypeid(sc), sc->Object);
   nanoclj_cell_t * Obj = mk_class(sc, "clojure.lang.Obj", gentypeid(sc), sc->Object);
@@ -9032,14 +9055,15 @@ void nanoclj_deinit_oblist(nanoclj_t * sc) {
 
 bool nanoclj_load_named_file(nanoclj_t * sc, const char *filename) {
   dump_stack_reset(sc);
-
-  nanoclj_val_t p = port_from_filename(sc, T_READER, mk_strview(filename));
-
-  sc->envir = sc->global_env;
-  tensor_mutate_push(sc->load_stack, p);
-  sc->args = NULL;
   
-  Eval_Cycle(sc, OP_T0LVL);
+  nanoclj_val_t p = port_from_filename(sc, T_READER, mk_strview(filename));
+  if (!sc->pending_exception) {
+    sc->envir = sc->global_env;
+    tensor_mutate_push(sc->load_stack, p);
+    sc->args = NULL;
+  
+    Eval_Cycle(sc, OP_T0LVL);
+  }
 
   return sc->pending_exception == NULL;
 }
@@ -9150,14 +9174,14 @@ int main(int argc, const char **argv) {
   int rv = 0;
   if (sc.pending_exception) {
     nanoclj_val_t name_v;
+    strview_t sv0;
     if (get_elem(&sc, _cons_metadata(get_type_object(&sc, mk_pointer(sc.pending_exception))), sc.NAME, &name_v)) {
-      strview_t sv = to_strview(name_v);
-      fprintf(stderr, "%.*s\n", (int)sv.size, sv.ptr);
+      sv0 = to_strview(name_v);
     } else {
-      fprintf(stderr, "Unknown exception\n");
+      sv0 = (strview_t){ "Unknown exception", 17 };
     }
     strview_t sv = to_strview(_car(sc.pending_exception));
-    fprintf(stderr, "%.*s\n", (int)sv.size, sv.ptr);
+    fprintf(stderr, "%.*s: %.*s\n", (int)sv0.size, sv0.ptr, (int)sv.size, sv.ptr);
     rv = 1;
   }
 

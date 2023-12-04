@@ -14,7 +14,8 @@ static inline size_t utf8_sequence_length(uint8_t lead) {
 }
 
 static inline const char * utf8_next(const char * p) {
-  return p + utf8_sequence_length((uint8_t)*p);
+  size_t n = utf8_sequence_length((uint8_t)*p);
+  return p + (n != 0 ? n : 1);
 }
 
 static inline const char * utf8_prev(const char * p) {
@@ -26,8 +27,10 @@ static inline const char * utf8_prev(const char * p) {
 
 static inline int32_t decode_utf8(const char *s) {
   const uint8_t * p = (const uint8_t *)s;
+  size_t n = utf8_sequence_length(*p);
+  if (n == 0) return 0xfffd; /* return REPLACEMENT CHARACTER */
   uint32_t codepoint = *p;
-  switch (utf8_sequence_length(*p)) {
+  switch (n) {
   case 2:
     p++;
     codepoint = ((codepoint << 6) & 0x7ff) + (*p & 0x3f);
@@ -37,7 +40,7 @@ static inline int32_t decode_utf8(const char *s) {
     codepoint = ((codepoint << 12) & 0xffff) + ((*p << 6) & 0xfff);
     p++;
     codepoint += *p & 0x3f;
-    break;  
+    break;
   case 4:
     p++;
     codepoint = ((codepoint << 18) & 0x1fffff) + ((*p << 12) & 0x3ffff);
