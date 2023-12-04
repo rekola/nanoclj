@@ -1731,7 +1731,7 @@ static inline nanoclj_val_t mk_string_fmt(nanoclj_t * sc, char *fmt, ...) {
   va_end(ap);
 
   if (n < NANOCLJ_SMALL_STR_SIZE) {
-    r->flags |= n; /* Set the small string size */
+    r->flags = (r->flags & ~31) | n; /* Set the small string size */
   } else { /* Reserve 1-byte padding for the 0-marker */
     nanoclj_tensor_t * tensor = mk_tensor_1d_padded(nanoclj_i8, n, 1);
     if (!tensor) return mk_nil();
@@ -3560,7 +3560,7 @@ static inline nanoclj_cell_t * vector_conjoin(nanoclj_t * sc, nanoclj_cell_t * v
   }
 }
 
-static inline nanoclj_cell_t * associative_conjoin(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t key, nanoclj_val_t value) {
+static inline nanoclj_cell_t * assoc(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t key, nanoclj_val_t value) {
   uint16_t t = _type(coll);
   size_t j = find_index(sc, coll, key);
   if (j != NPOS) {
@@ -4633,8 +4633,8 @@ static inline void print_slashstring(nanoclj_t * sc, strview_t sv, nanoclj_cell_
   const char * end = p + sv.size;
   while (p < end) {
     int c = decode_utf8(p);
-    p = utf8_next(p);
     putstr(sc, escape_char(c, sc->strbuff, true), out);
+    p = utf8_next(p);
   }
   putstr(sc, "\"", out);
 }
@@ -4932,22 +4932,20 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
 
 /* Creates a collection, args are seqed */
 static inline nanoclj_cell_t * mk_collection(nanoclj_t * sc, int type, nanoclj_cell_t * args) {
-  size_t len = count(sc, args);
-
-  if (type == T_ARRAYMAP) len /= 2;
-  
-  nanoclj_cell_t * coll = get_vector_object(sc, type, len);
+  nanoclj_cell_t * coll = get_vector_object(sc, type, 0);
   if (coll) {
-    if (type == T_ARRAYMAP) {
-      for (size_t i = 0; i < len; args = rest(sc, args), i++) {
+    if (is_map_type(type)) {
+      for ( ; args; args = next(sc, args)) {
 	nanoclj_val_t key = first(sc, args);
-	args = rest(sc, args);
-	nanoclj_val_t val = first(sc, args);
-	set_vector_elem(coll, i, mk_mapentry(sc, key, val));
+	args = next(sc, args);
+	if (args) {
+	  nanoclj_val_t val = first(sc, args);
+	  coll = assoc(sc, coll, key, val);
+	}
       }
     } else {
-      for (size_t i = 0; i < len; args = rest(sc, args), i++) {
-	set_vector_elem(coll, i, first(sc, args));
+      for ( ; args; args = next(sc, args)) {
+	coll = conjoin(sc, coll, first(sc, args));
       }
     }
   }
@@ -7072,12 +7070,12 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	      for (size_t i = 0; i < other_len; i++) {
 		nanoclj_cell_t * e = decode_pointer(get_indexed_elem(arg, i));
 		nanoclj_val_t key = get_indexed_elem(e, 0), val = get_indexed_elem(e, 1);
-		coll = associative_conjoin(sc, coll, key, val);
+		coll = assoc(sc, coll, key, val);
 	      }
 	      s_return(sc, mk_pointer(coll));
 	    } else if (_is_sequence(arg) || is_seqable_type(_type(arg))) {
 	      nanoclj_val_t key = first(sc, arg), val = second(sc, arg);
-	      s_return(sc, mk_pointer(associative_conjoin(sc, coll, key, val)));
+	      s_return(sc, mk_pointer(assoc(sc, coll, key, val)));
 	    }
 	  }
 	}
@@ -7086,7 +7084,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	nanoclj_cell_t * arg = decode_pointer(arg1);
 	if (arg && _type(arg) == T_MAPENTRY) {
 	  /* If MapEntry is conjoined to a vector, it is an index value pair */
-	  s_return(sc, mk_pointer(associative_conjoin(sc, coll, first(sc, arg), second(sc, arg))));
+	  s_return(sc, mk_pointer(assoc(sc, coll, first(sc, arg), second(sc, arg))));
 	}
       }
       if (_is_sequence(coll) || is_seqable_type(_type(coll))) {
@@ -7834,18 +7832,10 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   }
     
   case OP_RD_SET:
-    if (sc->value.as_long == sc->EMPTY.as_long) {
-      s_return(sc, mk_pointer(get_vector_object(sc, T_HASHSET, 0)));
-    } else {
-      s_return(sc, mk_pointer(cons(sc, sc->HASH_SET, decode_pointer(sc->value))));
-    }
+    s_return(sc, mk_pointer(cons(sc, sc->HASH_SET, decode_pointer(sc->value))));
     
   case OP_RD_MAP:
-    if (sc->value.as_long == sc->EMPTY.as_long) {
-      s_return(sc, mk_pointer(mk_hashmap(sc, 0)));
-    } else {
-      s_return(sc, mk_pointer(cons(sc, sc->HASH_MAP, decode_pointer(sc->value))));
-    }
+    s_return(sc, mk_pointer(cons(sc, sc->HASH_MAP, decode_pointer(sc->value))));
 
   case OP_RD_DOT:{
     nanoclj_val_t method = sc->code;
@@ -8694,7 +8684,7 @@ static inline nanoclj_cell_t * mk_properties(nanoclj_t * sc) {
   
   free(pw_buf);
 
-  return mk_collection(sc, T_ARRAYMAP, l);
+  return mk_collection(sc, T_HASHMAP, l);
 }
 
 #include "nanoclj_functions.h"

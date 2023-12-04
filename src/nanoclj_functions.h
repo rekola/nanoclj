@@ -117,7 +117,7 @@ static nanoclj_val_t System_setProperty(nanoclj_t * sc, nanoclj_cell_t * args) {
   nanoclj_val_t key = first(sc, args);
   nanoclj_val_t val = second(sc, args);
 
-  sc->context->properties = associative_conjoin(sc, sc->context->properties, key, val);
+  sc->context->properties = assoc(sc, sc->context->properties, key, val);
   return mk_nil();
 }
 
