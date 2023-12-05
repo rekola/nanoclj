@@ -5308,10 +5308,18 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
   case T_STRING:
   case T_CHAR_ARRAY:
   case T_FILE:
-  case T_UUID:{
-    strview_t sv = to_strview(first(sc, args));
-    return mk_pointer(get_string_object(sc, t, sv.ptr, sv.size, 0));
-  }
+  case T_UUID:
+    {
+      x = first(sc, args);
+      if (is_cell(x) && !is_nil(x)) {
+	nanoclj_cell_t * c = decode_pointer(x);
+	if (!_is_small(c) && is_string_type(_type(c))) {
+	  return mk_pointer(get_collection_object(sc, t, _offset_unchecked(c), _size_unchecked(c), _tensor_unchecked(c)));
+	}
+      }
+      strview_t sv = to_strview(x);
+      return mk_pointer(get_string_object(sc, t, sv.ptr, sv.size, 0));
+    }
 
   case T_VECTOR:
   case T_ARRAYMAP:
@@ -5395,7 +5403,7 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
 
   case T_CODEPOINT:
     i = to_int(first(sc, args));
-    if (i < 0 || i > 0x10ffff) {
+    if (i <= 0 || i > 0x10ffff) {
       return nanoclj_throw(sc, mk_illegal_arg_exception(sc, "Invalid codepoint"));
     } else {
       return mk_codepoint(i);
