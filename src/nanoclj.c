@@ -182,9 +182,10 @@ enum nanoclj_types {
   T_GRAPH_NODE = 58,
   T_GRAPH_EDGE = 59,
   T_GRADIENT = 60,
-  T_SHAPE = 61,
-  T_TABLE = 62,
-  T_LAST_SYSTEM_TYPE = 63
+  T_MESH = 61,
+  T_SHAPE = 62,
+  T_TABLE = 63,
+  T_LAST_SYSTEM_TYPE = 64
 };
 
 typedef struct {
@@ -3550,6 +3551,9 @@ static inline nanoclj_cell_t * vector_conjoin(nanoclj_t * sc, nanoclj_cell_t * v
     } else {
       memcpy(get_ptr(new_vec), _smalldata_unchecked(vec), old_size * sizeof(nanoclj_val_t));
       set_vector_elem(new_vec, old_size, new_value);
+      if (t == T_SORTED_HASHSET) {
+	qsort_r(get_ptr(new_vec), old_size + 1, sizeof(nanoclj_val_t), _compare, sc);
+      }
     }
     return new_vec;
   } else if (t == T_HASHSET || t == T_SORTED_HASHSET) {
@@ -7511,13 +7515,13 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     s_return(sc, mk_format(sc, to_strview(arg0), arg_next));
 
   case OP_THROW:                /* throw */
-    if (!unpack_args_1(sc, &arg0)) {
+    if (!unpack_args_1_not_nil(sc, &arg0)) {
       return false;
     } else {
-      sc->pending_exception = get_cell(sc, T_RUNTIME_EXCEPTION, 0, arg0, NULL, NULL);
+      sc->pending_exception = mk_runtime_exception(sc, arg0);
       return false;
     }
-    
+
   case OP_CLOSEM:        /* .close */
     if (!unpack_args_1_not_nil(sc, &arg0)) {
       return false;
@@ -8014,18 +8018,37 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       return false;
     } else {
       s_return(sc, mk_int(utf8proc_category(to_int(arg0))));
-    }    
+    }
 
   case OP_META:
     if (!unpack_args_1(sc, &arg0)) {
       return false;
-    }
-    if (is_cell(arg0)) {
+    } else if (is_cell(arg0)) {
       nanoclj_cell_t * c = decode_pointer(arg0);
       if (c) s_return(sc, mk_pointer(get_metadata(c)));
     }
     s_return(sc, mk_nil());
-    
+
+  case OP_WITH_META:
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
+      return false;
+    } else if (is_cell(arg0) && is_cell(arg1)) {
+      nanoclj_cell_t * c = decode_pointer(arg0);
+      if (!c) {
+	nanoclj_throw(sc, sc->NullPointerException);
+	return false;
+      }
+      uint_fast16_t t = _type(c);
+      if (t == T_VAR || t == T_LIST || t == T_CLOSURE || t == T_MACRO ||
+	  t == T_CLASS || t == T_ENVIRONMENT || t == T_FOREIGN_FUNCTION || t == T_IMAGE) {
+	nanoclj_cell_t * new_c = get_cell_x(sc, T_NIL, T_GC_ATOM, NULL, NULL, NULL);
+	memcpy(new_c, c, sizeof(nanoclj_cell_t));
+	set_metadata(new_c, decode_pointer(arg1));
+	s_return(sc, mk_pointer(new_c));
+      }
+    }
+    Error_0(sc, "Cannot set metadata");
+
   case OP_IN_NS:
     if (!unpack_args_1(sc, &arg0)) {
       return false;
@@ -8942,7 +8965,8 @@ bool nanoclj_init(nanoclj_t * sc) {
   mk_class(sc, "nanoclj.core.Codepoint", T_CODEPOINT, sc->Object);
   mk_class(sc, "nanoclj.core.CharArray", T_CHAR_ARRAY, sc->Object);
   sc->Image = mk_class(sc, "nanoclj.core.Image", T_IMAGE, sc->Object);
-  sc->Gradient = mk_class(sc, "nanoclj.core.Gradient", T_GRADIENT, sc->Object);
+  mk_class(sc, "nanoclj.core.Gradient", T_GRADIENT, sc->Object);
+  mk_class(sc, "nanoclj.core.Mesh", T_MESH, sc->Object);
   mk_class(sc, "nanoclj.core.Shape", T_SHAPE, sc->Object);
   sc->Audio = mk_class(sc, "nanoclj.core.Audio", T_AUDIO, sc->Object);
   mk_class(sc, "nanoclj.core.Tensor", T_TENSOR, sc->Object);

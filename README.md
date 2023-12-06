@@ -83,8 +83,8 @@ As well as printing images in block mode like the plot function does, they can a
 - `rationalize` returns exact result for doubles: `(rationalize 0.1) ;=> 3602879701896397/36028797018963968`
 - No chunked or buffered lazy sequences
 - No homogenous vectors (They are not necessary since most data types are unboxed by default)
-- Persistent data structures are flat, and while vectors, maps and sets provide fast reading and insertion, deletion and modification is slow.
-- Vectors, maps and sets cannot have metadata
+- Data structures are only partially persistent, and while vectors, maps and sets allow fast reading and insertion, deletion and modification is slow.
+- Vectors, maps, sets and queues cannot have metadata
 - Only 64 bit systems are supported
 
 ## Dependencies
@@ -99,7 +99,6 @@ As well as printing images in block mode like the plot function does, they can a
 - libsixel
 - utf8proc
 - shapelib
-- ffmpeg
 
 ## Building
 
@@ -159,7 +158,7 @@ Windows support is in progress.
   - assert-args
   - make-parents
   - with-open
-  - with-meta, vary-meta, alter-meta!, reset-meta!
+  - vary-meta, alter-meta!, reset-meta!
   - int-array, long-array, float-array, double-array, byte-array, short-array, aset-int, aset-double, object-array
   - aget, aset, alength, amap, areduce, aclone, into-array, make-array, to-array-2d, to-array
 - clojure.math
