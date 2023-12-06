@@ -13,3 +13,4 @@
     ([parent child] (clojure.string/join (System/getProperty "file.separator") [ parent child ]))))
 
 (def as-file java.io.File)
+(def as-url java.net.URL)

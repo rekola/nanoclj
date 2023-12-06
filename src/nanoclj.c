@@ -165,27 +165,28 @@ enum nanoclj_types {
   T_VIDEO = 41,
   T_AUDIO = 42,
   T_FILE = 43,
-  T_DATE = 44,
-  T_UUID = 45,
-  T_QUEUE = 46,
-  T_RUNTIME_EXCEPTION = 47,
-  T_ARITY_EXCEPTION = 48,
-  T_ILLEGAL_ARG_EXCEPTION = 49,
-  T_NUM_FMT_EXCEPTION = 50,
-  T_ARITHMETIC_EXCEPTION = 51,
-  T_CLASS_CAST_EXCEPTION = 52,
-  T_ILLEGAL_STATE_EXCEPTION = 53,
-  T_FILE_NOT_FOUND_EXCEPTION = 54,
-  T_INDEX_EXCEPTION = 55,
-  T_TENSOR = 56,
-  T_GRAPH = 57,
-  T_GRAPH_NODE = 58,
-  T_GRAPH_EDGE = 59,
-  T_GRADIENT = 60,
-  T_MESH = 61,
-  T_SHAPE = 62,
-  T_TABLE = 63,
-  T_LAST_SYSTEM_TYPE = 64
+  T_URL = 44,
+  T_DATE = 45,
+  T_UUID = 46,
+  T_QUEUE = 47,
+  T_RUNTIME_EXCEPTION = 48,
+  T_ARITY_EXCEPTION = 49,
+  T_ILLEGAL_ARG_EXCEPTION = 50,
+  T_NUM_FMT_EXCEPTION = 51,
+  T_ARITHMETIC_EXCEPTION = 52,
+  T_CLASS_CAST_EXCEPTION = 53,
+  T_ILLEGAL_STATE_EXCEPTION = 54,
+  T_FILE_NOT_FOUND_EXCEPTION = 55,
+  T_INDEX_EXCEPTION = 56,
+  T_TENSOR = 57,
+  T_GRAPH = 58,
+  T_GRAPH_NODE = 59,
+  T_GRAPH_EDGE = 60,
+  T_GRADIENT = 61,
+  T_MESH = 62,
+  T_SHAPE = 63,
+  T_TABLE = 64,
+  T_LAST_SYSTEM_TYPE = 65
 };
 
 typedef struct {
@@ -438,6 +439,7 @@ static inline bool is_seqable_type(uint_fast16_t t) {
   case T_STRING:
   case T_CHAR_ARRAY:
   case T_FILE:
+  case T_URL:
   case T_VECTOR:
   case T_ARRAYMAP:
   case T_HASHMAP:
@@ -479,7 +481,7 @@ static inline bool is_coll_type(uint_fast16_t t) {
 }
 
 static inline bool is_string_type(uint_fast16_t t) {
-  return t == T_STRING || t == T_CHAR_ARRAY || t == T_FILE || t == T_UUID;
+  return t == T_STRING || t == T_CHAR_ARRAY || t == T_FILE || t == T_URL || t == T_UUID;
 }
 
 static inline bool is_vector_type(uint_fast16_t t) {
@@ -581,6 +583,7 @@ static inline nanoclj_val_t get_indexed_value(const nanoclj_cell_t * coll, int64
   case T_CHAR_ARRAY:
   case T_UUID:
   case T_FILE:
+  case T_URL:
     return mk_codepoint(decode_utf8(get_const_ptr(coll) + ielem));
     
   default:
@@ -639,6 +642,7 @@ static inline nanoclj_tensor_t * get_tensor(nanoclj_cell_t * c) {
   case T_STRING:
   case T_CHAR_ARRAY:
   case T_FILE:
+  case T_URL:
   case T_UUID:
   case T_GRADIENT:
   case T_SHAPE:
@@ -1087,6 +1091,7 @@ static inline strview_t _to_strview(const nanoclj_cell_t * c) {
   case T_STRING:
   case T_CHAR_ARRAY:
   case T_FILE:
+  case T_URL:
   case T_UUID:
     return (strview_t){ get_const_ptr(c), get_size(c) };
   case T_READER:
@@ -2294,6 +2299,7 @@ static inline nanoclj_cell_t * seq(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_STRING:
   case T_CHAR_ARRAY:
   case T_FILE:
+  case T_URL:
   case T_UUID:
   case T_VECTOR:
   case T_ARRAYMAP:
@@ -2350,6 +2356,7 @@ static inline bool is_empty(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_STRING:
   case T_CHAR_ARRAY:
   case T_FILE:
+  case T_URL:
   case T_UUID:
   case T_VECTOR:
   case T_ARRAYMAP:
@@ -2418,6 +2425,7 @@ static inline nanoclj_cell_t * rest(nanoclj_t * sc, nanoclj_cell_t * coll) {
     case T_STRING:
     case T_CHAR_ARRAY:
     case T_FILE:
+    case T_URL:
     case T_QUEUE:
       if (get_size(coll) >= 2) {
 	if (_is_reverse(coll)) {
@@ -2545,6 +2553,7 @@ static inline nanoclj_val_t first(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_STRING:
   case T_CHAR_ARRAY:
   case T_FILE:
+  case T_URL:
     if (get_size(coll)) {
       if (_is_reverse(coll)) {
 	const char * start = get_ptr(coll);
@@ -2602,6 +2611,7 @@ static inline size_t count(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_STRING:
   case T_CHAR_ARRAY:
   case T_FILE:
+  case T_URL:
   case T_UUID:
     return utf8_num_codepoints(get_ptr(coll), get_size(coll));
 
@@ -2767,6 +2777,7 @@ static uint32_t hasheq(nanoclj_val_t v, void * d) {
       case T_STRING:
       case T_CHAR_ARRAY:
       case T_FILE:
+      case T_URL:
       case T_UUID:
 	{
 	  strview_t sv = _to_strview(c);
@@ -2911,6 +2922,7 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
     case T_STRING:
     case T_CHAR_ARRAY:
     case T_FILE:
+    case T_URL:
     case T_UUID:
       return strview_eq(_to_strview(a), _to_strview(b));
     case T_LONG:
@@ -3005,6 +3017,7 @@ static size_t find_index(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t ke
   case T_CHAR_ARRAY:
   case T_UUID:
   case T_FILE:
+  case T_URL:
     if (convert_to_long(key, &index)) {
       const char * start = get_ptr(coll), * p = start, * end = start + size;
       for (; index > 0 && p < end; index--) {
@@ -3365,6 +3378,7 @@ static inline int compare(nanoclj_t * sc, nanoclj_val_t a, nanoclj_val_t b) {
 	  case T_STRING:
 	  case T_CHAR_ARRAY:
 	  case T_FILE:
+	  case T_URL:
 	  case T_UUID:{
 	    strview_t sv1 = _to_strview(a2), sv2 = _to_strview(b2);
 	    const char * p1 = sv1.ptr, * p2 = sv2.ptr;
@@ -4197,6 +4211,7 @@ static inline nanoclj_cell_t * mk_reader(nanoclj_t * sc, uint16_t t, nanoclj_cel
       switch (_type(c)) {
       case T_STRING:
       case T_FILE:
+      case T_URL:
 	return decode_pointer(port_from_filename(sc, t, _to_strview(c)));
       case T_CHAR_ARRAY:
 	return decode_pointer(port_from_string(sc, t, _to_strview(c)));
@@ -4911,6 +4926,15 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
 	  };
 	}
 	break;
+      case T_URL:
+	sv = _to_strview(c);
+	if (print_flag) {
+	  sv = (strview_t){
+	    sc->strbuff,
+	    snprintf(sc->strbuff, STRBUFFSIZE, "#<URL %.*s>", (int)sv.size, sv.ptr)
+	  };
+	}
+	break;
       case T_IMAGE:
 	if (print_imageview(sc, _to_imageview(c), out)) {
 	  return;
@@ -5037,6 +5061,7 @@ static inline nanoclj_val_t mk_format(nanoclj_t * sc, strview_t fmt0, nanoclj_ce
     case T_STRING:
     case T_CHAR_ARRAY:
     case T_FILE:
+    case T_URL:
     case T_UUID:
     case T_SYMBOL:
     case T_KEYWORD:
@@ -5312,6 +5337,7 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
   case T_STRING:
   case T_CHAR_ARRAY:
   case T_FILE:
+  case T_URL:
   case T_UUID:
     {
       x = first(sc, args);
@@ -8920,6 +8946,7 @@ bool nanoclj_init(nanoclj_t * sc) {
   mk_class(sc, "java.util.zip.GZIPInputStream", T_GZIP_INPUT_STREAM, sc->Object);
   mk_class(sc, "java.util.zip.GZIPOutputStream", T_GZIP_OUTPUT_STREAM, sc->Object);
   mk_class(sc, "java.io.File", T_FILE, sc->Object);
+  mk_class(sc, "java.net.URL", T_URL, sc->Object);
   mk_class(sc, "java.util.Date", T_DATE, sc->Object);
   mk_class(sc, "java.util.UUID", T_UUID, sc->Object);
   mk_class(sc, "java.util.regex.Pattern", T_REGEX, sc->Object);

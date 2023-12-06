@@ -148,7 +148,7 @@ Windows support is in progress.
   - when-let, letfn, if-let, if-some
   - reduced, reduced?
   - with-local-vars, var-set, find-var, alter-var-root, declare, binding, with-bindings, ns-name
-  - as-url, resource
+  - resource
   - sequence, subseq, rsubseq
   - make-hierarchy, ancestors, supers, bases
   - bound?
