@@ -100,7 +100,7 @@ typedef struct nanoclj_cell_t nanoclj_cell_t;
     nanoclj_val_t (*mk_string) (nanoclj_t * sc, const char *str);
     nanoclj_val_t (*mk_codepoint) (int c);
     nanoclj_val_t (*mk_vector) (nanoclj_t * sc, size_t len);
-    nanoclj_val_t (*mk_foreign_func) (nanoclj_t * sc, foreign_func f, int min_arity, int max_arity);
+    nanoclj_val_t (*mk_foreign_func) (nanoclj_t * sc, foreign_func f, int min_arity, int max_arity, nanoclj_cell_t * meta);
     nanoclj_val_t (*mk_boolean) (bool b);
     
     bool (*is_string) (nanoclj_val_t p);

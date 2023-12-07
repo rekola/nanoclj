@@ -1427,13 +1427,13 @@ static inline nanoclj_cell_t * get_cell(nanoclj_t * sc, uint16_t type, uint16_t 
 }
 
 /* Creates a foreign function. For infinite arity, set max_arity to -1. */
-static inline nanoclj_val_t mk_foreign_func(nanoclj_t * sc, foreign_func f, int min_arity, int max_arity) {
-  nanoclj_cell_t * x = get_cell_x(sc, T_FOREIGN_FUNCTION, T_GC_ATOM, NULL, NULL, NULL);
+static inline nanoclj_val_t mk_foreign_func(nanoclj_t * sc, foreign_func f, int min_arity, int max_arity, nanoclj_cell_t * meta) {
+  nanoclj_cell_t * x = get_cell_x(sc, T_FOREIGN_FUNCTION, T_GC_ATOM, NULL, NULL, meta);
   if (x) {
     _ff_unchecked(x) = f;
     _min_arity_unchecked(x) = min_arity;
     _max_arity_unchecked(x) = max_arity;
-    _ff_metadata(x) = NULL;
+    _ff_metadata(x) = meta;
     
 #if RETAIN_ALLOCS
     retain(sc, x);
@@ -3726,8 +3726,7 @@ static inline nanoclj_val_t intern_foreign_func(nanoclj_t * sc, nanoclj_cell_t *
   set_vector_elem(md, 0, mk_mapentry(sc, sc->NS, ns_sym));
   set_vector_elem(md, 0, mk_mapentry(sc, sc->NAME, sym));
 
-  nanoclj_val_t fn = mk_foreign_func(sc, fptr, min_arity, max_arity);
-  set_metadata(decode_pointer(fn), md);
+  nanoclj_val_t fn = mk_foreign_func(sc, fptr, min_arity, max_arity, md);
   intern_with_meta(sc, envir, sym, fn, md);
   return fn;
 }
@@ -9153,7 +9152,7 @@ nanoclj_val_t nanoclj_call(nanoclj_t * sc, nanoclj_val_t func, nanoclj_val_t arg
 
 #if !NANOCLJ_STANDALONE
 void nanoclj_register_foreign_func(nanoclj_t * sc, nanoclj_registerable * sr) {
-  intern(sc, sc->global_env, def_symbol(sc, sr->name), mk_foreign_func(sc, sr->f, 0, -1));
+  intern(sc, sc->global_env, def_symbol(sc, sr->name), mk_foreign_func(sc, sr->f, 0, -1, NULL));
 }
 
 void nanoclj_register_foreign_func_list(nanoclj_t * sc,
@@ -9199,7 +9198,7 @@ int main(int argc, const char **argv) {
   nanoclj_set_error_port_file(&sc, stderr);
 #if USE_DL
   intern(&sc, sc.global_env, def_symbol(&sc, "load-extension"),
-	 mk_foreign_func(&sc, scm_load_ext, 0, -1));
+	 mk_foreign_func(&sc, scm_load_ext, 0, -1, NULL));
 #endif
 
   nanoclj_cell_t * args = NULL;
