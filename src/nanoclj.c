@@ -3509,26 +3509,26 @@ static inline void ok_to_freely_gc(nanoclj_t * sc) {
 /* ========== oblist implementation  ========== */
 
 static inline nanoclj_val_t oblist_add_item(nanoclj_t * sc, strview_t ns, strview_t name, nanoclj_val_t v) {
-  uint_fast32_t h = murmur3_hash_qualified_string(ns.ptr, ns.size, name.ptr, name.size);
-  uint_fast32_t location = h % sc->oblist->ne[0];
-  tensor_set(sc->oblist, location, mk_pointer(cons(sc, v, decode_pointer(tensor_get(sc->oblist, location)))));
+  sc->oblist = tensor_hash_mutate_set(sc->oblist, hasheq(v, sc), sc->oblist->ne[0], v, mk_nil(), false, sc, hasheq);
   return v;
 }
 
 static inline nanoclj_val_t oblist_find_item(nanoclj_t * sc, uint16_t type, strview_t ns, strview_t name) {
   uint_fast32_t h = murmur3_hash_qualified_string(ns.ptr, ns.size, name.ptr, name.size);
-  uint_fast32_t location = h % sc->oblist->ne[0];
-  nanoclj_val_t x = tensor_get(sc->oblist, location);
-  if (!is_nil(x)) {
-    for (; x.as_long != sc->EMPTY.as_long; x = cdr(x)) {
-      nanoclj_val_t y = car(x);
-      int ty = prim_type(y);
-      if (type == ty) {
+  size_t num_buckets = tensor_hash_get_bucket_count(sc->oblist);
+  size_t location = tensor_hash_get_bucket(h, num_buckets, false);
+  while ( 1 ) {
+    if (tensor_hash_is_unassigned(sc->oblist, location)) {
+      break;
+    } else {
+      nanoclj_val_t y = tensor_get(sc->oblist, location);
+      if (prim_type(y) == type) {
 	symbol_t * s = decode_symbol(y);
 	if (strview_eq(ns, s->ns) && strview_eq(name, s->name)) {
 	  return y;
 	}
       }
+      location = (location + 1) % num_buckets;
     }
   }
   return mk_nil();
@@ -8816,10 +8816,9 @@ bool nanoclj_init(nanoclj_t * sc) {
   _set_car(&(sc->_EMPTY), sc->EMPTY);
   _set_cdr(&(sc->_EMPTY), sc->EMPTY);
   _cons_metadata(&(sc->_EMPTY)) = NULL;
-  
-  sc->oblist = mk_tensor_1d(nanoclj_f64, 727);
-  tensor_mutate_fill_val(sc->oblist, mk_nil());
-  
+
+  sc->oblist = mk_tensor_hash(1, 727);
+
   assign_syntax(sc, "fn", OP_LAMBDA);
   assign_syntax(sc, "quote", OP_QUOTE);
   assign_syntax(sc, "var", OP_VAR);
@@ -9097,14 +9096,11 @@ void nanoclj_deinit_shared(nanoclj_t * sc, nanoclj_shared_context_t * ctx) {
 }
 
 void nanoclj_deinit_oblist(nanoclj_t * sc) {
-  for (int64_t i = 0; i < sc->oblist->ne[0]; i++) {
-    nanoclj_val_t x = tensor_get(sc->oblist, i);
-    if (!is_nil(x)) {
-      for (; x.as_long != sc->EMPTY.as_long; x = cdr(x)) {
-	nanoclj_val_t y = car(x);
-	symbol_t * s = decode_symbol(y);
-	free_symbol(s);
-      }
+  int64_t num_buckets = tensor_hash_get_bucket_count(sc->oblist);
+  int64_t * sparse_indices = sc->oblist->sparse_indices;
+  for (int64_t offset = 0; offset < num_buckets; offset++) {
+    if (sparse_indices[offset] != -1) {
+      free_symbol(decode_symbol(tensor_get(sc->oblist, offset)));
     }
   }
   tensor_free(sc->oblist);

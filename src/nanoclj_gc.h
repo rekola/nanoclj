@@ -194,13 +194,7 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_c
       mark_value(tensor_get(sc->types, i));
     }
   }
-  /* Mark oblist */
-  if (sc->oblist) {
-    for (int64_t i = 0; i < sc->oblist->ne[0]; i++) {
-      mark_value(tensor_get(sc->oblist, i));
-    }
-  }
-  
+
   mark_thread(sc);
   
   /* mark variables a, b, c */

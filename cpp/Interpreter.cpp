@@ -42,10 +42,6 @@ static void error_callback(const char * s, size_t len, void * data) {
   }
 }
 
-static nanoclj_val_t object_invoke_callback(nanoclj_t * sc, void * object, nanoclj_cell_t * args) {
-  return sc->vptr->first(sc, args);
-}
-
 Interpreter::Interpreter() {
   auto sc = nanoclj_init_new();
   if (!sc) {
@@ -57,7 +53,6 @@ Interpreter::Interpreter() {
     nanoclj_set_output_port_callback(sc, &out_print_callback, &out_color_callback, &out_restore_callback, &out_image_callback);
     nanoclj_set_error_port_callback(sc, &error_callback);
     nanoclj_set_external_data(sc, this);
-    nanoclj_set_object_invoke_callback(sc, &object_invoke_callback);
 
     char buf[1024];
     const char * path = getcwd(buf, 1024);

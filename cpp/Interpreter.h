@@ -64,7 +64,7 @@ namespace nanoclj {
     void define(std::string symbol, UserFn function) {
       sc_->vptr->intern(sc_, sc_->global_env,
 			sc_->vptr->mk_symbol(sc_, symbol.c_str()), 
-			sc_->vptr->mk_foreign_func(sc_, function, 0, -1)
+			sc_->vptr->mk_foreign_func(sc_, function, 0, -1, NULL)
 			);
     }
 

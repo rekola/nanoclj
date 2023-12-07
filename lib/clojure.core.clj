@@ -612,13 +612,13 @@
                          (cons (first remaining) (lazy-seq (f (next remaining) all)))
                          (cons (first all) (lazy-seq (f (next all) all)))))]
                (f nil coll))))
-                             
+
 (defn flatten
   "Breaks any nested structure in the coll and returns the content in a flat sequence."  
   [coll] (cond (empty? coll) '()
                (coll? (first coll)) (concat (flatten (first coll)) (flatten (rest coll)))
                :else (cons (first coll) (flatten (rest coll)))))
-                                                                               
+
 (defn partition
   "Partitions the collection into n sized blocks"
   [n coll] (if (empty? coll)

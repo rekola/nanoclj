@@ -841,6 +841,32 @@ static inline size_t tensor_hash_get_bucket(uint32_t hash, uint32_t num_buckets,
   else return hash % num_buckets;
 }
 
+static inline void _tensor_hash_mutate_set(nanoclj_tensor_t * tensor, uint32_t hash, int64_t val_index, nanoclj_val_t key, nanoclj_val_t val, bool is_ordered) {
+  int64_t num_buckets = tensor_hash_get_bucket_count(tensor);
+  int64_t * sparse_indices = tensor->sparse_indices;
+  int64_t offset = tensor_hash_get_bucket(hash, num_buckets, is_ordered);
+  while ( 1 ) {
+    if (sparse_indices[offset] == -1) {
+      sparse_indices[offset] = val_index;
+      if (tensor->n_dims == 2) {
+	tensor_set_2d(tensor, 0, offset, key);
+	tensor_set_2d(tensor, 1, offset, val);
+      } else {
+	tensor_set(tensor, offset, key);
+      }
+      break;
+    } else {
+      if (++offset == num_buckets) {
+	if (is_ordered) {
+	  /* TODO: handle failure */
+	  break;
+	} else offset = 0;
+      }
+    }
+  }
+  tensor->ne[tensor->n_dims - 1]++;
+}
+
 static inline nanoclj_tensor_t * tensor_hash_mutate_set(nanoclj_tensor_t * tensor, uint32_t hash, int64_t val_index, nanoclj_val_t key, nanoclj_val_t val, bool is_ordered, void * context, uint32_t (*hashfun)(nanoclj_val_t, void *)) {
   bool rebuild = false, overload = false;
   if (val_index * 10 / tensor_hash_get_bucket_count(tensor) >= 7) { /* load factor more than 70% */
@@ -867,30 +893,13 @@ static inline nanoclj_tensor_t * tensor_hash_mutate_set(nanoclj_tensor_t * tenso
 	  old_val = mk_nil();
 	}
 	uint32_t hash = hashfun(old_key, context);
-	tensor_hash_mutate_set(tensor, hash, tensor->ne[tensor->n_dims - 1], old_key, old_val, is_ordered, context, hashfun);
+	_tensor_hash_mutate_set(tensor, hash, tensor->ne[tensor->n_dims - 1], old_key, old_val, is_ordered);
       }
     }
+    if (!old_tensor->refcnt) tensor_free(old_tensor);
   }
 
-  int64_t num_buckets = tensor_hash_get_bucket_count(tensor);
-  int64_t * sparse_indices = tensor->sparse_indices;
-  int64_t offset = tensor_hash_get_bucket(hash, num_buckets, is_ordered);
-  while ( 1 ) {
-    if (sparse_indices[offset] == -1) {
-      sparse_indices[offset] = val_index;
-      if (tensor->n_dims == 2) {
-	tensor_set_2d(tensor, 0, offset, key);
-	tensor_set_2d(tensor, 1, offset, val);
-      } else {
-	tensor_set(tensor, offset, key);
-      }
-      break;
-    } else if (++offset == num_buckets) {
-      if (is_ordered) return NULL;
-      else offset = 0;
-    }
-  }
-  tensor->ne[tensor->n_dims - 1]++;
+  _tensor_hash_mutate_set(tensor, hash, val_index, key, val, is_ordered);
   return tensor;
 }
 
@@ -925,9 +934,6 @@ static inline int64_t tensor_hash_rest(const nanoclj_tensor_t * tensor, int64_t 
 static inline size_t tensor_hash_count(const nanoclj_tensor_t * tensor, int64_t offset, int64_t limit) {
   int64_t num_buckets = tensor_hash_get_bucket_count(tensor);
   int64_t * sparse_indices = tensor->sparse_indices;
-  while ( offset < num_buckets && sparse_indices[offset] == -1 ) {
-    offset++;
-  }
   size_t count = 0;
   for (; offset < num_buckets; offset++) {
     int64_t i = sparse_indices[offset];
