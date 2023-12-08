@@ -56,6 +56,10 @@ static inline int strview_cmp(strview_t a, strview_t b) {
   }
 }
 
+static inline int strview_ncmp(strview_t a, size_t n, const char * b) {
+  return a.size < n ? -1 : memcmp(a.ptr, b, n);
+}
+
 static inline int get_format_channels(nanoclj_internal_format_t f) {
   switch (f) {
   case nanoclj_r8: return 1;
@@ -117,6 +121,11 @@ static inline long long gcd_int64(long long a, long long b) {
     b = temp;
   }
   return a;
+}
+
+static inline bool is_valid_url(strview_t sv) {
+  return strview_ncmp(sv, 7, "http://") == 0 ||
+    strview_ncmp(sv, 8, "https://") == 0;
 }
 
 #endif

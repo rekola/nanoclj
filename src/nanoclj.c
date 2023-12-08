@@ -4128,8 +4128,7 @@ static inline nanoclj_val_t port_from_filename(nanoclj_t * sc, uint16_t type, st
   char * filename = alloc_c_str(sv);
   if (strcmp(filename, "-") == 0) {
     f = stdin;
-  } else if (strncmp(filename, "http://", 7) == 0 ||
-	     strncmp(filename, "https://", 8) == 0) {
+  } else if (is_valid_url(sv)) {
 #if NANOCLJ_HAS_HTTP
     int fd = http_open_thread(sc, sv);
     f = fdopen(fd, mode);
@@ -5319,6 +5318,12 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
   case T_UUID:
     {
       x = first(sc, args);
+      if (t == T_URL) {
+	strview_t sv = to_strview(x);
+	if (!is_valid_url(sv)) {
+	  return nanoclj_throw(sc, mk_exception(sc, sc->MalformedURLException, "Not a valid URL"));
+	}
+      }
       if (is_cell(x) && !is_nil(x)) {
 	nanoclj_cell_t * c = decode_pointer(x);
 	if (!_is_small(c) && is_string_type(_type(c))) {
@@ -8922,6 +8927,7 @@ bool nanoclj_init(nanoclj_t * sc) {
   sc->FileNotFoundException = mk_class(sc, "java.io.FileNotFoundException", gentypeid(sc), sc->IOException);
   sc->AccessDeniedException = mk_class(sc, "java.nio.file.AccessDeniedException", gentypeid(sc), sc->IOException);
   sc->CharacterCodingException = mk_class(sc, "java.nio.charset.CharacterCodingException", gentypeid(sc), sc->IOException);
+  sc->MalformedURLException = mk_class(sc, "java.net.MalformedURLException", gentypeid(sc), RuntimeException);
 
   /* Clojure types */
   nanoclj_cell_t * AReference = mk_class(sc, "clojure.lang.AReference", gentypeid(sc), sc->Object);
