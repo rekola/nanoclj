@@ -1774,7 +1774,7 @@ static inline nanoclj_val_t add_exception_source(nanoclj_t * sc, strview_t msg) 
       file = pr->stdio.filename;
     }
   }
-  return mk_string_fmt(sc, "%.*s (%s:%d)", (int)msg.size, msg.ptr, file, line);
+  return mk_string_fmt(sc, "%.*s (%s:%d)", msg.size, msg.ptr, file, line);
 }
 
 static inline nanoclj_cell_t * mk_runtime_exception(nanoclj_t * sc, nanoclj_val_t msg) {
@@ -1804,7 +1804,7 @@ static inline nanoclj_cell_t * mk_arity_exception(nanoclj_t * sc, int n_args, na
     msg0 = mk_string_fmt(sc, "Wrong number of args (%d)", n_args);
   } else {
     strview_t sv1 = to_strview(ns), sv2 = to_strview(fn);
-    msg0 = mk_string_fmt(sc, "Wrong number of args (%d) passed to %.*s/%.*s", n_args, (int)sv1.size, sv1.ptr, (int)sv2.size, sv2.ptr);
+    msg0 = mk_string_fmt(sc, "Wrong number of args (%d) passed to %.*s/%.*s", n_args, sv1.size, sv1.ptr, sv2.size, sv2.ptr);
   }
   nanoclj_val_t msg = add_exception_source(sc, to_strview(msg0));
   return get_cell(sc, T_ARITY_EXCEPTION, 0, msg, NULL, NULL);
@@ -3817,7 +3817,7 @@ static inline nanoclj_val_t gensym(nanoclj_t * sc, strview_t prefix) {
 
   nanoclj_val_t r = mk_nil();
   for (; ctx->gensym_cnt < LONG_MAX; ctx->gensym_cnt++) {
-    size_t len = snprintf(name, 256, "%.*s%ld", (int)prefix.size, prefix.ptr, ctx->gensym_cnt);
+    size_t len = snprintf(name, 256, "%.*s%ld", prefix.size, prefix.ptr, ctx->gensym_cnt);
 
     /* first check oblist */
     strview_t ns_sv = mk_strview(0);
@@ -4806,12 +4806,12 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
 	    const char * fmt = _type(c) == T_VAR ? "#'%.*s/%.*s" : "%.*s/%.*s";
 	    sv = (strview_t) {
 	      sc->strbuff,
-	      snprintf(sc->strbuff, STRBUFFSIZE, fmt, (int)ns.size, ns.ptr, (int)sv.size, sv.ptr)
+	      snprintf(sc->strbuff, STRBUFFSIZE, fmt, ns.size, ns.ptr, sv.size, sv.ptr)
 	    };
 	  } else if (_type(c) == T_VAR) {
 	    sv = (strview_t) {
 	      sc->strbuff,
-	      snprintf(sc->strbuff, STRBUFFSIZE, "#'%.*s", (int)sv.size, sv.ptr)
+	      snprintf(sc->strbuff, STRBUFFSIZE, "#'%.*s", sv.size, sv.ptr)
 	    };
 	  }
 	}
@@ -4846,7 +4846,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
 	if (print_flag) {
 	  sv = (strview_t){
 	    sc->strbuff,
-	    snprintf(sc->strbuff, STRBUFFSIZE, "#uuid \"%.*s\"", (int)sv.size, sv.ptr)
+	    snprintf(sc->strbuff, STRBUFFSIZE, "#uuid \"%.*s\"", sv.size, sv.ptr)
 	  };
 	}
 	break;
@@ -4889,7 +4889,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
 	if (print_flag) {
 	  sv = (strview_t){
 	    sc->strbuff,
-	    snprintf(sc->strbuff, STRBUFFSIZE, "#<Namespace %.*s>", (int)sv.size, sv.ptr)
+	    snprintf(sc->strbuff, STRBUFFSIZE, "#<Namespace %.*s>", sv.size, sv.ptr)
 	  };
 	}
       }
@@ -4899,7 +4899,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
 	if (print_flag) {
 	  sv = (strview_t){
 	    sc->strbuff,
-	    snprintf(sc->strbuff, STRBUFFSIZE, "#<File %.*s>", (int)sv.size, sv.ptr)
+	    snprintf(sc->strbuff, STRBUFFSIZE, "#<File %.*s>", sv.size, sv.ptr)
 	  };
 	}
 	break;
@@ -4908,7 +4908,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
 	if (print_flag) {
 	  sv = (strview_t){
 	    sc->strbuff,
-	    snprintf(sc->strbuff, STRBUFFSIZE, "#<URL %.*s>", (int)sv.size, sv.ptr)
+	    snprintf(sc->strbuff, STRBUFFSIZE, "#<URL %.*s>", sv.size, sv.ptr)
 	  };
 	}
 	break;
@@ -4945,7 +4945,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
 	sv = to_strview(name_v);
 	sv = (strview_t){
 	  sc->strbuff,
-	  snprintf(sc->strbuff, STRBUFFSIZE, "#object[%.*s]", (int)sv.size, sv.ptr)
+	  snprintf(sc->strbuff, STRBUFFSIZE, "#object[%.*s]", sv.size, sv.ptr)
 	};
       } else {
 	sv = (strview_t){ "#object", 7 };
@@ -4995,7 +4995,7 @@ static inline nanoclj_val_t mk_format(nanoclj_t * sc, strview_t fmt0, nanoclj_ce
   int n_args = 0, plan = 0, m = 1;
   long long arg0l = 0, arg1l = 0;
   double arg0d = 0.0, arg1d = 0.0;
-  strview_t arg0s, arg1s;
+  strview_t arg0s = (strview_t){ 0, 0 }, arg1s = (strview_t){ 0, 0 };
   char * p = sc->strbuff;
   
   for (; args; args = next(sc, args), n_args++, m *= 4) {
@@ -5055,19 +5055,19 @@ static inline nanoclj_val_t mk_format(nanoclj_t * sc, strview_t fmt0, nanoclj_ce
   switch (plan) {
   case 1: r = mk_string_fmt(sc, fmt, arg0l); break;
   case 2: r = mk_string_fmt(sc, fmt, arg0d); break;
-  case 3: r = mk_string_fmt(sc, fmt, (int)arg0s.size, arg0s.ptr); break;
+  case 3: r = mk_string_fmt(sc, fmt, arg0s.size, arg0s.ptr); break;
     
   case 5: r = mk_string_fmt(sc, fmt, arg0l, arg1l); break;
   case 6: r = mk_string_fmt(sc, fmt, arg0d, arg1l); break;
-  case 7: r = mk_string_fmt(sc, fmt, (int)arg0s.size, arg0s.ptr, arg1l); break;
+  case 7: r = mk_string_fmt(sc, fmt, arg0s.size, arg0s.ptr, arg1l); break;
     
   case 9: r = mk_string_fmt(sc, fmt, arg0l, arg1d); break;
   case 10: r = mk_string_fmt(sc, fmt, arg0d, arg1d); break;
-  case 11: r = mk_string_fmt(sc, fmt, (int)arg0s.size, arg0s.ptr, arg1d); break;
+  case 11: r = mk_string_fmt(sc, fmt, arg0s.size, arg0s.ptr, arg1d); break;
 
   case 13: r = mk_string_fmt(sc, fmt, arg0l, arg1s); break;
   case 14: r = mk_string_fmt(sc, fmt, arg0d, arg1s); break;
-  case 15: r = mk_string_fmt(sc, fmt, (int)arg0s.size, arg0s.ptr, (int)arg1s.size, arg1s.ptr); break;
+  case 15: r = mk_string_fmt(sc, fmt, arg0s.size, arg0s.ptr, arg1s.size, arg1s.ptr); break;
 
   default: r = mk_string(sc, fmt);
   }
@@ -5177,7 +5177,7 @@ static inline nanoclj_cell_t * resolve(nanoclj_t * sc, nanoclj_cell_t * env0, na
       all_namespaces = false;
     } else {
       symbol_t * s2 = decode_symbol(s->ns_sym);
-      nanoclj_val_t msg = mk_string_fmt(sc, "%.*s is not defined", (int)s2->name.size, s2->name.ptr);
+      nanoclj_val_t msg = mk_string_fmt(sc, "%.*s is not defined", s2->name.size, s2->name.ptr);
       nanoclj_throw(sc, mk_runtime_exception(sc, msg));
       return NULL;
     }
@@ -5815,7 +5815,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   
 #if 0
   strview_t op_sv = to_strview(mk_proc(sc->op));
-  fprintf(stderr, "opexe %d %.*s\n", (int)sc->op, (int)op_sv.size, op_sv.ptr);
+  fprintf(stderr, "opexe %d %.*s\n", (int)sc->op, op_sv.size, op_sv.ptr);
 #endif
 
   switch (op) {
@@ -5824,7 +5824,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       return false;
     } else if (!file_push(sc, arg0)) {
       strview_t sv = to_strview(arg0);
-      nanoclj_val_t msg = mk_string_fmt(sc, "Unable to open %.*s", (int)sv.size, sv.ptr);
+      nanoclj_val_t msg = mk_string_fmt(sc, "Unable to open %.*s", sv.size, sv.ptr);
       nanoclj_throw(sc, mk_runtime_exception(sc, msg));
       return false;
     } else {
@@ -5933,7 +5933,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 #endif
       } else {
 	symbol_t * s = decode_symbol(sc->code);
-	nanoclj_val_t msg = mk_string_fmt(sc, "Use of undeclared Var %.*s", (int)s->full_name.size, s->full_name.ptr);
+	nanoclj_val_t msg = mk_string_fmt(sc, "Use of undeclared Var %.*s", s->full_name.size, s->full_name.ptr);
 	nanoclj_throw(sc, mk_runtime_exception(sc, msg));
 	return false;
       }
@@ -6100,7 +6100,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  s_return(sc, first(sc, arg_next));
 	} else {
 	  strview_t sv = to_strview(arg0);
-	  nanoclj_val_t msg = mk_string_fmt(sc, "No item %.*s in collection", (int)sv.size, sv.ptr);
+	  nanoclj_val_t msg = mk_string_fmt(sc, "No item %.*s in collection", sv.size, sv.ptr);
 	  nanoclj_throw(sc, mk_runtime_exception(sc, msg));
 	  return false;
 	}
@@ -6242,7 +6242,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	s_return(sc, mk_pointer(var));
       } else {
 	symbol_t * s = decode_symbol(x);
-	nanoclj_val_t msg = mk_string_fmt(sc, "Use of undeclared Var %.*s", (int)s->full_name.size, s->full_name.ptr);
+	nanoclj_val_t msg = mk_string_fmt(sc, "Use of undeclared Var %.*s", s->full_name.size, s->full_name.ptr);
 	nanoclj_throw(sc, mk_runtime_exception(sc, msg));
 	return false;
       }
@@ -7396,7 +7396,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	}
       }
       strview_t sv = to_strview(arg1);
-      nanoclj_val_t msg = mk_string_fmt(sc, "%.*s is not a function", (int)sv.size, sv.ptr);
+      nanoclj_val_t msg = mk_string_fmt(sc, "%.*s is not a function", sv.size, sv.ptr);
       nanoclj_throw(sc, mk_runtime_exception(sc, msg));
       return false;
     }
@@ -7698,7 +7698,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	      }
 	    }
 	  
-	    nanoclj_val_t msg = mk_string_fmt(sc, "No reader function for tag %.*s", (int)tag_sv.size, tag_sv.ptr);
+	    nanoclj_val_t msg = mk_string_fmt(sc, "No reader function for tag %.*s", tag_sv.size, tag_sv.ptr);
 	    nanoclj_throw(sc, mk_runtime_exception(sc, msg));
 	    return false;
 	  }
@@ -9210,7 +9210,7 @@ int main(int argc, const char **argv) {
       sv0 = (strview_t){ "Unknown exception", 17 };
     }
     strview_t sv = to_strview(_car(sc.pending_exception));
-    fprintf(stderr, "%.*s: %.*s\n", (int)sv0.size, sv0.ptr, (int)sv.size, sv.ptr);
+    fprintf(stderr, "%.*s: %.*s\n", sv0.size, sv0.ptr, sv.size, sv.ptr);
     rv = 1;
   }
 

@@ -135,7 +135,6 @@ Windows support is in progress.
 - `*print-length*`, `*print-level*`, `*clojure-version*`, `*load-tests*`
 - Missing core functions and macros
   - doseq, for, dotimes
-  - bit-and-not
   - sort-by, sorted-set-by, sorted-set, sorted-map, sorted-map-by
   - update-in, merge-with
   - doto, ->, -->, some->, some->>
@@ -148,19 +147,19 @@ Windows support is in progress.
   - when-let, letfn, if-let, if-some
   - reduced, reduced?
   - with-local-vars, var-set, find-var, alter-var-root, declare, binding, with-bindings, ns-name
-  - resource
   - sequence, subseq, rsubseq
   - make-hierarchy, ancestors, supers, bases
   - bound?
   - random-uuid
   - re-groups, re-matcher, re-seq, re-matches
-  - hash-ordered-coll, hash-unordered-coll
   - assert-args
   - make-parents
   - with-open
   - vary-meta, alter-meta!, reset-meta!
   - int-array, long-array, float-array, double-array, byte-array, short-array, aset-int, aset-double, object-array
   - aget, aset, alength, amap, areduce, aclone, into-array, make-array, to-array-2d, to-array
+- clojure.java.io
+  - resource
 - clojure.math
 - clojure.core.async
   - thread, thread-call

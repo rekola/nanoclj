@@ -132,6 +132,9 @@
   "Creates a function that always returns x and accepts any number of arguments"
   [x] (fn [& args] x))
 
+(def hash-ordered-coll hash)
+(def hash-unordered-coll hash)
+
 ; Sequences
 
 (defn filter

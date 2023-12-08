@@ -320,6 +320,11 @@
   "Returns a bitwise not"
   [x] (- 0 (inc x)))
 
+(defn bit-and-not
+  "Returns bitwise and with complement"
+  ([x y] (-bit-and x (bit-not y)))
+  ([x y & more] (reduce #( -bit-and %1 (bit-not %2) ) (-bit-and x (bit-not y)) more)))
+
 (defn bit-test
   "Test a bit of x at index n"
   [x n] (if (equiv? (bit-and- x (bit-shift-left 1 n)) 0) false true))

@@ -91,7 +91,7 @@ typedef struct {
 
 typedef struct {
   const char * ptr;
-  size_t size;
+  int size;
 } strview_t;
 
 typedef struct {
