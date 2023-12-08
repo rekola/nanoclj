@@ -79,24 +79,22 @@ static nanoclj_val_t System_getenv(nanoclj_t * sc, nanoclj_cell_t * args) {
     return v ? mk_string(sc, v) : mk_nil();
   } else {
     extern char **environ;
+    nanoclj_cell_t * m = mk_hashmap(sc);
     
-    int l = 0;
-    for ( ; environ[l]; l++) { }
-    nanoclj_cell_t * map = mk_arraymap(sc, l);
-    fill_vector(map, mk_nil());
-
-    for (int i = 0; i < l; i++) {
-      char * p = environ[i];
-      int j = 0;
-      for (; p[j] != '=' && p[j] != 0; j++) {
-	
+    for (size_t i = 0; environ[i]; i++) {
+      char * p = environ[i], * eq = strchr(p, '=');
+      nanoclj_val_t key, val;
+      if (eq) {
+	key = mk_string_from_sv(sc, (strview_t){ p, eq - p });
+	val = mk_string(sc, eq + 1);
+      } else {
+	key = mk_string(sc, p);
+	val = mk_nil();
       }
-      nanoclj_val_t key = mk_string_from_sv(sc, (strview_t){ p, j });
-      nanoclj_val_t val = p[j] == '=' ? mk_string(sc, p + j + 1) : mk_nil();
-      set_vector_elem(map, i, mk_mapentry(sc, key, val));
+      m = assoc(sc, m, key, val);
     }
 
-    return mk_pointer(map);
+    return mk_pointer(m);
   }
 }
 
@@ -390,11 +388,11 @@ static inline nanoclj_val_t Image_load(nanoclj_t * sc, nanoclj_cell_t * args) {
     return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string_fmt(sc, "%s [%.*s]", stbi_failure_reason(), (int)src_sv.size, src_sv.ptr)));
   }
 
-  nanoclj_cell_t * meta = mk_arraymap(sc, 2);
-  set_vector_elem(meta, 0, mk_mapentry(sc, sc->WIDTH, mk_int(w)));
-  set_vector_elem(meta, 1, mk_mapentry(sc, sc->HEIGHT, mk_int(h)));
-  if (is_string(src) || is_file(src)) {
-    meta = conjoin(sc, meta, mk_mapentry(sc, sc->FILE_KW, src));
+  nanoclj_cell_t * meta = mk_hashmap(sc);
+  meta = assoc(sc, meta, sc->WIDTH, mk_int(w));
+  meta = assoc(sc, meta, sc->HEIGHT, mk_int(h));
+  if (is_string(src) || is_file(src) || is_url(src)) {
+    meta = assoc(sc, meta, sc->FILE_KW, src);
   }
   
   nanoclj_internal_format_t f;
@@ -770,15 +768,13 @@ static inline nanoclj_val_t Geo_load(nanoclj_t * sc, nanoclj_cell_t * args) {
 
     if (is_nil(type_id)) continue;
 
-    nanoclj_cell_t * geom = mk_arraymap(sc, 2);
-    fill_vector(geom, mk_nil());
+    nanoclj_cell_t * geom = mk_hashmap(sc);
     retain(sc, geom);
     
-    set_vector_elem(geom, 0, mk_mapentry(sc, type_key, type_id));
-    set_vector_elem(geom, 1, mk_mapentry(sc, coord_key, mk_pointer(coord)));    
+    geom = assoc(sc, geom, type_key, type_id);
+    geom = assoc(sc, geom, coord_key, mk_pointer(coord));
 
-    nanoclj_cell_t * prop = mk_arraymap(sc, 0);
-    fill_vector(prop, mk_nil());
+    nanoclj_cell_t * prop = mk_hashmap(sc);
     retain(sc, prop);
 
     for (size_t j = 0; j < field_count; j++) {
@@ -790,19 +786,19 @@ static inline nanoclj_val_t Geo_load(nanoclj_t * sc, nanoclj_cell_t * args) {
 
       switch (type) {
       case FTString:
-	prop = conjoin(sc, prop, mk_mapentry(sc, name_v, mk_string(sc, DBFReadStringAttribute(dbf, i, j))));
+	prop = assoc(sc, prop, name_v, mk_string(sc, DBFReadStringAttribute(dbf, i, j)));
 	if (strcmp(name, "NAME_EN") == 0) {
 	  fprintf(stderr, "id = %d: %s\n", o->nShapeId, DBFReadStringAttribute(dbf, i, j));
 	}
 	break;
       case FTInteger:
-	prop = conjoin(sc, prop, mk_mapentry(sc, name_v, mk_int(DBFReadIntegerAttribute(dbf, i, j))));
+	prop = assoc(sc, prop, name_v, mk_int(DBFReadIntegerAttribute(dbf, i, j)));
 	break;
       case FTDouble:
-	prop = conjoin(sc, prop, mk_mapentry(sc, name_v, mk_double(DBFReadDoubleAttribute(dbf, i, j))));
+	prop = assoc(sc, prop, name_v, mk_double(DBFReadDoubleAttribute(dbf, i, j)));
 	break;
       case FTLogical:
-	prop = conjoin(sc, prop, mk_mapentry(sc, name_v, mk_boolean(DBFReadLogicalAttribute(dbf, i, j))));
+	prop = assoc(sc, prop, name_v, mk_boolean(DBFReadLogicalAttribute(dbf, i, j)));
 	break;
       }
     }
@@ -815,15 +811,14 @@ static inline nanoclj_val_t Geo_load(nanoclj_t * sc, nanoclj_cell_t * args) {
     }
     retain_value(sc, bbox);
     
-    nanoclj_cell_t * feat = mk_arraymap(sc, 5);
-    fill_vector(feat, mk_nil());
+    nanoclj_cell_t * feat = mk_hashmap(sc);
     retain(sc, feat);
     
-    set_vector_elem(feat, 0, mk_mapentry(sc, type_key, mk_string(sc, "Feature")));
-    set_vector_elem(feat, 1, mk_mapentry(sc, geom_key, mk_pointer(geom)));
-    set_vector_elem(feat, 2, mk_mapentry(sc, prop_key, mk_pointer(prop)));
-    set_vector_elem(feat, 3, mk_mapentry(sc, bbox_key, bbox));
-    set_vector_elem(feat, 4, mk_mapentry(sc, id_key, mk_long(sc, o->nShapeId)));
+    feat = assoc(sc, feat, type_key, mk_string(sc, "Feature"));
+    feat = assoc(sc, feat, geom_key, mk_pointer(geom));
+    feat = assoc(sc, feat, prop_key, mk_pointer(prop));
+    feat = assoc(sc, feat, bbox_key, bbox);
+    feat = assoc(sc, feat, id_key, mk_long(sc, o->nShapeId));
 
     r = cons(sc, mk_pointer(feat), r);
 
@@ -914,7 +909,7 @@ static inline nanoclj_val_t Graph_load(nanoclj_t * sc, nanoclj_cell_t * args) {
 	id = mk_string(sc, (const char *)value);
 	xmlFree(value);
       }
-      nanoclj_cell_t * attributes = mk_arraymap(sc, 0);
+      nanoclj_cell_t * attributes = mk_hashmap(sc);
       xmlNode * child = node->children;
       for (; child; child = child->next) {
 	if (child->type != XML_ELEMENT_NODE || strcmp((const char *)child->name, "data") != 0) continue;
@@ -932,7 +927,7 @@ static inline nanoclj_val_t Graph_load(nanoclj_t * sc, nanoclj_cell_t * args) {
 	  value = mk_string(sc, (const char *)content->content);
 	}
 	if (!is_nil(key)) {
-	  attributes = conjoin(sc, attributes, mk_mapentry(sc, key, value));
+	  attributes = assoc(sc, attributes, key, value);
 	}
       }
       if (!is_nil(id)) {
@@ -963,27 +958,24 @@ static inline nanoclj_val_t create_xml_node(nanoclj_t * sc, xmlNode * input) {
     xmlAttr* attribute = input->properties;
     for (; attribute; attribute = attribute->next) {
       xmlChar * value = xmlNodeListGetString(input->doc, attribute->children, 1);
-      nanoclj_val_t e = mk_mapentry(sc, def_keyword(sc, (const char *)attribute->name), mk_string(sc, (const char *)value));
       if (!attrs) {
-	attrs = mk_arraymap(sc, 1);
-	set_vector_elem(attrs, 0, e);
-      } else {
-	attrs = conjoin(sc, attrs, e);
+	attrs = mk_hashmap(sc);
+	retain(sc, attrs);
       }
+      attrs = assoc(sc, attrs, def_keyword(sc, (const char *)attribute->name), mk_string(sc, (const char *)value));
       retain(sc, attrs);
       xmlFree(value);
     }
     
-    output = mk_arraymap(sc, 1 + (content ? 1 : 0) + (attrs ? 1 : 0));
+    output = mk_hashmap(sc);
     retain(sc, output);
 
-    int ni = 0;
-    set_vector_elem(output, ni++, mk_mapentry(sc, def_keyword(sc, "tag"), tag));
+    output = assoc(sc, output, def_keyword(sc, "tag"), tag);
     if (content) {
-      set_vector_elem(output, ni++, mk_mapentry(sc, def_keyword(sc, "content"), mk_pointer(content)));
+      output = assoc(sc, output, def_keyword(sc, "content"), mk_pointer(content));
     }
     if (attrs) {
-      set_vector_elem(output, ni++, mk_mapentry(sc, def_keyword(sc, "attrs"), mk_pointer(attrs)));
+      output = assoc(sc, output, def_keyword(sc, "attrs"), mk_pointer(attrs));
     }
   } else if (input->type == XML_TEXT_NODE) {
     const char * text = (const char *)input->content;
