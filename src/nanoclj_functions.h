@@ -155,9 +155,9 @@ static nanoclj_val_t System_getSystemTimes(nanoclj_t * sc, nanoclj_cell_t * args
   GetSystemTimes(&idleTime, &kernelTime, &userTime);
   long long idle = filetime_to_msec(idleTime);
   r = mk_vector(sc, 3);
-  set_vector_elem(r, 0, mk_long(sc, idle));
-  set_vector_elem(r, 1, mk_long(sc, filetime_to_msec(kernelTime) - idle));
-  set_vector_elem(r, 2, mk_long(sc, filetime_to_msec(userTime)));
+  set_indexed_value(r, 0, mk_long(sc, idle));
+  set_indexed_value(r, 1, mk_long(sc, filetime_to_msec(kernelTime) - idle));
+  set_indexed_value(r, 2, mk_long(sc, filetime_to_msec(userTime)));
 #else
   strview_t sv = to_strview(slurp(sc, T_READER, cons(sc, mk_string(sc, "/proc/stat"), NULL)));
   if (sc->pending_exception) return mk_nil();
@@ -169,9 +169,9 @@ static nanoclj_val_t System_getSystemTimes(nanoclj_t * sc, nanoclj_cell_t * args
     long long user, nice, system, idle;
     if (sscanf(p, "cpu  %lld %lld %lld %lld", &user, &nice, &system, &idle) == 4) {
       r = mk_vector(sc, 3);
-      set_vector_elem(r, 0, mk_long(sc, idle));
-      set_vector_elem(r, 1, mk_long(sc, system));
-      set_vector_elem(r, 2, mk_long(sc, user));
+      set_indexed_value(r, 0, mk_long(sc, idle));
+      set_indexed_value(r, 1, mk_long(sc, system));
+      set_indexed_value(r, 2, mk_long(sc, user));
     }
   }
   free(b);
@@ -710,9 +710,9 @@ static inline nanoclj_val_t Geo_load(nanoclj_t * sc, nanoclj_cell_t * args) {
 	for (int j = 0; j < o->nVertices; j++) {
 	  double x = o->padfX[j], y = o->padfY[j], z = o->padfZ[j];
 	  if (has_z) {
-	    set_vector_elem(coord, j, mk_vector_3d(sc, x, y, z));
+	    set_indexed_value(coord, j, mk_vector_3d(sc, x, y, z));
 	  } else {
-	    set_vector_elem(coord, j, mk_vector_2d(sc, x, y));
+	    set_indexed_value(coord, j, mk_vector_2d(sc, x, y));
 	  }
 	}	
       } else {
@@ -729,12 +729,12 @@ static inline nanoclj_val_t Geo_load(nanoclj_t * sc, nanoclj_cell_t * args) {
 	  for (int k = 0; k < end - start; k++) {
 	    double x = o->padfX[start + k], y = o->padfY[start + k], z = o->padfZ[start + k];
 	    if (has_z) {
-	      set_vector_elem(part, k, mk_vector_3d(sc, x, y, z));
+	      set_indexed_value(part, k, mk_vector_3d(sc, x, y, z));
 	    } else {
-	      set_vector_elem(part, k, mk_vector_2d(sc, x, y));
+	      set_indexed_value(part, k, mk_vector_2d(sc, x, y));
 	    }
 	  }
-	  set_vector_elem(coord, j, mk_pointer(part));
+	  set_indexed_value(coord, j, mk_pointer(part));
 	}
       }
       break;
@@ -756,12 +756,12 @@ static inline nanoclj_val_t Geo_load(nanoclj_t * sc, nanoclj_cell_t * args) {
 	for (int k = 0; k < end - start; k++) {
 	  double x = o->padfX[start + k], y = o->padfY[start + k], z = o->padfZ[start + k];
 	  if (has_z) {
-	    set_vector_elem(part, k, mk_vector_3d(sc, x, y, z));
+	    set_indexed_value(part, k, mk_vector_3d(sc, x, y, z));
 	  } else {
-	    set_vector_elem(part, k, mk_vector_2d(sc, x, y));
+	    set_indexed_value(part, k, mk_vector_2d(sc, x, y));
 	  }
 	}
-	set_vector_elem(coord, j, mk_pointer(part));
+	set_indexed_value(coord, j, mk_pointer(part));
       }
       break;
     }

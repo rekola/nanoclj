@@ -820,12 +820,12 @@ static inline size_t tensor_bigint_to_string(const nanoclj_tensor_t * tensor0, c
 
 /* Hashes */
 
-static inline nanoclj_tensor_t * mk_tensor_hash(int64_t dims, size_t initial_size) {
+static inline nanoclj_tensor_t * mk_tensor_hash(int64_t dims, size_t payload_size, size_t initial_size) {
   nanoclj_tensor_t * t;
   if (dims == 1) {
     t = mk_tensor_1d_padded(nanoclj_f64, 0, initial_size);
   } else {
-    t = mk_tensor_2d_padded(nanoclj_f64, 2, 0, initial_size);
+    t = mk_tensor_2d_padded(nanoclj_f64, payload_size, 0, initial_size);
   }
   t->sparse_indices = malloc(initial_size * sizeof(int64_t));
   for (int64_t i = 0; i < initial_size; i++) t->sparse_indices[i] = -1;
@@ -878,7 +878,7 @@ static inline nanoclj_tensor_t * tensor_hash_mutate_set(nanoclj_tensor_t * tenso
     nanoclj_tensor_t * old_tensor = tensor;
     int64_t old_num_buckets = tensor_hash_get_bucket_count(old_tensor);
     int64_t num_buckets = (overload ? 2 : 1) * old_num_buckets;
-    tensor = mk_tensor_hash(old_tensor->n_dims, num_buckets);
+    tensor = mk_tensor_hash(old_tensor->n_dims, old_tensor->ne[0], num_buckets);
     if (!tensor) return NULL;
     int64_t * old_sparse_indices = old_tensor->sparse_indices;
     for (int64_t offset = 0; offset < old_num_buckets; offset++) {
