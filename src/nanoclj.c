@@ -539,7 +539,7 @@ static inline nanoclj_val_t get_indexed_value(const nanoclj_cell_t * coll, int64
     if (_is_small(coll)) {
       return _smalldata_unchecked(coll)[1];
     } else {
-      return tensor_get_2d(coll->_collection.tensor, 1, ielem);
+      return tensor_get_2d(coll->_collection.tensor, 1, _offset_unchecked(coll) + ielem);
     }
     break;
   case T_STRING:
@@ -567,7 +567,7 @@ static inline nanoclj_val_t get_indexed_key(const nanoclj_cell_t * coll, int64_t
     if (_is_small(coll)) {
       return _smalldata_unchecked(coll)[0];
     } else {
-      return tensor_get_2d(coll->_collection.tensor, 0, ielem);
+      return tensor_get_2d(coll->_collection.tensor, 0, _offset_unchecked(coll) + ielem);
     }
     break;
   default:
@@ -576,10 +576,10 @@ static inline nanoclj_val_t get_indexed_key(const nanoclj_cell_t * coll, int64_t
 }
 
 static inline nanoclj_val_t get_indexed_meta(const nanoclj_cell_t * coll, int64_t ielem) {
-  if (_type(coll) == T_VARMAP) {
+  switch (_type(coll)) {
+  case T_VARMAP:
     return _is_small(coll) ?
-      _smalldata_unchecked(coll)[2] :
-      tensor_get_2d(coll->_collection.tensor, 2, ielem);
+      _smalldata_unchecked(coll)[2] : tensor_get_2d(coll->_collection.tensor, 2, _offset_unchecked(coll) + ielem);
   }
   return mk_nil();
 }
@@ -591,7 +591,7 @@ static inline void set_indexed_value(nanoclj_cell_t * coll, size_t ielem, nanocl
   case T_ARRAYMAP:
   case T_VARMAP:
     if (_is_small(coll)) {
-      _smalldata_unchecked(coll)[ielem * _sodim0_unchecked(coll) + 1] = a;
+      _smalldata_unchecked(coll)[1] = a;
     } else {
       tensor_set_2d(_tensor_unchecked(coll), 1, _offset_unchecked(coll) + ielem, a);
     }
@@ -606,12 +606,14 @@ static inline void set_indexed_value(nanoclj_cell_t * coll, size_t ielem, nanocl
 }
 
 static inline void set_indexed_meta(nanoclj_cell_t * coll, size_t ielem, nanoclj_val_t a) {
-  if (_type(coll) == T_VARMAP) {
+  switch (_type(coll)) {
+  case T_VARMAP:
     if (_is_small(coll)) {
-      _smalldata_unchecked(coll)[ielem * _sodim0_unchecked(coll) + 2] = a;
+      _smalldata_unchecked(coll)[2] = a;
     } else {
       tensor_set_2d(_tensor_unchecked(coll), 2, _offset_unchecked(coll) + ielem, a);
     }
+    break;
   }
 }
 
@@ -673,6 +675,8 @@ static inline nanoclj_cell_t * get_metadata(nanoclj_cell_t * c) {
   case T_VAR:
     if (_is_small(c)) {
       return decode_pointer(c->_small_tensor.vals[2]);
+    } else {
+      return decode_pointer(tensor_get_2d(c->_collection.tensor, 2, _offset_unchecked(c)));
     }
   case T_LIST:
   case T_CLOSURE:
@@ -693,6 +697,8 @@ static inline void set_metadata(nanoclj_cell_t * c, nanoclj_cell_t * meta) {
   case T_VAR:
     if (_is_small(c)) {
       c->_small_tensor.vals[2] = mk_pointer(meta);
+    } else {
+      tensor_set_2d(c->_collection.tensor, 2, _offset_unchecked(c), mk_pointer(meta));
     }
     break;
   case T_LIST:
@@ -3590,7 +3596,7 @@ static inline nanoclj_cell_t * new_slot_spec_in_env(nanoclj_t * sc, nanoclj_cell
   nanoclj_val_t slot = mk_pointer(slot0);
   
   nanoclj_cell_t * x = decode_pointer(_car(env));
-  if (_type(x) == T_HASHMAP) {
+  if (is_map_type(_type(x))) {
     _set_car(env, mk_pointer(assoc(sc, x, variable, slot)));
   } else {
     _set_car(env, mk_pointer(cons(sc, slot, x)));
@@ -3601,7 +3607,7 @@ static inline nanoclj_cell_t * new_slot_spec_in_env(nanoclj_t * sc, nanoclj_cell
 static inline nanoclj_cell_t * find_slot_in_env(nanoclj_t * sc, nanoclj_cell_t * env, nanoclj_val_t hdl, bool all) {
   for (nanoclj_cell_t * x = env; x != &(sc->_EMPTY); x = decode_pointer(_cdr(x))) {
     nanoclj_cell_t * y = decode_pointer(_car(x));
-    if (_type(y) == T_HASHMAP) {
+    if (is_map_type(_type(y))) {
       size_t idx = find_hash_index(sc, y, hdl, false);
       if (idx != NPOS) return decode_pointer(get_indexed_value(y, idx));
     } else {
@@ -7058,7 +7064,12 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       if (coll && is_map_type(_type(coll))) {
 	size_t idx = find_index(sc, coll, arg1);
 	if (idx != NPOS) {
-	  s_return(sc, mk_mapentry(sc, get_indexed_key(coll, idx), get_indexed_value(coll, idx)));
+	  nanoclj_val_t key = get_indexed_key(coll, idx), val = get_indexed_value(coll, idx);
+	  if (_type(coll) == T_VARMAP) {
+	    s_return(sc, mk_var(sc, key, val, get_indexed_meta(coll, idx)));
+	  } else {
+	    s_return(sc, mk_mapentry(sc, key, val));
+	  }
 	}
       }
     }
@@ -9100,7 +9111,7 @@ nanoclj_val_t nanoclj_call(nanoclj_t * sc, nanoclj_val_t func, nanoclj_val_t arg
   sc->envir = sc->global_env;
   sc->args = seq(sc, decode_pointer(args));
   sc->code = func;
-  Eval_Cycle(sc, OP_APPLY);  
+  Eval_Cycle(sc, OP_APPLY);
   return sc->value;
 }
 
