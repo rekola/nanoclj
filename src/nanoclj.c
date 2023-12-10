@@ -153,7 +153,7 @@ enum nanoclj_types {
   T_ARRAYMAP = 29,
   T_HASHMAP = 30,
   T_SORTED_HASHMAP = 31,
-  T_META_HASHMAP = 32,
+  T_VARMAP = 32,
   T_HASHSET = 33,
   T_SORTED_HASHSET = 34,
   T_VAR = 35,
@@ -450,7 +450,7 @@ static inline bool is_seqable_type(uint_fast16_t t) {
   case T_ARRAYMAP:
   case T_HASHMAP:
   case T_SORTED_HASHMAP:
-  case T_META_HASHMAP:
+  case T_VARMAP:
   case T_HASHSET:
   case T_SORTED_HASHSET:
   case T_CLASS:
@@ -478,7 +478,7 @@ static inline bool is_coll_type(uint_fast16_t t) {
   case T_ARRAYMAP:
   case T_HASHMAP:
   case T_SORTED_HASHMAP:
-  case T_META_HASHMAP:
+  case T_VARMAP:
   case T_HASHSET:
   case T_SORTED_HASHSET:
   case T_LAZYSEQ:
@@ -497,12 +497,12 @@ static inline bool is_vector_type(uint_fast16_t t) {
 }
 
 static inline bool is_vector_type_when_small(uint_fast16_t t) {
-  return t == T_HASHMAP || t == T_SORTED_HASHMAP || t == T_META_HASHMAP || t == T_ARRAYMAP ||
+  return t == T_HASHMAP || t == T_SORTED_HASHMAP || t == T_VARMAP || t == T_ARRAYMAP ||
     t == T_HASHSET || t == T_SORTED_HASHSET;
 }
 
 static inline bool is_map_type(uint_fast16_t t) {
-  return t == T_HASHMAP || t == T_SORTED_HASHMAP || t == T_META_HASHMAP || t == T_ARRAYMAP;
+  return t == T_HASHMAP || t == T_SORTED_HASHMAP || t == T_VARMAP || t == T_ARRAYMAP;
 }
 
 static inline bool is_set_type(uint_fast16_t t) {
@@ -535,7 +535,7 @@ static inline nanoclj_val_t get_indexed_value(const nanoclj_cell_t * coll, int64
   case T_HASHMAP:
   case T_SORTED_HASHMAP:
   case T_ARRAYMAP:
-  case T_META_HASHMAP:
+  case T_VARMAP:
     if (_is_small(coll)) {
       return _smalldata_unchecked(coll)[1];
     } else {
@@ -563,7 +563,7 @@ static inline nanoclj_val_t get_indexed_key(const nanoclj_cell_t * coll, int64_t
   case T_HASHMAP:
   case T_SORTED_HASHMAP:
   case T_ARRAYMAP:
-  case T_META_HASHMAP:
+  case T_VARMAP:
     if (_is_small(coll)) {
       return _smalldata_unchecked(coll)[0];
     } else {
@@ -576,7 +576,7 @@ static inline nanoclj_val_t get_indexed_key(const nanoclj_cell_t * coll, int64_t
 }
 
 static inline nanoclj_val_t get_indexed_meta(const nanoclj_cell_t * coll, int64_t ielem) {
-  if (_type(coll) == T_META_HASHMAP) {
+  if (_type(coll) == T_VARMAP) {
     return _is_small(coll) ?
       _smalldata_unchecked(coll)[2] :
       tensor_get_2d(coll->_collection.tensor, 2, ielem);
@@ -589,7 +589,7 @@ static inline void set_indexed_value(nanoclj_cell_t * coll, size_t ielem, nanocl
   case T_HASHMAP:
   case T_SORTED_HASHMAP:
   case T_ARRAYMAP:
-  case T_META_HASHMAP:
+  case T_VARMAP:
     if (_is_small(coll)) {
       _smalldata_unchecked(coll)[ielem * _sodim0_unchecked(coll) + 1] = a;
     } else {
@@ -606,7 +606,7 @@ static inline void set_indexed_value(nanoclj_cell_t * coll, size_t ielem, nanocl
 }
 
 static inline void set_indexed_meta(nanoclj_cell_t * coll, size_t ielem, nanoclj_val_t a) {
-  if (_type(coll) == T_META_HASHMAP) {
+  if (_type(coll) == T_VARMAP) {
     if (_is_small(coll)) {
       _smalldata_unchecked(coll)[ielem * _sodim0_unchecked(coll) + 2] = a;
     } else {
@@ -641,7 +641,7 @@ static inline nanoclj_tensor_t * get_tensor(nanoclj_cell_t * c) {
   case T_ARRAYMAP:
   case T_HASHMAP:
   case T_SORTED_HASHMAP:
-  case T_META_HASHMAP:
+  case T_VARMAP:
   case T_HASHSET:
   case T_SORTED_HASHSET:
   case T_VAR:
@@ -1696,7 +1696,7 @@ static inline void initialize_collection(nanoclj_cell_t * c, size_t offset, size
     _offset_unchecked(c) = offset;
   } else if (_type(c) == T_HASHMAP || _type(c) == T_SORTED_HASHMAP) {
     c->flags = T_GC_ATOM | T_SMALL | (size << 5) | 2;
-  } else if (_type(c) == T_META_HASHMAP) {
+  } else if (_type(c) == T_VARMAP) {
     c->flags = T_GC_ATOM | T_SMALL | (size << 5) | 3;
   } else {
     c->flags = T_GC_ATOM | T_SMALL | (1 << 5) | size;
@@ -1965,7 +1965,7 @@ static inline nanoclj_cell_t * get_vector_object(nanoclj_t * sc, int_fast16_t t,
       store = mk_tensor_hash(1, 0, size * 2);
     } else if (t == T_HASHMAP || t == T_SORTED_HASHMAP) {
       store = mk_tensor_hash(2, 2, size * 2);
-    } else if (t == T_META_HASHMAP) {
+    } else if (t == T_VARMAP) {
       store = mk_tensor_hash(2, 3, size * 2);
     } else {
       store = mk_tensor_1d(nanoclj_f64, size);
@@ -2023,6 +2023,16 @@ static inline nanoclj_val_t mk_mapentry(nanoclj_t * sc, nanoclj_val_t key, nanoc
   if (vec) {
     set_indexed_value(vec, 0, key);
     set_indexed_value(vec, 1, val);
+  }
+  return mk_pointer(vec);
+}
+
+static inline nanoclj_val_t mk_var(nanoclj_t * sc, nanoclj_val_t key, nanoclj_val_t val, nanoclj_val_t meta) {
+  nanoclj_cell_t * vec = get_vector_object(sc, T_VAR, 3);
+  if (vec) {
+    set_indexed_value(vec, 0, key);
+    set_indexed_value(vec, 1, val);
+    set_indexed_value(vec, 2, meta);
   }
   return mk_pointer(vec);
 }
@@ -2288,7 +2298,7 @@ static inline nanoclj_cell_t * seq(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_ARRAYMAP:
   case T_HASHMAP:
   case T_SORTED_HASHMAP:
-  case T_META_HASHMAP:
+  case T_VARMAP:
   case T_HASHSET:
   case T_SORTED_HASHSET:
   case T_QUEUE:
@@ -2346,7 +2356,7 @@ static inline bool is_empty(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_ARRAYMAP:
   case T_HASHMAP:
   case T_SORTED_HASHMAP:
-  case T_META_HASHMAP:
+  case T_VARMAP:
   case T_HASHSET:
   case T_SORTED_HASHSET:
   case T_MAPENTRY:
@@ -2427,7 +2437,7 @@ static inline nanoclj_cell_t * rest(nanoclj_t * sc, nanoclj_cell_t * coll) {
 
     case T_HASHMAP:
     case T_SORTED_HASHMAP:
-    case T_META_HASHMAP:
+    case T_VARMAP:
     case T_HASHSET:
     case T_SORTED_HASHSET:
       if (!_is_small(coll)) {
@@ -2488,8 +2498,9 @@ static inline nanoclj_val_t first(nanoclj_t * sc, nanoclj_cell_t * coll) {
     coll = deref(sc, coll);
     if (!coll) return mk_nil();
   }
-  
-  switch (_type(coll)) {
+
+  uint_fast16_t t = _type(coll);
+  switch (t) {
   case T_NIL:
     break;
   case T_CLOSURE:
@@ -2514,16 +2525,18 @@ static inline nanoclj_val_t first(nanoclj_t * sc, nanoclj_cell_t * coll) {
     break;
   case T_HASHMAP:
   case T_SORTED_HASHMAP:
-  case T_META_HASHMAP:
+  case T_VARMAP:
     if (get_size(coll) > 0) {
-      if (_is_small(coll)) {
-	return mk_mapentry(sc, coll->_small_tensor.vals[0], coll->_small_tensor.vals[1]);
-      } else {
+      if (!_is_small(coll)) {
 	nanoclj_tensor_t * tensor = coll->_collection.tensor;
 	uint64_t i = tensor_hash_first_offset(tensor, coll->_collection.offset, get_size(coll));
 	if (tensor_is_valid_offset(tensor, i)) {
-	  return mk_mapentry(sc, tensor_get_2d(tensor, 0, i), tensor_get_2d(tensor, 1, i));
+	  return mk_pointer(get_collection_object(sc, t == T_VARMAP ? T_VAR : T_MAPENTRY, i * tensor->ne[0], tensor->ne[0], tensor));
 	}
+      } else if (t == T_VARMAP) {
+	return mk_var(sc, coll->_small_tensor.vals[0], coll->_small_tensor.vals[1], coll->_small_tensor.vals[2]);
+      } else {
+      	return mk_mapentry(sc, coll->_small_tensor.vals[0], coll->_small_tensor.vals[1]);
       }
     }
     break;
@@ -2614,7 +2627,7 @@ static inline size_t count(nanoclj_t * sc, nanoclj_cell_t * coll) {
 
   case T_HASHMAP:
   case T_SORTED_HASHMAP:
-  case T_META_HASHMAP:
+  case T_VARMAP:
   case T_HASHSET:
   case T_SORTED_HASHSET:
     if (_is_small(coll)) {
@@ -2793,7 +2806,7 @@ static uint32_t hasheq(nanoclj_val_t v, void * d) {
 
       case T_HASHMAP:
       case T_SORTED_HASHMAP:
-      case T_META_HASHMAP:
+      case T_VARMAP:
       case T_ARRAYMAP:
 	{
 	  size_t n = get_size(c);
@@ -3055,7 +3068,7 @@ static size_t find_index(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t ke
 
   case T_SORTED_HASHSET:
   case T_SORTED_HASHMAP:
-  case T_META_HASHMAP:
+  case T_VARMAP:
     return find_hash_index(sc, coll, key, true);
   case T_HASHSET:
   case T_HASHMAP:
@@ -3479,7 +3492,7 @@ static inline nanoclj_cell_t * assoc(nanoclj_t * sc, nanoclj_cell_t * coll, nano
   if (j != NPOS) {
     coll = copy_collection(sc, coll);
     set_indexed_value(coll, j, value);
-  } else if (t == T_HASHMAP || t == T_SORTED_HASHMAP || t == T_META_HASHMAP) {
+  } else if (is_map_type(t)) {
     nanoclj_tensor_t * tensor = NULL;
     bool is_ordered = t == T_SORTED_HASHMAP;
     if (_is_small(coll)) {
@@ -3502,11 +3515,9 @@ static inline nanoclj_cell_t * assoc(nanoclj_t * sc, nanoclj_cell_t * coll, nano
       nanoclj_tensor_t * tensor = tensor_hash_mutate_set(coll->_collection.tensor, h, old_size, key, value, is_ordered, sc, is_ordered ? hashcmp : hasheq);
       coll = get_collection_object(sc, t, _offset_unchecked(coll), old_size + 1, tensor);
     }
-  } else if (t == T_VECTOR) {
+  } else {
     nanoclj_throw(sc, mk_index_exception(sc, "Index out of bounds"));
     return NULL;
-  } else {
-    coll = vector_conjoin(sc, coll, mk_mapentry(sc, key, value));
   }
   return coll;
 }
@@ -5324,7 +5335,7 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
   case T_ARRAYMAP:
   case T_HASHMAP:
   case T_SORTED_HASHMAP:
-  case T_META_HASHMAP:
+  case T_VARMAP:
   case T_HASHSET:
   case T_SORTED_HASHSET:
   case T_QUEUE:
@@ -8945,7 +8956,7 @@ bool nanoclj_init(nanoclj_t * sc) {
   sc->Graph = mk_class(sc, "nanoclj.core.Graph", T_GRAPH, sc->Object);
   mk_class(sc, "nanoclj.core.GraphNode", T_GRAPH_NODE, sc->Object);
   mk_class(sc, "nanoclj.core.GraphEdge", T_GRAPH_EDGE, sc->Object);
-  mk_class(sc, "nanoclj.core.PersistentHashMapWithMeta", T_META_HASHMAP, sc->Object);
+  mk_class(sc, "nanoclj.core.VarMap", T_VARMAP, sc->Object);
 
   sc->OutOfMemoryError = mk_exception(sc, OutOfMemoryError, "Out of memory");
   sc->NullPointerException = mk_exception(sc, NullPointerException, "Null pointer exception");
