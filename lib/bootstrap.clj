@@ -430,7 +430,7 @@
                                (first (rest seq))))
                        (rest (rest seq))
                        )))]
-      (f {} keyvals))))
+      (f (clojure.lang.PersistentArrayMap) keyvals))))
 
 (def hash-map
   "Creates an array-map from the arguments"
