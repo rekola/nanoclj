@@ -323,6 +323,13 @@
   "Calculates the counts of unique elements in coll and returns them in a map"
   [coll] (reduce (fn [counts x] (assoc counts x (inc (get counts x 0)))) {} coll))
 
+(defn group-by
+  "Groups elements in coll based on the function f"
+  [f coll] (loop [coll coll m {}]
+             (if (empty? coll)
+               m
+               (recur (rest coll) (update m (f (first coll)) (fn [v] (conj (or v []) (first coll))))))))
+
 ; Printing and Reading
 
 (defn slurp

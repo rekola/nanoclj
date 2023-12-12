@@ -149,7 +149,6 @@ Windows support is in progress.
   - partition-by
   - juxt
   - memoize
-  - group-by
   - condp
   - when-let, letfn, if-let, if-some
   - reduced, reduced?
