@@ -286,7 +286,13 @@
 
 (defn get-in
   "Get a value in a nested data structure"
-  ([m ks] (reduce get m ks)))
+  ([m ks] (reduce get m ks))
+  ([m ks not-found] (loop [ ks ks m m ]
+                      (if (empty? ks)
+                        m
+                        (if (contains? m (first ks))
+                          (recur (rest ks) (m (first ks)))
+                          not-found)))))
 
 (def dissoc
   "Returns new map that does not contain the specified key. Very inefficient."
