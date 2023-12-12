@@ -112,6 +112,13 @@ cmake ..
 make
 ```
 
+### Arch Linux PKGBUILD
+
+```
+curl https://raw.githubusercontent.com/rekola/nanoclj/main/PKGBUILD -O
+makepkg -si
+```
+
 ### Windows
 
 Windows support is in progress.
