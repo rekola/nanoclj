@@ -4252,6 +4252,15 @@ static inline nanoclj_val_t port_from_filename(nanoclj_t * sc, uint16_t type, st
     f = popen(filename + 1, mode);
   } else {
     f = fopen(filename, mode);
+    if (!f && filename[0] != '/') {
+      char tmp[256];
+      sprintf(tmp, "/usr/share/nanoclj/%s", filename);
+      f = fopen(tmp, mode);
+      if (!f) {
+	sprintf(tmp, "/usr/local/share/nanoclj/%s", filename);
+	f = fopen(tmp, mode);
+      }
+    }
   }
   if (!f) {
     char * msg = strerror(errno);
