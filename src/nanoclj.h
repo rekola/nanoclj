@@ -92,7 +92,7 @@ typedef struct nanoclj_cell_t nanoclj_cell_t;
 
 #if USE_INTERFACE
   struct nanoclj_interface {
-    nanoclj_val_t (*intern) (nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t symbol, nanoclj_val_t value);
+    void (*intern) (nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t symbol, nanoclj_val_t value);
     nanoclj_val_t (*cons) (nanoclj_t * sc, nanoclj_val_t head, nanoclj_val_t tail);
     nanoclj_val_t (*mk_integer) (nanoclj_t * sc, long long num);
     nanoclj_val_t (*mk_double) (double num);

@@ -265,6 +265,19 @@ static inline nanoclj_tensor_t * tensor_push(nanoclj_tensor_t * tensor, size_t h
   return tensor;
 }
 
+/* Semimutable push */
+static inline nanoclj_tensor_t * tensor_push_vec(nanoclj_tensor_t * tensor, int64_t head, nanoclj_val_t * vec) {
+  if (head < tensor->ne[1] || (tensor->ne[1] + 1) * tensor->nb[1] > tensor->nb[2]) {
+    nanoclj_tensor_t * old_tensor = tensor;
+    tensor = mk_tensor_2d_padded(nanoclj_f64, tensor->ne[0], head, head + 1);
+    if (!tensor) return NULL;
+    memcpy(tensor->data, old_tensor->data, head * tensor->nb[1]);
+  }
+  memcpy(tensor->data + tensor->ne[1] * tensor->nb[1], vec, tensor->nb[1]);
+  tensor->ne[1]++;
+  return tensor;
+}
+
 static inline void tensor_mutate_append_i32(nanoclj_tensor_t * s, int32_t v) {
   if ((s->ne[0] + 1) * sizeof(int32_t) > s->nb[1]) {
     s->nb[1] = 2 * (s->ne[0] + 1) * sizeof(int32_t);
@@ -296,7 +309,7 @@ static inline void tensor_mutate_fill_val(nanoclj_tensor_t * tensor, nanoclj_val
   for (size_t i = 0; i < n; i++) ((nanoclj_val_t*)tensor->data)[i] = v;
 }
 
-static inline void tensor_mutate_append_vec(nanoclj_tensor_t * t, float * vec) {
+static inline void tensor_mutate_append_vec_f32(nanoclj_tensor_t * t, float * vec) {
   if ((t->ne[1] + 1) * t->nb[1] > t->nb[2]) {
     t->nb[2] = 2 * (t->ne[1] + 1) * t->nb[1];
     t->data = realloc(t->data, t->nb[2]);
