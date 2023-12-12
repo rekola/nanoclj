@@ -854,7 +854,7 @@ static inline size_t tensor_hash_get_bucket(uint32_t hash, uint32_t num_buckets,
   else return hash % num_buckets;
 }
 
-static inline void _tensor_hash_mutate_set(nanoclj_tensor_t * tensor, uint32_t hash, int64_t val_index, nanoclj_val_t key, nanoclj_val_t val, bool is_ordered) {
+static inline void _tensor_hash_mutate_set(nanoclj_tensor_t * tensor, uint32_t hash, int64_t val_index, nanoclj_val_t key, nanoclj_val_t val, nanoclj_val_t meta, bool is_ordered) {
   int64_t num_buckets = tensor_hash_get_bucket_count(tensor);
   int64_t * sparse_indices = tensor->sparse_indices;
   int64_t offset = tensor_hash_get_bucket(hash, num_buckets, is_ordered);
@@ -864,6 +864,7 @@ static inline void _tensor_hash_mutate_set(nanoclj_tensor_t * tensor, uint32_t h
       if (tensor->n_dims == 2) {
 	tensor_set_2d(tensor, 0, offset, key);
 	tensor_set_2d(tensor, 1, offset, val);
+	if (tensor->ne[0] >= 3) tensor_set_2d(tensor, 2, offset, meta);
       } else {
 	tensor_set(tensor, offset, key);
       }
@@ -880,7 +881,7 @@ static inline void _tensor_hash_mutate_set(nanoclj_tensor_t * tensor, uint32_t h
   tensor->ne[tensor->n_dims - 1]++;
 }
 
-static inline nanoclj_tensor_t * tensor_hash_mutate_set(nanoclj_tensor_t * tensor, uint32_t hash, int64_t val_index, nanoclj_val_t key, nanoclj_val_t val, bool is_ordered, void * context, uint32_t (*hashfun)(nanoclj_val_t, void *)) {
+static inline nanoclj_tensor_t * tensor_hash_mutate_set(nanoclj_tensor_t * tensor, uint32_t hash, int64_t val_index, nanoclj_val_t key, nanoclj_val_t val, nanoclj_val_t meta, bool is_ordered, void * context, uint32_t (*hashfun)(nanoclj_val_t, void *)) {
   bool rebuild = false, overload = false;
   if (val_index * 10 / tensor_hash_get_bucket_count(tensor) >= 7) { /* load factor more than 70% */
     rebuild = overload = true;
@@ -897,22 +898,23 @@ static inline nanoclj_tensor_t * tensor_hash_mutate_set(nanoclj_tensor_t * tenso
     for (int64_t offset = 0; offset < old_num_buckets; offset++) {
       int64_t i = old_sparse_indices[offset];
       if (i >= 0 && i < val_index) {
-	nanoclj_val_t old_key, old_val;
+	nanoclj_val_t old_key, old_val, old_meta;
 	if (old_tensor->n_dims == 2) {
 	  old_key = tensor_get_2d(old_tensor, 0, offset);
 	  old_val = tensor_get_2d(old_tensor, 1, offset);
+	  if (old_tensor->ne[0] >= 3) old_meta = tensor_get_2d(old_tensor, 2, offset);
 	} else {
 	  old_key = tensor_get(old_tensor, offset);
 	  old_val = mk_nil();
 	}
 	uint32_t hash = hashfun(old_key, context);
-	_tensor_hash_mutate_set(tensor, hash, tensor->ne[tensor->n_dims - 1], old_key, old_val, is_ordered);
+	_tensor_hash_mutate_set(tensor, hash, tensor->ne[tensor->n_dims - 1], old_key, old_val, old_meta, is_ordered);
       }
     }
     if (!old_tensor->refcnt) tensor_free(old_tensor);
   }
 
-  _tensor_hash_mutate_set(tensor, hash, val_index, key, val, is_ordered);
+  _tensor_hash_mutate_set(tensor, hash, val_index, key, val, meta, is_ordered);
   return tensor;
 }
 

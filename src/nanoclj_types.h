@@ -15,7 +15,8 @@ typedef enum {
   nanoclj_i16,
   nanoclj_i32,
   nanoclj_f32,
-  nanoclj_f64 /* used for standard vectors */
+  nanoclj_f64, /* used for standard vectors */
+  nanoclj_tensor
 } nanoclj_tensor_type_t;
 
 typedef enum {
@@ -93,6 +94,11 @@ typedef struct {
   const char * ptr;
   int size;
 } strview_t;
+
+typedef struct {
+  const nanoclj_val_t * ptr;
+  size_t size;
+} valarrayview_t;
 
 typedef struct {
   float x, y;
