@@ -1070,7 +1070,7 @@ static inline nanoclj_val_t clojure_data_csv_read_csv(nanoclj_t * sc, nanoclj_ce
 static nanoclj_t * linenoise_sc = NULL;
 
 static inline void completion(const char *input, linenoiseCompletions *lc) {
-  valarrayview_t f = find_slot_in_env(linenoise_sc, linenoise_sc->root_env, linenoise_sc->AUTOCOMPLETE_HOOK, false);
+  valarrayview_t f = find_slot_in_env(linenoise_sc, linenoise_sc->root_ns, linenoise_sc->AUTOCOMPLETE_HOOK, false);
   if (f.ptr) {
     nanoclj_val_t hook = slot_value_in_env(f);
     if (!is_nil(hook)) {
@@ -1121,13 +1121,13 @@ static inline char *hints(const char *input, int *color, int *bold) {
   
   *color = 35;
   *bold = 0;
-  return h;  
+  return h;
 }
 
 static inline void on_mouse_motion(int x, int y) {
   double f = linenoise_sc->window_scale_factor;
   nanoclj_val_t p = mk_vector_2d(linenoise_sc, x / f, y / f);
-  intern(linenoise_sc, linenoise_sc->global_env, linenoise_sc->MOUSE_POS, p);
+  intern(linenoise_sc, linenoise_sc->root_ns, linenoise_sc->MOUSE_POS, p);
 }
 
 static inline void on_window_size() {

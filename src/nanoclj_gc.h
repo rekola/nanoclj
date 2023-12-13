@@ -146,7 +146,7 @@ static inline void dump_stack_mark(nanoclj_t * sc) {
 }
 
 static void mark_thread(nanoclj_t * sc) {
-  if (sc->global_env) mark(sc->global_env);
+  if (sc->current_ns) mark(sc->current_ns);
   
   /* mark current registers */
   if (sc->args) mark(sc->args);
@@ -184,7 +184,7 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_c
 #endif
   
   /* mark system globals */
-  if (sc->root_env) mark(sc->root_env);
+  if (sc->root_ns) mark(sc->root_ns);
   
   if (ctx->properties) mark(ctx->properties);
 

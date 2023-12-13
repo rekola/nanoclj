@@ -179,9 +179,9 @@ extern "C" {
     nanoclj_cell_t _EMPTY;
     nanoclj_val_t EMPTY;              /* special cell representing empty list */
     nanoclj_tensor_t * oblist;         /* pointer to symbol table */
-    nanoclj_cell_t * global_env;         /* pointer to global environment */
-    nanoclj_cell_t * root_env;		/* pointer to the initial root env */
-    nanoclj_cell_t * user_env;
+    nanoclj_cell_t * current_ns;         /* pointer to global environment */
+    nanoclj_cell_t * root_ns;		/* pointer to the initial root env */
+    nanoclj_cell_t * user_ns;
     nanoclj_tensor_t * types;
 
 /* global pointers to special symbols */
