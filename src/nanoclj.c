@@ -22,7 +22,6 @@
 
 // #define VECTOR_ARGS
 // #define RETAIN_ALLOCS 1
-// #define USE_VARMAP
 
 #ifndef CELL_SEGSIZE
 #define CELL_SEGSIZE    262144
@@ -456,6 +455,7 @@ static inline bool is_seqable_type(uint_fast16_t t) {
   case T_SORTED_HASHSET:
   case T_CLASS:
   case T_MAPENTRY:
+  case T_VAR:
   case T_CLOSURE:
   case T_MACRO:
   case T_QUEUE:
@@ -677,7 +677,7 @@ static inline nanoclj_cell_t * get_metadata(nanoclj_cell_t * c) {
     if (_is_small(c)) {
       return decode_pointer(c->_small_tensor.vals[2]);
     } else {
-      return decode_pointer(tensor_get_2d(c->_collection.tensor, 2, _offset_unchecked(c)));
+      return decode_pointer(tensor_get(c->_collection.tensor, _offset_unchecked(c) + 2));
     }
   case T_LIST:
   case T_CLOSURE:
@@ -3609,7 +3609,7 @@ static inline nanoclj_cell_t * disj(nanoclj_t * sc, nanoclj_cell_t * coll, nanoc
 
 /*
  * In this implementation, each frame of the environment may be
- * a hash table or a linkedin list
+ * a hash table or a linked list
  * In practice, we use maps only for namespaces and classes;
  * function frames are too small and transient for the lookup
  * speed to out-weigh the cost of making a new map.
@@ -3624,33 +3624,10 @@ static inline void new_frame_in_env(nanoclj_t * sc, nanoclj_cell_t * old_env) {
   sc->envir = get_cell(sc, T_ENVIRONMENT, 0, coll, old_env, NULL);
 }
 
-static inline void new_slot_spec_in_env(nanoclj_t * sc, nanoclj_cell_t * env,
-					nanoclj_val_t variable, nanoclj_val_t value,
-					nanoclj_cell_t * meta) {
-  nanoclj_cell_t * x = decode_pointer(_car(env));
-#ifdef USE_VARMAP
-  if (is_map_type(_type(x))) {
-    _set_car(env, mk_pointer(assoc_with_meta(sc, x, variable, value, mk_pointer(meta))));
-  } else {
-    nanoclj_cell_t * slot0 = get_vector_object(sc, T_VAR, 3);
-    set_indexed_value(slot0, 0, variable);
-    set_indexed_value(slot0, 1, value);
-    set_indexed_value(slot0, 2, mk_pointer(meta));
-    _set_car(env, mk_pointer(cons(sc, mk_pointer(slot0), x)));
-  }
-#else
-  nanoclj_cell_t * slot0 = get_vector_object(sc, T_VAR, 3);
-  set_indexed_value(slot0, 0, variable);
-  set_indexed_value(slot0, 1, value);
-  set_indexed_value(slot0, 2, mk_pointer(meta));
-  nanoclj_val_t slot = mk_pointer(slot0);
-  
-  if (is_map_type(_type(x))) {
-    _set_car(env, mk_pointer(assoc(sc, x, variable, slot)));
-  } else {
-    _set_car(env, mk_pointer(cons(sc, slot, x)));
-  }
-#endif
+static inline void new_var_in_ns(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t variable, nanoclj_val_t value, nanoclj_cell_t * meta) {
+  nanoclj_cell_t * x = decode_pointer(_car(ns));
+  /* TODO: ensure that x is a var-map */
+  _set_car(ns, mk_pointer(assoc_with_meta(sc, x, variable, value, mk_pointer(meta))));
 }
 
 static inline valarrayview_t find_slot_in_env(nanoclj_t * sc, nanoclj_cell_t * env, nanoclj_val_t hdl, bool all) {
@@ -3659,24 +3636,19 @@ static inline valarrayview_t find_slot_in_env(nanoclj_t * sc, nanoclj_cell_t * e
     if (is_map_type(_type(y))) {
       size_t idx = find_hash_index(sc, y, hdl, false);
       if (idx != NPOS) {
-#ifdef USE_VARMAP
 	if (_is_small(y)) {
 	  return (valarrayview_t){ &(y->_small_tensor.vals[0]), _sodim0_unchecked(y) };
 	} else {
 	  nanoclj_tensor_t * tensor = y->_collection.tensor;
 	  return (valarrayview_t){ tensor->data + tensor->nb[1] * idx, tensor->ne[0] };
 	}
-#else
-	nanoclj_cell_t * var = decode_pointer(get_indexed_value(y, idx));
-	return (valarrayview_t){_smalldata_unchecked(var), 3};
-#endif
       }
     } else {
       for (; y != &(sc->_EMPTY); y = decode_pointer(_cdr(y))) {
 	nanoclj_cell_t * var = decode_pointer(_car(y));
 	nanoclj_val_t sym = get_indexed_value(var, 0);
 	if (sym.as_long == hdl.as_long) {
-	  return (valarrayview_t){_smalldata_unchecked(var), 3};
+	  return (valarrayview_t){_smalldata_unchecked(var), 2};
 	}
       }
     }
@@ -3691,15 +3663,11 @@ static inline nanoclj_cell_t * get_var_in_env(nanoclj_t * sc, nanoclj_cell_t * e
     if (is_map_type(_type(y))) {
       size_t idx = find_hash_index(sc, y, hdl, false);
       if (idx != NPOS) {
-#ifdef USE_VARMAP
 	if (_is_small(y)) {
 	  return mk_var(sc, y->_small_tensor.vals[0], y->_small_tensor.vals[1], y->_small_tensor.vals[2]);
 	} else {
 	  return get_collection_object(sc, T_VAR, idx * 3, 3, y->_collection.tensor);
 	}
-#else
-	return decode_pointer(get_indexed_value(y, idx));
-#endif
       }
     } else {
       for (; y != &(sc->_EMPTY); y = decode_pointer(_cdr(y))) {
@@ -3716,7 +3684,12 @@ static inline nanoclj_cell_t * get_var_in_env(nanoclj_t * sc, nanoclj_cell_t * e
 }
 
 static inline void new_slot_in_env(nanoclj_t * sc, nanoclj_val_t variable, nanoclj_val_t value) {
-  new_slot_spec_in_env(sc, sc->envir, variable, value, NULL);
+  nanoclj_cell_t * x = decode_pointer(_car(sc->envir));
+  /* TODO: ensure that x is a linked list with vars */
+  nanoclj_cell_t * slot0 = get_vector_object(sc, T_VAR, 3);
+  set_indexed_value(slot0, 0, variable);
+  set_indexed_value(slot0, 1, value);
+  _set_car(sc->envir, mk_pointer(cons(sc, mk_pointer(slot0), x)));
 }
 
 static inline bool set_var_in_ns(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t hdl, nanoclj_val_t state, nanoclj_cell_t * meta) {
@@ -3724,29 +3697,19 @@ static inline bool set_var_in_ns(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_va
   size_t idx = find_hash_index(sc, y, hdl, false);
   if (idx == NPOS) return false;
 
-#ifdef USE_VARMAP
   nanoclj_val_t old_state = get_indexed_value(y, idx);
   set_indexed_value(y, idx, state);
   
   if (meta) set_indexed_meta(y, idx, mk_pointer(meta));
   else meta = decode_pointer(get_indexed_meta(y, idx));
-#else
-  nanoclj_cell_t * slot = decode_pointer(get_indexed_value(y, idx));
-  nanoclj_val_t old_state = get_indexed_value(slot, 1);
-  set_indexed_value(slot, 1, state);
-  if (meta) slot->_small_tensor.vals[2] = mk_pointer(meta);
-  else meta = decode_pointer(slot->_small_tensor.vals[2]);
-#endif
 
   nanoclj_val_t watches0;
   if (get_elem(sc, meta, sc->WATCHES, &watches0)) {
-#ifdef USE_VARMAP
-    nanoclj_cell_t * slot = get_collection_object(sc, T_VAR, idx * 3, 3, y->_collection.tensor);
-#endif
+    nanoclj_val_t var = mk_pointer(get_collection_object(sc, T_VAR, idx * 3, 3, y->_collection.tensor));
     nanoclj_cell_t * watches = seq(sc, decode_pointer(watches0));
     for (; watches; watches = next(sc, watches)) {
       nanoclj_val_t fn = first(sc, watches);
-      nanoclj_call(sc, fn, mk_pointer(cons(sc, mk_nil(), cons(sc, mk_pointer(slot), cons(sc, old_state, cons(sc, state, NULL))))));
+      nanoclj_call(sc, fn, mk_pointer(cons(sc, mk_nil(), cons(sc, var, cons(sc, old_state, cons(sc, state, NULL))))));
     }
   }
 
@@ -3790,7 +3753,7 @@ static inline nanoclj_val_t def_symbol(nanoclj_t * sc, const char *name) {
 
 static inline void intern_with_meta(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t symbol, nanoclj_val_t value, nanoclj_cell_t * meta) {
   if (!set_var_in_ns(sc, ns, symbol, value, meta)) {
-    new_slot_spec_in_env(sc, ns, symbol, value, meta);
+    new_var_in_ns(sc, ns, symbol, value, meta);
   }
 }
 
@@ -3798,9 +3761,9 @@ static inline void intern(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t sym
   intern_with_meta(sc, ns, symbol, value, NULL);
 }
 
-static inline void intern_with_nil(nanoclj_t * sc, nanoclj_cell_t * envir, nanoclj_val_t symbol) {
-  valarrayview_t var = find_slot_in_env(sc, envir, symbol, false);
-  if (!var.ptr) new_slot_spec_in_env(sc, envir, symbol, mk_nil(), NULL);
+static inline void intern_with_nil(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t symbol) {
+  valarrayview_t var = find_slot_in_env(sc, ns, symbol, false);
+  if (!var.ptr) new_var_in_ns(sc, ns, symbol, mk_nil(), NULL);
 }
 
 static inline nanoclj_val_t intern_foreign_func(nanoclj_t * sc, nanoclj_cell_t * envir, const char * name, foreign_func fptr, int min_arity, int max_arity) {
@@ -3819,11 +3782,7 @@ static inline nanoclj_val_t intern_foreign_func(nanoclj_t * sc, nanoclj_cell_t *
 }
 
 static inline nanoclj_cell_t * mk_class_with_meta(nanoclj_t * sc, nanoclj_val_t sym, int type_id, nanoclj_cell_t * parent_type, nanoclj_cell_t * md) {
-#ifdef USE_VARMAP
   nanoclj_cell_t * s = get_vector_object(sc, T_VARMAP, 0);
-#else
-  nanoclj_cell_t * s = get_vector_object(sc, T_HASHMAP, 0);
-#endif
   nanoclj_cell_t * t = get_cell(sc, type_id, T_TYPE, mk_pointer(s), parent_type, md);
   
   while (sc->types->ne[0] <= (size_t)type_id) {
@@ -3888,11 +3847,7 @@ static inline nanoclj_val_t def_symbol_or_keyword(nanoclj_t * sc, const char *na
 }
 
 static inline nanoclj_cell_t * def_namespace_with_sym(nanoclj_t *sc, nanoclj_val_t sym, nanoclj_cell_t * md) {
-#ifdef USE_VARMAP
   nanoclj_cell_t * s = get_vector_object(sc, T_VARMAP, 0);
-#else
-  nanoclj_cell_t * s = get_vector_object(sc, T_HASHMAP, 0);
-#endif
   nanoclj_cell_t * ns = get_cell(sc, T_ENVIRONMENT, 0, mk_pointer(s), sc->root_env, md);
 
   if (sc->global_env) {
@@ -6434,7 +6389,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_DEF1:                /* define */
     meta = sc->args;
     if (!set_var_in_ns(sc, sc->global_env, sc->code, sc->value, meta)) {
-      new_slot_spec_in_env(sc, sc->global_env, sc->code, sc->value, meta);
+      new_var_in_ns(sc, sc->global_env, sc->code, sc->value, meta);
     }
     s_return(sc, mk_pointer(get_var_in_env(sc, sc->global_env, sc->code, false)));
 
@@ -6689,8 +6644,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 
   case OP_MACRO1:              /* macro */
     cell_type(sc->value) = T_MACRO;
-    if (!set_var_in_ns(sc, sc->envir, sc->code, sc->value, NULL)) {
-      new_slot_in_env(sc, sc->code, sc->value);
+    if (!set_var_in_ns(sc, sc->global_env, sc->code, sc->value, NULL)) {
+      new_var_in_ns(sc, sc->global_env, sc->code, sc->value, NULL);
     }
     s_return(sc, sc->code);
 
@@ -8632,7 +8587,7 @@ static inline void assign_proc(nanoclj_t * sc, nanoclj_cell_t * ns, enum nanoclj
   meta = assoc(sc, meta, sc->NAME, x);
   meta = assoc(sc, meta, sc->DOC, mk_string(sc, i->doc));
   meta = assoc(sc, meta, sc->FILE_KW, mk_string(sc, __FILE__));
-  new_slot_spec_in_env(sc, ns, x, y, meta);
+  new_var_in_ns(sc, ns, x, y, meta);
 }
 
 static inline void update_window_info(nanoclj_t * sc, nanoclj_cell_t * out) {
@@ -9098,7 +9053,7 @@ bool nanoclj_init(nanoclj_t * sc) {
   sc->Graph = mk_class(sc, "nanoclj.core.Graph", T_GRAPH, sc->Object);
   mk_class(sc, "nanoclj.core.GraphNode", T_GRAPH_NODE, sc->Object);
   mk_class(sc, "nanoclj.core.GraphEdge", T_GRAPH_EDGE, sc->Object);
-  mk_class(sc, "nanoclj.core.VarMap", T_VARMAP, sc->Object);
+  mk_class(sc, "nanoclj.core.VarMap", T_VARMAP, APersistentMap);
 
   sc->OutOfMemoryError = mk_exception(sc, OutOfMemoryError, "Out of memory");
   sc->NullPointerException = mk_exception(sc, NullPointerException, "Null pointer exception");
