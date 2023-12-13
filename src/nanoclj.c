@@ -6381,8 +6381,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_DEF0:{                /* define */
     nanoclj_cell_t * code = decode_pointer(sc->code);
     x = _car(code);
-    if (!is_symbol(x)) {
-      Error_0(sc, "Variable is not a symbol");
+    if (!is_symbol(x) || decode_symbol(x)->ns.size) {
+      Error_0(sc, "Variable is not an unqualified symbol");
     }
     nanoclj_cell_t * meta = mk_meta_from_reader(sc, tensor_peek(sc->load_stack));
     meta = assoc(sc, meta, sc->NAME, x);
