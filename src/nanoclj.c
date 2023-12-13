@@ -3766,18 +3766,15 @@ static inline void intern_with_nil(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_
   if (!var.ptr) new_var_in_ns(sc, ns, symbol, mk_nil(), NULL);
 }
 
-static inline nanoclj_val_t intern_foreign_func(nanoclj_t * sc, nanoclj_cell_t * envir, const char * name, foreign_func fptr, int min_arity, int max_arity) {
-  nanoclj_val_t ns_sym = mk_nil();
-  get_elem(sc, _cons_metadata(envir), sc->NAME, &ns_sym);
-
+static inline nanoclj_val_t intern_foreign_func(nanoclj_t * sc, nanoclj_cell_t * ns, const char * name, foreign_func fptr, int min_arity, int max_arity) {
   nanoclj_val_t sym = def_symbol(sc, name);
 
   nanoclj_cell_t * md = mk_hashmap(sc);
-  md = assoc(sc, md, sc->NS, ns_sym);
+  md = assoc(sc, md, sc->NS, mk_pointer(ns));
   md = assoc(sc, md, sc->NAME, sym);
 
   nanoclj_val_t fn = mk_foreign_func(sc, fptr, min_arity, max_arity, md);
-  intern_with_meta(sc, envir, sym, fn, md);
+  intern_with_meta(sc, ns, sym, fn, md);
   return fn;
 }
 
@@ -4872,14 +4869,18 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
 	break;
       case T_CLASS:
       case T_VAR:{
-	nanoclj_val_t ns_v = mk_nil(), name_v = mk_nil();
+	nanoclj_val_t ns = mk_nil(), name_v = mk_nil();
 	nanoclj_cell_t * md = get_metadata(c);
 	get_elem(sc, md, sc->NAME, &name_v);
-	get_elem(sc, md, sc->NS, &ns_v);
+	get_elem(sc, md, sc->NS, &ns);
+	nanoclj_val_t ns_name_v;
+	if (!is_nil(ns)) {
+	  get_elem(sc, get_metadata(decode_pointer(ns)), sc->NAME, &ns_name_v);
+	}
 	if (!is_nil(name_v)) {
 	  sv = to_strview(name_v);
-	  if (!is_nil(ns_v)) {
-	    strview_t ns = to_strview(ns_v);
+	  if (!is_nil(ns_name_v)) {
+	    strview_t ns = to_strview(ns_name_v);
 	    const char * fmt = _type(c) == T_VAR ? "#'%.*s/%.*s" : "%.*s/%.*s";
 	    sv = (strview_t) {
 	      sc->strbuff,
@@ -6164,10 +6165,14 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	if (_min_arity_unchecked(code_cell) > 0 || _max_arity_unchecked(code_cell) != -1) {
 	  int64_t n = count(sc, sc->args);
 	  if (n < _min_arity_unchecked(code_cell) || n > _max_arity_unchecked(code_cell)) {
-	    nanoclj_val_t ns_v = mk_nil(), name_v = mk_nil();
-	    get_elem(sc, _ff_metadata(code_cell), sc->NS, &ns_v);
+	    nanoclj_val_t ns = mk_nil(), name_v = mk_nil();
+	    get_elem(sc, _ff_metadata(code_cell), sc->NS, &ns);
 	    get_elem(sc, _ff_metadata(code_cell), sc->NAME, &name_v);
-	    nanoclj_throw(sc, mk_arity_exception(sc, n, ns_v, name_v));
+	    nanoclj_val_t ns_name_v;
+	    if (!is_nil(ns)) {
+	      get_elem(sc, get_metadata(decode_pointer(ns)), sc->NAME, &ns_name_v);
+	    }
+	    nanoclj_throw(sc, mk_arity_exception(sc, n, ns_name_v, name_v));
 	    return false;
 	  }
 	}
@@ -6202,10 +6207,14 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	if (_type(params) == T_VECTOR) { /* Clojure style arguments */
 	  int64_t n = count(sc, sc->args);
 	  if (!destructure(sc, params, sc->args, n, true)) {
-	    nanoclj_val_t ns_v = mk_nil(), name_v = mk_nil();
-	    get_elem(sc, _cons_metadata(code_cell), sc->NS, &ns_v);
+	    nanoclj_val_t ns = mk_nil(), name_v = mk_nil();
+	    get_elem(sc, _cons_metadata(code_cell), sc->NS, &ns);
 	    get_elem(sc, _cons_metadata(code_cell), sc->NAME, &name_v);
-	    nanoclj_throw(sc, mk_arity_exception(sc, n, ns_v, name_v));
+	    nanoclj_val_t ns_name_v;
+	    if (!is_nil(ns)) {
+	      get_elem(sc, get_metadata(decode_pointer(ns)), sc->NAME, &ns_name_v);
+	    }
+	    nanoclj_throw(sc, mk_arity_exception(sc, n, ns_name_v, name_v));
 	    return false;
 	  }
 	  sc->code = cdr(x);
@@ -6223,10 +6232,14 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  }
 	  
 	  if (!found_match) {
-	    nanoclj_val_t ns_v = mk_nil(), name_v = mk_nil();
-	    get_elem(sc, _cons_metadata(code_cell), sc->NS, &ns_v);
+	    nanoclj_val_t ns = mk_nil(), name_v = mk_nil();
+	    get_elem(sc, _cons_metadata(code_cell), sc->NS, &ns);
 	    get_elem(sc, _cons_metadata(code_cell), sc->NAME, &name_v);
-	    nanoclj_throw(sc, mk_arity_exception(sc, needed_args, ns_v, name_v));
+	    nanoclj_val_t ns_name_v;
+	    if (!is_nil(ns)) {
+	      get_elem(sc, get_metadata(decode_pointer(ns)), sc->NAME, &ns_name_v);
+	    }
+	    nanoclj_throw(sc, mk_arity_exception(sc, needed_args, ns_name_v, name_v));
 	    return false;
 	  }
 	} else {
@@ -6234,10 +6247,14 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  nanoclj_cell_t * yy = sc->args;
 	  for ( ; is_list(x); x = cdr(x), yy = next(sc, yy)) {
 	    if (!yy) {
-	      nanoclj_val_t ns_v = mk_nil(), name_v = mk_nil();
-	      get_elem(sc, _cons_metadata(code_cell), sc->NS, &ns_v);
+	      nanoclj_val_t ns = mk_nil(), name_v = mk_nil();
+	      get_elem(sc, _cons_metadata(code_cell), sc->NS, &ns);
 	      get_elem(sc, _cons_metadata(code_cell), sc->NAME, &name_v);
-	      nanoclj_throw(sc, mk_arity_exception(sc, count(sc, sc->args), ns_v, name_v));
+	      nanoclj_val_t ns_name_v;
+	      if (!is_nil(ns)) {
+		get_elem(sc, get_metadata(decode_pointer(ns)), sc->NAME, &ns_name_v);
+	      }
+	      nanoclj_throw(sc, mk_arity_exception(sc, count(sc, sc->args), ns_name_v, name_v));
 	      return false;
 	    } else {
 	      new_slot_in_env(sc, car(x), first(sc, yy));
@@ -6369,12 +6386,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
     nanoclj_cell_t * meta = mk_meta_from_reader(sc, tensor_peek(sc->load_stack));
     meta = assoc(sc, meta, sc->NAME, x);
-
-    nanoclj_val_t ns_name;
-    if (get_elem(sc, _cons_metadata(sc->global_env), sc->NAME, &ns_name)) {
-      meta = assoc(sc, meta, sc->NS, ns_name);
-    }
-      
+    meta = assoc(sc, meta, sc->NS, mk_pointer(sc->global_env));
+    
     if (_caddr(code).as_long != sc->EMPTY.as_long) {
       meta = assoc(sc, meta, sc->DOC, _cadr(code));
       sc->code = _caddr(code);
@@ -8577,13 +8590,10 @@ static inline void assign_syntax(nanoclj_t * sc, const char *name, unsigned int 
 }
 
 static inline void assign_proc(nanoclj_t * sc, nanoclj_cell_t * ns, enum nanoclj_opcode op, opcode_info * i) {
-  nanoclj_val_t ns_sym = mk_nil();
-  get_elem(sc, _cons_metadata(ns), sc->NAME, &ns_sym);
-
   nanoclj_val_t x = def_symbol(sc, i->name);
   nanoclj_val_t y = mk_proc(op);
   nanoclj_cell_t * meta = mk_hashmap(sc);
-  meta = assoc(sc, meta, sc->NS, ns_sym);
+  meta = assoc(sc, meta, sc->NS, mk_pointer(ns));
   meta = assoc(sc, meta, sc->NAME, x);
   meta = assoc(sc, meta, sc->DOC, mk_string(sc, i->doc));
   meta = assoc(sc, meta, sc->FILE_KW, mk_string(sc, __FILE__));
