@@ -559,8 +559,17 @@ static int findHighlight(const char * buf, int len, int start_pos, char ic, int 
     char nesting[1024];
     int ni = 0;
     char fc;
-    if (ic == '"') fc = '"';
-    else if (dir == 1) {
+    bool is_in_string = false;
+    for (int i = 0; i <= start_pos; i++) {
+      if (buf[i] == '"') is_in_string = !is_in_string;
+    }
+    if (ic == '"') {
+	if (is_in_string && dir == -1) return -1;
+	else if (!is_in_string && dir == 1) return -1;
+	fc = '"';
+    } else if (is_in_string) {
+      return -1;
+    } else if (dir == 1) {
         switch (ic) {
 	case '(': fc = ')'; break;
 	case '[': fc = ']'; break;
@@ -575,7 +584,7 @@ static int findHighlight(const char * buf, int len, int start_pos, char ic, int 
 	default: return -1;
 	}
     }
-    for (int i = start_pos; i >= 0 && i < len; i += dir) {
+    for (int i = start_pos + dir; i >= 0 && i < len; i += dir) {
         if (!ni && buf[i] == fc) return i;
         else if (ni && nesting[ni-1] == buf[i]) ni--;
 	else if (ni < 1024) {
@@ -631,8 +640,8 @@ static void refreshSingleLine(struct linenoiseState *l, int flags) {
     if (flags & REFRESH_WRITE) {
         int highlight_pos = -1;
 	if (!pasting) {
-	  if (pos < len) highlight_pos = findHighlight(buf, len, pos + 1, buf[pos], 1);
-	  if (highlight_pos == -1 && pos > 1) highlight_pos = findHighlight(buf, len, pos - 2, buf[pos - 1], -1);
+	    if (pos < len) highlight_pos = findHighlight(buf, len, pos, buf[pos], 1);
+	    if (highlight_pos == -1 && pos > 1) highlight_pos = findHighlight(buf, len, pos - 1, buf[pos - 1], -1);
 	}
 
         /* Write the prompt and the current buffer content */
