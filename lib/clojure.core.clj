@@ -135,6 +135,9 @@
 (def hash-ordered-coll hash)
 (def hash-unordered-coll hash)
 
+(defn juxt
+  ([& fs] (fn [& xs] (reduce #(conj %1 (apply %2 xs)) [] fs))))
+
 ; Sequences
 
 (defn filter

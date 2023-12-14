@@ -147,7 +147,6 @@ Windows support is in progress.
   - doto, ->, -->, some->, some->>
   - map-indexed, mapcat, zipmap, lazy-cat
   - partition-by
-  - juxt
   - memoize
   - condp
   - when-let, letfn, if-let, if-some
