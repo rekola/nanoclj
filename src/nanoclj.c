@@ -3056,6 +3056,30 @@ static inline size_t find_hash_index(nanoclj_t * sc, nanoclj_cell_t * coll, nano
   return NPOS;
 }
 
+static inline size_t find_varmap_index(nanoclj_cell_t * coll, nanoclj_val_t key) {
+  if (!_is_small(coll)) {
+    nanoclj_tensor_t * tensor = coll->_collection.tensor;
+    size_t num_buckets = tensor_hash_get_bucket_count(tensor);
+    size_t location = tensor_hash_get_bucket(decode_symbol(key)->hash, num_buckets, false);
+    while ( 1 ) {
+      if (tensor_hash_is_unassigned(tensor, location)) {
+	break;
+      } else {
+	nanoclj_val_t stored = tensor_hash_get(tensor, location, coll->_collection.size);
+	if (stored.as_long == key.as_long) {
+	  return location;
+	} else if (++location == num_buckets) {
+	  location = 0;
+	}
+      }
+    }
+  } else if (get_size(coll)) {
+    nanoclj_val_t stored_key = coll->_small_tensor.vals[0];
+    if (stored_key.as_long == key.as_long) return 0;
+  }
+  return NPOS;
+}
+
 static size_t find_index(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t key) {
   long long index;
   switch (_type(coll)) {
@@ -3633,8 +3657,8 @@ static inline void new_var_in_ns(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_va
 static inline valarrayview_t find_slot_in_env(nanoclj_t * sc, nanoclj_cell_t * env, nanoclj_val_t hdl, bool all) {
   for (nanoclj_cell_t * x = env; x != &(sc->_EMPTY); x = decode_pointer(_cdr(x))) {
     nanoclj_cell_t * y = decode_pointer(_car(x));
-    if (is_map_type(_type(y))) {
-      size_t idx = find_hash_index(sc, y, hdl, false);
+    if (_type(y) == T_VARMAP) {
+      size_t idx = find_varmap_index(y, hdl);
       if (idx != NPOS) {
 	if (_is_small(y)) {
 	  return (valarrayview_t){ &(y->_small_tensor.vals[0]), _sodim0_unchecked(y) };
@@ -3660,8 +3684,8 @@ static inline valarrayview_t find_slot_in_env(nanoclj_t * sc, nanoclj_cell_t * e
 static inline nanoclj_cell_t * get_var_in_env(nanoclj_t * sc, nanoclj_cell_t * env, nanoclj_val_t hdl, bool all) {
   for (nanoclj_cell_t * x = env; x != &(sc->_EMPTY); x = decode_pointer(_cdr(x))) {
     nanoclj_cell_t * y = decode_pointer(_car(x));
-    if (is_map_type(_type(y))) {
-      size_t idx = find_hash_index(sc, y, hdl, false);
+    if (_type(y) == T_VARMAP) {
+      size_t idx = find_varmap_index(y, hdl);
       if (idx != NPOS) {
 	if (_is_small(y)) {
 	  return mk_var(sc, y->_small_tensor.vals[0], y->_small_tensor.vals[1], y->_small_tensor.vals[2]);
@@ -3689,12 +3713,13 @@ static inline void new_slot_in_env(nanoclj_t * sc, nanoclj_val_t variable, nanoc
   nanoclj_cell_t * slot0 = get_vector_object(sc, T_VAR, 3);
   set_indexed_value(slot0, 0, variable);
   set_indexed_value(slot0, 1, value);
+  set_indexed_value(slot0, 2, mk_nil());
   _set_car(sc->envir, mk_pointer(cons(sc, mk_pointer(slot0), x)));
 }
 
 static inline bool set_var_in_ns(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t hdl, nanoclj_val_t state, nanoclj_cell_t * meta) {
   nanoclj_cell_t * y = decode_pointer(_car(ns));
-  size_t idx = find_hash_index(sc, y, hdl, false);
+  size_t idx = find_varmap_index(y, hdl);
   if (idx == NPOS) return false;
 
   nanoclj_val_t old_state = get_indexed_value(y, idx);
