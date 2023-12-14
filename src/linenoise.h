@@ -104,12 +104,6 @@ void linenoiseSetMouseMotionCallback(linenoiseMouseMotionCallback *);
 /* Window Size */
 typedef void(linenoiseWindowSizeCallback)(void);
 void linenoiseSetWindowSizeCallback(linenoiseWindowSizeCallback *);
-
-/* Brace Highlight API. */
-typedef void(linenoiseHighlightCallback)(const char *, int pos);
-void linenoiseSetHighlightCallback(linenoiseHighlightCallback *);
-typedef void(linenoiseHighlightCancelCallback)();
-void linenoiseSetHighlightCancelCallback(linenoiseHighlightCancelCallback *);
   
 /* History API. */
 int linenoiseHistoryAdd(const char *line);

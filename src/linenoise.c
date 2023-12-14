@@ -114,6 +114,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/ioctl.h>
+#include <sys/time.h>
 #include <sys/file.h>
 #include <unistd.h>
 #include <signal.h>
@@ -126,8 +127,6 @@ static char *unsupported_term[] = {"dumb", "cons25", "emacs", NULL};
 static linenoiseCompletionCallback *completionCallback = NULL;
 static linenoiseMouseMotionCallback *mouseMotionCallback = NULL;
 static linenoiseWindowSizeCallback *windowSizeCallback = NULL;
-static linenoiseHighlightCallback *highlightCallback = NULL;
-static linenoiseHighlightCancelCallback *highlightCancelCallback = NULL;
 static linenoiseHintsCallback *hintsCallback = NULL;
 static linenoiseFreeHintsCallback *freeHintsCallback = NULL;
 static char *linenoiseNoTTY(void);
@@ -143,6 +142,9 @@ static int atexit_registered = 0; /* Register atexit just 1 time. */
 static int history_max_len = LINENOISE_DEFAULT_HISTORY_MAX_LEN;
 static int history_len = 0;
 static char **history = NULL;
+
+static struct timeval lastCharRead;
+static int pasting = 0;
 
 static struct linenoiseState *activeState;
 
@@ -411,6 +413,7 @@ static int completeLine(struct linenoiseState *ls, int keypressed) {
     if (lc.len == 0) {
         linenoiseBeep();
         ls->in_completion = 0;
+	c = 0;
     } else {
         switch(c) {
             case 9: /* tab */
@@ -495,16 +498,6 @@ void linenoiseSetMouseMotionCallback(linenoiseMouseMotionCallback *fn) {
 
 void linenoiseSetWindowSizeCallback(linenoiseWindowSizeCallback *fn) {
     windowSizeCallback = fn;
-}
-
-/* Register a callback function to be called for brace highlighting. */
-void linenoiseSetHighlightCallback(linenoiseHighlightCallback *fn) {
-    highlightCallback = fn;
-}
-
-/* Register a callback function to be called for canceling brace highlighting actions. */
-void linenoiseSetHighlightCancelCallback(linenoiseHighlightCancelCallback *fn) {
-    highlightCancelCallback = fn;
 }
 
 /* =========================== Line editing ================================= */
@@ -637,8 +630,10 @@ static void refreshSingleLine(struct linenoiseState *l, int flags) {
 
     if (flags & REFRESH_WRITE) {
         int highlight_pos = -1;
-	if (pos < len) highlight_pos = findHighlight(buf, len, pos + 1, buf[pos], 1);
-        if (highlight_pos == -1 && pos > 1) highlight_pos = findHighlight(buf, len, pos - 2, buf[pos - 1], -1);
+	if (!pasting) {
+	  if (pos < len) highlight_pos = findHighlight(buf, len, pos + 1, buf[pos], 1);
+	  if (highlight_pos == -1 && pos > 1) highlight_pos = findHighlight(buf, len, pos - 2, buf[pos - 1], -1);
+	}
 
         /* Write the prompt and the current buffer content */
         abAppend(&ab,l->prompt,l->plen);
@@ -844,9 +839,6 @@ int linenoiseEditInsert(struct linenoiseState *l, char c) {
             refreshLine(l);
         }
 
-	if (highlightCallback != NULL) {
-	  highlightCallback(l->buf, l->pos-1);
-        }
     }
     return 0;
 }
@@ -1105,9 +1097,12 @@ char *linenoiseEditFeed(struct linenoiseState *l) {
     if (nread <= 0) {
       return NULL;
     }
-
-    if (highlightCancelCallback != NULL) {
-      highlightCancelCallback();
+    if (c != ENTER) {
+        gettimeofday(&lastCharRead, NULL);
+    } else {
+        struct timeval now;
+	gettimeofday(&now, NULL);
+	pasting = (1000000L * (now.tv_sec - lastCharRead.tv_sec) + now.tv_usec - lastCharRead.tv_usec) < 10000;
     }
  
     /* Only autocomplete when the callback is set. It returns < 0 when
@@ -1125,6 +1120,7 @@ char *linenoiseEditFeed(struct linenoiseState *l) {
 
     switch(c) {
     case ENTER:    /* enter */
+        if (pasting) return linenoiseEditMore;
         history_len--;
         free(history[history_len]);
         if (mlmode) linenoiseEditMoveEnd(l);
@@ -1544,6 +1540,9 @@ int linenoiseHistorySave(const char *filename, const char *line) {
  * If the file exists and the operation succeeded 0 is returned, otherwise
  * on error -1 is returned. */
 int linenoiseHistoryLoad(const char *filename) {
+    /* Take opportunity to initialize lastKeyPress */
+    gettimeofday(&lastCharRead, NULL);
+    
     FILE *fp = fopen(filename,"r");
     char buf[LINENOISE_MAX_LINE];
 
