@@ -36,18 +36,21 @@
 (def list? (fn [x] (instance? clojure.lang.Cons x)))
 (def zero? (fn [n] (equiv? n 0)))
 
-(def ^:private is-any-of? (fn [x & args]
-                            (cond (empty? args) false
-                                  (equals? x (first args)) true
-                                  :else (apply* is-any-of? (cons x (rest args))))))
+(def ^:private is-any-of?
+  (fn
+    ([x] false)
+    ([x a] (equals? x a))
+    ([x a b] (or (equals? x a) (equals? x b)))
+    ([x a b c] (or (equals? x a) (equals? x b) (equals? x c)))
+    ([x a b c & args] (or (equals? x a) (equals? x b) (equals? x c) (apply* is-any-of? (cons x (rest args)))))))
 
 (def int?
   "Returns true if the argument is fixed-precision integer"
-  (fn [x] (is-any-of? (type x) java.lang.Integer java.lang.Long)))
+  (fn [x] (is-any-of? (type x) java.lang.Byte java.lang.Short java.lang.Integer java.lang.Long)))
 
 (def integer?
   "Returns true if the argument is integer"
-  (fn [x] (is-any-of? (type x) java.lang.Integer java.lang.Long clojure.lang.BigInt)))
+  (fn [x] (is-any-of? (type x) java.lang.Byte java.lang.Short java.lang.Integer java.lang.Long clojure.lang.BigInt)))
 
 (def number?
   "Returns true if the argument is a number"

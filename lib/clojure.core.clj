@@ -62,7 +62,7 @@
 
 (defn run! [proc coll] (if (empty? coll) nil (do (proc (first coll)) (run! proc (rest coll)))))
 
-(def image nanoclj.core.Image )
+(def image nanoclj.core.Image)
 
 ; Utilities for math.
 
@@ -76,9 +76,9 @@
 
 (defn pos? [n] (> n 0))
 (defn neg? [n] (< n 0))
-(defn pos-int? [n] (and (integer? n) (> n 0)))
-(defn neg-int? [n] (and (integer? n) (< n 0)))
-(defn nat-int? [n] (and (integer? n) (>= n 0)))
+(defn pos-int? [n] (and (int? n) (> n 0)))
+(defn neg-int? [n] (and (int? n) (< n 0)))
+(defn nat-int? [n] (and (int? n) (>= n 0)))
 (defn float? [n] (instance? java.lang.Double x))
 (defn double? [n] (instance? java.lang.Double x))
 (defn NaN? [n] (identical? n ##NaN))
@@ -812,3 +812,23 @@
 
 (def subvec -slice)
 (def subs -slice)
+
+; Namespaces
+
+(defn find-ns
+  "Returns the namespace with the symbol x or nil"
+  [x] (let [ns (deref (resolve x))] (if (isa? clojure.lang.Namespace ns) ns nil)))
+
+(defn ns-map
+  "Returns the var-map of namespace ns"
+  [ns] (car ns))
+
+(defn the-ns
+  "Returns the namespace that the symbol x refers, or x itself, if x is a namespae"
+  [x] (if (isa? clojure.lang.Namespace x)
+        x
+        (or (find-ns x) (throw "No namespace found"))))
+
+(defn alias
+  "Adds an alias in the current namespace to another namespace"
+  [alias-sym ns-sym] (intern *ns* alias-sym (the-ns ns-sym)))

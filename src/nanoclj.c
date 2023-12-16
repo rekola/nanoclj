@@ -465,6 +465,7 @@ static inline bool is_seqable_type(uint_fast16_t t) {
   case T_TABLE:
   case T_GRADIENT:
   case T_SHAPE:
+  case T_ENVIRONMENT:
     return true;
   }
   return false;
@@ -4898,7 +4899,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
 	nanoclj_cell_t * md = get_metadata(c);
 	get_elem(sc, md, sc->NAME, &name_v);
 	get_elem(sc, md, sc->NS, &ns);
-	nanoclj_val_t ns_name_v;
+	nanoclj_val_t ns_name_v = mk_nil();
 	if (!is_nil(ns)) {
 	  get_elem(sc, get_metadata(decode_pointer(ns)), sc->NAME, &ns_name_v);
 	}
