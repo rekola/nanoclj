@@ -34,11 +34,11 @@ static inline bool is_cell(nanoclj_val_t v) {
 }
 
 static inline nanoclj_val_t mk_byte(int8_t n) {
-  return (nanoclj_val_t)((SIGNATURE_INTEGER << 48) | (UINT64_C(0) << 32) | (uint8_t)n);
+  return (nanoclj_val_t)((SIGNATURE_INTEGER << 48) | (UINT64_C(0) << 32) | (uint32_t)(int32_t)n);
 }
 
 static inline nanoclj_val_t mk_short(int16_t n) {
-  return (nanoclj_val_t)((SIGNATURE_INTEGER << 48) | (UINT64_C(1) << 32) | (uint16_t)n);
+  return (nanoclj_val_t)((SIGNATURE_INTEGER << 48) | (UINT64_C(1) << 32) | (uint32_t)(int32_t)n);
 }
 
 static inline nanoclj_val_t mk_int(int32_t num) {
