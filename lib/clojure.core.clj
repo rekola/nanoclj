@@ -219,7 +219,7 @@
 
 (defn vector-of
   "The function is given a type t for creating a homogenous vector of the given type.
-  The type, however, is ignored since homogenous vectors are not necessary in nanoclj."
+  The type, however, is ignored since homogenous vectors are not implemented in nanoclj."
   ([t] (vector))
   ([t & elements] (vec elements)))
 
@@ -806,9 +806,44 @@
 
 ; Arrays
 
-(defn make-array
-  "Creates an array"
-  [& args] (apply nanoclj.core.Tensor args))
+(defn byte-array
+  "Creates a byte array of specified size"
+  ([size] (byte-array size 0))
+  ([size init-val] (nanoclj.core.Tensor java.lang.Byte/TYPE init-val size)))
+
+(defn short-array
+  "Creates a short array of specified size"
+  ([size] (short-array size 0))
+  ([size init-val] (nanoclj.core.Tensor java.lang.Short/TYPE init-val size)))
+
+(defn int-array
+  "Creates an int array of specified size"
+  ([size] (int-array size 0))
+  ([size init-val] (nanoclj.core.Tensor java.lang.Integer/TYPE init-val size)))
+
+(defn long-array
+  "Creates a long array of specified size"
+  ([size] (long-array size 0))
+  ([size init-val] (nanoclj.core.Tensor java.lang.Long/TYPE init-val size)))
+
+(defn float-array
+  "Creates a float array of specified size"
+  ([size] (float-array size 0.0))
+  ([size init-val] (nanoclj.core.Tensor java.lang.Float/TYPE init-val size)))
+
+(defn double-array
+  "Creates a double array of specified size"
+  ([size] (double-array size 0.0))
+  ([size init-val] (nanoclj.core.Tensor java.lang.Double/TYPE init-val size)))
+
+(defn object-array
+  "Creates a object array of specified size"
+  ([size] (object-array size nil))
+  ([size init-val] (nanoclj.core.Tensor 7 init-val size)))
+
+(defn alength
+  "Returns the size of an array. For multidimensional arrays, returns the last dimension."
+  [a] (count a))
 
 (def subvec -slice)
 (def subs -slice)

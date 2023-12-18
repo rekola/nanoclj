@@ -466,6 +466,7 @@ static inline bool is_seqable_type(uint_fast16_t t) {
   case T_GRADIENT:
   case T_SHAPE:
   case T_ENVIRONMENT:
+  case T_TENSOR:
     return true;
   }
   return false;
@@ -657,6 +658,7 @@ static inline nanoclj_tensor_t * get_tensor(nanoclj_cell_t * c) {
   case T_UUID:
   case T_GRADIENT:
   case T_SHAPE:
+  case T_TENSOR:
     if (!_is_small(c)) {
       return c->_collection.tensor;
     }
@@ -670,6 +672,33 @@ static inline nanoclj_tensor_t * get_tensor(nanoclj_cell_t * c) {
     return c->_bignum.tensor;
   }
   return NULL;
+}
+
+static inline int64_t get_offset(nanoclj_cell_t * c) {
+  switch (_type(c)) {
+  case T_VECTOR:
+  case T_ARRAYMAP:
+  case T_HASHMAP:
+  case T_SORTED_HASHMAP:
+  case T_VARMAP:
+  case T_HASHSET:
+  case T_SORTED_HASHSET:
+  case T_VAR:
+  case T_QUEUE:
+  case T_STRING:
+  case T_CHAR_ARRAY:
+  case T_FILE:
+  case T_URL:
+  case T_UUID:
+  case T_GRADIENT:
+  case T_SHAPE:
+  case T_TENSOR:
+    if (!_is_small(c)) {
+      return c->_collection.offset;
+    }
+    break;
+  }
+  return 0;
 }
 
 static inline nanoclj_cell_t * get_metadata(nanoclj_cell_t * c) {
@@ -1606,6 +1635,8 @@ static inline nanoclj_cell_t * mk_object_from_tensor(nanoclj_t * sc, uint16_t ty
   if (x) {
     tensor->refcnt++;
     x->_collection.tensor = tensor;
+    x->_collection.offset = 0;
+    x->_collection.size = tensor->ne[0];
 #ifdef RETAIN_ALLOCS
     retain(sc, x);
 #endif
@@ -2312,6 +2343,8 @@ static inline nanoclj_cell_t * seq(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_HASHSET:
   case T_SORTED_HASHSET:
   case T_QUEUE:
+  case T_TENSOR:
+  case T_GRADIENT:
     if (get_size(coll) == 0) {
       return NULL;
     } else {
@@ -2371,6 +2404,8 @@ static inline bool is_empty(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_SORTED_HASHSET:
   case T_MAPENTRY:
   case T_QUEUE:
+  case T_TENSOR:
+  case T_GRADIENT:
     return get_size(coll) == 0;
 
   case T_GRAPH:
@@ -2432,6 +2467,8 @@ static inline nanoclj_cell_t * rest(nanoclj_t * sc, nanoclj_cell_t * coll) {
     case T_FILE:
     case T_URL:
     case T_QUEUE:
+    case T_TENSOR:
+    case T_GRADIENT:
       if (get_size(coll) >= 2) {
 	if (_is_reverse(coll)) {
 	  coll = remove_suffix(sc, coll, 1);
@@ -2524,6 +2561,8 @@ static inline nanoclj_val_t first(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_MAPENTRY:
   case T_VAR:
   case T_QUEUE:
+  case T_TENSOR:
+  case T_GRADIENT:
     if (get_size(coll) > 0) {
       if (_is_reverse(coll)) {
 	return get_indexed_value(coll, get_size(coll) - 1);
@@ -2642,6 +2681,8 @@ static inline size_t count(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_MAPENTRY:
   case T_QUEUE:
   case T_ARRAYMAP:
+  case T_TENSOR:
+  case T_GRADIENT:
     return get_size(coll);
 
   case T_HASHMAP:
@@ -5406,26 +5447,6 @@ static inline bool destructure_value(nanoclj_t * sc, nanoclj_val_t e, nanoclj_va
   return true;
 }
 
-static inline nanoclj_cell_t * mk_tensor(nanoclj_t * sc, nanoclj_cell_t * args) {
-  nanoclj_val_t tensor_type0 = first(sc, args);
-  args = next(sc, args);
-  size_t dims = count(sc, args);
-  nanoclj_tensor_t * tensor = NULL;
-  nanoclj_cell_t * x = get_cell_x(sc, T_TENSOR, T_GC_ATOM, NULL, NULL, NULL);
-  if (x) {
-    tensor->refcnt++;
-    x->_collection.tensor = tensor;
-    x->_collection.offset = 0;
-    x->_collection.size = 0;
-#if RETAIN_ALLOCS
-    retain(sc, x);
-#endif
-    return x;
-  }
-  sc->pending_exception = sc->OutOfMemoryError;
-  return NULL;
-}
-
 /* Constructs an object by type, args are seqed */
 static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_cell_t * args) {
   nanoclj_val_t x, y;
@@ -5685,7 +5706,22 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
     }
 
   case T_TENSOR:
-    return mk_pointer(mk_tensor(sc, args));
+    {
+      nanoclj_tensor_type_t typ = (nanoclj_tensor_type_t)to_long(first(sc, args));
+      args = next(sc, args);
+      nanoclj_val_t init_val = first(sc, args);
+      args = next(sc, args);
+      int64_t dim1 = to_long(first(sc, args));
+      nanoclj_tensor_t * tensor = mk_tensor_1d(typ, dim1);
+      switch (typ) {
+      case nanoclj_i8: tensor_mutate_fill_i8(tensor, to_int(init_val)); break;
+      case nanoclj_i32: tensor_mutate_fill_i32(tensor, to_int(init_val)); break;
+      case nanoclj_f32: tensor_mutate_fill_f32(tensor, to_double(init_val)); break;
+      case nanoclj_f64: tensor_mutate_fill_f64(tensor, to_double(init_val)); break;
+      case nanoclj_val: tensor_mutate_fill_f64(tensor, init_val.as_double); break;
+      }
+      return mk_pointer(mk_object_from_tensor(sc, T_TENSOR, tensor));
+    }
 
   case T_GRADIENT:
     {
@@ -7174,6 +7210,31 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
     Error_0(sc, "Value is not ISeqable");
 
+  case OP_AGET:
+    if (!unpack_args_2_not_nil(sc, &arg0, &arg1)) {
+      return false;
+    } else if (is_cell(arg0)) { /* arg0 = idx, arg1 = val */
+      nanoclj_cell_t * c = decode_pointer(arg0);
+      nanoclj_tensor_t * tensor = get_tensor(c);
+      int64_t idx = to_long(arg1);
+      if (tensor) {
+	idx += get_offset(c);
+	switch (tensor->type) {
+	case nanoclj_i8: s_return(sc, mk_int(tensor_get_i8(tensor, idx)));
+	case nanoclj_i16: s_return(sc, mk_int(tensor_get_i16(tensor, idx)));
+	case nanoclj_i32: s_return(sc, mk_int(tensor_get_i32(tensor, idx)));
+	case nanoclj_f32: s_return(sc, mk_double(tensor_get_f32(tensor, idx)));
+	case nanoclj_f64: s_return(sc, mk_double(tensor_get_f64(tensor, idx)));
+	case nanoclj_val: s_return(sc, tensor_get(tensor, idx));
+	}
+      } else if (_is_small(c)) {
+	switch (_type(c)) {
+	case T_VECTOR: s_return(sc, c->_small_tensor.vals[idx]);
+	}
+      }
+    }
+    Error_0(sc, "Type doesn't support aget");
+
   case OP_GET:             /* get */
     if (!unpack_args_2_plus(sc, &arg0, &arg1, &arg_next)) {
       return false;
@@ -8276,7 +8337,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       }
       s_return(sc, mk_string_from_sv(sc, to_strview(arg0)));
     }
-    
+
   case OP_SET_COLOR:
     if (!unpack_args_1_plus(sc, &arg0, &arg_next)) {
       return false;

@@ -85,6 +85,8 @@ As well as printing images in block mode like the plot function does, they can a
 - No homogenous vectors (They are not necessary since most data types are unboxed by default)
 - Data structures are only partially persistent, and while vectors, maps and sets allow fast reading and insertion, deletion and modification is slow.
 - Vectors, maps, sets and queues cannot have metadata
+- Namespaces can only contain Vars, not Classes: `(resolve 'Math) ;=> #'java.lang.Math
+- Multidimensional arrays cannot be ragged
 - Only 64 bit systems are supported
 
 ## Dependencies
@@ -151,20 +153,22 @@ Windows support is in progress.
   - condp
   - when-let, letfn, if-let, if-some
   - reduced, reduced?
-  - with-local-vars, var-set, find-var, alter-var-root, declare, binding, with-bindings, ns-name
+  - with-local-vars, var-set, find-var, alter-var-root, declare, binding, with-bindings
   - sequence, subseq, rsubseq
   - make-hierarchy, ancestors, supers, bases
   - bound?
   - random-uuid
   - re-groups, re-matcher, re-seq, re-matches
   - assert-args
-  - make-parents
   - with-open
+  - indexed?
   - vary-meta, alter-meta!, reset-meta!
-  - int-array, long-array, float-array, double-array, byte-array, short-array, aset-int, aset-double, object-array
-  - aget, aset, alength, amap, areduce, aclone, into-array, make-array, to-array-2d, to-array
+  - aset-int, aset-double, aset, amap, areduce, aclone, into-array, to-array-2d, to-array, make-array
+  - remove-ns, create-ns, ns-imports, ns-interns, ns-refers, ns-publics, ns-aliases, ns-name, all-ns, ns-unalias, ns-unmap, import, ns
+  - find-keyword
 - clojure.java.io
   - resource
+  - make-parents
 - clojure.math
 - clojure.core.async
   - thread, thread-call

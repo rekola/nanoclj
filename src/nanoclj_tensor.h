@@ -16,6 +16,8 @@ static inline size_t tensor_get_cell_size(nanoclj_tensor_type_t t) {
   case nanoclj_i32: return sizeof(uint32_t);
   case nanoclj_f32: return sizeof(float);
   case nanoclj_f64: return sizeof(double);
+  case nanoclj_i64: return sizeof(uint64_t);
+  case nanoclj_val: return sizeof(nanoclj_val_t);
   }
   return 0;
 }
@@ -106,6 +108,10 @@ static inline void tensor_set_f64_2d(nanoclj_tensor_t * tensor, int64_t i, int64
   *(double *)(tensor->data + i * tensor->nb[0] + j * tensor->nb[1]) = v;
 }
 
+static inline double tensor_get_f32(const nanoclj_tensor_t * tensor, int64_t i) {
+  return ((float *)tensor->data)[i];
+}
+
 static inline double tensor_get_f64(const nanoclj_tensor_t * tensor, int64_t i) {
   return ((double *)tensor->data)[i];
 }
@@ -119,9 +125,22 @@ static inline double tensor_get_f32_2d(const nanoclj_tensor_t * tensor, int64_t 
 }
 
 static inline nanoclj_val_t tensor_get(const nanoclj_tensor_t * tensor, int64_t i) {
-  nanoclj_val_t v;
-  v.as_double = tensor_get_f64(tensor, i);
-  return v;
+  switch (tensor->type) {
+  case nanoclj_f32:
+    {
+      nanoclj_val_t v;
+      v.as_double = tensor_get_f32(tensor, i);
+      return v;
+    }
+  case nanoclj_f64:
+  case nanoclj_val:
+    {
+      nanoclj_val_t v;
+      v.as_double = tensor_get_f64(tensor, i);
+      return v;
+    }
+  }
+  return mk_nil();
 }
 
 static inline nanoclj_val_t tensor_get_2d(const nanoclj_tensor_t * tensor, int64_t i, int64_t j) {
@@ -132,6 +151,14 @@ static inline nanoclj_val_t tensor_get_2d(const nanoclj_tensor_t * tensor, int64
 
 static inline uint8_t tensor_get_i8(const nanoclj_tensor_t * tensor, int64_t i) {
   return ((uint8_t *)tensor->data)[i];
+}
+
+static inline uint16_t tensor_get_i16(const nanoclj_tensor_t * tensor, int64_t i) {
+  return ((uint16_t *)tensor->data)[i];
+}
+
+static inline uint32_t tensor_get_i32(const nanoclj_tensor_t * tensor, int64_t i) {
+  return ((uint32_t *)tensor->data)[i];
 }
 
 static inline void tensor_set(nanoclj_tensor_t * tensor, int64_t i, nanoclj_val_t v) {
@@ -299,6 +326,30 @@ static inline size_t tensor_mutate_append_bytes(nanoclj_tensor_t * s, const uint
 
 static inline void tensor_mutate_fill_i8(nanoclj_tensor_t * tensor, uint8_t v) {
   memset(tensor->data, v, tensor->nb[tensor->n_dims]);
+}
+
+static inline void tensor_mutate_fill_i16(nanoclj_tensor_t * tensor, uint16_t v) {
+  for (size_t i = 0; i < tensor->ne[0]; i++) {
+    ((uint16_t *)tensor->data)[i] = v;
+  }
+}
+
+static inline void tensor_mutate_fill_i32(nanoclj_tensor_t * tensor, uint32_t v) {
+  for (size_t i = 0; i < tensor->ne[0]; i++) {
+    ((uint32_t *)tensor->data)[i] = v;
+  }
+}
+
+static inline void tensor_mutate_fill_f32(nanoclj_tensor_t * tensor, float v) {
+  for (size_t i = 0; i < tensor->ne[0]; i++) {
+    ((float *)tensor->data)[i] = v;
+  }
+}
+
+static inline void tensor_mutate_fill_f64(nanoclj_tensor_t * tensor, double v) {
+  for (size_t i = 0; i < tensor->ne[0]; i++) {
+    ((double *)tensor->data)[i] = v;
+  }
 }
 
 /* fill the tensor data with value (also the padding is filled) */
