@@ -2007,9 +2007,9 @@ static inline nanoclj_cell_t * get_vector_object(nanoclj_t * sc, int_fast16_t t,
     } else if (t == T_VARMAP) {
       store = mk_tensor_hash(2, 3, size * 2);
     } else if (t == T_ARRAYMAP) {
-      store = mk_tensor_2d_padded(nanoclj_f64, 2, 0, size);
+      store = mk_tensor_2d_padded(nanoclj_val, 2, 0, size);
     } else {
-      store = mk_tensor_1d(nanoclj_f64, size);
+      store = mk_tensor_1d(nanoclj_val, size);
     }
     if (!store) return NULL;
   }
@@ -5715,6 +5715,7 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
       nanoclj_tensor_t * tensor = mk_tensor_1d(typ, dim1);
       switch (typ) {
       case nanoclj_i8: tensor_mutate_fill_i8(tensor, to_int(init_val)); break;
+      case nanoclj_i16: tensor_mutate_fill_i16(tensor, to_int(init_val)); break;
       case nanoclj_i32: tensor_mutate_fill_i32(tensor, to_int(init_val)); break;
       case nanoclj_f32: tensor_mutate_fill_f32(tensor, to_double(init_val)); break;
       case nanoclj_f64: tensor_mutate_fill_f64(tensor, to_double(init_val)); break;
@@ -5957,7 +5958,7 @@ static inline void eval_in_thread(nanoclj_t * sc, nanoclj_val_t code) {
   child->save_inport = mk_nil();
   child->value = mk_nil();
   child->rdbuff = mk_tensor_1d(nanoclj_i8, 0);
-  child->load_stack = mk_tensor_1d(nanoclj_f64, 0);
+  child->load_stack = mk_tensor_1d(nanoclj_val, 0);
 
   /* init sink */
   child->sink.type = T_LIST;
@@ -8133,7 +8134,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       if (!s) {
 	s_return(sc, sc->EMPTY);
       } else {
-	nanoclj_tensor_t * vec = mk_tensor_1d(nanoclj_f64, 0);
+	nanoclj_tensor_t * vec = mk_tensor_1d(nanoclj_val, 0);
 	for ( ; s; s = next(sc, s)) {
 	  tensor_mutate_push(vec, first(sc, s));
 	}
@@ -8941,8 +8942,8 @@ bool nanoclj_init(nanoclj_t * sc) {
   sc->pending_exception = NULL;
 
   sc->rdbuff = mk_tensor_1d(nanoclj_i8, 0);
-  sc->load_stack = mk_tensor_1d(nanoclj_f64, 0);
-  sc->types = mk_tensor_1d(nanoclj_f64, 0);
+  sc->load_stack = mk_tensor_1d(nanoclj_val, 0);
+  sc->types = mk_tensor_1d(nanoclj_val, 0);
 
   if (alloc_cellseg(sc, FIRST_CELLSEGS) != FIRST_CELLSEGS) {
     return false;

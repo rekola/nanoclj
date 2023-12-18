@@ -16,7 +16,6 @@ static inline size_t tensor_get_cell_size(nanoclj_tensor_type_t t) {
   case nanoclj_i32: return sizeof(uint32_t);
   case nanoclj_f32: return sizeof(float);
   case nanoclj_f64: return sizeof(double);
-  case nanoclj_i64: return sizeof(uint64_t);
   case nanoclj_val: return sizeof(nanoclj_val_t);
   }
   return 0;
@@ -92,7 +91,8 @@ static inline bool tensor_is_identity(const nanoclj_tensor_t * tensor) {
     case nanoclj_i16: return *(uint16_t*)tensor->data == 1;
     case nanoclj_i32: return *(uint32_t*)tensor->data == 1;
     case nanoclj_f32: return *(float*)tensor->data == 1.0f;
-    case nanoclj_f64: return *(double*)tensor->data == 1.0;
+    case nanoclj_f64:
+    case nanoclj_val: return *(double*)tensor->data == 1.0;
     }
   } else {
     /* TODO */
@@ -106,6 +106,18 @@ static inline void tensor_set_f64(nanoclj_tensor_t * tensor, int64_t i, double v
 
 static inline void tensor_set_f64_2d(nanoclj_tensor_t * tensor, int64_t i, int64_t j, double v) {
   *(double *)(tensor->data + i * tensor->nb[0] + j * tensor->nb[1]) = v;
+}
+
+static inline uint8_t tensor_get_i8(const nanoclj_tensor_t * tensor, int64_t i) {
+  return ((uint8_t *)tensor->data)[i];
+}
+
+static inline uint16_t tensor_get_i16(const nanoclj_tensor_t * tensor, int64_t i) {
+  return ((uint16_t *)tensor->data)[i];
+}
+
+static inline uint32_t tensor_get_i32(const nanoclj_tensor_t * tensor, int64_t i) {
+  return ((uint32_t *)tensor->data)[i];
 }
 
 static inline double tensor_get_f32(const nanoclj_tensor_t * tensor, int64_t i) {
@@ -126,6 +138,9 @@ static inline double tensor_get_f32_2d(const nanoclj_tensor_t * tensor, int64_t 
 
 static inline nanoclj_val_t tensor_get(const nanoclj_tensor_t * tensor, int64_t i) {
   switch (tensor->type) {
+  case nanoclj_i8: return mk_byte(tensor_get_i8(tensor, i));
+  case nanoclj_i16: return mk_short(tensor_get_i16(tensor, i));
+  case nanoclj_i32: return mk_int(tensor_get_i32(tensor, i));
   case nanoclj_f32:
     {
       nanoclj_val_t v;
@@ -147,18 +162,6 @@ static inline nanoclj_val_t tensor_get_2d(const nanoclj_tensor_t * tensor, int64
   nanoclj_val_t v;
   v.as_double = tensor_get_f64_2d(tensor, i, j);
   return v;
-}
-
-static inline uint8_t tensor_get_i8(const nanoclj_tensor_t * tensor, int64_t i) {
-  return ((uint8_t *)tensor->data)[i];
-}
-
-static inline uint16_t tensor_get_i16(const nanoclj_tensor_t * tensor, int64_t i) {
-  return ((uint16_t *)tensor->data)[i];
-}
-
-static inline uint32_t tensor_get_i32(const nanoclj_tensor_t * tensor, int64_t i) {
-  return ((uint32_t *)tensor->data)[i];
 }
 
 static inline void tensor_set(nanoclj_tensor_t * tensor, int64_t i, nanoclj_val_t v) {
@@ -283,7 +286,7 @@ static inline nanoclj_tensor_t * tensor_dup(const nanoclj_tensor_t * tensor) {
 static inline nanoclj_tensor_t * tensor_push(nanoclj_tensor_t * tensor, size_t head, nanoclj_val_t val) {
   if (head < tensor->ne[0] || (head + 1) * sizeof(nanoclj_val_t) > tensor->nb[1]) {
     nanoclj_tensor_t * old_tensor = tensor;
-    tensor = mk_tensor_1d_padded(nanoclj_f64, head, head + 1);
+    tensor = mk_tensor_1d_padded(nanoclj_val, head, head + 1);
     if (!tensor) return NULL;
     memcpy(tensor->data, old_tensor->data, head * sizeof(nanoclj_val_t));
   }
@@ -296,7 +299,7 @@ static inline nanoclj_tensor_t * tensor_push(nanoclj_tensor_t * tensor, size_t h
 static inline nanoclj_tensor_t * tensor_push_vec(nanoclj_tensor_t * tensor, int64_t head, nanoclj_val_t * vec) {
   if (head < tensor->ne[1] || (tensor->ne[1] + 1) * tensor->nb[1] > tensor->nb[2]) {
     nanoclj_tensor_t * old_tensor = tensor;
-    tensor = mk_tensor_2d_padded(nanoclj_f64, tensor->ne[0], head, head + 1);
+    tensor = mk_tensor_2d_padded(nanoclj_val, tensor->ne[0], head, head + 1);
     if (!tensor) return NULL;
     memcpy(tensor->data, old_tensor->data, head * tensor->nb[1]);
   }
@@ -887,9 +890,9 @@ static inline size_t tensor_bigint_to_string(const nanoclj_tensor_t * tensor0, c
 static inline nanoclj_tensor_t * mk_tensor_hash(int64_t dims, size_t payload_size, size_t initial_size) {
   nanoclj_tensor_t * t;
   if (dims == 1) {
-    t = mk_tensor_1d_padded(nanoclj_f64, 0, initial_size);
+    t = mk_tensor_1d_padded(nanoclj_val, 0, initial_size);
   } else {
-    t = mk_tensor_2d_padded(nanoclj_f64, payload_size, 0, initial_size);
+    t = mk_tensor_2d_padded(nanoclj_val, payload_size, 0, initial_size);
   }
   t->sparse_indices = malloc(initial_size * sizeof(int64_t));
   for (int64_t i = 0; i < initial_size; i++) t->sparse_indices[i] = -1;

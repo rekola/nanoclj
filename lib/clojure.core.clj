@@ -821,11 +821,6 @@
   ([size] (int-array size 0))
   ([size init-val] (nanoclj.core.Tensor java.lang.Integer/TYPE init-val size)))
 
-(defn long-array
-  "Creates a long array of specified size"
-  ([size] (long-array size 0))
-  ([size init-val] (nanoclj.core.Tensor java.lang.Long/TYPE init-val size)))
-
 (defn float-array
   "Creates a float array of specified size"
   ([size] (float-array size 0.0))
@@ -839,7 +834,7 @@
 (defn object-array
   "Creates a object array of specified size"
   ([size] (object-array size nil))
-  ([size init-val] (nanoclj.core.Tensor 7 init-val size)))
+  ([size init-val] (nanoclj.core.Tensor 6 init-val size)))
 
 (defn alength
   "Returns the size of an array. For multidimensional arrays, returns the last dimension."

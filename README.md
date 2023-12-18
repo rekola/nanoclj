@@ -163,7 +163,7 @@ Windows support is in progress.
   - with-open
   - indexed?
   - vary-meta, alter-meta!, reset-meta!
-  - aset-int, aset-double, aset, amap, areduce, aclone, into-array, to-array-2d, to-array, make-array
+  - aset-int, aset-double, aset, amap, areduce, aclone, into-array, to-array-2d, to-array, make-array, long-array
   - remove-ns, create-ns, ns-imports, ns-interns, ns-refers, ns-publics, ns-aliases, ns-name, all-ns, ns-unalias, ns-unmap, import, ns
   - find-keyword
 - clojure.java.io

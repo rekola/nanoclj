@@ -1,6 +1,6 @@
 (in-ns 'java.lang.Double)
 
-(def TYPE 4)
+(def TYPE 5)
 (def BYTES 8)
 (def NaN ##NaN)
 (def NEGATIVE_INFINITY ##-Inf)
