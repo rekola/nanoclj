@@ -156,7 +156,7 @@ static inline nanoclj_val_t tensor_get(const nanoclj_tensor_t * tensor, int64_t 
   case nanoclj_f32: return mk_double(tensor_get_f32(tensor, i));
   case nanoclj_f64: return mk_double(tensor_get_f64(tensor, i));
   case nanoclj_val:
-    {
+    { /* Can't use mk_double() here since it would break nan-packing */
       nanoclj_val_t v;
       v.as_double = tensor_get_f64(tensor, i);
       return v;
@@ -173,7 +173,7 @@ static inline nanoclj_val_t tensor_get_2d(const nanoclj_tensor_t * tensor, int64
   case nanoclj_f32: return mk_double(tensor_get_f32_2d(tensor, i, j));
   case nanoclj_f64: return mk_double(tensor_get_f32_2d(tensor, i, j));
   case nanoclj_val:
-    {
+    { /* Can't use mk_double() here since it would break nan-packing */
       nanoclj_val_t v;
       v.as_double = tensor_get_f64_2d(tensor, i, j);
       return v;

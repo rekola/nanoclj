@@ -620,7 +620,7 @@ static inline void set_indexed_meta(nanoclj_cell_t * coll, size_t ielem, nanoclj
   }
 }
 
-/* Size of a tensor backed data structure (e.g. string, vector) */
+/* Size of a tensor backed data structure (e.g. string, vector, array) */
 static inline size_t get_size(const nanoclj_cell_t * c) {
   if (_is_small(c)) {
     if (is_map_type(_type(c))) {
@@ -7218,6 +7218,10 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       nanoclj_cell_t * c = decode_pointer(arg0);
       nanoclj_tensor_t * tensor = get_tensor(c);
       int64_t idx = to_long(arg1);
+      if (idx < 0 || idx >= get_size(c)) {
+	nanoclj_throw(sc, mk_index_exception(sc, "Index out of bounds"));
+	return false;
+      }
       if (tensor) {
 	idx += get_offset(c);
 	switch (tensor->type) {
@@ -7230,7 +7234,15 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	}
       } else if (_is_small(c)) {
 	switch (_type(c)) {
-	case T_VECTOR: s_return(sc, c->_small_tensor.vals[idx]);
+	case T_VECTOR:
+	case T_QUEUE:
+	  s_return(sc, c->_small_tensor.vals[idx]);
+	case T_STRING:
+	case T_CHAR_ARRAY:
+	case T_FILE:
+	case T_URL:
+	case T_UUID:
+	  s_return(sc, mk_byte(c->_small_tensor.bytes[idx]));
 	}
       }
     }
