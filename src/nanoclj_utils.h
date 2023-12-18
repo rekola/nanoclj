@@ -125,7 +125,8 @@ static inline long long gcd_int64(long long a, long long b) {
 
 static inline bool is_valid_url(strview_t sv) {
   return strview_ncmp(sv, 7, "http://") == 0 ||
-    strview_ncmp(sv, 8, "https://") == 0;
+    strview_ncmp(sv, 8, "https://") == 0 ||
+    strview_ncmp(sv, 7, "file://") == 0;
 }
 
 #endif
