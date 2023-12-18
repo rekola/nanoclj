@@ -128,12 +128,24 @@ static inline double tensor_get_f64(const nanoclj_tensor_t * tensor, int64_t i) 
   return ((double *)tensor->data)[i];
 }
 
-static inline double tensor_get_f64_2d(const nanoclj_tensor_t * tensor, int64_t i, int64_t j) {
-  return *(double *)(tensor->data + i * tensor->nb[0] + j * tensor->nb[1]);
+static inline double tensor_get_i8_2d(const nanoclj_tensor_t * tensor, int64_t i, int64_t j) {
+  return *(uint8_t *)(tensor->data + i * tensor->nb[0] + j * tensor->nb[1]);
+}
+
+static inline double tensor_get_i16_2d(const nanoclj_tensor_t * tensor, int64_t i, int64_t j) {
+  return *(uint16_t *)(tensor->data + i * tensor->nb[0] + j * tensor->nb[1]);
+}
+
+static inline double tensor_get_i32_2d(const nanoclj_tensor_t * tensor, int64_t i, int64_t j) {
+  return *(uint32_t *)(tensor->data + i * tensor->nb[0] + j * tensor->nb[1]);
 }
 
 static inline double tensor_get_f32_2d(const nanoclj_tensor_t * tensor, int64_t i, int64_t j) {
   return *(float *)(tensor->data + i * tensor->nb[0] + j * tensor->nb[1]);
+}
+
+static inline double tensor_get_f64_2d(const nanoclj_tensor_t * tensor, int64_t i, int64_t j) {
+  return *(double *)(tensor->data + i * tensor->nb[0] + j * tensor->nb[1]);
 }
 
 static inline nanoclj_val_t tensor_get(const nanoclj_tensor_t * tensor, int64_t i) {
@@ -141,13 +153,8 @@ static inline nanoclj_val_t tensor_get(const nanoclj_tensor_t * tensor, int64_t 
   case nanoclj_i8: return mk_byte(tensor_get_i8(tensor, i));
   case nanoclj_i16: return mk_short(tensor_get_i16(tensor, i));
   case nanoclj_i32: return mk_int(tensor_get_i32(tensor, i));
-  case nanoclj_f32:
-    {
-      nanoclj_val_t v;
-      v.as_double = tensor_get_f32(tensor, i);
-      return v;
-    }
-  case nanoclj_f64:
+  case nanoclj_f32: return mk_double(tensor_get_f32(tensor, i));
+  case nanoclj_f64: return mk_double(tensor_get_f64(tensor, i));
   case nanoclj_val:
     {
       nanoclj_val_t v;
@@ -159,9 +166,20 @@ static inline nanoclj_val_t tensor_get(const nanoclj_tensor_t * tensor, int64_t 
 }
 
 static inline nanoclj_val_t tensor_get_2d(const nanoclj_tensor_t * tensor, int64_t i, int64_t j) {
-  nanoclj_val_t v;
-  v.as_double = tensor_get_f64_2d(tensor, i, j);
-  return v;
+  switch (tensor->type) {
+  case nanoclj_i8: return mk_byte(tensor_get_i8_2d(tensor, i, j));
+  case nanoclj_i16: return mk_short(tensor_get_i16_2d(tensor, i, j));
+  case nanoclj_i32: return mk_int(tensor_get_i32_2d(tensor, i, j));
+  case nanoclj_f32: return mk_double(tensor_get_f32_2d(tensor, i, j));
+  case nanoclj_f64: return mk_double(tensor_get_f32_2d(tensor, i, j));
+  case nanoclj_val:
+    {
+      nanoclj_val_t v;
+      v.as_double = tensor_get_f64_2d(tensor, i, j);
+      return v;
+    }
+  }
+  return mk_nil();
 }
 
 static inline void tensor_set(nanoclj_tensor_t * tensor, int64_t i, nanoclj_val_t v) {
