@@ -596,14 +596,14 @@ static inline void set_indexed_value(nanoclj_cell_t * coll, size_t ielem, nanocl
     if (_is_small(coll)) {
       _smalldata_unchecked(coll)[1] = a;
     } else {
-      tensor_set_2d(_tensor_unchecked(coll), 1, _offset_unchecked(coll) + ielem, a);
+      tensor_mutate_set_2d(_tensor_unchecked(coll), 1, _offset_unchecked(coll) + ielem, a);
     }
     break;
   default:
     if (_is_small(coll)) {
       _smalldata_unchecked(coll)[ielem] = a;
     } else {
-      tensor_set(_tensor_unchecked(coll), _offset_unchecked(coll) + ielem, a);
+      tensor_mutate_set(_tensor_unchecked(coll), _offset_unchecked(coll) + ielem, a);
     }
   }
 }
@@ -614,7 +614,7 @@ static inline void set_indexed_meta(nanoclj_cell_t * coll, size_t ielem, nanoclj
     if (_is_small(coll)) {
       _smalldata_unchecked(coll)[2] = a;
     } else {
-      tensor_set_2d(_tensor_unchecked(coll), 2, _offset_unchecked(coll) + ielem, a);
+      tensor_mutate_set_2d(_tensor_unchecked(coll), 2, _offset_unchecked(coll) + ielem, a);
     }
     break;
   }
@@ -729,7 +729,7 @@ static inline void set_metadata(nanoclj_cell_t * c, nanoclj_cell_t * meta) {
     if (_is_small(c)) {
       c->_small_tensor.vals[2] = mk_pointer(meta);
     } else {
-      tensor_set_2d(c->_collection.tensor, 2, _offset_unchecked(c), mk_pointer(meta));
+      tensor_mutate_set_2d(c->_collection.tensor, 2, _offset_unchecked(c), mk_pointer(meta));
     }
     break;
   case T_LIST:
@@ -3852,7 +3852,7 @@ static inline nanoclj_cell_t * mk_class_with_meta(nanoclj_t * sc, nanoclj_val_t 
   while (sc->types->ne[0] <= (size_t)type_id) {
     tensor_mutate_push(sc->types, mk_nil());
   }
-  tensor_set(sc->types, type_id, mk_pointer(t));
+  tensor_mutate_set(sc->types, type_id, mk_pointer(t));
   intern_with_meta(sc, sc->current_ns, sym, mk_pointer(t), md);
 
   return t;
@@ -5709,17 +5709,30 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
     {
       nanoclj_tensor_type_t typ = (nanoclj_tensor_type_t)to_long(first(sc, args));
       args = next(sc, args);
-      nanoclj_val_t init_val = first(sc, args);
+      nanoclj_val_t source_val = first(sc, args);
       args = next(sc, args);
       int64_t dim1 = to_long(first(sc, args));
       nanoclj_tensor_t * tensor = mk_tensor_1d(typ, dim1);
-      switch (typ) {
-      case nanoclj_i8: tensor_mutate_fill_i8(tensor, to_int(init_val)); break;
-      case nanoclj_i16: tensor_mutate_fill_i16(tensor, to_int(init_val)); break;
-      case nanoclj_i32: tensor_mutate_fill_i32(tensor, to_int(init_val)); break;
-      case nanoclj_f32: tensor_mutate_fill_f32(tensor, to_double(init_val)); break;
-      case nanoclj_f64: tensor_mutate_fill_f64(tensor, to_double(init_val)); break;
-      case nanoclj_val: tensor_mutate_fill_f64(tensor, init_val.as_double); break;
+      nanoclj_cell_t * source_seq = NULL;
+      if (is_cell(source_val)) {
+	nanoclj_cell_t * c = decode_pointer(source_val);
+	if (c && (is_seqable_type(_type(c)) || _is_sequence(c))) {
+	  source_seq = seq(sc, c);
+	}
+      }
+      for (size_t i = 0; i < dim1; i++) {
+	if (source_seq) {
+	  source_val = first(sc, source_seq);
+	  source_seq = next(sc, source_seq);
+	}
+	switch (typ) {
+	case nanoclj_i8: tensor_mutate_set_i8(tensor, i, to_int(source_val)); break;
+	case nanoclj_i16: tensor_mutate_set_i16(tensor, i, to_int(source_val)); break;
+	case nanoclj_i32: tensor_mutate_set_i32(tensor, i, to_int(source_val)); break;
+	case nanoclj_f32: tensor_mutate_set_f32(tensor, i, to_double(source_val)); break;
+	case nanoclj_f64: tensor_mutate_set_f64(tensor, i, to_double(source_val)); break;
+	case nanoclj_val: tensor_mutate_set(tensor, i, source_val); break;
+	}
       }
       return mk_pointer(mk_object_from_tensor(sc, T_TENSOR, tensor));
     }

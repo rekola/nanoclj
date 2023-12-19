@@ -100,12 +100,36 @@ static inline bool tensor_is_identity(const nanoclj_tensor_t * tensor) {
   return false;
 }
 
-static inline void tensor_set_f64(nanoclj_tensor_t * tensor, int64_t i, double v) {
+static inline void tensor_mutate_set_i8(nanoclj_tensor_t * tensor, int64_t i, uint8_t v) {
+  ((uint8_t *)tensor->data)[i] = v;
+}
+
+static inline void tensor_mutate_set_i16(nanoclj_tensor_t * tensor, int64_t i, uint16_t v) {
+  ((uint16_t *)tensor->data)[i] = v;
+}
+
+static inline void tensor_mutate_set_i32(nanoclj_tensor_t * tensor, int64_t i, uint32_t v) {
+  ((uint32_t *)tensor->data)[i] = v;
+}
+
+static inline void tensor_mutate_set_f32(nanoclj_tensor_t * tensor, int64_t i, double v) {
+  ((float *)tensor->data)[i] = v;
+}
+
+static inline void tensor_mutate_set_f64(nanoclj_tensor_t * tensor, int64_t i, double v) {
   ((double *)tensor->data)[i] = v;
 }
 
-static inline void tensor_set_f64_2d(nanoclj_tensor_t * tensor, int64_t i, int64_t j, double v) {
+static inline void tensor_mutate_set_f64_2d(nanoclj_tensor_t * tensor, int64_t i, int64_t j, double v) {
   *(double *)(tensor->data + i * tensor->nb[0] + j * tensor->nb[1]) = v;
+}
+
+static inline void tensor_mutate_set(nanoclj_tensor_t * tensor, int64_t i, nanoclj_val_t v) {
+  tensor_mutate_set_f64(tensor, i, v.as_double);
+}
+
+static inline void tensor_mutate_set_2d(nanoclj_tensor_t * tensor, int64_t i, int64_t j, nanoclj_val_t v) {
+  tensor_mutate_set_f64_2d(tensor, i, j, v.as_double);
 }
 
 static inline uint8_t tensor_get_i8(const nanoclj_tensor_t * tensor, int64_t i) {
@@ -180,14 +204,6 @@ static inline nanoclj_val_t tensor_get_2d(const nanoclj_tensor_t * tensor, int64
     }
   }
   return mk_nil();
-}
-
-static inline void tensor_set(nanoclj_tensor_t * tensor, int64_t i, nanoclj_val_t v) {
-  tensor_set_f64(tensor, i, v.as_double);
-}
-
-static inline void tensor_set_2d(nanoclj_tensor_t * tensor, int64_t i, int64_t j, nanoclj_val_t v) {
-  tensor_set_f64_2d(tensor, i, j, v.as_double);
 }
 
 /* Creates a 1D tensor with padding (reserve space)*/
@@ -347,38 +363,6 @@ static inline size_t tensor_mutate_append_bytes(nanoclj_tensor_t * s, const uint
 
 static inline void tensor_mutate_fill_i8(nanoclj_tensor_t * tensor, uint8_t v) {
   memset(tensor->data, v, tensor->nb[tensor->n_dims]);
-}
-
-static inline void tensor_mutate_fill_i16(nanoclj_tensor_t * tensor, uint16_t v) {
-  for (size_t i = 0; i < tensor->ne[0]; i++) {
-    ((uint16_t *)tensor->data)[i] = v;
-  }
-}
-
-static inline void tensor_mutate_fill_i32(nanoclj_tensor_t * tensor, uint32_t v) {
-  for (size_t i = 0; i < tensor->ne[0]; i++) {
-    ((uint32_t *)tensor->data)[i] = v;
-  }
-}
-
-static inline void tensor_mutate_fill_f32(nanoclj_tensor_t * tensor, float v) {
-  for (size_t i = 0; i < tensor->ne[0]; i++) {
-    ((float *)tensor->data)[i] = v;
-  }
-}
-
-static inline void tensor_mutate_fill_f64(nanoclj_tensor_t * tensor, double v) {
-  for (size_t i = 0; i < tensor->ne[0]; i++) {
-    ((double *)tensor->data)[i] = v;
-  }
-}
-
-/* fill the tensor data with value (also the padding is filled) */
-static inline void tensor_mutate_fill_val(nanoclj_tensor_t * tensor, nanoclj_val_t v) {
-  size_t n = 0;
-  if (tensor->n_dims == 1) n = tensor->nb[1] / sizeof(nanoclj_val_t);
-  else if (tensor->n_dims == 2) n = tensor->nb[2] / sizeof(nanoclj_val_t);
-  for (size_t i = 0; i < n; i++) ((nanoclj_val_t*)tensor->data)[i] = v;
 }
 
 static inline void tensor_mutate_append_vec_f32(nanoclj_tensor_t * t, float * vec) {
@@ -934,11 +918,11 @@ static inline void _tensor_hash_mutate_set(nanoclj_tensor_t * tensor, uint32_t h
     if (sparse_indices[offset] == -1) {
       sparse_indices[offset] = val_index;
       if (tensor->n_dims == 2) {
-	tensor_set_2d(tensor, 0, offset, key);
-	tensor_set_2d(tensor, 1, offset, val);
-	if (tensor->ne[0] >= 3) tensor_set_2d(tensor, 2, offset, meta);
+	tensor_mutate_set_2d(tensor, 0, offset, key);
+	tensor_mutate_set_2d(tensor, 1, offset, val);
+	if (tensor->ne[0] >= 3) tensor_mutate_set_2d(tensor, 2, offset, meta);
       } else {
-	tensor_set(tensor, offset, key);
+	tensor_mutate_set(tensor, offset, key);
       }
       break;
     } else {

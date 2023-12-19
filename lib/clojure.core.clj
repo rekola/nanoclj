@@ -808,33 +808,45 @@
 
 (defn byte-array
   "Creates a byte array of specified size"
-  ([size] (byte-array size 0))
-  ([size init-val] (nanoclj.core.Tensor java.lang.Byte/TYPE init-val size)))
+  ([size-or-seq] (if (seq? size-or-seq)
+                   (byte-array (count size-or-seq) size-or-seq)
+                   (byte-array size-or-seq 0)))
+  ([size init-val-or-seq] (nanoclj.core.Tensor java.lang.Byte/TYPE init-val-or-seq size)))
 
 (defn short-array
   "Creates a short array of specified size"
-  ([size] (short-array size 0))
-  ([size init-val] (nanoclj.core.Tensor java.lang.Short/TYPE init-val size)))
+  ([size-or-seq] (if (seq? size-or-seq)
+                   (short-array (count size-or-seq) size-or-seq)
+                   (short-array size-or-seq 0)))
+  ([size init-val-or-seq] (nanoclj.core.Tensor java.lang.Short/TYPE init-val-or-seq size)))
 
 (defn int-array
   "Creates an int array of specified size"
-  ([size] (int-array size 0))
-  ([size init-val] (nanoclj.core.Tensor java.lang.Integer/TYPE init-val size)))
+  ([size-or-seq] (if (seq? size-or-seq)
+                   (int-array (count size-or-seq) size-or-seq)
+                   (int-array size-or-seq 0)))
+  ([size init-val-or-seq] (nanoclj.core.Tensor java.lang.Integer/TYPE init-val-or-seq size)))
 
 (defn float-array
   "Creates a float array of specified size"
-  ([size] (float-array size 0.0))
-  ([size init-val] (nanoclj.core.Tensor java.lang.Float/TYPE init-val size)))
+  ([size-or-seq] (if (seq? size-or-seq)
+                   (float-array (count size-or-seq) size-or-seq)
+                   (float-array size-or-seq 0.0)))
+  ([size init-val-or-seq] (nanoclj.core.Tensor java.lang.Float/TYPE init-val-or-seq size)))
 
 (defn double-array
-  "Creates a double array of specified size"
-  ([size] (double-array size 0.0))
-  ([size init-val] (nanoclj.core.Tensor java.lang.Double/TYPE init-val size)))
+  "Creates a float array of specified size"
+  ([size-or-seq] (if (seq? size-or-seq)
+                   (double-array (count size-or-seq) size-or-seq)
+                   (double-array size-or-seq 0.0)))
+  ([size init-val-or-seq] (nanoclj.core.Tensor java.lang.Double/TYPE init-val-or-seq size)))
 
 (defn object-array
   "Creates a object array of specified size"
-  ([size] (object-array size nil))
-  ([size init-val] (nanoclj.core.Tensor 6 init-val size)))
+  ([size-or-seq] (if (seq? size-or-seq)
+                   (object-array (count size-or-seq) size-or-seq)
+                   (object-array size-or-seq nil)))
+  ([size init-val-or-seq] (nanoclj.core.Tensor 6 init-val-or-seq size)))
 
 (defn alength
   "Returns the size of an array. For multidimensional arrays, returns the last dimension."
