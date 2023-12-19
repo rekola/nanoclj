@@ -1630,13 +1630,13 @@ static inline nanoclj_cell_t * mk_image(nanoclj_t * sc, int32_t width, int32_t h
   return img;
 }
 
-static inline nanoclj_cell_t * mk_object_from_tensor(nanoclj_t * sc, uint16_t type, nanoclj_tensor_t * tensor) {
+static inline nanoclj_cell_t * mk_object_from_tensor(nanoclj_t * sc, uint16_t type, size_t offset, size_t size, nanoclj_tensor_t * tensor) {
   nanoclj_cell_t * x = get_cell_x(sc, type, T_GC_ATOM, NULL, NULL, NULL);
   if (x) {
     tensor->refcnt++;
     x->_collection.tensor = tensor;
-    x->_collection.offset = 0;
-    x->_collection.size = tensor->ne[0];
+    x->_collection.offset = offset;
+    x->_collection.size = size;
 #ifdef RETAIN_ALLOCS
     retain(sc, x);
 #endif
@@ -5707,34 +5707,57 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
 
   case T_TENSOR:
     {
-      nanoclj_tensor_type_t typ = (nanoclj_tensor_type_t)to_long(first(sc, args));
+      nanoclj_val_t arg0 = first(sc, args);
       args = next(sc, args);
-      nanoclj_val_t source_val = first(sc, args);
-      args = next(sc, args);
-      int64_t dim1 = to_long(first(sc, args));
-      nanoclj_tensor_t * tensor = mk_tensor_1d(typ, dim1);
-      nanoclj_cell_t * source_seq = NULL;
-      if (is_cell(source_val)) {
-	nanoclj_cell_t * c = decode_pointer(source_val);
-	if (c && (is_seqable_type(_type(c)) || _is_sequence(c))) {
-	  source_seq = seq(sc, c);
+      if (args) {
+	nanoclj_tensor_type_t typ = (nanoclj_tensor_type_t)to_long(first(sc, args));
+	args = next(sc, args);
+	nanoclj_val_t source_val = first(sc, args);
+	args = next(sc, args);
+	int64_t dim1 = to_long(first(sc, args));
+	nanoclj_cell_t * source_seq = NULL;
+	if (is_cell(source_val)) {
+	  nanoclj_cell_t * c = decode_pointer(source_val);
+	  if (c && (is_seqable_type(_type(c)) || _is_sequence(c))) {
+	    source_seq = seq(sc, c);
+	  }
+	} else if (!is_number(source_val)) {
+	  nanoclj_throw(sc, mk_class_cast_exception(sc, "Argument cannot be cast to java.lang.Number"));
+	  break;
+	}
+	nanoclj_tensor_t * tensor = mk_tensor_1d(typ, dim1);
+	for (size_t i = 0; i < dim1; i++) {
+	  if (source_seq) {
+	    source_val = first(sc, source_seq);
+	    source_seq = next(sc, source_seq);
+	    if (!is_number(source_val)) {
+	      fprintf(stderr, "not a num\n");
+	      nanoclj_throw(sc, mk_class_cast_exception(sc, "Argument cannot be cast to java.lang.Number"));
+	      tensor_free(tensor);
+	      break;
+	    }
+	  }
+	  switch (typ) {
+	  case nanoclj_i8: tensor_mutate_set_i8(tensor, i, to_int(source_val)); break;
+	  case nanoclj_i16: tensor_mutate_set_i16(tensor, i, to_int(source_val)); break;
+	  case nanoclj_i32: tensor_mutate_set_i32(tensor, i, to_int(source_val)); break;
+	  case nanoclj_f32: tensor_mutate_set_f32(tensor, i, to_double(source_val)); break;
+	  case nanoclj_f64: tensor_mutate_set_f64(tensor, i, to_double(source_val)); break;
+	  case nanoclj_val: tensor_mutate_set(tensor, i, source_val); break;
+	  }
+	}
+	return mk_pointer(mk_object_from_tensor(sc, T_TENSOR, 0, dim1, tensor));
+      } else if (is_cell(arg0)) {
+	nanoclj_cell_t * c = decode_pointer(arg0);
+	if (_is_small(c)) {
+	  /* TODO */
+	} else {
+	  nanoclj_tensor_t * tensor = get_tensor(c);
+	  if (tensor) {
+	    return mk_pointer(mk_object_from_tensor(sc, T_TENSOR, _offset_unchecked(c), _size_unchecked(c), tensor));
+	  }
 	}
       }
-      for (size_t i = 0; i < dim1; i++) {
-	if (source_seq) {
-	  source_val = first(sc, source_seq);
-	  source_seq = next(sc, source_seq);
-	}
-	switch (typ) {
-	case nanoclj_i8: tensor_mutate_set_i8(tensor, i, to_int(source_val)); break;
-	case nanoclj_i16: tensor_mutate_set_i16(tensor, i, to_int(source_val)); break;
-	case nanoclj_i32: tensor_mutate_set_i32(tensor, i, to_int(source_val)); break;
-	case nanoclj_f32: tensor_mutate_set_f32(tensor, i, to_double(source_val)); break;
-	case nanoclj_f64: tensor_mutate_set_f64(tensor, i, to_double(source_val)); break;
-	case nanoclj_val: tensor_mutate_set(tensor, i, source_val); break;
-	}
-      }
-      return mk_pointer(mk_object_from_tensor(sc, T_TENSOR, tensor));
     }
 
   case T_GRADIENT:
@@ -5748,7 +5771,7 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
 	float v[] = { (float)i++ / (n - 1), c.red / 255.0f, c.green / 255.0f, c.blue / 255.0f, c.alpha / 255.0f };
 	tensor_mutate_append_vec_f32(tensor, v);
       }
-      return mk_pointer(mk_object_from_tensor(sc, T_GRADIENT, tensor));
+      return mk_pointer(mk_object_from_tensor(sc, T_GRADIENT, 0, tensor->ne[0], tensor));
     }
 
   case T_SHAPE:
@@ -5765,7 +5788,7 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
 	  tensor_mutate_append_vec_f32(tensor, v);
 	}
       }
-      return mk_pointer(mk_object_from_tensor(sc, T_GRADIENT, tensor));
+      return mk_pointer(mk_object_from_tensor(sc, T_SHAPE, 0, tensor->ne[0], tensor));
     }
 
   case T_BIGINT:

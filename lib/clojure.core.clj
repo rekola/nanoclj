@@ -11,30 +11,37 @@
 (defn gradient? [x] (instance? nanoclj.core.Gradient x))
 (defn inst? [x] (instance? java.util.Date x))
 (defn uuid? [x] (instance? java.util.UUID x))
-(defn coll? [x] (is-any-of? (type x)
-                            clojure.lang.APersistentSet
-                            clojure.lang.APersistentMap
-                            clojure.lang.PersistentVector
-                            clojure.lang.Cons
-                            ))
-(defn associative? [coll] (is-any-of? (type x)
-                                      clojure.lang.PersistentVector
-                                      clojure.lang.APersistentMap))
+(defn coll? [x] (or (instance? clojure.lang.APersistentSet)
+                    (instance? clojure.lang.APersistentMap)
+                    (is-any-of? (type x)
+                                clojure.lang.PersistentVector
+                                clojure.lang.PersistentQueue
+                                clojure.lang.Cons
+                            )))
+(defn associative? [coll] (or (instance? clojure.lang.PersistentVector x)
+                              (instance? clojure.lang.APersistentMap x)))
 (defn sequential?
   "Returns true if coll is sequential (ordered)"
   [coll] (is-any-of? (type coll) clojure.lang.PersistentVector clojure.lang.Cons))
 
 (defn counted?
   "Returns true if coll implements count in constant time"
-  [coll] (is-any-of? (type coll) clojure.lang.APersistentSet clojure.lang.APersistentMap clojure.lang.PersistentVector))
+  [coll] (or (instance? clojure.lang.APersistentSet coll)
+             (instance? clojure.lang.APersistentMap coll)
+             (instance? clojure.lang.PersistentVector coll)))
 
 (defn seq?
   "Returns true if coll is a Sequence"
   [coll] (or (instance? clojure.lang.Cons coll) (instance? clojure.lang.LazySeq coll) (equals? (-bit-and (-get-cell-flags coll) 1024) 1024)))
 
 (defn seqable?
-  "Returns true if coll supportes seq"
-  [coll] (is-any-of? (type coll) java.lang.String clojure.lang.LazySeq clojure.lang.PersistentVector clojure.lang.Cons clojure.lang.APersistentSet clojure.lang.APersistentMap))
+  "Returns true if coll supports seq"
+  [coll] (or (instance? java.lang.String coll)
+             (instance? clojure.lang.LazySeq coll)
+             (instance? clojure.lang.PersistentVector coll)
+             (instance? clojure.lang.Cons coll)
+             (instance? clojure.lang.APersistentSet coll)
+             (instance? clojure.lang.APersistentMap coll)))
 
 (defn realized?
   "Returns true if Delay or LazySeq has been realized"
@@ -804,49 +811,51 @@
 
 (defn rand-nth [coll] (nth coll (rand-int (count coll))))
 
-; Arrays
+; Arrays & tensors
+
+(def tensor nanoclj.core.Tensor)
 
 (defn byte-array
   "Creates a byte array of specified size"
-  ([size-or-seq] (if (seq? size-or-seq)
+  ([size-or-seq] (if (seqable? size-or-seq)
                    (byte-array (count size-or-seq) size-or-seq)
                    (byte-array size-or-seq 0)))
-  ([size init-val-or-seq] (nanoclj.core.Tensor java.lang.Byte/TYPE init-val-or-seq size)))
+  ([size init-val-or-seq] (tensor java.lang.Byte/TYPE init-val-or-seq size)))
 
 (defn short-array
   "Creates a short array of specified size"
-  ([size-or-seq] (if (seq? size-or-seq)
+  ([size-or-seq] (if (seqable? size-or-seq)
                    (short-array (count size-or-seq) size-or-seq)
                    (short-array size-or-seq 0)))
-  ([size init-val-or-seq] (nanoclj.core.Tensor java.lang.Short/TYPE init-val-or-seq size)))
+  ([size init-val-or-seq] (tensor java.lang.Short/TYPE init-val-or-seq size)))
 
 (defn int-array
   "Creates an int array of specified size"
-  ([size-or-seq] (if (seq? size-or-seq)
+  ([size-or-seq] (if (seqable? size-or-seq)
                    (int-array (count size-or-seq) size-or-seq)
                    (int-array size-or-seq 0)))
-  ([size init-val-or-seq] (nanoclj.core.Tensor java.lang.Integer/TYPE init-val-or-seq size)))
+  ([size init-val-or-seq] (tensor java.lang.Integer/TYPE init-val-or-seq size)))
 
 (defn float-array
   "Creates a float array of specified size"
-  ([size-or-seq] (if (seq? size-or-seq)
+  ([size-or-seq] (if (seqable? size-or-seq)
                    (float-array (count size-or-seq) size-or-seq)
                    (float-array size-or-seq 0.0)))
-  ([size init-val-or-seq] (nanoclj.core.Tensor java.lang.Float/TYPE init-val-or-seq size)))
+  ([size init-val-or-seq] (tensor java.lang.Float/TYPE init-val-or-seq size)))
 
 (defn double-array
   "Creates a float array of specified size"
-  ([size-or-seq] (if (seq? size-or-seq)
+  ([size-or-seq] (if (seqable? size-or-seq)
                    (double-array (count size-or-seq) size-or-seq)
                    (double-array size-or-seq 0.0)))
-  ([size init-val-or-seq] (nanoclj.core.Tensor java.lang.Double/TYPE init-val-or-seq size)))
+  ([size init-val-or-seq] (tensor java.lang.Double/TYPE init-val-or-seq size)))
 
 (defn object-array
   "Creates a object array of specified size"
-  ([size-or-seq] (if (seq? size-or-seq)
+  ([size-or-seq] (if (seqable? size-or-seq)
                    (object-array (count size-or-seq) size-or-seq)
                    (object-array size-or-seq nil)))
-  ([size init-val-or-seq] (nanoclj.core.Tensor 6 init-val-or-seq size)))
+  ([size init-val-or-seq] (tensor 6 init-val-or-seq size)))
 
 (defn alength
   "Returns the size of an array. For multidimensional arrays, returns the last dimension."
