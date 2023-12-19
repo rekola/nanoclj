@@ -21,7 +21,6 @@
 (def vector clojure.lang.PersistentVector)
 (def cons clojure.lang.Cons)
 (def boolean java.lang.Boolean)
-(def char-array nanoclj.core.CharArray)
 (def map-entry clojure.lang.MapEntry)
 (def image nanoclj.core.Image)
 

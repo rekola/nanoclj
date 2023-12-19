@@ -822,6 +822,11 @@
                    (byte-array size-or-seq 0)))
   ([size init-val-or-seq] (tensor java.lang.Byte/TYPE init-val-or-seq size)))
 
+(defn char-array
+  "Creates an array of UTF-8 code units from a string or from size and initial value or sequence. The resulting array is a byte array."
+  ([str] (tensor str))
+  ([size init-val-or-seq](tensor java.lang.Byte/TYPE init-val-or-seq size)))
+
 (defn short-array
   "Creates a short array of specified size"
   ([size-or-seq] (if (seqable? size-or-seq)

@@ -134,60 +134,59 @@ enum nanoclj_types {
   T_SYMBOL = 10,
   T_LIST = 11,
   T_STRING = 12,
-  T_CHAR_ARRAY = 13,
-  T_CLOSURE = 14,
-  T_RATIO = 15,
-  T_FOREIGN_FUNCTION = 16,
-  T_READER = 17,
-  T_WRITER = 18,
-  T_INPUT_STREAM = 19,
-  T_OUTPUT_STREAM = 20,
-  T_GZIP_INPUT_STREAM = 21,
-  T_GZIP_OUTPUT_STREAM = 22,
-  T_VECTOR = 23,
-  T_MACRO = 24,
-  T_LAZYSEQ = 25,
-  T_ENVIRONMENT = 26,
-  T_CLASS = 27,
-  T_MAPENTRY = 28,
-  T_ARRAYMAP = 29,
-  T_HASHMAP = 30,
-  T_SORTED_HASHMAP = 31,
-  T_VARMAP = 32,
-  T_HASHSET = 33,
-  T_SORTED_HASHSET = 34,
-  T_VAR = 35,
-  T_FOREIGN_OBJECT = 36,
-  T_BIGINT = 37,
-  T_BIGDECIMAL = 38,
-  T_REGEX = 39,
-  T_DELAY = 40,
-  T_IMAGE = 41,
-  T_VIDEO = 42,
-  T_AUDIO = 43,
-  T_FILE = 44,
-  T_URL = 45,
-  T_DATE = 46,
-  T_UUID = 47,
-  T_QUEUE = 48,
-  T_RUNTIME_EXCEPTION = 49,
-  T_ARITY_EXCEPTION = 50,
-  T_ILLEGAL_ARG_EXCEPTION = 51,
-  T_NUM_FMT_EXCEPTION = 52,
-  T_ARITHMETIC_EXCEPTION = 53,
-  T_CLASS_CAST_EXCEPTION = 54,
-  T_ILLEGAL_STATE_EXCEPTION = 55,
-  T_FILE_NOT_FOUND_EXCEPTION = 56,
-  T_INDEX_EXCEPTION = 57,
-  T_TENSOR = 58,
-  T_GRAPH = 59,
-  T_GRAPH_NODE = 60,
-  T_GRAPH_EDGE = 61,
-  T_GRADIENT = 62,
-  T_MESH = 63,
-  T_SHAPE = 64,
-  T_TABLE = 65,
-  T_LAST_SYSTEM_TYPE = 66
+  T_CLOSURE = 13,
+  T_RATIO = 14,
+  T_FOREIGN_FUNCTION = 15,
+  T_READER = 16,
+  T_WRITER = 17,
+  T_INPUT_STREAM = 18,
+  T_OUTPUT_STREAM = 19,
+  T_GZIP_INPUT_STREAM = 20,
+  T_GZIP_OUTPUT_STREAM = 21,
+  T_VECTOR = 22,
+  T_MACRO = 23,
+  T_LAZYSEQ = 24,
+  T_ENVIRONMENT = 25,
+  T_CLASS = 26,
+  T_MAPENTRY = 27,
+  T_ARRAYMAP = 28,
+  T_HASHMAP = 29,
+  T_SORTED_HASHMAP = 30,
+  T_VARMAP = 31,
+  T_HASHSET = 32,
+  T_SORTED_HASHSET = 33,
+  T_VAR = 34,
+  T_FOREIGN_OBJECT = 35,
+  T_BIGINT = 36,
+  T_BIGDECIMAL = 37,
+  T_REGEX = 38,
+  T_DELAY = 39,
+  T_IMAGE = 40,
+  T_VIDEO = 41,
+  T_AUDIO = 42,
+  T_FILE = 43,
+  T_URL = 44,
+  T_DATE = 45,
+  T_UUID = 46,
+  T_QUEUE = 47,
+  T_RUNTIME_EXCEPTION = 48,
+  T_ARITY_EXCEPTION = 49,
+  T_ILLEGAL_ARG_EXCEPTION = 50,
+  T_NUM_FMT_EXCEPTION = 51,
+  T_ARITHMETIC_EXCEPTION = 52,
+  T_CLASS_CAST_EXCEPTION = 53,
+  T_ILLEGAL_STATE_EXCEPTION = 54,
+  T_FILE_NOT_FOUND_EXCEPTION = 55,
+  T_INDEX_EXCEPTION = 56,
+  T_TENSOR = 57,
+  T_GRAPH = 58,
+  T_GRAPH_NODE = 59,
+  T_GRAPH_EDGE = 60,
+  T_GRADIENT = 61,
+  T_MESH = 62,
+  T_SHAPE = 63,
+  T_TABLE = 64,
+  T_LAST_SYSTEM_TYPE = 65
 };
 
 typedef struct {
@@ -411,11 +410,6 @@ static inline bool is_string(nanoclj_val_t p) {
   const nanoclj_cell_t * c = decode_pointer(p);
   return c && _type(c) == T_STRING;
 }
-static inline bool is_char_array(nanoclj_val_t p) {
-  if (!is_cell(p)) return false;
-  const nanoclj_cell_t * c = decode_pointer(p);
-  return c && _type(c) == T_CHAR_ARRAY;
-}
 static inline bool is_file(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
   const nanoclj_cell_t * c = decode_pointer(p);
@@ -436,6 +430,11 @@ static inline bool is_image(nanoclj_val_t p) {
   const nanoclj_cell_t * c = decode_pointer(p);
   return c && _type(c) == T_IMAGE;
 }
+static inline bool is_tensor(nanoclj_val_t p) {
+  if (!is_cell(p)) return false;
+  const nanoclj_cell_t * c = decode_pointer(p);
+  return c && _type(c) == T_TENSOR;
+}
 
 static inline bool is_seqable_type(uint_fast16_t t) {
   switch (t) {
@@ -443,7 +442,6 @@ static inline bool is_seqable_type(uint_fast16_t t) {
   case T_LIST:
   case T_LAZYSEQ:
   case T_STRING:
-  case T_CHAR_ARRAY:
   case T_FILE:
   case T_URL:
   case T_VECTOR:
@@ -492,7 +490,7 @@ static inline bool is_coll_type(uint_fast16_t t) {
 }
 
 static inline bool is_string_type(uint_fast16_t t) {
-  return t == T_STRING || t == T_CHAR_ARRAY || t == T_FILE || t == T_URL || t == T_UUID;
+  return t == T_STRING || t == T_FILE || t == T_URL || t == T_UUID;
 }
 
 static inline bool is_vector_type(uint_fast16_t t) {
@@ -546,7 +544,6 @@ static inline nanoclj_val_t get_indexed_value(const nanoclj_cell_t * coll, int64
     }
     break;
   case T_STRING:
-  case T_CHAR_ARRAY:
   case T_UUID:
   case T_FILE:
   case T_URL:
@@ -652,7 +649,6 @@ static inline nanoclj_tensor_t * get_tensor(nanoclj_cell_t * c) {
   case T_VAR:
   case T_QUEUE:
   case T_STRING:
-  case T_CHAR_ARRAY:
   case T_FILE:
   case T_URL:
   case T_UUID:
@@ -686,7 +682,6 @@ static inline int64_t get_offset(nanoclj_cell_t * c) {
   case T_VAR:
   case T_QUEUE:
   case T_STRING:
-  case T_CHAR_ARRAY:
   case T_FILE:
   case T_URL:
   case T_UUID:
@@ -1133,11 +1128,15 @@ static inline strview_t _to_strview(const nanoclj_cell_t * c) {
   case T_NIL:
     return (strview_t){ "()", 2 };
   case T_STRING:
-  case T_CHAR_ARRAY:
   case T_FILE:
   case T_URL:
   case T_UUID:
     return (strview_t){ get_const_ptr(c), get_size(c) };
+  case T_TENSOR:
+    if (c->_collection.tensor->type == nanoclj_i8) {
+      return (strview_t){ get_const_ptr(c), get_size(c) };
+    }
+    break;
   case T_READER:
   case T_WRITER:
     if (_port_type_unchecked(c) == port_string) {
@@ -2331,7 +2330,6 @@ static inline nanoclj_cell_t * seq(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_MACRO:
     return NULL;
   case T_STRING:
-  case T_CHAR_ARRAY:
   case T_FILE:
   case T_URL:
   case T_UUID:
@@ -2391,7 +2389,6 @@ static inline bool is_empty(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_NIL:
     return true;
   case T_STRING:
-  case T_CHAR_ARRAY:
   case T_FILE:
   case T_URL:
   case T_UUID:
@@ -2463,7 +2460,6 @@ static inline nanoclj_cell_t * rest(nanoclj_t * sc, nanoclj_cell_t * coll) {
     case T_VECTOR:
     case T_ARRAYMAP:
     case T_STRING:
-    case T_CHAR_ARRAY:
     case T_FILE:
     case T_URL:
     case T_QUEUE:
@@ -2613,7 +2609,6 @@ static inline nanoclj_val_t first(nanoclj_t * sc, nanoclj_cell_t * coll) {
     }
     break;
   case T_STRING:
-  case T_CHAR_ARRAY:
   case T_FILE:
   case T_URL:
     if (get_size(coll)) {
@@ -2671,7 +2666,6 @@ static inline size_t count(nanoclj_t * sc, nanoclj_cell_t * coll) {
 #endif
 
   case T_STRING:
-  case T_CHAR_ARRAY:
   case T_FILE:
   case T_URL:
   case T_UUID:
@@ -2840,7 +2834,6 @@ static uint32_t hasheq(nanoclj_val_t v, void * d) {
 	break;
 
       case T_STRING:
-      case T_CHAR_ARRAY:
       case T_FILE:
       case T_URL:
       case T_UUID:
@@ -3010,7 +3003,6 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
     nanoclj_cell_t * a = decode_pointer(a0), * b = decode_pointer(b0);
     switch (t_a) {
     case T_STRING:
-    case T_CHAR_ARRAY:
     case T_FILE:
     case T_URL:
     case T_UUID:
@@ -3136,7 +3128,6 @@ static size_t find_index(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t ke
     }
     break;
   case T_STRING:
-  case T_CHAR_ARRAY:
   case T_UUID:
   case T_FILE:
   case T_URL:
@@ -3376,7 +3367,6 @@ static inline int compare(nanoclj_t * sc, nanoclj_val_t a, nanoclj_val_t b) {
 	if (type_a == type_b) {
 	  switch (type_a) {
 	  case T_STRING:
-	  case T_CHAR_ARRAY:
 	  case T_FILE:
 	  case T_URL:
 	  case T_UUID:{
@@ -4331,7 +4321,7 @@ static inline nanoclj_cell_t * mk_reader(nanoclj_t * sc, uint16_t t, nanoclj_cel
       case T_FILE:
       case T_URL:
 	return decode_pointer(port_from_filename(sc, t, _to_strview(c)));
-      case T_CHAR_ARRAY:
+      case T_TENSOR:
 	return decode_pointer(port_from_string(sc, t, _to_strview(c)));
       case T_READER:
       case T_INPUT_STREAM:
@@ -5181,7 +5171,6 @@ static inline nanoclj_val_t mk_format(nanoclj_t * sc, strview_t fmt0, nanoclj_ce
       break;
     }
     case T_STRING:
-    case T_CHAR_ARRAY:
     case T_FILE:
     case T_URL:
     case T_UUID:
@@ -5461,7 +5450,6 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
     return mk_boolean(is_true(first(sc, args)));
 
   case T_STRING:
-  case T_CHAR_ARRAY:
   case T_FILE:
   case T_URL:
   case T_UUID:
@@ -5633,7 +5621,7 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
 	return x;
       } else if (is_string(x) || is_file(x)) {
 	return port_from_filename(sc, t, to_strview(x));
-      } else if (is_char_array(x)) {
+      } else if (is_tensor(x)) {
 	return port_from_string(sc, t, to_strview(x));
       } else {
 	args = next(sc, args);
@@ -5749,16 +5737,22 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
 	return mk_pointer(mk_object_from_tensor(sc, T_TENSOR, 0, dim1, tensor));
       } else if (is_cell(arg0)) {
 	nanoclj_cell_t * c = decode_pointer(arg0);
+	size_t size = get_size(c), offset = 0;
+	nanoclj_tensor_t * tensor = NULL;
 	if (_is_small(c)) {
-	  /* TODO */
+	  /* TODO: allow other types than i8 */
+	  tensor = mk_tensor_1d(nanoclj_i8, size);
+	  memcpy(tensor->data, get_const_ptr(c), size);
 	} else {
-	  nanoclj_tensor_t * tensor = get_tensor(c);
-	  if (tensor) {
-	    return mk_pointer(mk_object_from_tensor(sc, T_TENSOR, _offset_unchecked(c), _size_unchecked(c), tensor));
-	  }
+	  tensor = get_tensor(c);
+	}
+	if (tensor) {
+	  return mk_pointer(mk_object_from_tensor(sc, T_TENSOR, offset, size, tensor));
 	}
       }
     }
+    nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Invalid arguments for tensor")));
+    break;
 
   case T_GRADIENT:
     {
@@ -7274,7 +7268,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	case T_QUEUE:
 	  s_return(sc, c->_small_tensor.vals[idx]);
 	case T_STRING:
-	case T_CHAR_ARRAY:
 	case T_FILE:
 	case T_URL:
 	case T_UUID:
@@ -9188,7 +9181,6 @@ bool nanoclj_init(nanoclj_t * sc) {
   mk_class(sc, "nanoclj.core.ForeignObject", T_FOREIGN_OBJECT, AFn);
 
   mk_class(sc, "nanoclj.core.Codepoint", T_CODEPOINT, sc->Object);
-  mk_class(sc, "nanoclj.core.CharArray", T_CHAR_ARRAY, sc->Object);
   sc->Image = mk_class(sc, "nanoclj.core.Image", T_IMAGE, sc->Object);
   mk_class(sc, "nanoclj.core.Gradient", T_GRADIENT, sc->Object);
   mk_class(sc, "nanoclj.core.Mesh", T_MESH, sc->Object);
