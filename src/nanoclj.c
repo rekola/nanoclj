@@ -5485,7 +5485,8 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
       }
       if (is_cell(x) && !is_nil(x)) {
 	nanoclj_cell_t * c = decode_pointer(x);
-	if (!_is_small(c) && is_string_type(_type(c))) {
+	if (!_is_small(c) && (is_string_type(_type(c)) ||
+			      (_type(c) == T_TENSOR && c->_collection.tensor->type == nanoclj_i8))) {
 	  return mk_pointer(get_collection_object(sc, t, _offset_unchecked(c), _size_unchecked(c), _tensor_unchecked(c)));
 	}
       }
