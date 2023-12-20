@@ -58,8 +58,6 @@
 (def bigint clojure.lang.BigInt)
 (def biginteger clojure.lang.BigInt)
 
-(def resolve ns-resolve)
-
 (defn inst-ms
   "Returns millisecond time of java.util.Date"
   [x] (long x))
@@ -877,6 +875,12 @@
 (def subs -slice)
 
 ; Namespaces
+
+(defn resolve
+  [sym] (find (car *ns*) sym))
+
+(defn ns-resolve
+  [ns sym] (find (car ns) sym))
 
 (defn find-ns
   "Returns the namespace with the symbol x or nil"

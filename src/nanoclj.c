@@ -3149,11 +3149,11 @@ static size_t find_index(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t ke
 
   case T_SORTED_HASHSET:
   case T_SORTED_HASHMAP:
-  case T_VARMAP:
-  case T_ARRAYMAP:
     return find_hash_index(sc, coll, key, true);
   case T_HASHSET:
   case T_HASHMAP:
+  case T_VARMAP:
+  case T_ARRAYMAP:
     return find_hash_index(sc, coll, key, false);
 
   default:
@@ -6465,15 +6465,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       }
     } else {
       Error_0(sc, "Not a symbol");
-    }
-
-  case OP_NS_RESOLVE:                /* ns-resolve */
-    if (!unpack_args_1_plus(sc, &arg0, &arg_next)) {
-      return false;
-    } else if (arg_next) {
-      s_return(sc, mk_pointer(resolve_var(sc, decode_pointer(arg0), first(sc, arg_next))));
-    } else {
-      s_return(sc, mk_pointer(resolve_var(sc, sc->envir, arg0)));
     }
 
   case OP_INTERN:
