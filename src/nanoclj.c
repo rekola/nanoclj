@@ -254,6 +254,10 @@ static inline bool is_keyword(nanoclj_val_t v) {
   return (v.as_long >> 48) == SIGNATURE_KEYWORD;
 }
 
+static inline bool is_boolean(nanoclj_val_t v) {
+  return (v.as_long >> 48) == SIGNATURE_BOOLEAN;
+}
+
 /* returns the type of a, a must not be NULL */
 static inline uint_fast16_t _type(const nanoclj_cell_t * a) {
   if (a->flags & T_TYPE) return T_CLASS;
@@ -5436,6 +5440,24 @@ static inline bool destructure_value(nanoclj_t * sc, nanoclj_val_t e, nanoclj_va
   return true;
 }
 
+static inline bool check_tensor_value_type(nanoclj_t * sc, nanoclj_tensor_type_t t, nanoclj_val_t v) {
+  switch (t) {
+  case nanoclj_boolean:
+    if (!is_boolean(v)) {
+      nanoclj_throw(sc, mk_class_cast_exception(sc, "Argument cannot be cast to java.lang.Boolean"));
+      return false;
+    }
+  case nanoclj_val:
+    break;
+  default:
+    if (!is_number(v)) {
+      nanoclj_throw(sc, mk_class_cast_exception(sc, "Argument cannot be cast to java.lang.Number"));
+      return false;
+    }
+  }
+  return true;
+}
+
 /* Constructs an object by type, args are seqed */
 static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_cell_t * args) {
   nanoclj_val_t x, y;
@@ -5698,8 +5720,7 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
       nanoclj_val_t arg0 = first(sc, args);
       args = next(sc, args);
       if (args) {
-	nanoclj_tensor_type_t typ = (nanoclj_tensor_type_t)to_long(first(sc, args));
-	args = next(sc, args);
+	nanoclj_tensor_type_t typ = (nanoclj_tensor_type_t)to_long(arg0);
 	nanoclj_val_t source_val = first(sc, args);
 	args = next(sc, args);
 	int64_t dim1 = to_long(first(sc, args));
@@ -5709,8 +5730,7 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
 	  if (c && (is_seqable_type(_type(c)) || _is_sequence(c))) {
 	    source_seq = seq(sc, c);
 	  }
-	} else if (!is_number(source_val)) {
-	  nanoclj_throw(sc, mk_class_cast_exception(sc, "Argument cannot be cast to java.lang.Number"));
+	} else if (!check_tensor_value_type(sc, typ, source_val)) {
 	  break;
 	}
 	nanoclj_tensor_t * tensor = mk_tensor_1d(typ, dim1);
@@ -5718,14 +5738,13 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
 	  if (source_seq) {
 	    source_val = first(sc, source_seq);
 	    source_seq = next(sc, source_seq);
-	    if (!is_number(source_val)) {
-	      fprintf(stderr, "not a num\n");
-	      nanoclj_throw(sc, mk_class_cast_exception(sc, "Argument cannot be cast to java.lang.Number"));
+	    if (!check_tensor_value_type(sc, typ, source_val)) {
 	      tensor_free(tensor);
 	      break;
 	    }
 	  }
 	  switch (typ) {
+	  case nanoclj_boolean: tensor_mutate_set_i8(tensor, i, is_true(source_val) ? 1 : 0); break;
 	  case nanoclj_i8: tensor_mutate_set_i8(tensor, i, to_int(source_val)); break;
 	  case nanoclj_i16: tensor_mutate_set_i16(tensor, i, to_int(source_val)); break;
 	  case nanoclj_i32: tensor_mutate_set_i32(tensor, i, to_int(source_val)); break;
@@ -7255,6 +7274,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       if (tensor) {
 	idx += get_offset(c);
 	switch (tensor->type) {
+	case nanoclj_boolean: s_return(sc, mk_boolean(tensor_get_i8(tensor, idx)));
 	case nanoclj_i8: s_return(sc, mk_int(tensor_get_i8(tensor, idx)));
 	case nanoclj_i16: s_return(sc, mk_int(tensor_get_i16(tensor, idx)));
 	case nanoclj_i32: s_return(sc, mk_int(tensor_get_i32(tensor, idx)));

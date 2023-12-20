@@ -1,6 +1,6 @@
 (in-ns 'java.lang.Integer)
 
-(def TYPE 3)
+(def TYPE 4)
 (def MAX_VALUE 2147483647)
 (def MIN_VALUE -2147483647)
 

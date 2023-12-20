@@ -11,6 +11,7 @@
 (load-file "java.lang.Integer.clj")
 (load-file "java.lang.Float.clj")
 (load-file "java.lang.Double.clj")
+(load-file "java.lang.Boolean.clj")
 (load-file "java.lang.Byte.clj")
 (load-file "java.lang.Short.clj")
 (load-file "java.lang.Long.clj")

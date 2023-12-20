@@ -815,6 +815,13 @@
 
 (def tensor nanoclj.core.Tensor)
 
+(defn boolean-array
+  "Creates a boolean array of specified size"
+  ([size-or-seq] (if (seqable? size-or-seq)
+                   (boolean-array (count size-or-seq) size-or-seq)
+                   (boolean-array size-or-seq 0)))
+  ([size init-val-or-seq] (tensor java.lang.Boolean/TYPE init-val-or-seq size)))
+
 (defn byte-array
   "Creates a byte array of specified size"
   ([size-or-seq] (if (seqable? size-or-seq)
@@ -860,7 +867,7 @@
   ([size-or-seq] (if (seqable? size-or-seq)
                    (object-array (count size-or-seq) size-or-seq)
                    (object-array size-or-seq nil)))
-  ([size init-val-or-seq] (tensor 6 init-val-or-seq size)))
+  ([size init-val-or-seq] (tensor 7 init-val-or-seq size)))
 
 (defn alength
   "Returns the size of an array. For multidimensional arrays, returns the last dimension."

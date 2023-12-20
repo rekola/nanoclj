@@ -11,6 +11,7 @@
 
 static inline size_t tensor_get_cell_size(nanoclj_tensor_type_t t) {
   switch (t) {
+  case nanoclj_boolean: return sizeof(uint8_t);
   case nanoclj_i8: return sizeof(uint8_t);
   case nanoclj_i16: return sizeof(uint16_t);
   case nanoclj_i32: return sizeof(uint32_t);
@@ -87,6 +88,7 @@ static inline bool tensor_is_identity(const nanoclj_tensor_t * tensor) {
       (tensor->n_dims == 3 && tensor->ne[0] == 1 && tensor->ne[1] == 1 && tensor->ne[2] == 1)) {
     /* Simple one-element object */
     switch (tensor->type) {
+    case nanoclj_boolean:
     case nanoclj_i8: return *(uint8_t*)tensor->data == 1;
     case nanoclj_i16: return *(uint16_t*)tensor->data == 1;
     case nanoclj_i32: return *(uint32_t*)tensor->data == 1;
@@ -174,6 +176,7 @@ static inline double tensor_get_f64_2d(const nanoclj_tensor_t * tensor, int64_t 
 
 static inline nanoclj_val_t tensor_get(const nanoclj_tensor_t * tensor, int64_t i) {
   switch (tensor->type) {
+  case nanoclj_boolean: return mk_boolean(tensor_get_i8(tensor, i));
   case nanoclj_i8: return mk_byte(tensor_get_i8(tensor, i));
   case nanoclj_i16: return mk_short(tensor_get_i16(tensor, i));
   case nanoclj_i32: return mk_int(tensor_get_i32(tensor, i));
@@ -191,6 +194,7 @@ static inline nanoclj_val_t tensor_get(const nanoclj_tensor_t * tensor, int64_t 
 
 static inline nanoclj_val_t tensor_get_2d(const nanoclj_tensor_t * tensor, int64_t i, int64_t j) {
   switch (tensor->type) {
+  case nanoclj_boolean:
   case nanoclj_i8: return mk_byte(tensor_get_i8_2d(tensor, i, j));
   case nanoclj_i16: return mk_short(tensor_get_i16_2d(tensor, i, j));
   case nanoclj_i32: return mk_int(tensor_get_i32_2d(tensor, i, j));

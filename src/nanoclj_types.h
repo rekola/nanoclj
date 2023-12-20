@@ -11,7 +11,8 @@ typedef union {
 } nanoclj_val_t;
 
 typedef enum {
-  nanoclj_i8 = 1,
+  nanoclj_boolean = 1, /* 8-bit */
+  nanoclj_i8,
   nanoclj_i16,
   nanoclj_i32,
   nanoclj_f32,

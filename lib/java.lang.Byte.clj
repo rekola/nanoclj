@@ -1,3 +1,3 @@
 (in-ns 'java.lang.Byte)
 
-(def TYPE 1)
+(def TYPE 2)
