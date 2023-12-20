@@ -5316,30 +5316,6 @@ static inline valarrayview_t resolve(nanoclj_t * sc, nanoclj_cell_t * env0, nano
   return find_slot_in_env(sc, env, sym, all_namespaces);
 }
 
-static inline nanoclj_cell_t * resolve_var(nanoclj_t * sc, nanoclj_cell_t * env0, nanoclj_val_t sym0) {
-  symbol_t * s = decode_symbol(sym0);
-  nanoclj_cell_t * env;
-  nanoclj_val_t sym;
-  bool all_namespaces = true;
-  if (s->ns.size) {
-    valarrayview_t c = find_slot_in_env(sc, env0, s->ns_sym, true);
-    if (c.ptr) {
-      env = decode_pointer(slot_value_in_env(c));
-      sym = s->name_sym;
-      all_namespaces = false;
-    } else {
-      symbol_t * s2 = decode_symbol(s->ns_sym);
-      nanoclj_val_t msg = mk_string_fmt(sc, "%.*s is not defined", s2->name.size, s2->name.ptr);
-      nanoclj_throw(sc, mk_runtime_exception(sc, msg));
-      return NULL;
-    }
-  } else {
-    env = env0;
-    sym = sym0;
-  }
-  return get_var_in_env(sc, env, sym, all_namespaces);
-}
-
 static inline nanoclj_val_t resolve_value(nanoclj_t * sc, nanoclj_cell_t * env, nanoclj_val_t sym) {
   return slot_value_in_env(resolve(sc, env, sym));
 }
@@ -6450,24 +6426,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
    
   case OP_QUOTE:               /* quote */
     s_return(sc, car(sc->code));
-
-  case OP_VAR:                 /* var */
-    x = car(sc->code);
-    if (is_symbol(x)) {
-      nanoclj_cell_t * var = resolve_var(sc, sc->envir, x);
-      if (sc->pending_exception) {
-	return false;
-      } else if (var) {
-	s_return(sc, mk_pointer(var));
-      } else {
-	symbol_t * s = decode_symbol(x);
-	nanoclj_val_t msg = mk_string_fmt(sc, "Use of undeclared Var %.*s", s->full_name.size, s->full_name.ptr);
-	nanoclj_throw(sc, mk_runtime_exception(sc, msg));
-	return false;
-      }
-    } else {
-      Error_0(sc, "Not a symbol");
-    }
 
   case OP_INTERN:
     if (!unpack_args_2_plus(sc, &arg0, &arg1, &arg_next)) {
@@ -9030,7 +8988,6 @@ bool nanoclj_init(nanoclj_t * sc) {
 
   assign_syntax(sc, "fn", OP_LAMBDA);
   assign_syntax(sc, "quote", OP_QUOTE);
-  assign_syntax(sc, "var", OP_VAR);
   assign_syntax(sc, "def", OP_DEF0);
   assign_syntax(sc, "if", OP_IF0);
   assign_syntax(sc, "do", OP_DO);

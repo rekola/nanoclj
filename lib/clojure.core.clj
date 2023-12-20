@@ -876,15 +876,20 @@
 
 ; Namespaces
 
-(defn resolve
-  [sym] (find (car *ns*) sym))
-
 (defn ns-resolve
   [ns sym] (find (car ns) sym))
+
+(defn resolve
+  [sym] (ns-resolve *ns* sym))
 
 (defn find-ns
   "Returns the namespace with the symbol x or nil"
   [x] (let [ns (deref (resolve x))] (if (isa? clojure.lang.Namespace ns) ns nil)))
+
+(def-macro (var symbol) `(or (and (namespace ',symbol)
+                                  (ns-resolve (find-ns (symbol (namespace ',symbol))) (symbol (name ',symbol))))
+                             (resolve ',symbol)
+                             (throw (str "Use of undeclared Var " ',symbol))))
 
 (defn ns-map
   "Returns the var-map of namespace ns"
