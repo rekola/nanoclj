@@ -3822,9 +3822,9 @@ static inline void intern(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t sym
   intern_with_meta(sc, ns, symbol, value, NULL);
 }
 
-static inline void intern_with_nil(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t symbol) {
+static inline void intern_with_nil(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t symbol, nanoclj_cell_t * meta) {
   valarrayview_t var = find_slot_in_env(sc, ns, symbol, false);
-  if (!var.ptr) new_var_in_ns(sc, ns, symbol, mk_nil(), NULL);
+  if (!var.ptr) new_var_in_ns(sc, ns, symbol, mk_nil(), meta);
 }
 
 static inline nanoclj_val_t intern_foreign_func(nanoclj_t * sc, nanoclj_cell_t * ns, const char * name, foreign_func fptr, int min_arity, int max_arity) {
@@ -4893,7 +4893,8 @@ static inline void print_ratio(nanoclj_t * sc, int sign, nanoclj_tensor_t * num,
 /* Uses internal buffer unless string pointer is already available */
 static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_flag, nanoclj_cell_t * out) {
   strview_t sv = { 0, 0 };
-
+  nanoclj_val_t name = mk_nil();
+  
   switch (prim_type(l)) {
   case T_LONG:
     sv = (strview_t){
@@ -4928,20 +4929,21 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
       case T_NIL:
 	sv = _to_strview(c);
 	break;
-      case T_CLASS:
-      case T_VAR:{
-	nanoclj_val_t ns = mk_nil(), name_v = mk_nil();
+      case T_VAR:
+	name = first(sc, c);
+      case T_CLASS:{
+	nanoclj_val_t ns = mk_nil();
 	nanoclj_cell_t * md = get_metadata(c);
-	get_elem(sc, md, sc->NAME, &name_v);
 	get_elem(sc, md, sc->NS, &ns);
-	nanoclj_val_t ns_name_v = mk_nil();
-	if (!is_nil(ns)) {
-	  get_elem(sc, get_metadata(decode_pointer(ns)), sc->NAME, &ns_name_v);
-	}
-	if (!is_nil(name_v)) {
-	  sv = to_strview(name_v);
-	  if (!is_nil(ns_name_v)) {
-	    strview_t ns = to_strview(ns_name_v);
+	if (is_nil(name)) get_elem(sc, md, sc->NAME, &name);
+	if (!is_nil(name)) {
+	  nanoclj_val_t ns_name = mk_nil();
+	  if (!is_nil(ns)) {
+	    get_elem(sc, get_metadata(decode_pointer(ns)), sc->NAME, &ns_name);
+	  }
+	  sv = to_strview(name);
+	  if (!is_nil(ns_name)) {
+	    strview_t ns = to_strview(ns_name);
 	    const char * fmt = _type(c) == T_VAR ? "#'%.*s/%.*s" : "%.*s/%.*s";
 	    sv = (strview_t) {
 	      sc->strbuff,
@@ -6474,10 +6476,13 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       Error_0(sc, "Invalid types");
     } else { /* arg0: namespace, arg1: symbol */
       nanoclj_cell_t * ns = decode_pointer(arg0);
+      nanoclj_cell_t * meta = mk_meta_from_reader(sc, tensor_peek(sc->load_stack));
+      meta = assoc(sc, meta, sc->NAME, arg1);
+      meta = assoc(sc, meta, sc->NS, mk_pointer(ns));
       if (arg_next) {
-	intern(sc, ns, arg1, first(sc, arg_next));
+	intern_with_meta(sc, ns, arg1, first(sc, arg_next), meta);
       } else {
-	intern_with_nil(sc, ns, arg1);
+	intern_with_nil(sc, ns, arg1, meta);
       }
       s_return(sc, mk_pointer(get_var_in_env(sc, ns, arg1, false)));
     }
