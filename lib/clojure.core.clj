@@ -24,6 +24,9 @@
   "Returns true if coll is sequential (ordered)"
   [coll] (is-any-of? (type coll) clojure.lang.PersistentVector clojure.lang.Cons))
 
+(defn indexed?
+  [coll] (instance? clojure.lang.PersistentVector coll))
+
 (defn counted?
   "Returns true if coll implements count in constant time"
   [coll] (or (instance? clojure.lang.APersistentSet coll)
@@ -283,7 +286,7 @@
       (if kvs
         (if (next kvs)
           (recur new-map (first kvs) (second kvs) (nnext kvs))
-          (throw "Value missing for key"))
+          (throw (new RuntimeException "Value missing for key")))
         new-map))))
 
 (defn assoc-in
@@ -606,7 +609,7 @@
     ([coll index]
      (cond (vector? coll) (coll index)
      	   (string? coll) (coll index)
-     	   (or (< index 0) (empty? coll)) (throw "ERROR - Index out of bounds")
+     	   (or (< index 0) (empty? coll)) (throw (new IndexOutOfBoundsException "Index out of bounds"))
            (if (zero? index) (first coll) (recur (next coll) (dec index)))))
     ([coll index not-found]
      (cond (vector? coll) (coll index not-found)
@@ -618,13 +621,13 @@
 
 (defn nthrest
   "Returns the nth rest of coll"
-  [coll n] (cond (< n 0) (throw "Invalid argument")
+  [coll n] (cond (< n 0) (throw (new RuntimeException "Invalid argument"))
                  (= n 0) coll
                  :else (recur (rest coll) (dec n))))
 
 (defn nthnext
   "Returns the nth next of coll"
-  [coll n] (cond (< n 0) (throw "Invalid argument")
+  [coll n] (cond (< n 0) (throw (new RuntimeException "Invalid argument"))
                  (= n 0) (seq coll)
                  :else (recur (next coll) (dec n))))
 
@@ -718,7 +721,7 @@
           "true" true
           "false" false
           nil)
-        (throw "Not a string")))
+        (throw (new RuntimeException "Not a string"))))
 
 (defn parse-long
   "Parses a long"
@@ -766,11 +769,11 @@
 
 (defn cast
   "Returns x if it is an instance of class c, otherwise throws an exception"
-  [c x] (if (isa? c x) x (throw "Wrong class")))
+  [c x] (if (isa? c x) x (throw (new RuntimeException "Wrong class"))))
 
 (defn num
   "Returns x if it is a number, otherwise throws an exception"
-  [x] (if (isa? java.lang.Number x) x (throw "Not a number")))
+  [x] (if (isa? java.lang.Number x) x (throw (new RuntimeException "Not a number"))))
 
 (defn parents
   "Returns a set with the immmediate parents of the provided object"
@@ -889,7 +892,7 @@
 (def-macro (var symbol) `(or (and (namespace ',symbol)
                                   (ns-resolve (find-ns (symbol (namespace ',symbol))) (symbol (name ',symbol))))
                              (resolve ',symbol)
-                             (throw (str "Use of undeclared Var " ',symbol))))
+                             (throw (new RuntimeException (str "Use of undeclared Var " ',symbol)))))
 
 (defn ns-map
   "Returns the var-map of namespace ns"
@@ -899,7 +902,7 @@
   "Returns the namespace that the symbol x refers, or x itself, if x is a namespae"
   [x] (if (isa? clojure.lang.Namespace x)
         x
-        (or (find-ns x) (throw "No namespace found"))))
+        (or (find-ns x) (throw (new RuntimeException "No namespace found")))))
 
 (defn alias
   "Adds an alias in the current namespace to another namespace"

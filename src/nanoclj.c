@@ -5790,6 +5790,11 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
       nanoclj_bignum_t bn = to_bigint(first(sc, args));
       return mk_pointer(mk_bigint_from_tensor(sc, bn.sign, bn.tensor));
     }
+
+  case T_RUNTIME_EXCEPTION:
+  case T_INDEX_EXCEPTION:
+  case T_NUM_FMT_EXCEPTION:
+    return mk_pointer(get_cell(sc, t, 0, first(sc, args), NULL, NULL));
   }
   return mk_nil();
 }
@@ -7216,9 +7221,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     Error_0(sc, "Value is not ISeqable");
 
   case OP_AGET:
-    if (!unpack_args_2_not_nil(sc, &arg0, &arg1)) {
+    if (!unpack_args_2_plus(sc, &arg0, &arg1, &arg_next)) {
       return false;
-    } else if (is_cell(arg0)) { /* arg0 = idx, arg1 = val */
+    } else if (is_cell(arg0)) { /* arg0 = array, arg1 = idx, arg_rest = idxs */
       nanoclj_cell_t * c = decode_pointer(arg0);
       nanoclj_tensor_t * tensor = get_tensor(c);
       int64_t idx = to_long(arg1);
@@ -7716,7 +7721,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     if (!unpack_args_1_not_nil(sc, &arg0)) {
       return false;
     } else {
-      sc->pending_exception = mk_runtime_exception(sc, arg0);
+      sc->pending_exception = decode_pointer(arg0);
       return false;
     }
 

@@ -6,4 +6,4 @@
 
 (def parseInt
   "Parses a string to get an Integer"
-  (fn [str] (let [n (read-string str)] (if (number? n) n nil))))
+  (fn [str] (let [n (read-string str)] (if (number? n) n (throw (new NumberFormatException "Invalid number format"))))))

@@ -164,7 +164,7 @@
                      :else (if (zero? level)
                              (cond (equals? (car form) 'unquote) (car (cdr form))
                                    (equals? (car form) 'unquote-splicing)
-                                   (throw (str "Unquote-splicing wasn't in a list:" form))
+                                   (throw (new RuntimeException (str "Unquote-splicing wasn't in a list:" form)))
                                    (and (list? (car form))
                                         (equals? (car (car form)) 'unquote-splicing))
                                    (mappend form (car (cdr (car form)))
@@ -228,7 +228,7 @@
     (foldr f (f x (car lst)) (cdr lst))))
 
 (def-macro (case e $ clauses)
-  (if (empty? clauses) `(throw (str "No matching clause: " ,e))
+  (if (empty? clauses) `(throw (new RuntimeException (str "No matching clause: " ,e)))
       (if (empty? (rest clauses))
         (first clauses)
         `(if (equals? ,e ,(car clauses))
