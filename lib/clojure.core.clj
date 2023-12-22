@@ -90,7 +90,7 @@
 (defn float? [n] (instance? java.lang.Double x))
 (defn double? [n] (instance? java.lang.Double x))
 (defn NaN? [n] (identical? n ##NaN))
-(defn infinite? [n] (or (== n ##Inf) (== n ##-Inf)))
+(defn infinite? [n] (or (identical? n ##Inf) (identical? n ##-Inf)))
 
 (defn mod
   "Modulus of num and div. Not the same as C's % operator (which is rem) but Knuth's mod (truncating towards negativity)."
