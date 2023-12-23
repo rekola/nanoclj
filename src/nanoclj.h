@@ -119,7 +119,6 @@ typedef struct nanoclj_cell_t nanoclj_cell_t;
 
     nanoclj_val_t (*first)(nanoclj_t * sc, nanoclj_cell_t * coll);
     bool (*is_empty)(nanoclj_t * sc, nanoclj_cell_t * coll);
-    nanoclj_cell_t * (*rest)(nanoclj_t * sc, nanoclj_cell_t * coll);
     nanoclj_cell_t * (*next)(nanoclj_t * sc, nanoclj_cell_t * coll);
 
     bool (*is_symbol) (nanoclj_val_t p);

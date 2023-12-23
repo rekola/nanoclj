@@ -18,7 +18,7 @@
 #define SIGNATURE_PROC		(MASK_EXPONENT | MASK_QUIET | 4)
 #define SIGNATURE_KEYWORD	(MASK_EXPONENT | MASK_QUIET | 5)
 #define SIGNATURE_SYMBOL	(MASK_EXPONENT | MASK_QUIET | 6)
-/* 7: unassigned */
+#define SIGNATURE_EMPTYLIST	(MASK_EXPONENT | MASK_QUIET | 7)
 
 /* Predefined primitive values */
 #define kNIL	UINT64_C(18444492273895866368)
@@ -27,6 +27,10 @@
 
 static inline nanoclj_val_t mk_nil() {
   return (nanoclj_val_t)kNIL;
+}
+
+static inline bool is_nil(nanoclj_val_t v) {
+  return v.as_long == kNIL;
 }
 
 static inline bool is_cell(nanoclj_val_t v) {
@@ -54,6 +58,10 @@ static inline nanoclj_val_t mk_proc(enum nanoclj_opcode op) {
   return (nanoclj_val_t)((SIGNATURE_PROC << 48) | (uint32_t)op);
 }
 
+static inline nanoclj_val_t mk_emptylist() {
+  return (nanoclj_val_t)(SIGNATURE_EMPTYLIST << 48);
+}
+
 static inline nanoclj_val_t mk_boolean(bool b) {
   nanoclj_val_t v;
   v.as_long = b ? kTRUE : kFALSE;
@@ -67,6 +75,18 @@ static inline nanoclj_val_t mk_double(double n) {
 
 static inline int32_t decode_integer(nanoclj_val_t value) {
   return (uint32_t)(value.as_long & 0xffffffff);
+}
+
+static inline bool is_symbol(nanoclj_val_t v) {
+  return (v.as_long >> 48) == SIGNATURE_SYMBOL;
+}
+
+static inline bool is_keyword(nanoclj_val_t v) {
+  return (v.as_long >> 48) == SIGNATURE_KEYWORD;
+}
+
+static inline bool is_boolean(nanoclj_val_t v) {
+  return (v.as_long >> 48) == SIGNATURE_BOOLEAN;
 }
 
 #endif
