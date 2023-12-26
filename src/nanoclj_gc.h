@@ -206,7 +206,6 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_c
   if (c) mark(c);
 
   /* garbage collect */
-  clrmark(sc->EMPTY);
   ctx->fcells = 0;
   nanoclj_cell_t * free_cell = decode_pointer(sc->EMPTY);
   
@@ -238,8 +237,8 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_c
       }
     }
   }
-    
-  ctx->free_cell = free_cell != &(sc->_EMPTY) ? free_cell : NULL;
+
+  ctx->free_cell = free_cell;
   
 #if GC_VERBOSE
   char msg[80];

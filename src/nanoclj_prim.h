@@ -89,4 +89,8 @@ static inline bool is_boolean(nanoclj_val_t v) {
   return (v.as_long >> 48) == SIGNATURE_BOOLEAN;
 }
 
+static inline bool is_emptylist(nanoclj_val_t v) {
+  return (v.as_long >> 48) == SIGNATURE_EMPTYLIST;
+}
+
 #endif

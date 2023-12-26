@@ -7,9 +7,7 @@
 #define NANOCLJ_SMALL_LV_SIZE 3
 #define NANOCLJ_SMALL_STR_SIZE 24
 
-#ifndef STRBUFFSIZE
 #define STRBUFFSIZE 256
-#endif
 
 #include <zlib.h>
 
@@ -176,7 +174,6 @@ extern "C" {
     nanoclj_cell_t * MalformedURLException;
     
     nanoclj_cell_t sink;	      /* when mem. alloc. fails */
-    nanoclj_cell_t _EMPTY;
     nanoclj_val_t EMPTY;              /* special cell representing empty list */
     nanoclj_tensor_t * oblist;         /* pointer to symbol table */
     nanoclj_cell_t * current_ns;         /* pointer to global environment */

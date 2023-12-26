@@ -122,71 +122,72 @@
 
 enum nanoclj_types {
   T_NIL = 0,
-  T_DOUBLE = 1,
-  T_BOOLEAN = 2,
-  T_BYTE = 3,
-  T_SHORT = 4,
-  T_INTEGER = 5,
-  T_LONG = 6,
-  T_CODEPOINT = 7,
-  T_PROC = 8,
-  T_KEYWORD = 9,
-  T_SYMBOL = 10,
-  T_LIST = 11,
-  T_STRING = 12,
-  T_CLOSURE = 13,
-  T_RATIO = 14,
-  T_FOREIGN_FUNCTION = 15,
-  T_READER = 16,
-  T_WRITER = 17,
-  T_INPUT_STREAM = 18,
-  T_OUTPUT_STREAM = 19,
-  T_GZIP_INPUT_STREAM = 20,
-  T_GZIP_OUTPUT_STREAM = 21,
-  T_VECTOR = 22,
-  T_MACRO = 23,
-  T_LAZYSEQ = 24,
-  T_ENVIRONMENT = 25,
-  T_CLASS = 26,
-  T_MAPENTRY = 27,
-  T_ARRAYMAP = 28,
-  T_HASHMAP = 29,
-  T_SORTED_HASHMAP = 30,
-  T_VARMAP = 31,
-  T_HASHSET = 32,
-  T_SORTED_HASHSET = 33,
-  T_VAR = 34,
-  T_FOREIGN_OBJECT = 35,
-  T_BIGINT = 36,
-  T_BIGDECIMAL = 37,
-  T_REGEX = 38,
-  T_DELAY = 39,
-  T_IMAGE = 40,
-  T_VIDEO = 41,
-  T_AUDIO = 42,
-  T_FILE = 43,
-  T_URL = 44,
-  T_DATE = 45,
-  T_UUID = 46,
-  T_QUEUE = 47,
-  T_RUNTIME_EXCEPTION = 48,
-  T_ARITY_EXCEPTION = 49,
-  T_ILLEGAL_ARG_EXCEPTION = 50,
-  T_NUM_FMT_EXCEPTION = 51,
-  T_ARITHMETIC_EXCEPTION = 52,
-  T_CLASS_CAST_EXCEPTION = 53,
-  T_ILLEGAL_STATE_EXCEPTION = 54,
-  T_FILE_NOT_FOUND_EXCEPTION = 55,
-  T_INDEX_EXCEPTION = 56,
-  T_TENSOR = 57,
-  T_GRAPH = 58,
-  T_GRAPH_NODE = 59,
-  T_GRAPH_EDGE = 60,
-  T_GRADIENT = 61,
-  T_MESH = 62,
-  T_SHAPE = 63,
-  T_TABLE = 64,
-  T_LAST_SYSTEM_TYPE = 65
+  T_EMPTYLIST = 1,
+  T_DOUBLE = 2,
+  T_BOOLEAN = 3,
+  T_BYTE = 4,
+  T_SHORT = 5,
+  T_INTEGER = 6,
+  T_LONG = 7,
+  T_CODEPOINT = 8,
+  T_PROC = 9,
+  T_KEYWORD = 10,
+  T_SYMBOL = 11,
+  T_LIST = 12,
+  T_STRING = 13,
+  T_CLOSURE = 14,
+  T_RATIO = 15,
+  T_FOREIGN_FUNCTION = 16,
+  T_READER = 17,
+  T_WRITER = 18,
+  T_INPUT_STREAM = 19,
+  T_OUTPUT_STREAM = 20,
+  T_GZIP_INPUT_STREAM = 21,
+  T_GZIP_OUTPUT_STREAM = 22,
+  T_VECTOR = 23,
+  T_MACRO = 24,
+  T_LAZYSEQ = 25,
+  T_ENVIRONMENT = 26,
+  T_CLASS = 27,
+  T_MAPENTRY = 28,
+  T_ARRAYMAP = 29,
+  T_HASHMAP = 30,
+  T_SORTED_HASHMAP = 31,
+  T_VARMAP = 32,
+  T_HASHSET = 33,
+  T_SORTED_HASHSET = 34,
+  T_VAR = 35,
+  T_FOREIGN_OBJECT = 36,
+  T_BIGINT = 37,
+  T_BIGDECIMAL = 38,
+  T_REGEX = 39,
+  T_DELAY = 40,
+  T_IMAGE = 41,
+  T_VIDEO = 42,
+  T_AUDIO = 43,
+  T_FILE = 44,
+  T_URL = 45,
+  T_DATE = 46,
+  T_UUID = 47,
+  T_QUEUE = 48,
+  T_RUNTIME_EXCEPTION = 49,
+  T_ARITY_EXCEPTION = 50,
+  T_ILLEGAL_ARG_EXCEPTION = 51,
+  T_NUM_FMT_EXCEPTION = 52,
+  T_ARITHMETIC_EXCEPTION = 53,
+  T_CLASS_CAST_EXCEPTION = 54,
+  T_ILLEGAL_STATE_EXCEPTION = 55,
+  T_FILE_NOT_FOUND_EXCEPTION = 56,
+  T_INDEX_EXCEPTION = 57,
+  T_TENSOR = 58,
+  T_GRAPH = 59,
+  T_GRAPH_NODE = 60,
+  T_GRAPH_EDGE = 61,
+  T_GRADIENT = 62,
+  T_MESH = 63,
+  T_SHAPE = 64,
+  T_TABLE = 65,
+  T_LAST_SYSTEM_TYPE = 66
 };
 
 typedef struct {
@@ -221,6 +222,7 @@ typedef struct {
 static uint_fast16_t prim_type_extended(nanoclj_val_t value) {
   uint64_t signature = value.as_long >> 48;
   switch (signature) {
+  case SIGNATURE_EMPTYLIST: return T_EMPTYLIST;
   case SIGNATURE_CELL: return T_NIL;
   case SIGNATURE_BOOLEAN: return T_BOOLEAN;
   case SIGNATURE_INTEGER: return T_BYTE + ((value.as_long >> 32) & 0xffff);
@@ -235,6 +237,7 @@ static uint_fast16_t prim_type_extended(nanoclj_val_t value) {
 static uint_fast16_t prim_type(nanoclj_val_t value) {
   uint64_t signature = value.as_long >> 48;
   switch (signature) {
+  case SIGNATURE_EMPTYLIST: return T_EMPTYLIST;
   case SIGNATURE_CELL: return T_NIL;
   case SIGNATURE_BOOLEAN: return T_BOOLEAN;
   case SIGNATURE_INTEGER: return T_LONG;
@@ -327,14 +330,33 @@ static inline void free_symbol(symbol_t * s) {
 }
 
 #define _is_gc_atom(p)            (p->flags & T_GC_ATOM)
+
+#if 1
+static inline nanoclj_val_t _car(const nanoclj_cell_t * c) {
+  if (c) return c->_cons.car;
+  else return mk_nil();
+}
+static inline nanoclj_val_t _cdr(const nanoclj_cell_t * c) {
+  if (c) return c->_cons.cdr;
+  else return mk_nil();
+}
+static inline void _set_car(nanoclj_cell_t * c, nanoclj_val_t v) {
+  if (c) c->_cons.car = v;
+}
+static inline void _set_cdr(nanoclj_cell_t * c, nanoclj_val_t v) {
+  if (c) c->_cons.cdr = v;
+}
+#else
 #define _car(p)		 	  ((p)->_cons.car)
 #define _cdr(p)			  ((p)->_cons.cdr)
 #define _set_car(p, v)         	  _car(p) = v
 #define _set_cdr(p, v)         	  _cdr(p) = v
+#endif
+
 #define car(p)           	  _car(decode_pointer(p))
 #define cdr(p)           	  _cdr(decode_pointer(p))
-#define set_car(p, v)         	  _car(decode_pointer(p)) = v
-#define set_cdr(p, v)         	  _cdr(decode_pointer(p)) = v
+#define set_car(p, v)         	  _set_car(decode_pointer(p), v)
+#define set_cdr(p, v)         	  _set_cdr(decode_pointer(p), v)
 
 #define _cons_metadata(p)	  ((p)->_cons.meta)
 #define _ff_metadata(p)		  ((p)->_ff.meta)
@@ -1113,8 +1135,6 @@ static inline strview_t mk_strview(const char * s) {
 
 static inline strview_t _to_strview(const nanoclj_cell_t * c) {
   switch (_type(c)) {
-  case T_NIL:
-    return (strview_t){ "()", 2 };
   case T_STRING:
   case T_FILE:
   case T_URL:
@@ -1138,6 +1158,8 @@ static inline strview_t _to_strview(const nanoclj_cell_t * c) {
 
 static inline strview_t to_strview(nanoclj_val_t x) {
   switch (prim_type(x)) {
+  case T_EMPTYLIST:
+    return (strview_t){ "()", 2 };
   case T_BOOLEAN:
     return decode_integer(x) == 0 ? (strview_t){ "false", 5 } : (strview_t){ "true", 4 };
   case T_SYMBOL:
@@ -3613,8 +3635,9 @@ static inline nanoclj_cell_t * assoc(nanoclj_t * sc, nanoclj_cell_t * coll, nano
 }
 
 static inline nanoclj_cell_t * conjoin(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t new_value) {
-  if (!coll) coll = &(sc->_EMPTY);
-
+  if (!coll) {
+    return get_cell(sc, T_LIST, 0, new_value, coll, NULL);
+  }
   int t = _type(coll);
   if (_is_sequence(coll) || t == T_NIL || t == T_LIST || t == T_LAZYSEQ) {
     return get_cell(sc, T_LIST, 0, new_value, coll, NULL);
@@ -3682,10 +3705,9 @@ static inline void new_var_in_ns(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_va
 }
 
 static inline valarrayview_t find_slot_in_env(nanoclj_t * sc, nanoclj_cell_t * env, nanoclj_val_t hdl, bool all) {
-  if (env == &(sc->_EMPTY)) env = NULL;
   for (nanoclj_cell_t * x = env; x; x = decode_list(sc, _cdr(x))) {
     nanoclj_cell_t * y = decode_pointer(_car(x));
-    if (_type(y) == T_VARMAP) {
+    if (y && _type(y) == T_VARMAP) {
       size_t idx = find_varmap_index(y, hdl);
       if (idx != NPOS) {
 	if (_is_small(y)) {
@@ -3696,7 +3718,6 @@ static inline valarrayview_t find_slot_in_env(nanoclj_t * sc, nanoclj_cell_t * e
 	}
       }
     } else {
-      if (y == &(sc->_EMPTY)) y = NULL;
       for (; y; y = decode_list(sc, _cdr(y))) {
 	nanoclj_cell_t * var = decode_pointer(_car(y));
 	nanoclj_val_t sym = get_indexed_value(var, 0);
@@ -4908,6 +4929,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
       };
     }
     break;
+  case T_EMPTYLIST:
   case T_BOOLEAN:
   case T_SYMBOL:
   case T_KEYWORD:
@@ -5212,9 +5234,6 @@ static inline nanoclj_val_t mk_format(nanoclj_t * sc, strview_t fmt0, nanoclj_ce
 
 /* reverse list --- in-place */
 static inline nanoclj_cell_t * reverse_in_place(nanoclj_t * sc, nanoclj_cell_t * p) {
-  if (p == &(sc->_EMPTY)) {
-    p = NULL;
-  }
   nanoclj_cell_t * result = NULL;
   while (p) {
     nanoclj_cell_t * q = decode_list(sc, _cdr(p));
@@ -5226,9 +5245,6 @@ static inline nanoclj_cell_t * reverse_in_place(nanoclj_t * sc, nanoclj_cell_t *
 }
 
 static inline nanoclj_cell_t * reverse_in_place_with_term(nanoclj_t * sc, nanoclj_val_t term, nanoclj_cell_t * p) {
-  if (p == &(sc->_EMPTY)) {
-    p = NULL;
-  }
   nanoclj_val_t result = term;
   while (p) {
     nanoclj_cell_t * q = decode_list(sc, _cdr(p));
@@ -5354,7 +5370,7 @@ static inline bool destructure(nanoclj_t * sc, nanoclj_cell_t * binding, nanoclj
     new_slot_in_env(sc, as, mk_pointer(y));
     n -= 2;
   }
-  
+
   if (first_level) {
     bool multi = n >= 2 && get_indexed_value(binding, n - 2).as_long == sc->AMP.as_long;
     if (!multi && num_args != n) {
@@ -5396,6 +5412,7 @@ static inline bool destructure(nanoclj_t * sc, nanoclj_cell_t * binding, nanoclj
       return false;
     }
   }
+
   if (first_level && y) {
     /* Too many arguments */
     return false;
@@ -6216,7 +6233,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 
   case OP_APPLY:               /* apply 'code' to 'args' */
     switch (prim_type(sc->code)) {
-    case T_PROC: 
+    case T_PROC:
       s_goto(sc, decode_integer(sc->code));
       
     case T_KEYWORD:
@@ -6298,7 +6315,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	params0 = car(x);
 	params = decode_pointer(params0);
 
-	if (_type(params) == T_VECTOR) { /* Clojure style arguments */
+	if (!params) { /* lazy-seqs etc. do not have params */
+	  sc->code = cdr(x);
+	} else if (_type(params) == T_VECTOR) { /* Clojure style arguments */
 	  int64_t n = count(sc, sc->args);
 	  if (!destructure(sc, params, sc->args, n, true)) {
 	    nanoclj_val_t ns = mk_nil(), name_v = mk_nil();
@@ -6368,6 +6387,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  }
 	  sc->code = cdr(closure_code(code_cell));
 	}
+
 	sc->args = NULL;
 	s_goto(sc, OP_DO);
       default:
@@ -6450,19 +6470,21 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     
   case OP_DEF0:{                /* define */
     nanoclj_cell_t * code = decode_pointer(sc->code);
-    x = _car(code);
+    x = first(sc, code);
+    code = next(sc, code);
     if (!is_symbol(x) || decode_symbol(x)->ns.size) {
       Error_0(sc, "Variable is not an unqualified symbol");
     }
     nanoclj_cell_t * meta = mk_meta_from_reader(sc, tensor_peek(sc->load_stack));
     meta = assoc(sc, meta, sc->NAME, x);
     meta = assoc(sc, meta, sc->NS, mk_pointer(sc->current_ns));
-    
-    if (_caddr(code).as_long != sc->EMPTY.as_long) {
-      meta = assoc(sc, meta, sc->DOC, _cadr(code));
-      sc->code = _caddr(code);
+
+    nanoclj_cell_t * code2 = next(sc, code);
+    if (code2) {
+      meta = assoc(sc, meta, sc->DOC, first(sc, code));
+      sc->code = first(sc, code2);
     } else {
-      sc->code = _cadr(code);
+      sc->code = first(sc, code);
     }
     
     s_save(sc, OP_DEF1, meta, x);
@@ -6511,12 +6533,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     if (is_true(sc->value)) {
       sc->code = car(sc->code);
     } else {
-      /* (if false 1) ==> () because car(sc->EMPTY) = sc->EMPTY */
+      /* (if false 1) ==> nil because car(sc->EMPTY) = nil */
       sc->code = cadr(sc->code);
-    }
-    /* Hack: Clojure differs from Scheme so change '() to nil */
-    if (sc->code.as_long == sc->EMPTY.as_long) {
-      sc->code = mk_nil();
     }
     s_goto(sc, OP_EVAL);
 
@@ -6609,9 +6627,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 
   case OP_LET2:                /* let */
     new_frame_in_env(sc, sc->envir);
-    if (sc->args == &(sc->_EMPTY)) {
-      sc->args = NULL;
-    }
     for (x = is_symbol(car(sc->code)) ? cadr(sc->code) : car(sc->code),
 	   z = sc->args; z; x = cdr(x), z = decode_list(sc, _cdr(z))) {
       new_slot_in_env(sc, caar(x), _car(z));
@@ -7186,7 +7201,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_FIRST:                 /* first */
     if (!unpack_args_1(sc, &arg0)) {
       return false;
-    } else if (is_cell(arg0)) {
+    } else if (is_cell(arg0) || is_emptylist(arg0)) {
       nanoclj_cell_t * c = decode_pointer(arg0);
       if (!c || _is_sequence(c) || is_seqable_type(_type(c))) {
 	s_return(sc, first(sc, c));
@@ -7197,7 +7212,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_SECOND:
     if (!unpack_args_1(sc, &arg0)) {
       return false;
-    } else if (is_cell(arg0)) {
+    } else if (is_cell(arg0) || is_emptylist(arg0)) {
       nanoclj_cell_t * c = decode_pointer(arg0);
       if (!c || _is_sequence(c) || is_seqable_type(_type(c))) {
 	s_return(sc, second(sc, c));
@@ -7209,7 +7224,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_NEXT:
     if (!unpack_args_1(sc, &arg0)) {
       return false;
-    } else if (is_cell(arg0)) {
+    } else if (is_cell(arg0) || is_emptylist(arg0)) {
       nanoclj_cell_t * c = decode_pointer(arg0);
       if (!c || _is_sequence(c) || is_seqable_type(_type(c))) {
 	if (op == OP_NEXT) {
@@ -7296,7 +7311,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_CONJ:             /* -conj */
     if (!unpack_args_2(sc, &arg0, &arg1)) {
       return false;
-    } else if (is_cell(arg0)) {
+    } else if (is_cell(arg0) || is_emptylist(arg0)) {
       nanoclj_cell_t * coll = decode_pointer(arg0);
       if (coll && is_map_type(_type(coll))) {
 	if (is_cell(arg1)) {
@@ -7666,7 +7681,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	_set_car(c, mk_nil());
 	_set_cdr(c, mk_nil());
 	s_return(sc, sc->EMPTY);
-      } else if (is_cell(sc->value)) {
+      } else if (is_cell(sc->value) || is_emptylist(sc->value)) {
 	nanoclj_cell_t * c2 = decode_pointer(sc->value);
 	if (_is_sequence(c2) || is_seqable_type(_type(c2))) {
 	  _set_car(c, first(sc, c2));
@@ -8092,7 +8107,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_SEQ:
     if (!unpack_args_1(sc, &arg0)) {
       return false;
-    } else if (is_cell(arg0)) {
+    } else if (is_cell(arg0) || is_emptylist(arg0)) {
       nanoclj_cell_t * c = decode_pointer(arg0);
       if (!c || _is_sequence(c)) {
 	s_return(sc, mk_pointer(c));
@@ -8119,7 +8134,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_EMPTYP:
     if (!unpack_args_1(sc, &arg0)) {
       return false;
-    } else if (is_cell(arg0)) {
+    } else if (is_cell(arg0) || is_emptylist(arg0)) {
       nanoclj_cell_t * c = decode_pointer(arg0);
       if (!c) {
 	s_retbool(true);
@@ -8954,8 +8969,8 @@ bool nanoclj_init(nanoclj_t * sc) {
   sc->context->n_seg_reserved = 0;
   sc->context->alloc_seg = NULL;
   sc->context->cell_seg = NULL;
-  
-  sc->EMPTY = mk_pointer(&sc->_EMPTY);
+
+  sc->EMPTY = mk_emptylist();
   sc->save_inport = mk_nil();
   sc->current_ns = sc->root_ns = sc->user_ns = sc->envir = NULL;
 
@@ -8981,13 +8996,6 @@ bool nanoclj_init(nanoclj_t * sc) {
   _set_cdr(&(sc->sink), sc->EMPTY);
   _cons_metadata(&(sc->sink)) = NULL;
   
-  /* init sc->EMPTY */
-  sc->_EMPTY.type = T_NIL;
-  sc->_EMPTY.flags = T_GC_ATOM | MARK;
-  _set_car(&(sc->_EMPTY), sc->EMPTY);
-  _set_cdr(&(sc->_EMPTY), sc->EMPTY);
-  _cons_metadata(&(sc->_EMPTY)) = NULL;
-
   sc->oblist = mk_tensor_hash(1, 0, 727);
 
   assign_syntax(sc, "fn", OP_LAMBDA);
@@ -9152,6 +9160,7 @@ bool nanoclj_init(nanoclj_t * sc) {
   mk_class(sc, "clojure.lang.ArityException", T_ARITY_EXCEPTION, Exception);
   
   /* nanoclj types */
+  mk_class(sc, "nanoclj.core.EmptyList", T_EMPTYLIST, sc->Object);
   nanoclj_cell_t * Closure = mk_class(sc, "nanoclj.core.Closure", T_CLOSURE, AFn);
   mk_class(sc, "nanoclj.core.Procedure", T_PROC, AFn);
   mk_class(sc, "nanoclj.core.Macro", T_MACRO, Closure);
@@ -9165,7 +9174,6 @@ bool nanoclj_init(nanoclj_t * sc) {
   mk_class(sc, "nanoclj.core.Shape", T_SHAPE, sc->Object);
   sc->Audio = mk_class(sc, "nanoclj.core.Audio", T_AUDIO, sc->Object);
   mk_class(sc, "nanoclj.core.Tensor", T_TENSOR, sc->Object);
-  mk_class(sc, "nanoclj.core.EmptyList", T_NIL, sc->Object);
   sc->Graph = mk_class(sc, "nanoclj.core.Graph", T_GRAPH, sc->Object);
   mk_class(sc, "nanoclj.core.GraphNode", T_GRAPH_NODE, sc->Object);
   mk_class(sc, "nanoclj.core.GraphEdge", T_GRAPH_EDGE, sc->Object);
