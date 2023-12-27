@@ -24,6 +24,7 @@
 #define kNIL	UINT64_C(18444492273895866368)
 #define kTRUE	UINT64_C(9221401712017801217)
 #define kFALSE	UINT64_C(9221401712017801216)
+#define kEMPTY	UINT64_c(9223090561878065152)
 
 static inline nanoclj_val_t mk_nil() {
   return (nanoclj_val_t)kNIL;
@@ -71,6 +72,14 @@ static inline nanoclj_val_t mk_boolean(bool b) {
 static inline nanoclj_val_t mk_double(double n) {
   /* Canonize all kinds of NaNs such as -NaN to ##NaN */
   return (nanoclj_val_t)(isnan(n) ? NAN : n);
+}
+
+static inline nanoclj_val_t mk_pointer(const nanoclj_cell_t * ptr) {
+  return (nanoclj_val_t)((SIGNATURE_CELL << 48) | (uint64_t)ptr);
+}
+
+static inline nanoclj_val_t mk_list(const nanoclj_cell_t * ptr) {
+  return ptr ? mk_pointer(ptr) : mk_emptylist();
 }
 
 static inline int32_t decode_integer(nanoclj_val_t value) {

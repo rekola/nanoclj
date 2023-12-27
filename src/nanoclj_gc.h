@@ -207,7 +207,7 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_c
 
   /* garbage collect */
   ctx->fcells = 0;
-  nanoclj_cell_t * free_cell = decode_pointer(sc->EMPTY);
+  nanoclj_cell_t * free_cell = NULL;
   
   /* free-list is kept sorted by address so as to maintain consecutive
      ranges, if possible, for use with vectors. Here we scan the cells
@@ -229,7 +229,7 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_c
           p->type = 0;
 	  p->flags = 0;
 	  _cons_metadata(p) = NULL;
-          _set_car(p, sc->EMPTY);
+          _set_car(p, mk_emptylist());
         }
         ++ctx->fcells;
 	_set_cdr(p, mk_pointer(free_cell));

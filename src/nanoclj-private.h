@@ -4,7 +4,6 @@
 #include "nanoclj.h"
 
 #define NANOCLJ_SMALL_VEC_SIZE 3
-#define NANOCLJ_SMALL_LV_SIZE 3
 #define NANOCLJ_SMALL_STR_SIZE 24
 
 #define STRBUFFSIZE 256
@@ -79,8 +78,8 @@ extern "C" {
     union {
       union {
 	uint8_t bytes[NANOCLJ_SMALL_STR_SIZE];
-	nanoclj_val_t vals[NANOCLJ_SMALL_VEC_SIZE + 1];
-	long long longs[NANOCLJ_SMALL_LV_SIZE];
+	nanoclj_val_t vals[NANOCLJ_SMALL_VEC_SIZE];
+	long long longs[NANOCLJ_SMALL_VEC_SIZE];
       } _small_tensor;
       nanoclj_bignum_t _bignum;
       struct {
@@ -174,7 +173,6 @@ extern "C" {
     nanoclj_cell_t * MalformedURLException;
     
     nanoclj_cell_t sink;	      /* when mem. alloc. fails */
-    nanoclj_val_t EMPTY;              /* special cell representing empty list */
     nanoclj_tensor_t * oblist;         /* pointer to symbol table */
     nanoclj_cell_t * current_ns;         /* pointer to global environment */
     nanoclj_cell_t * root_ns;		/* pointer to the initial root env */

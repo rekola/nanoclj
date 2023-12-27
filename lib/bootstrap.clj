@@ -95,11 +95,13 @@
   "Returns true if coll is invokeable"
   (fn [x] (instance? clojure.lang.AFn x)))
 
-(def defined? (fn [sym] (boolean (resolve sym))))
+(def defined?
+  "Returns true if the argument is defined in the current namespace"
+  (fn [sym] (boolean (resolve sym))))
 
 (def list
   "Creates a list from the given args"
-  (fn [& args] args))
+  (fn [& args] (or args '())))
 
 (def spread
   (fn [args] (cond

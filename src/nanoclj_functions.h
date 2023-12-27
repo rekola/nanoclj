@@ -1032,7 +1032,7 @@ static inline nanoclj_val_t clojure_data_csv_read_csv(nanoclj_t * sc, nanoclj_ce
     if (c == -1) break;
     if (c == '\r') continue;
     if (!is_quoted) {
-      if (!vec) vec = mk_tensor_1d(nanoclj_f64, 0);
+      if (!vec) vec = mk_tensor_1d(nanoclj_val, 0);
       if (c == '\n') {
 	break;
       } else {
@@ -1057,10 +1057,10 @@ static inline nanoclj_val_t clojure_data_csv_read_csv(nanoclj_t * sc, nanoclj_ce
     if (value) tensor_mutate_push(vec, mk_string_with_tensor(sc, value));
     nanoclj_val_t next_row = mk_foreign_func(sc, clojure_data_csv_read_csv, 1, 1, NULL);
     nanoclj_cell_t * code = cons(sc, mk_pointer(cons(sc, next_row, cons(sc, mk_pointer(rdr), NULL))), NULL);
-    nanoclj_cell_t * lazy_seq = get_cell(sc, T_LAZYSEQ, 0, mk_pointer(cons(sc, sc->EMPTY, code)), sc->envir, NULL);
+    nanoclj_cell_t * lazy_seq = get_cell(sc, T_LAZYSEQ, 0, mk_pointer(cons(sc, mk_emptylist(), code)), sc->envir, NULL);
     return mk_pointer(cons(sc, mk_vector_with_tensor(sc, vec), lazy_seq));
   } else {
-    return sc->EMPTY;
+    return mk_emptylist();
   }
 }
 
