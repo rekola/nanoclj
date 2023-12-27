@@ -11,8 +11,9 @@
 (defn gradient? [x] (instance? nanoclj.core.Gradient x))
 (defn inst? [x] (instance? java.util.Date x))
 (defn uuid? [x] (instance? java.util.UUID x))
-(defn coll? [x] (or (instance? clojure.lang.APersistentSet)
-                    (instance? clojure.lang.APersistentMap)
+(defn coll? [x] (or (identical? x '())
+                    (instance? clojure.lang.APersistentSet x)
+                    (instance? clojure.lang.APersistentMap x)
                     (is-any-of? (type x)
                                 clojure.lang.PersistentVector
                                 clojure.lang.PersistentQueue
