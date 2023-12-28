@@ -1,7 +1,6 @@
 # nanoclj
 
 [![CI](https://github.com/rekola/nanoclj/workflows/Ubuntu-CI/badge.svg)]()
-[![CI](https://github.com/rekola/nanoclj/workflows/VS17-CI/badge.svg)]()
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](http://makeapullrequest.com)
 
 ## A Tiny Clojure Interpreter
@@ -69,7 +68,7 @@ As well as printing images in block mode like the plot function does, they can a
 
 ## Differences to Clojure:
 
-- Characters are 32 bit and strings and char arrays are UTF-8 (count is O(n))
+- Characters are 32 bit, strings are UTF-8 (count is O(n)) and char-array creates a byte array
 - Strings are sequences, and they are compared and sorted as such.
 - List count has complexity of O(n)
 - Vectors support O(1) append, but update is O(n)
@@ -86,7 +85,7 @@ As well as printing images in block mode like the plot function does, they can a
 - Data structures are only partially persistent, and while vectors, maps and sets allow fast reading and insertion, deletion and modification is slow.
 - Vectors, maps, sets and queues cannot have metadata
 - Namespaces can only contain Vars, not Classes: `(resolve 'Math) ;=> #'java.lang.Math
-- Multidimensional arrays cannot be ragged
+- Arrays can only contain primitive values (including Objects), Multidimensional arrays cannot be ragged
 - Only 64 bit systems are supported
 
 ## Dependencies
@@ -156,15 +155,17 @@ Windows support is in progress.
   - with-local-vars, var-set, find-var, alter-var-root, declare, binding, with-bindings
   - sequence, subseq, rsubseq
   - make-hierarchy, ancestors, supers, bases
+  - select-keys
   - bound?
   - random-uuid
   - re-groups, re-matcher, re-seq, re-matches
   - assert-args
   - with-open
-  - indexed?
+  - pop!
+  - fnil
   - vary-meta, alter-meta!, reset-meta!
-  - aset-int, aset-double, aset, amap, areduce, aclone, into-array, to-array-2d, to-array, make-array, long-array
-  - remove-ns, create-ns, ns-imports, ns-interns, ns-refers, ns-publics, ns-aliases, ns-name, all-ns, ns-unalias, ns-unmap, import, ns
+  - aset-char, aset-long, amap, areduce, to-array-2d, make-array, long-array, bytes?
+  - remove-ns, create-ns, ns-imports, ns-interns, ns-refers, ns-publics, ns-aliases, ns-name, all-ns, ns-unalias, ns-unmap, import, ns, require
   - find-keyword
 - clojure.java.io
   - resource
