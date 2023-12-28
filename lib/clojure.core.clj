@@ -821,7 +821,7 @@
   "Creates a boolean array of specified size"
   ([size-or-seq] (if (seqable? size-or-seq)
                    (boolean-array (count size-or-seq) size-or-seq)
-                   (boolean-array size-or-seq 0)))
+                   (boolean-array size-or-seq false)))
   ([size init-val-or-seq] (tensor java.lang.Boolean/TYPE init-val-or-seq size)))
 
 (defn byte-array
@@ -833,8 +833,7 @@
 
 (defn char-array
   "Creates an array of UTF-8 code units from a string or from size and initial value or sequence. The resulting array is a byte array."
-  ([str] (tensor str))
-  ([size init-val-or-seq](tensor java.lang.Byte/TYPE init-val-or-seq size)))
+  [str] (tensor str))
 
 (defn short-array
   "Creates a short array of specified size"
@@ -869,7 +868,16 @@
   ([size-or-seq] (if (seqable? size-or-seq)
                    (object-array (count size-or-seq) size-or-seq)
                    (object-array size-or-seq nil)))
-  ([size init-val-or-seq] (tensor 7 init-val-or-seq size)))
+  ([size init-val-or-seq] (tensor java.lang.Object/TYPE init-val-or-seq size)))
+
+(defn to-array
+  "Creates an Object array from coll"
+  [coll] (tensor java.lang.Object/TYPE coll (count coll)))
+
+(defn into-array
+  "Creates an array from aseq. If type is not provided, it's taken from the first element of aseq"
+  ([aseq] (into-array (class (first aseq)) aseq))
+  ([type aseq] (tensor (if (class? type) @(ns-resolve type 'TYPE) type) aseq (count aseq))))
 
 (defn alength
   "Returns the size of an array. For multidimensional arrays, returns the last dimension."
@@ -877,6 +885,13 @@
 
 (def subvec -slice)
 (def subs -slice)
+
+(def aset-boolean aset)
+(def aset-byte aset)
+(def aset-double aset)
+(def aset-float aset)
+(def aset-int aset)
+(def aset-short aset)
 
 ; Namespaces
 

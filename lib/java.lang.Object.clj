@@ -1,5 +1,7 @@
 (in-ns 'java.lang.Object)
 
+(def TYPE 7)
+
 (defn getName
   "Returns the class name"
   [c] (str c))
