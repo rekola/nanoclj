@@ -747,20 +747,6 @@ static inline void set_metadata(nanoclj_cell_t * c, nanoclj_cell_t * meta) {
   }
 }
 
-static inline bool is_integral_type(uint_fast16_t type) {
-  switch (type) {
-  case T_BOOLEAN:
-  case T_BYTE:
-  case T_SHORT:
-  case T_INTEGER:
-  case T_LONG:
-  case T_CODEPOINT:
-  case T_PROC:
-    return true;
-  }
-  return false;
-}
-
 static inline bool is_numeric_type(uint16_t t) {
   switch (t) {
   case T_DOUBLE:
@@ -3342,16 +3328,16 @@ static inline int compare(nanoclj_t * sc, nanoclj_val_t a, nanoclj_val_t b) {
       if (ra < rb) return -1;
       else if (ra > rb) return +1;
       return 0; /* 0.0 = -0.0 */
-    } else if (is_integral_type(type_a) && is_integral_type(type_b)) {
-      int ia = decode_integer(a), ib = decode_integer(b);
-      if (ia < ib) return -1;
-      else if (ia > ib) return +1;
-      return 0;
     } else if ((type_a == T_KEYWORD && type_b == T_KEYWORD) ||
 	       (type_a == T_SYMBOL && type_b == T_SYMBOL)) {
       symbol_t * sa = decode_symbol(a), * sb = decode_symbol(b);
       int i = strview_cmp(sa->ns, sb->ns);
       return i ? i : strview_cmp(sa->name, sb->name);
+    } else if (type_a && type_b) {
+      int ia = decode_integer(a), ib = decode_integer(b);
+      if (ia < ib) return -1;
+      else if (ia > ib) return +1;
+      return 0;
     } else {
       if (!type_a && !type_b) {
 	nanoclj_cell_t * a2 = decode_pointer(a), * b2 = decode_pointer(b);
