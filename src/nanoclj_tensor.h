@@ -320,16 +320,56 @@ static inline nanoclj_tensor_t * tensor_dup(const nanoclj_tensor_t * tensor) {
   return NULL;
 }
 
+static inline nanoclj_tensor_t * tensor_resize(nanoclj_tensor_t * tensor, int64_t from_size, int64_t size) {
+  if (from_size != tensor->ne[0] || size * tensor->nb[0] > tensor->nb[1]) {
+    nanoclj_tensor_t * old_tensor = tensor;
+    tensor = mk_tensor_1d_padded(old_tensor->type, old_tensor->ne[0], size);
+    if (!tensor) return NULL;
+    memcpy(tensor->data, old_tensor->data, old_tensor->ne[0] * old_tensor->nb[0]);
+  }
+  tensor->ne[0] = size;
+  return tensor;
+}
+
 /* Semimutable push */
 static inline nanoclj_tensor_t * tensor_push(nanoclj_tensor_t * tensor, size_t head, nanoclj_val_t val) {
-  if (head < tensor->ne[0] || (head + 1) * sizeof(nanoclj_val_t) > tensor->nb[1]) {
-    nanoclj_tensor_t * old_tensor = tensor;
-    tensor = mk_tensor_1d_padded(nanoclj_val, head, head + 1);
-    if (!tensor) return NULL;
-    memcpy(tensor->data, old_tensor->data, head * sizeof(nanoclj_val_t));
-  }
-  ((nanoclj_val_t *)tensor->data)[head] = val;
-  tensor->ne[0]++;
+  tensor = tensor_resize(tensor, head, head + 1);
+  tensor_mutate_set(tensor, head, val);
+  return tensor;
+}
+
+/* Semimutable push */
+static inline nanoclj_tensor_t * tensor_push_i8(nanoclj_tensor_t * tensor, size_t head, uint8_t val) {
+  tensor = tensor_resize(tensor, head, head + 1);
+  tensor_mutate_set_i8(tensor, head, val);
+  return tensor;
+}
+
+/* Semimutable push */
+static inline nanoclj_tensor_t * tensor_push_i16(nanoclj_tensor_t * tensor, size_t head, uint16_t val) {
+  tensor = tensor_resize(tensor, head, head + 1);
+  tensor_mutate_set_i16(tensor, head, val);
+  return tensor;
+}
+
+/* Semimutable push */
+static inline nanoclj_tensor_t * tensor_push_i32(nanoclj_tensor_t * tensor, size_t head, uint32_t val) {
+  tensor = tensor_resize(tensor, head, head + 1);
+  tensor_mutate_set_i32(tensor, head, val);
+  return tensor;
+}
+
+/* Semimutable push */
+static inline nanoclj_tensor_t * tensor_push_f32(nanoclj_tensor_t * tensor, size_t head, float val) {
+  tensor = tensor_resize(tensor, head, head + 1);
+  tensor_mutate_set_f32(tensor, head, val);
+  return tensor;
+}
+
+/* Semimutable push */
+static inline nanoclj_tensor_t * tensor_push_f64(nanoclj_tensor_t * tensor, size_t head, float val) {
+  tensor = tensor_resize(tensor, head, head + 1);
+  tensor_mutate_set_f64(tensor, head, val);
   return tensor;
 }
 

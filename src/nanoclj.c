@@ -3550,7 +3550,15 @@ static inline nanoclj_cell_t * vector_conjoin(nanoclj_t * sc, nanoclj_cell_t * v
     return get_collection_object(sc, t, _offset_unchecked(vec), old_size + 1, tensor);
   } else {
     size_t old_offset = _offset_unchecked(vec);
-    nanoclj_tensor_t * tensor = tensor_push(_tensor_unchecked(vec), old_offset + old_size, new_value);
+    nanoclj_tensor_t * tensor = _tensor_unchecked(vec);
+    switch (tensor->type) {
+    case nanoclj_i8: tensor = tensor_push_i8(tensor, old_offset + old_size, to_int(new_value)); break;
+    case nanoclj_i16: tensor = tensor_push_i16(tensor, old_offset + old_size, to_int(new_value)); break;
+    case nanoclj_i32: tensor = tensor_push_i32(tensor, old_offset + old_size, to_int(new_value)); break;
+    case nanoclj_f32: tensor = tensor_push_f32(tensor, old_offset + old_size, to_double(new_value)); break;
+    case nanoclj_f64: tensor = tensor_push_f64(tensor, old_offset + old_size, to_double(new_value)); break;
+    case nanoclj_val: tensor = tensor_push(tensor, old_offset + old_size, new_value); break;
+    }
     if (!tensor) return NULL;
     return get_collection_object(sc, t, old_offset, old_size + 1, tensor);
   }
@@ -3623,7 +3631,7 @@ static inline nanoclj_cell_t * conjoin(nanoclj_t * sc, nanoclj_cell_t * coll, na
     } else {
       return coll;
     }
-  } else if (is_vector_type(t)) {
+  } else if (is_vector_type(t) || t == T_TENSOR) {
     return vector_conjoin(sc, coll, new_value);
   } else if (is_string_type(t)) {
     int32_t c = decode_integer(new_value);
@@ -6606,25 +6614,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	   z = sc->args; z; x = cdr(x), z = decode_pointer(_cdr(z))) {
       new_slot_in_env(sc, caar(x), _car(z));
     }
-    if (is_symbol(car(sc->code))) {     /* named let */
-      for (x = cadr(sc->code), sc->args = NULL; !is_nil(x) && !is_emptylist(x); x = cdr(x)) {
-        if (!is_list(x))
-          Error_0(sc, "Bad syntax of binding in let");
-        if (!is_list(car(x)))
-          Error_0(sc, "Bad syntax of binding in let");
-        sc->args = cons(sc, caar(x), sc->args);
-      }
-      /* make closure. first is code. second is environment */
-      x = mk_pointer(get_cell(sc, T_CLOSURE, 0, mk_pointer(cons(sc, mk_pointer(reverse_in_place(sc, sc->args)),
-								decode_pointer(cddr(sc->code)))), sc->envir, NULL));
-
-      new_slot_in_env(sc, car(sc->code), x);
-      sc->code = cddr(sc->code);
-      sc->args = NULL;
-    } else {
-      sc->code = cdr(sc->code);
-      sc->args = NULL;
-    }
+    sc->code = cdr(sc->code);
+    sc->args = NULL;
     s_goto(sc, OP_DO);
 
   case OP_COND0:               /* cond */
@@ -7217,43 +7208,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
     Error_0(sc, "Value is not ISeqable");
 
-  case OP_AGET:
-    if (!unpack_args_2_plus(sc, &arg0, &arg1, &arg_next)) {
-      return false;
-    } else if (is_cell(arg0)) { /* arg0 = array, arg1 = idx, arg_rest = idxs */
-      nanoclj_cell_t * c = decode_pointer(arg0);
-      nanoclj_tensor_t * tensor = get_tensor(c);
-      int64_t idx = to_long(arg1);
-      if (idx < 0 || idx >= get_size(c)) {
-	nanoclj_throw(sc, mk_index_exception(sc, "Index out of bounds"));
-	return false;
-      }
-      if (tensor) {
-	idx += get_offset(c);
-	switch (tensor->type) {
-	case nanoclj_boolean: s_return(sc, mk_boolean(tensor_get_i8(tensor, idx)));
-	case nanoclj_i8: s_return(sc, mk_int(tensor_get_i8(tensor, idx)));
-	case nanoclj_i16: s_return(sc, mk_int(tensor_get_i16(tensor, idx)));
-	case nanoclj_i32: s_return(sc, mk_int(tensor_get_i32(tensor, idx)));
-	case nanoclj_f32: s_return(sc, mk_double(tensor_get_f32(tensor, idx)));
-	case nanoclj_f64: s_return(sc, mk_double(tensor_get_f64(tensor, idx)));
-	case nanoclj_val: s_return(sc, tensor_get(tensor, idx));
-	}
-      } else if (_is_small(c)) {
-	switch (_type(c)) {
-	case T_VECTOR:
-	case T_QUEUE:
-	  s_return(sc, c->_small_tensor.vals[idx]);
-	case T_STRING:
-	case T_FILE:
-	case T_URL:
-	case T_UUID:
-	  s_return(sc, mk_byte(c->_small_tensor.bytes[idx]));
-	}
-      }
-    }
-    Error_0(sc, "Type doesn't support aget");
-
   case OP_GET:             /* get */
     if (!unpack_args_2_plus(sc, &arg0, &arg1, &arg_next)) {
       return false;
@@ -7288,7 +7242,77 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       return false;
     }
     s_retbool(is_cell(arg0) && get_elem(sc, decode_pointer(arg0), arg1, NULL));
-    
+
+  case OP_AGET:
+    if (!unpack_args_2_plus(sc, &arg0, &arg1, &arg_next)) {
+      return false;
+    } else if (is_nil(arg0)) {
+      nanoclj_throw(sc, sc->NullPointerException);
+      return false;
+    } else if (is_cell(arg0)) { /* arg0 = array, arg1 = idx, arg_rest = idxs */
+      nanoclj_cell_t * c = decode_pointer(arg0);
+      nanoclj_tensor_t * tensor = get_tensor(c);
+      int64_t idx = to_long(arg1);
+      if (idx < 0 || idx >= get_size(c)) {
+	nanoclj_throw(sc, mk_index_exception(sc, "Index out of bounds"));
+	return false;
+      }
+      if (tensor) {
+	idx += get_offset(c);
+	s_return(sc, tensor_get(tensor, idx));
+      } else if (_is_small(c)) {
+	switch (_type(c)) {
+	case T_VECTOR:
+	case T_QUEUE:
+	  s_return(sc, c->_small_tensor.vals[idx]);
+	case T_STRING:
+	case T_FILE:
+	case T_URL:
+	case T_UUID:
+	  s_return(sc, mk_byte(c->_small_tensor.bytes[idx]));
+	}
+      }
+    }
+    Error_0(sc, "Type doesn't support aget");
+
+  case OP_ASET:
+    if (!unpack_args_3(sc, &arg0, &arg1, &arg2)) {
+      return false;
+    } else if (is_nil(arg0)) {
+      nanoclj_throw(sc, sc->NullPointerException);
+      return false;
+    } else if (is_cell(arg0)) { /* arg0 = array, arg1 = idx, arg2 = val */
+      nanoclj_cell_t * c = decode_pointer(arg0);
+      nanoclj_tensor_t * tensor = get_tensor(c);
+      int64_t idx = to_long(arg1);
+      if (idx < 0 || idx >= get_size(c)) {
+	nanoclj_throw(sc, mk_index_exception(sc, "Index out of bounds"));
+	return false;
+      }
+      if (tensor) {
+	idx += get_offset(c);
+	switch (tensor->type) {
+	case nanoclj_boolean: tensor_mutate_set_i8(tensor, idx, is_true(arg2) ? 1 : 0); break;
+	case nanoclj_i8: tensor_mutate_set_i8(tensor, idx, to_int(arg2)); break;
+	case nanoclj_i16: tensor_mutate_set_i16(tensor, idx, to_int(arg2)); break;
+	case nanoclj_i32: tensor_mutate_set_i32(tensor, idx, to_int(arg2)); break;
+	case nanoclj_f32: tensor_mutate_set_f32(tensor, idx, to_double(arg2)); break;
+	case nanoclj_f64: tensor_mutate_set_f64(tensor, idx, to_double(arg2)); break;
+	case nanoclj_val: tensor_mutate_set(tensor, idx, arg2); break;
+	}
+	s_return(sc, arg2);
+      }
+    }
+    Error_0(sc, "Type doesn't support aset");
+
+  case OP_ACLONE:
+    if (!unpack_args_1_not_nil(sc, &arg0)) {
+      return false;
+    } else if (is_cell(arg0)) { /* arg0 = array, arg1 = idx, arg_rest = idxs */
+      s_return(sc, mk_pointer(copy_collection(sc, decode_pointer(arg0))));
+    }
+    Error_0(sc, "Type doesn't support aclone");
+
   case OP_CONJ:             /* -conj */
     if (!unpack_args_2(sc, &arg0, &arg1)) {
       return false;
@@ -8736,7 +8760,7 @@ static inline void update_window_info(nanoclj_t * sc, nanoclj_cell_t * out) {
 /* initialization of nanoclj_t */
 #if USE_INTERFACE
 static inline nanoclj_val_t cons_checked(nanoclj_t * sc, nanoclj_val_t head, nanoclj_val_t tail) {
-  if (is_cell(tail)) {
+  if (is_cell(tail) || is_emptylist(tail)) {
     return mk_pointer(cons(sc, head, decode_pointer(tail)));
   } else {
     return mk_nil();
@@ -8776,7 +8800,7 @@ static void set_vector_elem_checked(nanoclj_val_t vec, size_t ielem, nanoclj_val
 }
 
 static size_t count_checked(nanoclj_t * sc, nanoclj_val_t coll) {
-  if (is_cell(coll)) {
+  if (is_cell(coll) || is_emptylist(coll)) {
     return count(sc, decode_pointer(coll));
   } else {
     return 0;
