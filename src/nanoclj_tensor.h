@@ -321,13 +321,26 @@ static inline nanoclj_tensor_t * tensor_dup(const nanoclj_tensor_t * tensor) {
 }
 
 static inline nanoclj_tensor_t * tensor_resize(nanoclj_tensor_t * tensor, int64_t from_size, int64_t size) {
-  if (from_size != tensor->ne[0] || size * tensor->nb[0] > tensor->nb[1]) {
-    nanoclj_tensor_t * old_tensor = tensor;
-    tensor = mk_tensor_1d_padded(old_tensor->type, old_tensor->ne[0], size);
-    if (!tensor) return NULL;
-    memcpy(tensor->data, old_tensor->data, old_tensor->ne[0] * old_tensor->nb[0]);
+  switch (tensor->n_dims) {
+  case 1:
+    if (from_size != tensor->ne[0] || size * tensor->nb[0] > tensor->nb[1]) {
+      nanoclj_tensor_t * old_tensor = tensor;
+      tensor = mk_tensor_1d_padded(old_tensor->type, old_tensor->ne[0], size);
+      if (!tensor) return NULL;
+      memcpy(tensor->data, old_tensor->data, old_tensor->ne[0] * old_tensor->nb[0]);
+    }
+    tensor->ne[0] = size;
+    break;
+  case 2:
+    if (from_size != tensor->ne[1] || size * tensor->nb[1] > tensor->nb[2]) {
+      nanoclj_tensor_t * old_tensor = tensor;
+      tensor = mk_tensor_2d_padded(old_tensor->type, old_tensor->ne[0], old_tensor->ne[1], size);
+      if (!tensor) return NULL;
+      memcpy(tensor->data, old_tensor->data, old_tensor->ne[1] * tensor->nb[1]);
+    }
+    tensor->ne[1] = size;
+    break;
   }
-  tensor->ne[0] = size;
   return tensor;
 }
 
@@ -375,14 +388,8 @@ static inline nanoclj_tensor_t * tensor_push_f64(nanoclj_tensor_t * tensor, size
 
 /* Semimutable push */
 static inline nanoclj_tensor_t * tensor_push_vec(nanoclj_tensor_t * tensor, int64_t head, nanoclj_val_t * vec) {
-  if (head < tensor->ne[1] || (tensor->ne[1] + 1) * tensor->nb[1] > tensor->nb[2]) {
-    nanoclj_tensor_t * old_tensor = tensor;
-    tensor = mk_tensor_2d_padded(nanoclj_val, tensor->ne[0], head, head + 1);
-    if (!tensor) return NULL;
-    memcpy(tensor->data, old_tensor->data, head * tensor->nb[1]);
-  }
-  memcpy(tensor->data + tensor->ne[1] * tensor->nb[1], vec, tensor->nb[1]);
-  tensor->ne[1]++;
+  tensor = tensor_resize(tensor, head, head + 1);
+  memcpy(tensor->data + head * tensor->nb[1], vec, tensor->nb[1]);
   return tensor;
 }
 
@@ -428,13 +435,8 @@ static inline size_t tensor_mutate_append_codepoint(nanoclj_tensor_t * t, int32_
 static inline nanoclj_tensor_t * tensor_append_codepoint(nanoclj_tensor_t * tensor, size_t head, int32_t c) {
   uint8_t buffer[4];
   size_t n = utf8proc_encode_char(c, &buffer[0]);
-  if (head < tensor->ne[0] || head + n > tensor->nb[1]) {
-    nanoclj_tensor_t * old_tensor = tensor;
-    tensor = mk_tensor_1d_padded(nanoclj_i8, head, head + n);
-    memcpy(tensor->data, old_tensor->data, head);
-  }
+  tensor = tensor_resize(tensor, head, head + n);
   memcpy(tensor->data + head, &buffer[0], n);
-  tensor->ne[0] += n;
   return tensor;
 }
 
