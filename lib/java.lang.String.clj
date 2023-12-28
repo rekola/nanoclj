@@ -4,6 +4,10 @@
   "Returns itself"
   [s] s)
 
+(defn getBytes
+  "Returns the string as a byte array"
+  [s] (char-array s))
+
 (defn toLowerCase
   "Returns lower case version of the string"
   [s] (clojure.string/lower-case s))
