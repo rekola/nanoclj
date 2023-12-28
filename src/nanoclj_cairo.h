@@ -202,6 +202,12 @@ static inline void canvas_get_text_extents(void * canvas, strview_t text, double
   free(tmp);
 }
 
+static inline void canvas_text_path(void * canvas, strview_t text) {
+  char * tmp = alloc_c_str(text);
+  cairo_text_path((cairo_t *)canvas, tmp);
+  free(tmp);
+}
+
 static inline void canvas_translate(void * canvas, double x, double y) {
   cairo_translate((cairo_t *)canvas, x, y);
 }

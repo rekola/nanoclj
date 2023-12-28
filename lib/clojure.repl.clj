@@ -19,17 +19,28 @@
                     (let [v-margin 5
                           h-margin 0
                           [cell-width cell-height] *cell-size*
+                          s1 (* 1.5 cell-height)
+                          s2 (* 0.6 cell-height)
                           cx (clojure.java.io/writer 0 0 :gray)]
                       (with-out cx
-                        (set-font-size (* 1.5 cell-height))
+                        (set-font-size s1)
                         (let [[ label-w label-h ] (get-text-extents label)
                               y-pos (* 1.3 cell-height)]
                           (resize (* 2 (+ h-margin label-w)) (* 2 cell-height))
-                          (set-font-size (* 1.5 cell-height))
                           (move-to h-margin y-pos)
-                          (print label)
-                          (set-font-size (* 0.6 cell-height))
-                          (print version)
+                          (set-font-size s1)
+                          (text-path label)
+                          (set-font-size s2)
+                          (text-path version)
+                          (set-color 0.8)
+                          (fill)
+
+                          (set-line-width :hair)
+                          (move-to h-margin y-pos)
+                          (set-font-size s1)
+                          (text-path label)
+                          (set-color 1)
+                          (stroke)
                           (flush)
                           )))
                     (str label \space version)))
