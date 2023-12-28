@@ -104,11 +104,11 @@ E2:_setmark(p);
     p = decode_pointer(q0);
     goto E2;
   }
-E5:q0 = _cdr(p);                 /* down cdr */
-  if (is_cell(q0) && !is_nil(q0) && !is_mark(q0)) {
-    _set_cdr(p, mk_pointer(t));
+ E5:q = _cdr(p);                 /* down cdr */
+  if (q && !_is_mark(q)) {
+    _set_cdr(p, t);
     t = p;
-    p = decode_pointer(q0);
+    p = q;
     goto E2;
   }
 E6:                            /* up.  Undo the link switching from steps E4 and E5. */
@@ -124,8 +124,8 @@ E6:                            /* up.  Undo the link switching from steps E4 and
     p = q;
     goto E5;
   } else {
-    t = decode_pointer(_cdr(q));
-    _set_cdr(q, mk_pointer(p));
+    t = _cdr(q);
+    _set_cdr(q, p);
     p = q;
     goto E6;
   }
@@ -232,7 +232,7 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_c
           _set_car(p, mk_emptylist());
         }
         ++ctx->fcells;
-	_set_cdr(p, mk_pointer(free_cell));
+	_set_cdr(p, free_cell);
         free_cell = p;
       }
     }

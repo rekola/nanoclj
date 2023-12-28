@@ -114,7 +114,8 @@ extern "C" {
 	struct nanoclj_cell_t * meta;
       } _ff;
       struct {
-        nanoclj_val_t car, cdr;
+        nanoclj_val_t car;
+	nanoclj_cell_t * cdr;
 	struct nanoclj_cell_t * meta;
       } _cons;
     };
