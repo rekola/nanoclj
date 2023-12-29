@@ -714,6 +714,7 @@ static inline nanoclj_cell_t * get_metadata(nanoclj_cell_t * c) {
   case T_MACRO:
   case T_CLASS:
   case T_ENVIRONMENT:
+  case T_SYMBOL:
     return _cons_metadata(c);
   case T_FOREIGN_FUNCTION:
     return _ff_metadata(c);
@@ -735,6 +736,9 @@ static inline void set_metadata(nanoclj_cell_t * c, nanoclj_cell_t * meta) {
   case T_LIST:
   case T_CLOSURE:
   case T_MACRO:
+  case T_CLASS:
+  case T_ENVIRONMENT:
+  case T_SYMBOL:
     _cons_metadata(c) = meta;
     break;
   case T_FOREIGN_FUNCTION:
@@ -3907,9 +3911,8 @@ static inline nanoclj_cell_t * def_namespace(nanoclj_t * sc, const char *name, c
   return def_namespace_with_sym(sc, sym, md);
 }
 
-static inline nanoclj_cell_t * mk_meta_from_reader(nanoclj_t * sc, nanoclj_val_t p0) {
+static inline nanoclj_cell_t * update_meta_from_reader(nanoclj_t * sc, nanoclj_cell_t * md, nanoclj_val_t p0) {
   nanoclj_cell_t * p = decode_pointer(p0);
-  nanoclj_cell_t * md = mk_hashmap(sc);
   if (_port_type_unchecked(p) == port_file) {
     nanoclj_port_rep_t * pr = _rep_unchecked(p);
     md = assoc(sc, md, sc->LINE, mk_int(_line_unchecked(p) + 1));
@@ -5536,7 +5539,7 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
   case T_CLASS:{
     nanoclj_val_t name = first(sc, args);
     nanoclj_val_t parent = second(sc, args);
-    nanoclj_cell_t * meta = mk_meta_from_reader(sc, tensor_peek(sc->load_stack));
+    nanoclj_cell_t * meta = update_meta_from_reader(sc, mk_hashmap(sc), tensor_peek(sc->load_stack));
     return mk_pointer(mk_class_with_meta(sc, name, gentypeid(sc), decode_pointer(parent), meta));
   }
 
@@ -6417,7 +6420,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       Error_0(sc, "Invalid types");
     } else { /* arg0: namespace, arg1: symbol */
       nanoclj_cell_t * ns = decode_pointer(arg0);
-      nanoclj_cell_t * meta = mk_meta_from_reader(sc, tensor_peek(sc->load_stack));
+      nanoclj_cell_t * meta = update_meta_from_reader(sc, mk_hashmap(sc), tensor_peek(sc->load_stack));
       meta = assoc(sc, meta, sc->NAME, arg1);
       meta = assoc(sc, meta, sc->NS, mk_pointer(ns));
       if (arg_next) {
@@ -6432,10 +6435,17 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     nanoclj_cell_t * code = decode_pointer(sc->code);
     x = first(sc, code);
     code = next(sc, code);
+    nanoclj_cell_t * meta = NULL;
+    if (is_cell(x) && type(x) == T_SYMBOL) {
+      meta = get_metadata(decode_pointer(x));
+      x = car(x);
+    } else {
+      meta = mk_hashmap(sc);
+    }
     if (!is_symbol(x) || decode_symbol(x)->ns.size) {
       Error_0(sc, "Variable is not an unqualified symbol");
     }
-    nanoclj_cell_t * meta = mk_meta_from_reader(sc, tensor_peek(sc->load_stack));
+    meta = update_meta_from_reader(sc, meta, tensor_peek(sc->load_stack));
     meta = assoc(sc, meta, sc->NAME, x);
     meta = assoc(sc, meta, sc->NS, mk_pointer(sc->current_ns));
 
@@ -7921,13 +7931,20 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	}
 
 	case TOK_META:
+	  sc->tok = token(sc, inport);
+	  if (sc->tok == TOK_EOF) {
+	    s_return(sc, mk_codepoint(EOF));
+	  }
+	  s_save(sc, OP_RD_META, NULL, mk_emptylist());
+	  s_goto(sc, OP_RD_SEXPR);
+	  
 	case TOK_IGNORE:
 	  s_save(sc, OP_RD_IGNORE, NULL, mk_emptylist());
 	  sc->tok = token(sc, inport);
 	  if (sc->tok == TOK_EOF) {
 	    s_return(sc, mk_codepoint(EOF));
 	  }
-	  s_goto(sc, OP_RD_SEXPR);      
+	  s_goto(sc, OP_RD_SEXPR);
 	
 	case TOK_SHARP_CONST:
 	  x = mk_sharp_const(sc, readstr_upto(sc, DELIMITERS, inport, false));
@@ -7944,7 +7961,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       }
     }
     Error_0(sc, "Not a reader");
-    
+
   case OP_RD_LIST:
     x = get_in_port(sc);
     if (is_cell(x)) {
@@ -8088,6 +8105,49 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       s_goto(sc, OP_RD_SEXPR);
     }
     Error_0(sc, "Not a reader");
+
+  case OP_RD_META:
+    x = get_in_port(sc);
+    if (is_cell(x)) {
+      nanoclj_cell_t * inport = decode_pointer(x);
+      if (is_readable(inport)) {
+	sc->args = cons(sc, sc->value, sc->args);
+	sc->tok = token(sc, inport);
+	if (sc->tok == TOK_EOF) {
+	  s_return(sc, mk_codepoint(EOF));
+	} else {
+	  s_save(sc, OP_RD_META2, sc->args, mk_emptylist());
+	  s_goto(sc, OP_RD_SEXPR);
+	}
+      }
+    }
+    Error_0(sc, "Not a reader");
+
+  case OP_RD_META2:
+    {
+      nanoclj_val_t md = _car(sc->args);
+      nanoclj_val_t obj = sc->value;
+      if (is_symbol(obj)) {
+	obj = mk_pointer(get_cell(sc, T_SYMBOL, 0, obj, NULL, NULL));
+      }
+      if (is_cell(obj)) {
+	if (is_cell(md) && !is_nil(md) && is_map_type(type(md))) {
+	  set_metadata(decode_pointer(obj), decode_pointer(md));
+	} else {
+	  nanoclj_cell_t * md2 = mk_hashmap(sc);
+	  if (is_keyword(md)) {
+	    md2 = assoc(sc, md2, md, mk_boolean(true));
+	  } else if (is_string(md)) {
+	    md2 = assoc(sc, md2, def_keyword(sc, "tag"), md);
+	  } else {
+	    nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Metadata must be Symbol, Keyword, String or Map")));
+	    return false;
+  	  }
+	  set_metadata(decode_pointer(obj), md2);
+	}
+      }
+      s_return(sc, obj);
+    }
 
   case OP_SEQ:
     if (!unpack_args_1(sc, &arg0)) {
@@ -8258,7 +8318,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       if (var.ptr) {
 	ns = decode_pointer(slot_value_in_env(var));
       } else {
-	nanoclj_cell_t * meta = mk_meta_from_reader(sc, tensor_peek(sc->load_stack));
+	nanoclj_cell_t * meta = update_meta_from_reader(sc, mk_hashmap(sc), tensor_peek(sc->load_stack));
 	meta = assoc(sc, meta, sc->NAME, arg0);
 	ns = def_namespace_with_sym(sc, arg0, meta);
       }
