@@ -122,72 +122,73 @@
 
 enum nanoclj_types {
   T_NIL = 0,
-  T_EMPTYLIST = 1,
-  T_DOUBLE = 2,
-  T_BOOLEAN = 3,
-  T_BYTE = 4,
-  T_SHORT = 5,
-  T_INTEGER = 6,
-  T_LONG = 7,
-  T_CODEPOINT = 8,
-  T_PROC = 9,
-  T_KEYWORD = 10,
-  T_SYMBOL = 11,
-  T_LIST = 12,
-  T_STRING = 13,
-  T_CLOSURE = 14,
-  T_RATIO = 15,
-  T_FOREIGN_FUNCTION = 16,
-  T_READER = 17,
-  T_WRITER = 18,
-  T_INPUT_STREAM = 19,
-  T_OUTPUT_STREAM = 20,
-  T_GZIP_INPUT_STREAM = 21,
-  T_GZIP_OUTPUT_STREAM = 22,
-  T_VECTOR = 23,
-  T_MACRO = 24,
-  T_LAZYSEQ = 25,
-  T_ENVIRONMENT = 26,
-  T_CLASS = 27,
-  T_MAPENTRY = 28,
-  T_ARRAYMAP = 29,
-  T_HASHMAP = 30,
-  T_SORTED_HASHMAP = 31,
-  T_VARMAP = 32,
-  T_HASHSET = 33,
-  T_SORTED_HASHSET = 34,
-  T_VAR = 35,
-  T_FOREIGN_OBJECT = 36,
-  T_BIGINT = 37,
-  T_BIGDECIMAL = 38,
-  T_REGEX = 39,
-  T_DELAY = 40,
-  T_IMAGE = 41,
-  T_VIDEO = 42,
-  T_AUDIO = 43,
-  T_FILE = 44,
-  T_URL = 45,
-  T_DATE = 46,
-  T_UUID = 47,
-  T_QUEUE = 48,
-  T_RUNTIME_EXCEPTION = 49,
-  T_ARITY_EXCEPTION = 50,
-  T_ILLEGAL_ARG_EXCEPTION = 51,
-  T_NUM_FMT_EXCEPTION = 52,
-  T_ARITHMETIC_EXCEPTION = 53,
-  T_CLASS_CAST_EXCEPTION = 54,
-  T_ILLEGAL_STATE_EXCEPTION = 55,
-  T_FILE_NOT_FOUND_EXCEPTION = 56,
-  T_INDEX_EXCEPTION = 57,
-  T_TENSOR = 58,
-  T_GRAPH = 59,
-  T_GRAPH_NODE = 60,
-  T_GRAPH_EDGE = 61,
-  T_GRADIENT = 62,
-  T_MESH = 63,
-  T_SHAPE = 64,
-  T_TABLE = 65,
-  T_LAST_SYSTEM_TYPE = 66
+  T_CELL = 1,
+  T_EMPTYLIST = 2,
+  T_DOUBLE = 3,
+  T_BOOLEAN = 4,
+  T_BYTE = 5,
+  T_SHORT = 6,
+  T_INTEGER = 7,
+  T_LONG = 8,
+  T_CODEPOINT = 9,
+  T_PROC = 10,
+  T_KEYWORD = 11,
+  T_SYMBOL = 12,
+  T_LIST = 13,
+  T_STRING = 14,
+  T_CLOSURE = 15,
+  T_RATIO = 16,
+  T_FOREIGN_FUNCTION = 17,
+  T_READER = 18,
+  T_WRITER = 19,
+  T_INPUT_STREAM = 20,
+  T_OUTPUT_STREAM = 21,
+  T_GZIP_INPUT_STREAM = 22,
+  T_GZIP_OUTPUT_STREAM = 23,
+  T_VECTOR = 24,
+  T_MACRO = 25,
+  T_LAZYSEQ = 26,
+  T_ENVIRONMENT = 27,
+  T_CLASS = 28,
+  T_MAPENTRY = 29,
+  T_ARRAYMAP = 30,
+  T_HASHMAP = 31,
+  T_SORTED_HASHMAP = 32,
+  T_VARMAP = 33,
+  T_HASHSET = 34,
+  T_SORTED_HASHSET = 35,
+  T_VAR = 36,
+  T_FOREIGN_OBJECT = 37,
+  T_BIGINT = 38,
+  T_BIGDECIMAL = 39,
+  T_REGEX = 40,
+  T_DELAY = 41,
+  T_IMAGE = 42,
+  T_VIDEO = 43,
+  T_AUDIO = 44,
+  T_FILE = 45,
+  T_URL = 46,
+  T_DATE = 47,
+  T_UUID = 48,
+  T_QUEUE = 49,
+  T_RUNTIME_EXCEPTION = 50,
+  T_ARITY_EXCEPTION = 51,
+  T_ILLEGAL_ARG_EXCEPTION = 52,
+  T_NUM_FMT_EXCEPTION = 53,
+  T_ARITHMETIC_EXCEPTION = 54,
+  T_CLASS_CAST_EXCEPTION = 55,
+  T_ILLEGAL_STATE_EXCEPTION = 56,
+  T_FILE_NOT_FOUND_EXCEPTION = 57,
+  T_INDEX_EXCEPTION = 58,
+  T_TENSOR = 59,
+  T_GRAPH = 60,
+  T_GRAPH_NODE = 61,
+  T_GRAPH_EDGE = 62,
+  T_GRADIENT = 63,
+  T_MESH = 64,
+  T_SHAPE = 65,
+  T_TABLE = 66,
+  T_LAST_SYSTEM_TYPE = 67
 };
 
 typedef struct {
@@ -222,8 +223,8 @@ typedef struct {
 static uint_fast16_t prim_type_extended(nanoclj_val_t value) {
   uint64_t signature = value.as_long >> 48;
   switch (signature) {
-  case SIGNATURE_NIL:
-  case SIGNATURE_CELL: return T_NIL;
+  case SIGNATURE_NIL: return T_NIL;
+  case SIGNATURE_CELL: return T_CELL;
   case SIGNATURE_EMPTYLIST: return T_EMPTYLIST;
   case SIGNATURE_BOOLEAN: return T_BOOLEAN;
   case SIGNATURE_INTEGER: return T_BYTE + ((value.as_long >> 32) & 0xffff);
@@ -238,8 +239,8 @@ static uint_fast16_t prim_type_extended(nanoclj_val_t value) {
 static uint_fast16_t prim_type(nanoclj_val_t value) {
   uint64_t signature = value.as_long >> 48;
   switch (signature) {
-  case SIGNATURE_NIL:
-  case SIGNATURE_CELL: return T_NIL;
+  case SIGNATURE_NIL: return T_NIL;
+  case SIGNATURE_CELL: return T_CELL;
   case SIGNATURE_EMPTYLIST: return T_EMPTYLIST;
   case SIGNATURE_BOOLEAN: return T_BOOLEAN;
   case SIGNATURE_INTEGER: return T_LONG;
@@ -267,13 +268,13 @@ static inline bool is_type(nanoclj_val_t value) {
 }
 
 static inline uint_fast16_t expand_type(nanoclj_val_t value, uint_fast16_t primitive_type) {
-  if (!primitive_type) return _type(decode_pointer(value));
+  if (primitive_type == T_CELL) return _type(decode_pointer(value));
   return primitive_type;
 }
 
 static inline uint_fast16_t type(nanoclj_val_t value) {
   uint_fast16_t type = prim_type_extended(value);
-  return type ? type : _type(decode_pointer(value));
+  return type != T_CELL ? type : _type(decode_pointer(value));
 }
 
 static inline bool _is_list(nanoclj_cell_t * c) {
@@ -770,18 +771,13 @@ static inline bool is_number(nanoclj_val_t p) {
   case T_DOUBLE:
   case T_LONG:
     return true;
-  case T_NIL:
-    {
-      const nanoclj_cell_t * c = decode_pointer(p);
-      if (c) {
-	switch (_type(c)) {
-	case T_LONG:
-	case T_BIGINT:
-	case T_RATIO:
-	case T_BIGDECIMAL:
-	  return true;
-	}
-      }
+  case T_CELL:
+    switch (_type(decode_pointer(p))) {
+    case T_LONG:
+    case T_BIGINT:
+    case T_RATIO:
+    case T_BIGDECIMAL:
+      return true;
     }
   }
   return false;
@@ -798,41 +794,39 @@ static inline bool convert_to_long(nanoclj_val_t p, long long * l) {
   case T_DOUBLE:
     *l = (long long)p.as_double;
     return true;
-  case T_NIL:
+  case T_CELL:
     {
       const nanoclj_cell_t * c = decode_pointer(p);
-      if (c) {
-	switch (_type(c)) {
-	case T_LONG:
-	case T_DATE:
-	  *l = _lvalue_unchecked(c);
+      switch (_type(c)) {
+      case T_LONG:
+      case T_DATE:
+	*l = _lvalue_unchecked(c);
+	return true;
+      case T_CLASS:
+	*l = c->type;
+	return true;
+      case T_BIGINT:
+	*l = (long long)tensor_bigint_to_uint64(c->_bignum.tensor) * c->_bignum.sign;
+	return true;
+      case T_RATIO:
+	{
+	  nanoclj_tensor_t * q;
+	  tensor_bigint_divmod(c->_bignum.tensor, c->_bignum.denominator, &q, NULL);
+	  *l = c->_bignum.sign * tensor_bigint_to_uint64(q);
+	  tensor_free(q);
 	  return true;
-	case T_CLASS:
-	  *l = c->type;
-	  return true;
-	case T_BIGINT:
-	  *l = (long long)tensor_bigint_to_uint64(c->_bignum.tensor) * c->_bignum.sign;
-	  return true;
-	case T_RATIO:
-	  {
-	    nanoclj_tensor_t * q;
-	    tensor_bigint_divmod(c->_bignum.tensor, c->_bignum.denominator, &q, NULL);
-	    *l = c->_bignum.sign * tensor_bigint_to_uint64(q);
-	    tensor_free(q);
-	    return true;
-	  }
-	case T_STRING:
-	  {
-	    size_t n = get_size(c);
-	    char * tmp = malloc(n + 1);
-	    memcpy(tmp, get_const_ptr(c), n);
-	    tmp[n] = 0;
-	    char * end;
-	    *l = strtoll(tmp, &end, 10);
-	    bool is_ok = tmp + n == end && !((*l == LLONG_MIN || *l == LLONG_MAX) && errno == ERANGE);
-	    free(tmp);
-	    return is_ok;
-	  }
+	}
+      case T_STRING:
+	{
+	  size_t n = get_size(c);
+	  char * tmp = malloc(n + 1);
+	  memcpy(tmp, get_const_ptr(c), n);
+	  tmp[n] = 0;
+	  char * end;
+	  *l = strtoll(tmp, &end, 10);
+	  bool is_ok = tmp + n == end && !((*l == LLONG_MIN || *l == LLONG_MAX) && errno == ERANGE);
+	  free(tmp);
+	  return is_ok;
 	}
       }
     }
@@ -862,9 +856,9 @@ static inline bool convert_to_double(nanoclj_val_t p, double * d) {
   case T_DOUBLE:
     *d = p.as_double;
     return true;
-  case T_NIL: {
-    const nanoclj_cell_t * c = decode_pointer(p);
-    if (c) {
+  case T_CELL:
+    {
+      const nanoclj_cell_t * c = decode_pointer(p);
       switch (_type(c)) {
       case T_LONG:
       case T_DATE:
@@ -901,7 +895,6 @@ static inline bool convert_to_double(nanoclj_val_t p, double * d) {
       }
     }
   }
-  }
   return false;
 }
 
@@ -928,28 +921,26 @@ static inline nanoclj_bignum_t to_bigint(nanoclj_val_t p) {
   switch (prim_type(p)) {
   case T_LONG:
     return mk_bignum(decode_integer(p));
-  case T_NIL:
+  case T_CELL:
     {
       nanoclj_cell_t * c = decode_pointer(p);
-      if (c) {
-	switch (_type(c)) {
-	case T_BIGINT:
-	case T_BIGDECIMAL:
-	  return c->_bignum;
-	case T_LONG:
-	  return mk_bignum(_lvalue_unchecked(c));
-	case T_STRING:
-	  {
-	    char * ptr = get_ptr(c);
-	    size_t size = get_size(c);
-	    int sign = 1;
-	    if (size && (ptr[0] == '+' || ptr[0] == '-')) {
-	      if (ptr[0] == '-') sign = -1;
-	      ptr++;
-	      size--;
-	    }
-	    return (nanoclj_bignum_t){ mk_tensor_bigint_from_string(ptr, size, 10), NULL, sign, 0 };
+      switch (_type(c)) {
+      case T_BIGINT:
+      case T_BIGDECIMAL:
+	return c->_bignum;
+      case T_LONG:
+	return mk_bignum(_lvalue_unchecked(c));
+      case T_STRING:
+	{
+	  char * ptr = get_ptr(c);
+	  size_t size = get_size(c);
+	  int sign = 1;
+	  if (size && (ptr[0] == '+' || ptr[0] == '-')) {
+	    if (ptr[0] == '-') sign = -1;
+	    ptr++;
+	    size--;
 	  }
+	  return (nanoclj_bignum_t){ mk_tensor_bigint_from_string(ptr, size, 10), NULL, sign, 0 };
 	}
       }
     }
@@ -961,19 +952,17 @@ static inline nanoclj_bignum_t to_ratio(nanoclj_val_t p) {
   switch (prim_type(p)) {
   case T_LONG:
     return mk_bignum_ratio(decode_integer(p));
-  case T_NIL:
+  case T_CELL:
     {
       nanoclj_cell_t * c = decode_pointer(p);
-      if (c) {
-	switch (_type(c)) {
-	case T_BIGINT:
-	case T_BIGDECIMAL:
-	  return (nanoclj_bignum_t){ c->_bignum.tensor, mk_tensor_bigint(1), c->_bignum.sign, 0 };
-	case T_RATIO:
-	  return (nanoclj_bignum_t){ c->_bignum.tensor, c->_bignum.denominator, c->_bignum.sign, 0 };
-	case T_LONG:
-	  return mk_bignum_ratio(_lvalue_unchecked(c));
-	}
+      switch (_type(c)) {
+      case T_BIGINT:
+      case T_BIGDECIMAL:
+	return (nanoclj_bignum_t){ c->_bignum.tensor, mk_tensor_bigint(1), c->_bignum.sign, 0 };
+      case T_RATIO:
+	return (nanoclj_bignum_t){ c->_bignum.tensor, c->_bignum.denominator, c->_bignum.sign, 0 };
+      case T_LONG:
+	return mk_bignum_ratio(_lvalue_unchecked(c));
       }
     }
   }
@@ -1152,11 +1141,8 @@ static inline strview_t to_strview(nanoclj_val_t x) {
     return decode_symbol(x)->full_name;
   case T_PROC:
     return mk_strview(dispatch_table[decode_integer(x)].name);
-  case T_NIL:
-    {
-      const nanoclj_cell_t * c = decode_pointer(x);
-      if (c) return _to_strview(c);
-    }
+  case T_CELL:
+    return _to_strview(decode_pointer(x));
   }
   return mk_strview(0);
 }
@@ -2413,18 +2399,16 @@ static inline bool is_zero(nanoclj_val_t p) {
     return decode_integer(p) == 0;
   case T_DOUBLE:
     return p.as_double == 0.0;
-  case T_NIL:
+  case T_CELL:
     {
       const nanoclj_cell_t * c = decode_pointer(p);
-      if (c) {
-	switch (_type(c)) {
-	case T_LONG:
-	  return _lvalue_unchecked(c) == 0;
-	case T_BIGINT:
-	case T_RATIO:
-	case T_BIGDECIMAL:
-	  return tensor_is_empty(c->_bignum.tensor);
-	}
+      switch (_type(c)) {
+      case T_LONG:
+	return _lvalue_unchecked(c) == 0;
+      case T_BIGINT:
+      case T_RATIO:
+      case T_BIGDECIMAL:
+	return tensor_is_empty(c->_bignum.tensor);
       }
     }
   }
@@ -2753,10 +2737,9 @@ static inline uint32_t hashcmp(nanoclj_val_t v, void * d) {
   case T_BOOLEAN:
     return is_false(v) ? 0 : LONG_MAX;
 
-  case T_NIL:
+  case T_CELL:
     {
       nanoclj_cell_t * c = decode_pointer(v);
-      if (!c) return 0;
       int32_t h = 0;
       switch (_type(c)) {
       case T_LONG:
@@ -2794,10 +2777,9 @@ static uint32_t hasheq(nanoclj_val_t v, void * d) {
   case T_KEYWORD:
     return decode_symbol(v)->hash;
     
-  case T_NIL:
+  case T_CELL:
     {
       nanoclj_cell_t * c = decode_pointer(v);
-      if (!c) return 0;
       if (c->flags & T_HASHED) {
 	return c->hasheq;
       }
@@ -2934,7 +2916,7 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
     return a0.as_double == b0.as_double; /* 0.0 == -0.0, double is only equal to another double */
   } else if (t_a == T_LONG && t_b == T_LONG) {
     return decode_integer(a0) == decode_integer(b0);
-  } else if (t_a && t_b) {
+  } else if (t_a != T_CELL && t_b != T_CELL) {
     return false;
   }
   /* Test cell types */
@@ -3296,7 +3278,7 @@ static inline bool equiv(nanoclj_val_t a, nanoclj_val_t b) {
     return decode_integer(a) == decode_integer(b);
   } else if (a.as_long == b.as_long) {
     return true;
-  } else if (type_a && type_b) {
+  } else if (type_a != T_CELL && type_b != T_CELL) {
     return false;
   } else if (type_a == T_RATIO || type_b == T_RATIO) {
     return false; /* ratio can only be equivalent to other ratio or double */
@@ -3320,29 +3302,29 @@ static inline bool equiv(nanoclj_val_t a, nanoclj_val_t b) {
 static inline int compare(nanoclj_t * sc, nanoclj_val_t a, nanoclj_val_t b) {
   if (a.as_long == b.as_long) {
     return 0;
-  } else if (is_nil(a)) {
-    return -1;
-  } else if (is_nil(b)) {
-    return +1;
   } else {
     int type_a = prim_type(a), type_b = prim_type(b);
-    if (type_a == T_DOUBLE || type_b == T_DOUBLE) {
+    if (type_a == T_NIL) {
+      return -1;
+    } else if (type_b == T_NIL) {
+      return +1;
+    } else if (type_a == T_DOUBLE || type_b == T_DOUBLE) {
       double ra = to_double(a), rb = to_double(b);
       if (ra < rb) return -1;
       else if (ra > rb) return +1;
       return 0; /* 0.0 = -0.0 */
-    } else if ((type_a == T_KEYWORD && type_b == T_KEYWORD) ||
-	       (type_a == T_SYMBOL && type_b == T_SYMBOL)) {
+    } else if ((type_a == T_KEYWORD || type_a == T_SYMBOL) &&
+	       (type_b == T_KEYWORD || type_b == T_SYMBOL)) {
       symbol_t * sa = decode_symbol(a), * sb = decode_symbol(b);
       int i = strview_cmp(sa->ns, sb->ns);
       return i ? i : strview_cmp(sa->name, sb->name);
-    } else if (type_a && type_b) {
+    } else if (type_a != T_CELL && type_b != T_CELL) {
       int ia = decode_integer(a), ib = decode_integer(b);
       if (ia < ib) return -1;
       else if (ia > ib) return +1;
       return 0;
     } else {
-      if (!type_a && !type_b) {
+      if (type_a == T_CELL && type_b == T_CELL) {
 	nanoclj_cell_t * a2 = decode_pointer(a), * b2 = decode_pointer(b);
 	type_a = _type(a2);
 	type_b = _type(b2);
@@ -4906,11 +4888,12 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
   case T_KEYWORD:
     sv = to_strview(l);
     break;
-  case T_NIL:{
-    nanoclj_cell_t * c = decode_pointer(l);
-    if (c == NULL) {
-      sv = (strview_t){ "nil", 3 };
-    } else {
+  case T_NIL:
+    sv = (strview_t){ "nil", 3 };
+    break;
+  case T_CELL:
+    {
+      nanoclj_cell_t * c = decode_pointer(l);
       switch (_type(c)) {
       case T_VAR:
 	name = first(sc, c);
@@ -5056,7 +5039,6 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
       }
       break;
     }
-  }
     break;
   }
 
@@ -6115,9 +6097,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	nanoclj_throw(sc, mk_runtime_exception(sc, msg));
 	return false;
       }
-    case T_NIL:{
-      nanoclj_cell_t * code_cell = decode_pointer(sc->code);
-      if (code_cell) {
+    case T_CELL:
+      {
+	nanoclj_cell_t * code_cell = decode_pointer(sc->code);
 	switch (_type(code_cell)) {
 	case T_LIST:
 	  if ((syn = syntaxnum(_car_unchecked(code_cell))) != 0) {       /* SYNTAX */
@@ -6134,16 +6116,14 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	    s_goto(sc, OP_EVAL);
 	  }
 	  
-	case T_VECTOR:{
+	case T_VECTOR:
 	  if (get_size(code_cell) > 0) {
 	    s_save(sc, OP_E0VEC, NULL, mk_pointer(copy_collection(sc, decode_pointer(sc->code))));
 	    sc->code = get_indexed_value(code_cell, 0);
 	    s_goto(sc, OP_EVAL);
 	  }
 	}
-	}
       }
-    }
     }
     /* Default */
     s_return(sc, sc->code);
@@ -6215,12 +6195,12 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       }
     }
 
-    case T_NIL:{
+    case T_NIL:
+      nanoclj_throw(sc, sc->NullPointerException);
+      return false;
+      
+    case T_CELL:{
       nanoclj_cell_t * code_cell = decode_pointer(sc->code);
-      if (!code_cell) {
-	nanoclj_throw(sc, sc->NullPointerException);
-	return false;
-      }
       bool set_recur_point = false;
       nanoclj_val_t params0;
       
@@ -6512,7 +6492,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
     s_goto(sc, OP_EVAL);
 
-  case OP_LOOP:{                /* loop */   
+  case OP_LOOP:{                /* loop */
     x = car(sc->code);
     if (!is_cell(x)) {
       Error_0(sc, "Syntax error");
@@ -6778,13 +6758,16 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
 
   case OP_ABS:
-    if (!unpack_args_1_not_nil(sc, &arg0)) {
+    if (!unpack_args_1(sc, &arg0)) {
       return false;
     }
     switch (prim_type(arg0)) {
+    case T_NIL:
+      nanoclj_throw(sc, sc->NullPointerException);
+      return false;
     case T_LONG: s_return(sc, mk_long(sc, abs(decode_integer(arg0))));
     case T_DOUBLE: s_return(sc, mk_double(fabs(arg0.as_double)));
-    case T_NIL: {
+    case T_CELL: {
       nanoclj_cell_t * c = decode_pointer(arg0);
       switch (_type(c)) {
       case T_LONG:
@@ -6806,13 +6789,16 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 
   case OP_INC:
   case OP_INCP:
-    if (!unpack_args_1_not_nil(sc, &arg0)) {
+    if (!unpack_args_1(sc, &arg0)) {
       return false;
     }
     switch (prim_type(arg0)) {
+    case T_NIL:
+      nanoclj_throw(sc, sc->NullPointerException);
+      return false;
     case T_LONG: s_return(sc, mk_long(sc, decode_integer(arg0) + 1));
     case T_DOUBLE: s_return(sc, mk_double(arg0.as_double + 1.0));
-    case T_NIL: {
+    case T_CELL: {
       nanoclj_cell_t * c = decode_pointer(arg0);
       switch (_type(c)) {
       case T_LONG:
@@ -6849,13 +6835,16 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 
   case OP_DEC:
   case OP_DECP:
-    if (!unpack_args_1_not_nil(sc, &arg0)) {
+    if (!unpack_args_1(sc, &arg0)) {
       return false;
     }
     switch (prim_type(arg0)) {
+    case T_NIL:
+      nanoclj_throw(sc, sc->NullPointerException);
+      return false;
     case T_LONG: s_return(sc, mk_long(sc, decode_integer(arg0) - 1));
     case T_DOUBLE: s_return(sc, mk_double(arg0.as_double - 1.0));
-    case T_NIL: {
+    case T_CELL: {
       nanoclj_cell_t * c = decode_pointer(arg0);
       switch (_type(c)) {
       case T_LONG:
@@ -7121,102 +7110,131 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_POP:
     if (!unpack_args_1(sc, &arg0)) {
       return false;
-    } else if (is_cell(arg0)) {
-      nanoclj_cell_t * c = decode_pointer(arg0);
-      if (is_empty(sc, c)) {
-	nanoclj_throw(sc, mk_illegal_state_exception(sc, "Can't pop empty collection"));
-	return false;
-      } else if (_is_sequence(c)) {
-	s_return(sc, mk_list(rest(sc, c)));
-      } else {
-	uint_fast16_t t = _type(c);
-	if (t == T_VECTOR) {
-	  s_return(sc, mk_pointer(remove_suffix(sc, c, 1)));
-	} else if (t == T_QUEUE) {
-	  s_return(sc, mk_pointer(remove_prefix(sc, c, 1)));
-	} else if (t == T_LIST) {
-	  s_return(sc, mk_list(rest(sc, c)));
-	}
-      }
-    } else if (is_nil(arg0)) {
+    }
+    switch (prim_type(arg0)) {
+    case T_NIL:
       s_return(sc, mk_nil());
-    } else if (is_emptylist(arg0)) {
+    case T_EMPTYLIST:
       nanoclj_throw(sc, mk_illegal_state_exception(sc, "Can't pop empty list"));
       return false;
+    case T_CELL:
+      {
+	nanoclj_cell_t * c = decode_pointer(arg0);
+	if (is_empty(sc, c)) {
+	  nanoclj_throw(sc, mk_illegal_state_exception(sc, "Can't pop empty collection"));
+	  return false;
+	} else if (_is_sequence(c)) {
+	  s_return(sc, mk_list(rest(sc, c)));
+	} else {
+	  uint_fast16_t t = _type(c);
+	  if (t == T_VECTOR) {
+	    s_return(sc, mk_pointer(remove_suffix(sc, c, 1)));
+	  } else if (t == T_QUEUE) {
+	    s_return(sc, mk_pointer(remove_prefix(sc, c, 1)));
+	  } else if (t == T_LIST) {
+	    s_return(sc, mk_list(rest(sc, c)));
+	  }
+	}
+      }
     }
     Error_0(sc, "No protocol method IStack.-pop defined for type");
     
   case OP_PEEK:
     if (!unpack_args_1(sc, &arg0)) {
       return false;
-    } else if (is_cell(arg0)) {
-      nanoclj_cell_t * c = decode_pointer(arg0);
-      if (_is_sequence(c)) {
-	s_return(sc, first(sc, c));
-      } else {
-	uint_fast16_t t = _type(c);
-	if (t == T_VECTOR) {
-	  size_t s = get_size(c);
-	  if (s >= 1) s_return(sc, get_indexed_value(c, s - 1));
-	  else s_return(sc, mk_nil());
-	} else if (t == T_QUEUE || t == T_LIST) {
+    }
+    switch (prim_type(arg0)) {
+    case T_NIL:
+    case T_EMPTYLIST:
+      s_return(sc, mk_nil());
+    case T_CELL:
+      {
+	nanoclj_cell_t * c = decode_pointer(arg0);
+	if (_is_sequence(c)) {
 	  s_return(sc, first(sc, c));
+	} else {
+	  uint_fast16_t t = _type(c);
+	  if (t == T_VECTOR) {
+	    size_t s = get_size(c);
+	    if (s >= 1) s_return(sc, get_indexed_value(c, s - 1));
+	    else s_return(sc, mk_nil());
+	  } else if (t == T_QUEUE || t == T_LIST) {
+	    s_return(sc, first(sc, c));
+	  }
 	}
       }
-    } else if (is_nil(arg0) || is_emptylist(arg0)) {
-      s_return(sc, mk_nil());
     }
     Error_0(sc, "No protocol method IStack.-peek defined for type");
     
   case OP_FIRST:                 /* first */
     if (!unpack_args_1(sc, &arg0)) {
       return false;
-    } else if (is_cell(arg0)) {
-      nanoclj_cell_t * c = decode_pointer(arg0);
-      if (_is_sequence(c) || is_seqable_type(_type(c))) {
-	s_return(sc, first(sc, c));
-      }
-    } else if (is_nil(arg0) || is_emptylist(arg0)) {
+    }
+    switch (prim_type(arg0)) {
+    case T_NIL:
+    case T_EMPTYLIST:
       s_return(sc, mk_nil());
+    case T_CELL:
+      {
+	nanoclj_cell_t * c = decode_pointer(arg0);
+	if (_is_sequence(c) || is_seqable_type(_type(c))) {
+	  s_return(sc, first(sc, c));
+	}
+      }
     }
     Error_0(sc, "Value is not ISeqable");
 
   case OP_SECOND:
     if (!unpack_args_1(sc, &arg0)) {
       return false;
-    } else if (is_cell(arg0)) {
-      nanoclj_cell_t * c = decode_pointer(arg0);
-      if (_is_sequence(c) || is_seqable_type(_type(c))) {
-	s_return(sc, second(sc, c));
-      }
-    } else if (is_nil(arg0) || is_emptylist(arg0)) {
+    }
+    switch (prim_type(arg0)) {
+    case T_NIL:
+    case T_EMPTYLIST:
       s_return(sc, mk_nil());
+    case T_CELL:
+      {
+	nanoclj_cell_t * c = decode_pointer(arg0);
+	if (_is_sequence(c) || is_seqable_type(_type(c))) {
+	  s_return(sc, second(sc, c));
+	}
+      }
     }
     Error_0(sc, "Value is not ISeqable");
 
   case OP_REST:
     if (!unpack_args_1(sc, &arg0)) {
       return false;
-    } else if (is_cell(arg0)) {
-      nanoclj_cell_t * c = decode_pointer(arg0);
-      if (_is_sequence(c) || is_seqable_type(_type(c))) {
-	s_return(sc, mk_list(rest(sc, c)));
-      }
-    } else if (is_nil(arg0) || is_emptylist(arg0)) {
+    }
+    switch (prim_type(arg0)) {
+    case T_NIL:
+    case T_EMPTYLIST:
       s_return(sc, mk_emptylist());
+    case T_CELL:
+      {
+	nanoclj_cell_t * c = decode_pointer(arg0);
+	if (_is_sequence(c) || is_seqable_type(_type(c))) {
+	  s_return(sc, mk_list(rest(sc, c)));
+	}
+      }
     }
     Error_0(sc, "Value is not ISeqable");
     
   case OP_NEXT:
     if (!unpack_args_1(sc, &arg0)) {
       return false;
-    } else if (is_cell(arg0)) {
-      nanoclj_cell_t * c = decode_pointer(arg0);
-      if (_is_sequence(c) || is_seqable_type(_type(c))) {
-	s_return(sc, mk_pointer(next(sc, c)));
-      }
-    } else if (is_nil(arg0) || is_emptylist(arg0)) {
+    }
+    switch (prim_type(arg0)) {
+    case T_NIL:
+    case T_EMPTYLIST:
       s_return(sc, mk_nil());
+    case T_CELL:
+      {
+	nanoclj_cell_t * c = decode_pointer(arg0);
+	if (_is_sequence(c) || is_seqable_type(_type(c))) {
+	  s_return(sc, mk_pointer(next(sc, c)));
+	}
+      }
     }
     Error_0(sc, "Value is not ISeqable");
 
@@ -7327,38 +7345,43 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_CONJ:             /* -conj */
     if (!unpack_args_2(sc, &arg0, &arg1)) {
       return false;
-    } else if (is_cell(arg0)) {
-      nanoclj_cell_t * coll = decode_pointer(arg0);
-      if (is_map_type(_type(coll))) {
-	if (is_cell(arg1)) {
-	  nanoclj_cell_t * arg = decode_pointer(arg1);
-	  if (arg) {
-	    if (is_map_type(_type(arg))) {
-	      size_t other_len = get_size(arg);
-	      for (size_t i = 0; i < other_len; i++) {
-		nanoclj_val_t key = get_indexed_key(arg, i), val = get_indexed_value(arg, i);
-		coll = assoc(sc, coll, key, val);
+    }
+    switch (prim_type(arg0)) {
+    case T_NIL:
+    case T_EMPTYLIST:
+      s_return(sc, mk_pointer(cons(sc, arg1, NULL)));
+    case T_CELL:
+      {
+	nanoclj_cell_t * coll = decode_pointer(arg0);
+	if (is_map_type(_type(coll))) {
+	  if (is_cell(arg1)) {
+	    nanoclj_cell_t * arg = decode_pointer(arg1);
+	    if (arg) {
+	      if (is_map_type(_type(arg))) {
+		size_t other_len = get_size(arg);
+		for (size_t i = 0; i < other_len; i++) {
+		  nanoclj_val_t key = get_indexed_key(arg, i), val = get_indexed_value(arg, i);
+		  coll = assoc(sc, coll, key, val);
+		}
+		s_return(sc, mk_pointer(coll));
+	      } else if (_is_sequence(arg) || is_seqable_type(_type(arg))) {
+		nanoclj_val_t key = first(sc, arg), val = second(sc, arg);
+		s_return(sc, mk_pointer(assoc(sc, coll, key, val)));
 	      }
-	      s_return(sc, mk_pointer(coll));
-	    } else if (_is_sequence(arg) || is_seqable_type(_type(arg))) {
-	      nanoclj_val_t key = first(sc, arg), val = second(sc, arg);
-	      s_return(sc, mk_pointer(assoc(sc, coll, key, val)));
 	    }
 	  }
+	  Error_0(sc, "Value is not ISeqable");
+	} else if (_type(coll) == T_VECTOR && is_cell(arg1)) {
+	  nanoclj_cell_t * arg = decode_pointer(arg1);
+	  if (arg && _type(arg) == T_MAPENTRY) {
+	    /* If MapEntry is conjoined to a vector, it is an index value pair */
+	    s_return(sc, mk_pointer(assoc(sc, coll, first(sc, arg), second(sc, arg))));
+	  }
 	}
-	Error_0(sc, "Value is not ISeqable");
-      } else if (_type(coll) == T_VECTOR && is_cell(arg1)) {
-	nanoclj_cell_t * arg = decode_pointer(arg1);
-	if (arg && _type(arg) == T_MAPENTRY) {
-	  /* If MapEntry is conjoined to a vector, it is an index value pair */
-	  s_return(sc, mk_pointer(assoc(sc, coll, first(sc, arg), second(sc, arg))));
+	if (_is_sequence(coll) || is_seqable_type(_type(coll))) {
+	  s_return(sc, mk_pointer(conjoin(sc, coll, arg1)));
 	}
       }
-      if (_is_sequence(coll) || is_seqable_type(_type(coll))) {
-	s_return(sc, mk_pointer(conjoin(sc, coll, arg1)));
-      }
-    } else if (is_nil(arg0) || is_emptylist(arg0)) {
-      s_return(sc, mk_pointer(cons(sc, arg1, NULL)));
     }
     Error_0(sc, "No protocol method ICollection.-conj defined");
 
@@ -7373,13 +7396,18 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_COUNT:
     if (!unpack_args_1(sc, &arg0)) {
       return false;
-    } else if (is_cell(arg0)) {
-      nanoclj_cell_t * c = decode_pointer(arg0);
-      if (_is_sequence(c) || is_seqable_type(_type(c))) {
-	s_return(sc, mk_long(sc, count(sc, c)));
-      }
-    } else if (is_emptylist(arg0) || is_nil(arg0)) {
+    }
+    switch (prim_type(arg0)) {
+    case T_NIL:
+    case T_EMPTYLIST:
       s_return(sc, mk_int(0));
+    case T_CELL:
+      {
+	nanoclj_cell_t * c = decode_pointer(arg0);
+	if (_is_sequence(c) || is_seqable_type(_type(c))) {
+	  s_return(sc, mk_long(sc, count(sc, c)));
+	}
+      }
     }
     Error_0(sc, "No protocol method ICounted.-count defined for type");
     
@@ -7531,15 +7559,19 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
 
   case OP_BIT_SHIFT_LEFT:
-    if (!unpack_args_2_not_nil(sc, &arg0, &arg1)) {
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
       return false;
     } else if (is_numeric_type(type(arg1))) {
       long long n = to_long(arg1);
       switch (prim_type(arg0)) {
+      case T_NIL:
+	nanoclj_throw(sc, sc->NullPointerException);
+	return false;
+
       case T_LONG:
 	s_return(sc, mk_long(sc, decode_integer(arg0) << n));
 	
-      case T_NIL:
+      case T_CELL:
 	{
 	  nanoclj_cell_t * c = decode_pointer(arg0);
 	  uint16_t ta = _type(c);
@@ -7591,17 +7623,19 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_CLASS:
     if (!unpack_args_1(sc, &arg0)) {
       return false;
-    } else if (is_nil(arg0)) {
+    }
+    switch (prim_type(arg0)) {
+    case T_NIL:
       s_return(sc, mk_nil());
-    } else {
-      if (op == OP_TYPE && is_cell(arg0)) {
+    case T_CELL:
+      if (op == OP_TYPE) {
 	nanoclj_cell_t * c = decode_pointer(arg0);
 	if (!_is_gc_atom(c) && get_elem(sc, _cons_metadata(c), sc->TYPE, &x)) {
 	  s_return(sc, x);
 	}
       }
-      s_return(sc, mk_pointer(get_type_object(sc, arg0)));
     }
+    s_return(sc, mk_pointer(get_type_object(sc, arg0)));
 
   case OP_DOT:
     if (!unpack_args_2_plus(sc, &arg0, &arg1, &arg_next)) {
@@ -7637,14 +7671,19 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_INSTANCEP:
     if (!unpack_args_2(sc, &arg0, &arg1)) {
       return false;
-    } else if (is_cell(arg0)) { /* arg0: type, arg1: object */
-      nanoclj_cell_t * t = decode_pointer(arg0);
-      if (_type(t) == T_CLASS) {
-	s_retbool(isa(sc, t, arg1));
-      }
-    } else if (is_nil(arg0)) {
+    }
+    /* arg0: type, arg1: object */
+    switch (prim_type(arg0)) {
+    case T_NIL:
       nanoclj_throw(sc, sc->NullPointerException);
       return false;
+    case T_CELL:
+      {
+	nanoclj_cell_t * t = decode_pointer(arg0);
+	if (_type(t) == T_CLASS) {
+	  s_retbool(isa(sc, t, arg1));
+	}
+      }
     }
     nanoclj_throw(sc, mk_illegal_arg_exception(sc, "Invalid argument types"));
     return false;
@@ -7807,7 +7846,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	    _nesting_unchecked(inport)++;
 	    s_save(sc, OP_RD_VEC_ELEMENT, sc->EMPTYVEC, mk_emptylist());
 	    s_goto(sc, OP_RD_SEXPR);
-	  }      
+	  }
 	
 	case TOK_SET:
 	case TOK_MAP:
@@ -8170,15 +8209,20 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_SEQ:
     if (!unpack_args_1(sc, &arg0)) {
       return false;
-    } else if (is_cell(arg0)) {
-      nanoclj_cell_t * c = decode_pointer(arg0);
-      if (_is_sequence(c)) {
-	s_return(sc, mk_pointer(c));
-      } else if (is_seqable_type(_type(c))) {
-	s_return(sc, mk_pointer(seq(sc, c)));
-      }
-    } else if (is_nil(arg0) || is_emptylist(arg0)) {
+    }
+    switch (prim_type(arg0)) {
+    case T_NIL:
+    case T_EMPTYLIST:
       s_return(sc, mk_nil());
+    case T_CELL:
+      {
+	nanoclj_cell_t * c = decode_pointer(arg0);
+	if (_is_sequence(c)) {
+	  s_return(sc, mk_pointer(c));
+	} else if (is_seqable_type(_type(c))) {
+	  s_return(sc, mk_pointer(seq(sc, c)));
+	}
+      }
     }
     Error_0(sc, "Value is not ISeqable");
 
@@ -8197,13 +8241,18 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_EMPTYP:
     if (!unpack_args_1(sc, &arg0)) {
       return false;
-    } else if (is_cell(arg0)) {
-      nanoclj_cell_t * c = decode_pointer(arg0);
-      if (_is_sequence(c) || is_seqable_type(_type(c))) {
-	s_retbool(is_empty(sc, c));
-      }
-    } else if (is_nil(arg0) || is_emptylist(arg0)) {
+    }
+    switch (prim_type(arg0)) {
+    case T_NIL:
+    case T_EMPTYLIST:
       s_retbool(true);
+    case T_CELL:
+      {
+	nanoclj_cell_t * c = decode_pointer(arg0);
+	if (_is_sequence(c) || is_seqable_type(_type(c))) {
+	  s_retbool(is_empty(sc, c));
+	}
+      }
     }
     Error_0(sc, "Value is not ISeqable");
     
@@ -8226,25 +8275,30 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_SORT:
     if (!unpack_args_1(sc, &arg0)) {
       return false;
-    } else if (is_cell(arg0)) {
-      nanoclj_cell_t * s = seq(sc, decode_pointer(arg0));
-      if (!s) {
-	s_return(sc, mk_emptylist());
-      } else {
-	nanoclj_tensor_t * vec = mk_tensor_1d(nanoclj_val, 0);
-	for ( ; s; s = next(sc, s)) {
-	  tensor_mutate_push(vec, first(sc, s));
-	}
-	tensor_mutate_sort(vec, _compare, sc);
-	nanoclj_cell_t * r = 0;
-	for (int64_t i = vec->ne[0] - 1; i >= 0; i--) {
-	  r = conjoin(sc, r, tensor_get(vec, i));
-	}
-	tensor_free(vec);
-	s_return(sc, mk_pointer(r));
-      }
-    } else if (is_emptylist(arg0) || is_nil(arg0)) {
+    }
+    switch (prim_type(arg0)) {
+    case T_NIL:
+    case T_EMPTYLIST:
       s_return(sc, arg0);
+    case T_CELL:
+      {
+	nanoclj_cell_t * s = seq(sc, decode_pointer(arg0));
+	if (!s) {
+	  s_return(sc, mk_emptylist());
+	} else {
+	  nanoclj_tensor_t * vec = mk_tensor_1d(nanoclj_val, 0);
+	  for ( ; s; s = next(sc, s)) {
+	    tensor_mutate_push(vec, first(sc, s));
+	  }
+	  tensor_mutate_sort(vec, _compare, sc);
+	  nanoclj_cell_t * r = 0;
+	  for (int64_t i = vec->ne[0] - 1; i >= 0; i--) {
+	    r = conjoin(sc, r, tensor_get(vec, i));
+	  }
+	  tensor_free(vec);
+	  s_return(sc, mk_pointer(r));
+	}
+      }
     }
     Error_0(sc, "Value is not ISeqable");
     
