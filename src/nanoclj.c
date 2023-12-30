@@ -3271,30 +3271,36 @@ static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t
 #endif
 
 static inline bool equiv(nanoclj_val_t a, nanoclj_val_t b) {
-  int type_a = prim_type(a), type_b = prim_type(b);
-  if (type_a == T_DOUBLE || type_b == T_DOUBLE) {
-    return to_double(a) == to_double(b);
-  } else if (type_a == T_LONG && type_b == T_LONG) {
-    return decode_integer(a) == decode_integer(b);
-  } else if (a.as_long == b.as_long) {
+  if (a.as_long == b.as_long) {
     return true;
-  } else if (type_a != T_CELL && type_b != T_CELL) {
-    return false;
-  } else if (type_a == T_RATIO || type_b == T_RATIO) {
-    return false; /* ratio can only be equivalent to other ratio or double */
   } else {
-    type_a = expand_type(a, type_a);
-    type_b = expand_type(b, type_b);
-    if (type_a == T_BIGINT || type_b == T_BIGINT) {
-      nanoclj_bignum_t bn_a = to_bigint(a), bn_b = to_bigint(b);
-      bool e = bn_a.sign == bn_b.sign && tensor_eq(bn_a.tensor, bn_b.tensor);
-      if (!bn_a.tensor->refcnt) tensor_free(bn_a.tensor);
-      if (!bn_b.tensor->refcnt) tensor_free(bn_b.tensor);
-      return e;
-    } else if (type_a == T_LONG || type_b == T_LONG) {
-      return to_long(a) == to_long(b);
-    } else {
+    int type_a = prim_type(a), type_b = prim_type(b);
+    if (type_a == T_DOUBLE || type_b == T_DOUBLE) {
+      return to_double(a) == to_double(b);
+    } else if (type_a == T_LONG && type_b == T_LONG) {
+      return decode_integer(a) == decode_integer(b);
+    } else if (type_a != T_CELL && type_b != T_CELL) {
       return false;
+    } else {
+      type_a = expand_type(a, type_a);
+      type_b = expand_type(b, type_b);
+      if (type_a == T_RATIO && type_b == T_RATIO) {
+	nanoclj_cell_t * ra = decode_pointer(a), * rb = decode_pointer(b);
+	return ra->_bignum.sign == rb->_bignum.sign && tensor_eq(ra->_bignum.tensor, rb->_bignum.tensor) &&
+	  tensor_eq(ra->_bignum.denominator, rb->_bignum.denominator);
+      } else if (type_a == T_RATIO || type_b == T_RATIO) {
+	return false; /* ratio can only be equivalent to other ratio or double */
+      } else if (type_a == T_BIGINT || type_b == T_BIGINT) {
+	nanoclj_bignum_t bn_a = to_bigint(a), bn_b = to_bigint(b);
+	bool e = bn_a.sign == bn_b.sign && tensor_eq(bn_a.tensor, bn_b.tensor);
+	if (!bn_a.tensor->refcnt) tensor_free(bn_a.tensor);
+	if (!bn_b.tensor->refcnt) tensor_free(bn_b.tensor);
+	return e;
+      } else if (type_a == T_LONG || type_b == T_LONG) {
+	return to_long(a) == to_long(b);
+      } else {
+	return false;
+      }
     }
   }
 }
