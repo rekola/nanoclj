@@ -10,7 +10,9 @@
 #define MASK_PAYLOAD		0x0000ffffffffffff
 
 /* Signatures for primitive types */
-#define SIGNATURE_CELL		(MASK_EXPONENT | MASK_QUIET | MASK_SIGN)
+#define SIGNATURE_CELL		(MASK_EXPONENT | MASK_QUIET | MASK_SIGN | 0)
+#define SIGNATURE_EMPTYLIST	(MASK_EXPONENT | MASK_QUIET | MASK_SIGN | 1)
+#define SIGNATURE_NIL		(MASK_EXPONENT | MASK_QUIET | MASK_SIGN | 7)
 #define SIGNATURE_NAN		(MASK_EXPONENT | MASK_QUIET | 0)
 #define SIGNATURE_BOOLEAN	(MASK_EXPONENT | MASK_QUIET | 1)
 #define SIGNATURE_INTEGER	(MASK_EXPONENT | MASK_QUIET | 2)
@@ -18,24 +20,27 @@
 #define SIGNATURE_PROC		(MASK_EXPONENT | MASK_QUIET | 4)
 #define SIGNATURE_KEYWORD	(MASK_EXPONENT | MASK_QUIET | 5)
 #define SIGNATURE_SYMBOL	(MASK_EXPONENT | MASK_QUIET | 6)
-#define SIGNATURE_EMPTYLIST	(MASK_EXPONENT | MASK_QUIET | 7)
 
 /* Predefined primitive values */
-#define kNIL	UINT64_C(18444492273895866368)
+#define kNIL	UINT64_C(18446462598732840960)
+#define kEMPTY	UINT64_C(18444773748872577024)
 #define kTRUE	UINT64_C(9221401712017801217)
 #define kFALSE	UINT64_C(9221401712017801216)
-#define kEMPTY	UINT64_c(9223090561878065152)
-
-static inline nanoclj_val_t mk_nil() {
-  return (nanoclj_val_t)kNIL;
-}
 
 static inline bool is_nil(nanoclj_val_t v) {
   return v.as_long == kNIL;
 }
 
+static inline bool is_emptylist(nanoclj_val_t v) {
+  return v.as_long == kEMPTY;
+}
+
 static inline bool is_cell(nanoclj_val_t v) {
   return (v.as_long >> 48) == SIGNATURE_CELL;
+}
+
+static inline nanoclj_val_t mk_nil() {
+  return (nanoclj_val_t)kNIL;
 }
 
 static inline nanoclj_val_t mk_byte(int8_t n) {
@@ -75,11 +80,19 @@ static inline nanoclj_val_t mk_double(double n) {
 }
 
 static inline nanoclj_val_t mk_pointer(const nanoclj_cell_t * ptr) {
-  return (nanoclj_val_t)((SIGNATURE_CELL << 48) | (uint64_t)ptr);
+  if (ptr) {
+    return (nanoclj_val_t)((SIGNATURE_CELL << 48) | (uint64_t)ptr);
+  } else {
+    return mk_nil();
+  }
 }
 
 static inline nanoclj_val_t mk_list(const nanoclj_cell_t * ptr) {
   return ptr ? mk_pointer(ptr) : mk_emptylist();
+}
+
+static inline nanoclj_cell_t * decode_pointer(nanoclj_val_t value) {
+  return (nanoclj_cell_t *)(value.as_long & MASK_PAYLOAD);
 }
 
 static inline int32_t decode_integer(nanoclj_val_t value) {
@@ -96,10 +109,6 @@ static inline bool is_keyword(nanoclj_val_t v) {
 
 static inline bool is_boolean(nanoclj_val_t v) {
   return (v.as_long >> 48) == SIGNATURE_BOOLEAN;
-}
-
-static inline bool is_emptylist(nanoclj_val_t v) {
-  return (v.as_long >> 48) == SIGNATURE_EMPTYLIST;
 }
 
 #endif

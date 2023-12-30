@@ -52,7 +52,7 @@ E2:_setmark(p);
       nanoclj_val_t * data = _smalldata_unchecked(p);
       for (int64_t i = 0; i < s; i++) {
 	nanoclj_val_t v = data[i];
-	if (is_cell(v) && !is_nil(v)) mark(decode_pointer(v));
+	if (is_cell(v)) mark(decode_pointer(v));
       }
     } else {
       nanoclj_tensor_t * tensor = p->_collection.tensor;
@@ -65,7 +65,7 @@ E2:_setmark(p);
 	  if (idx >= 0 && idx < num) {
 	    for (int64_t i = 0; i < tensor->ne[0]; i++) {
 	      nanoclj_val_t v = tensor_get_2d(tensor, i, offset);
-	      if (is_cell(v) && !is_nil(v)) mark(decode_pointer(v));
+	      if (is_cell(v)) mark(decode_pointer(v));
 	    }
 	  }
 	}
@@ -74,7 +74,7 @@ E2:_setmark(p);
 	for (size_t i = 0; i < num; i++) {
 	  /* Vector cells will be treated like ordinary cells */
 	  nanoclj_val_t v = data[offset + i];
-	  if (is_cell(v) && !is_nil(v)) mark(decode_pointer(v));
+	  if (is_cell(v)) mark(decode_pointer(v));
 	}
       }
     }
@@ -86,7 +86,7 @@ E2:_setmark(p);
       nanoclj_graph_array_t * g = _graph_unchecked(p);
       for (size_t i = 0; i < num; i++) {
 	nanoclj_val_t v = g->nodes[i].data;
-	if (is_cell(v) && !is_nil(v)) mark(decode_pointer(v));
+	if (is_cell(v)) mark(decode_pointer(v));
       }
     }
     break;
@@ -97,7 +97,7 @@ E2:_setmark(p);
   
   /* E4: down car */
   q0 = _car(p);
-  if (is_cell(q0) && !is_nil(q0) && !is_mark(q0)) {
+  if (is_cell(q0) && !is_mark(q0)) {
     _set_gc_atom(p);                 /* a note that we have moved car */
     _set_car(p, mk_pointer(t));
     t = p;
@@ -132,7 +132,7 @@ E6:                            /* up.  Undo the link switching from steps E4 and
 }
 
 static inline void mark_value(nanoclj_val_t v) {
-  if (is_cell(v) && !is_nil(v)) mark(decode_pointer(v));
+  if (is_cell(v)) mark(decode_pointer(v));
 }
 
 static inline void dump_stack_mark(nanoclj_t * sc) {
