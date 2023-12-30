@@ -76,7 +76,7 @@ As well as printing images in block mode like the plot function does, they can a
 - Tail-call optimization
 - sort is not stable and doesn't throw on mismatching types
 - License is BSD 2-Clause License instead of EPL
-- Symbols are interned and cannot have metadata
+- Symbols are interned but are temporarily boxed when metadata is added
 - Primitives such as doubles and small integers are passed by value, and are in effect, interned
 - Strings are not interned: `(identical? "abc" "abc") ;=> false`
 - `rationalize` returns exact result for doubles: `(rationalize 0.1) ;=> 3602879701896397/36028797018963968`
@@ -86,6 +86,7 @@ As well as printing images in block mode like the plot function does, they can a
 - Vectors, maps, sets and queues cannot have metadata
 - Namespaces can only contain Vars, not Classes: `(resolve 'Math) ;=> #'java.lang.Math
 - Arrays can only contain primitive values (including Objects), Multidimensional arrays cannot be ragged
+- No type hints
 - Only 64 bit systems are supported
 
 ## Dependencies
@@ -130,7 +131,7 @@ Windows support is in progress.
 - Transient data structures and dynamic variables
 - Transducers
 - Refs, Agents, Atoms, Validators
-- Reader Conditionals and Metadata reader macro
+- Reader Conditionals
 - BigDecimals, 32-bit floats and hexadecimal floating point literals
 - Unchecked operations
 - Locals cleaning
@@ -161,7 +162,7 @@ Windows support is in progress.
   - re-groups, re-matcher, re-seq, re-matches
   - assert-args
   - with-open
-  - pop!
+  - pop!, conj!, persistent!
   - fnil
   - vary-meta, alter-meta!, reset-meta!
   - aset-char, aset-long, amap, areduce, to-array-2d, make-array, long-array, bytes?
