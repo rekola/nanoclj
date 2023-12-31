@@ -137,58 +137,59 @@ enum nanoclj_types {
   T_LIST = 13,
   T_STRING = 14,
   T_CLOSURE = 15,
-  T_RATIO = 16,
-  T_FOREIGN_FUNCTION = 17,
-  T_READER = 18,
-  T_WRITER = 19,
-  T_INPUT_STREAM = 20,
-  T_OUTPUT_STREAM = 21,
-  T_GZIP_INPUT_STREAM = 22,
-  T_GZIP_OUTPUT_STREAM = 23,
-  T_VECTOR = 24,
-  T_MACRO = 25,
-  T_LAZYSEQ = 26,
-  T_ENVIRONMENT = 27,
-  T_CLASS = 28,
-  T_MAPENTRY = 29,
-  T_ARRAYMAP = 30,
-  T_HASHMAP = 31,
-  T_SORTED_HASHMAP = 32,
-  T_VARMAP = 33,
-  T_HASHSET = 34,
-  T_SORTED_HASHSET = 35,
-  T_VAR = 36,
-  T_FOREIGN_OBJECT = 37,
-  T_BIGINT = 38,
-  T_BIGDECIMAL = 39,
-  T_REGEX = 40,
-  T_DELAY = 41,
-  T_IMAGE = 42,
-  T_VIDEO = 43,
-  T_AUDIO = 44,
-  T_FILE = 45,
-  T_URL = 46,
-  T_DATE = 47,
-  T_UUID = 48,
-  T_QUEUE = 49,
-  T_RUNTIME_EXCEPTION = 50,
-  T_ARITY_EXCEPTION = 51,
-  T_ILLEGAL_ARG_EXCEPTION = 52,
-  T_NUM_FMT_EXCEPTION = 53,
-  T_ARITHMETIC_EXCEPTION = 54,
-  T_CLASS_CAST_EXCEPTION = 55,
-  T_ILLEGAL_STATE_EXCEPTION = 56,
-  T_FILE_NOT_FOUND_EXCEPTION = 57,
-  T_INDEX_EXCEPTION = 58,
-  T_TENSOR = 59,
-  T_GRAPH = 60,
-  T_GRAPH_NODE = 61,
-  T_GRAPH_EDGE = 62,
-  T_GRADIENT = 63,
-  T_MESH = 64,
-  T_SHAPE = 65,
-  T_TABLE = 66,
-  T_LAST_SYSTEM_TYPE = 67
+  T_RECUR_CLOSURE = 16,
+  T_RATIO = 17,
+  T_FOREIGN_FUNCTION = 18,
+  T_READER = 19,
+  T_WRITER = 20,
+  T_INPUT_STREAM = 21,
+  T_OUTPUT_STREAM = 22,
+  T_GZIP_INPUT_STREAM = 23,
+  T_GZIP_OUTPUT_STREAM = 24,
+  T_VECTOR = 25,
+  T_MACRO = 26,
+  T_LAZYSEQ = 27,
+  T_ENVIRONMENT = 28,
+  T_CLASS = 29,
+  T_MAPENTRY = 30,
+  T_ARRAYMAP = 31,
+  T_HASHMAP = 32,
+  T_SORTED_HASHMAP = 33,
+  T_VARMAP = 34,
+  T_HASHSET = 35,
+  T_SORTED_HASHSET = 36,
+  T_VAR = 37,
+  T_FOREIGN_OBJECT = 38,
+  T_BIGINT = 39,
+  T_BIGDECIMAL = 40,
+  T_REGEX = 41,
+  T_DELAY = 42,
+  T_IMAGE = 43,
+  T_VIDEO = 44,
+  T_AUDIO = 45,
+  T_FILE = 46,
+  T_URL = 47,
+  T_DATE = 48,
+  T_UUID = 49,
+  T_QUEUE = 50,
+  T_RUNTIME_EXCEPTION = 51,
+  T_ARITY_EXCEPTION = 52,
+  T_ILLEGAL_ARG_EXCEPTION = 53,
+  T_NUM_FMT_EXCEPTION = 54,
+  T_ARITHMETIC_EXCEPTION = 55,
+  T_CLASS_CAST_EXCEPTION = 56,
+  T_ILLEGAL_STATE_EXCEPTION = 57,
+  T_FILE_NOT_FOUND_EXCEPTION = 58,
+  T_INDEX_EXCEPTION = 59,
+  T_TENSOR = 60,
+  T_GRAPH = 61,
+  T_GRAPH_NODE = 62,
+  T_GRAPH_EDGE = 63,
+  T_GRADIENT = 64,
+  T_MESH = 65,
+  T_SHAPE = 66,
+  T_TABLE = 67,
+  T_LAST_SYSTEM_TYPE = 68
 };
 
 typedef struct {
@@ -1037,11 +1038,6 @@ static inline bool is_mapentry(nanoclj_val_t p) {
   return _type(c) == T_MAPENTRY;
 }
 
-static inline bool is_closure(nanoclj_val_t p) {
-  if (!is_cell(p)) return false;
-  const nanoclj_cell_t * c = decode_pointer(p);
-  return _type(c) == T_CLOSURE;
-}
 static inline bool is_macro(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
   const nanoclj_cell_t * c = decode_pointer(p);
@@ -2261,9 +2257,6 @@ static inline void s_save(nanoclj_t * sc, enum nanoclj_opcode op,
   next_frame->args = args;
   next_frame->envir = sc->envir;
   next_frame->code = code;
-#ifdef USE_RECUR_REGISTER
-  next_frame->recur = sc->recur;
-#endif
 }
 
 static inline nanoclj_cell_t * deref(nanoclj_t * sc, nanoclj_cell_t * c) {
@@ -5221,9 +5214,6 @@ static inline bool _s_return(nanoclj_t * sc, nanoclj_val_t a) {
   sc->args = frame->args;
   sc->envir = frame->envir;
   sc->code = frame->code;
-#ifdef USE_RECUR_REGISTER
-  sc->recur = frame->recur;
-#endif
   if (sc->op) {
     return true;
   } else {
@@ -5305,7 +5295,7 @@ static inline void dump_stack_free(nanoclj_t * sc) {
 
 #define s_retbool(tf)    s_return(sc, mk_boolean(tf))
 
-static inline bool destructure(nanoclj_t * sc, nanoclj_cell_t * binding, nanoclj_cell_t * y, size_t num_args, bool first_level) {
+static inline bool destructure(nanoclj_t * sc, nanoclj_cell_t * binding, nanoclj_cell_t * y, size_t num_args, bool first_level, bool is_recur) {
   size_t n = get_size(binding);
   
   if (n >= 2 && get_indexed_value(binding, n - 2).as_long == sc->AS.as_long) {
@@ -5316,9 +5306,9 @@ static inline bool destructure(nanoclj_t * sc, nanoclj_cell_t * binding, nanoclj
 
   if (first_level) {
     bool multi = n >= 2 && get_indexed_value(binding, n - 2).as_long == sc->AMP.as_long;
-    if (!multi && num_args != n) {
-      return false;
-    } else if (multi && num_args < n - 2) {
+    if ((!multi && num_args != n) ||
+	(multi && !is_recur && num_args < n - 2) ||
+	(multi && is_recur && num_args != n - 1)) {
       return false;
     }
   }
@@ -5326,17 +5316,21 @@ static inline bool destructure(nanoclj_t * sc, nanoclj_cell_t * binding, nanoclj
   for (size_t i = 0; i < n; i++, y = next(sc, y)) {
     nanoclj_val_t e = get_indexed_value(binding, i);
     if (e.as_long == sc->AMP.as_long) {
-      if (++i < n) {
-	e = get_indexed_value(binding, i);
+      if (++i >= n) {
+	return false;
+      }
+      e = get_indexed_value(binding, i);
+      if (!is_recur) {
 	if (!is_cell(e)) {
 	  new_slot_in_env(sc, e, mk_pointer(y));
-	} else if (!destructure(sc, decode_pointer(e), seq(sc, y), 0, false)) {
+	} else if (!destructure(sc, decode_pointer(e), seq(sc, y), 0, false, false)) {
 	  return false;
 	}
+	y = NULL;
+	break;
       }
-      y = NULL;
-      break;
-    } else if (!first_level || y) {
+    }
+    if (!first_level || y) {
       if (e.as_long == sc->UNDERSCORE.as_long) {
 	/* ignore argument */
       } else {
@@ -5350,7 +5344,7 @@ static inline bool destructure(nanoclj_t * sc, nanoclj_cell_t * binding, nanoclj
 	  } else if (!is_emptylist(y2) && !is_nil(y2)) {
 	    return false;
 	  }
-	  if (!destructure(sc, decode_pointer(e), s, 0, false)) {
+	  if (!destructure(sc, decode_pointer(e), s, 0, false, false)) {
 	    return false;
 	  }
 	}
@@ -5379,7 +5373,7 @@ static inline bool destructure_value(nanoclj_t * sc, nanoclj_val_t e, nanoclj_va
     } else if (!is_nil(arg) && !is_emptylist(arg)) {
       return false;
     }
-    if (!destructure(sc, decode_pointer(e), s, 0, false)) {
+    if (!destructure(sc, decode_pointer(e), s, 0, false, false)) {
       return false;
     }
   }
@@ -5811,7 +5805,7 @@ static inline bool unpack_args_1_plus(nanoclj_t * sc, nanoclj_val_t * arg0, nano
   }
   nanoclj_val_t ns = mk_string(sc, "nanoclj.core");
   const char * fn = dispatch_table[(int)sc->op].name;
-  nanoclj_throw(sc, mk_arity_exception(sc, count(sc, sc->args), ns, mk_string(sc, fn)));
+  nanoclj_throw(sc, mk_arity_exception(sc, count(sc, sc->args), ns, mk_string(sc, fn0)));
   return false;
 }
 
@@ -5945,9 +5939,6 @@ static inline void eval_in_thread(nanoclj_t * sc, nanoclj_val_t code) {
   
   child->args = NULL;
   child->code = code;
-#ifdef USE_RECUR_REGISTER    
-  child->recur = mk_nil();
-#endif
   child->tok = 0;
 
   dump_stack_initialize(child);
@@ -6092,10 +6083,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	}
       } else if (sc->code.as_long == sc->ENV.as_long) {
 	s_return(sc, mk_pointer(sc->envir));
-#ifdef USE_RECUR_REGISTER
-      } else if (sc->code.as_long == sc->RECUR.as_long) {
-	s_return(sc, sc->recur);
-#endif
       } else {
 	symbol_t * s = decode_symbol(sc->code);
 	nanoclj_val_t msg = mk_string_fmt(sc, "Use of undeclared Var %.*s", s->full_name.size, s->full_name.ptr);
@@ -6206,7 +6193,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       
     case T_CELL:{
       nanoclj_cell_t * code_cell = decode_pointer(sc->code);
-      bool set_recur_point = false;
+      bool set_recur_point = false, is_recur = false;
       nanoclj_val_t params0;
       
       switch (_type(code_cell)) {
@@ -6243,6 +6230,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  s_return(sc, x);
 	}
       }
+      case T_RECUR_CLOSURE:
+	is_recur = true;
       case T_CLOSURE:
 	set_recur_point = true;
       case T_MACRO:
@@ -6252,14 +6241,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	/* make environment */
 	new_frame_in_env(sc, closure_env(code_cell));
 	x = closure_code(code_cell);
-
-	if (set_recur_point) {
-#ifndef USE_RECUR_REGISTER
-	  new_slot_in_env(sc, sc->RECUR, sc->code);
-#else
-	  sc->recur = sc->code;
-#endif
-	}
 	
 	params0 = car(x);
 	params = decode_pointer(params0);
@@ -6268,7 +6249,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  sc->code = mk_pointer(cdr(x));
 	} else if (_type(params) == T_VECTOR) { /* Clojure style arguments */
 	  int64_t n = count(sc, sc->args);
-	  if (!destructure(sc, params, sc->args, n, true)) {
+	  if (!destructure(sc, params, sc->args, n, true, is_recur)) {
 	    nanoclj_val_t ns = mk_nil(), name_v = mk_nil();
 	    get_elem(sc, _cons_metadata(code_cell), sc->NS, &ns);
 	    get_elem(sc, _cons_metadata(code_cell), sc->NAME, &name_v);
@@ -6279,17 +6260,24 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	    nanoclj_throw(sc, mk_arity_exception(sc, n, ns_name_v, name_v));
 	    return false;
 	  }
+	  if (set_recur_point) {
+	    new_slot_in_env(sc, sc->RECUR, mk_pointer(get_cell(sc, T_RECUR_CLOSURE, 0, x, closure_env(code_cell), NULL)));
+	  }
 	  sc->code = mk_pointer(cdr(x));
 	} else if (_type(params) == T_LIST && is_vector(_car_unchecked(params))) { /* Clojure style multi-arity arguments */
 	  size_t needed_args = count(sc, sc->args);
 	  bool found_match = false;
 	  nanoclj_cell_t * x2 = decode_pointer(x);
 	  for ( ; x2; x2 = _cdr_unchecked(x2)) {
-	    nanoclj_val_t vec = car(_car_unchecked(x2));
+	    nanoclj_val_t code = _car_unchecked(x2);
+	    nanoclj_val_t vec = car(code);
 
-	    if (destructure(sc, decode_pointer(vec), sc->args, needed_args, true)) {
+	    if (destructure(sc, decode_pointer(vec), sc->args, needed_args, true, is_recur)) {
 	      found_match = true;
-	      sc->code = mk_pointer(cdr(_car_unchecked(x2)));
+	      sc->code = mk_pointer(cdr(code));
+	      if (set_recur_point) {
+		new_slot_in_env(sc, sc->RECUR, mk_pointer(get_cell(sc, T_RECUR_CLOSURE, 0, code, closure_env(code_cell), NULL)));
+	      }
 	      break;
 	    }
 	  }
@@ -6342,6 +6330,10 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 
 	sc->args = NULL;
 	s_goto(sc, OP_DO);
+
+      case T_LIST:
+	break;
+	
       default:
       	if (!unpack_args_1_plus(sc, &arg0, &arg_next)) {
 	  return false;
@@ -8967,7 +8959,6 @@ static struct nanoclj_interface vtbl = {
   is_symbol,
   is_keyword,
 
-  is_closure,
   is_macro,
   is_mapentry,  
   is_environment,
@@ -9113,9 +9104,6 @@ bool nanoclj_init(nanoclj_t * sc) {
   }
   dump_stack_initialize(sc);
   sc->code = mk_emptylist();
-#ifdef USE_RECUR_REGISTER
-  sc->recur = mk_emptylist();
-#endif
 
   /* init sink */
   sc->sink.type = T_LIST;
@@ -9292,6 +9280,7 @@ bool nanoclj_init(nanoclj_t * sc) {
   nanoclj_cell_t * Closure = mk_class(sc, "nanoclj.core.Closure", T_CLOSURE, AFn);
   mk_class(sc, "nanoclj.core.Procedure", T_PROC, AFn);
   mk_class(sc, "nanoclj.core.Macro", T_MACRO, Closure);
+  mk_class(sc, "nanoclj.core.RecurClosure", T_RECUR_CLOSURE, Closure);
   mk_class(sc, "nanoclj.core.ForeignFunction", T_FOREIGN_FUNCTION, AFn);
   mk_class(sc, "nanoclj.core.ForeignObject", T_FOREIGN_OBJECT, AFn);
 
@@ -9378,9 +9367,6 @@ void nanoclj_deinit(nanoclj_t * sc) {
   sc->code = mk_nil();
   sc->args = NULL;
   sc->value = mk_nil();
-#ifdef USE_RECUR_REGISTER
-  sc->recur = mk_nil();
-#endif
   sc->save_inport = mk_nil();
 
   tensor_free(sc->rdbuff);

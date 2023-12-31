@@ -11,8 +11,6 @@ extern "C" {
 
 #include "nanoclj_types.h"
 
-/* #define USE_RECUR_REGISTER */
-
 typedef struct nanoclj_cell_t nanoclj_cell_t;
 
 /*
@@ -124,7 +122,6 @@ typedef struct nanoclj_cell_t nanoclj_cell_t;
     bool (*is_symbol) (nanoclj_val_t p);
     bool (*is_keyword) (nanoclj_val_t p);
 
-    bool (*is_closure) (nanoclj_val_t p);
     bool (*is_macro) (nanoclj_val_t p);
     bool (*is_mapentry) (nanoclj_val_t p);
     bool (*is_environment) (nanoclj_val_t p);

@@ -152,9 +152,7 @@ static void mark_thread(nanoclj_t * sc) {
   if (sc->args) mark(sc->args);
   if (sc->envir) mark(sc->envir);
   mark_value(sc->code);
-#ifdef USE_RECUR_REGISTER
-  mark_value(sc->recur);
-#endif
+
   dump_stack_mark(sc);
   
   mark_value(sc->value);

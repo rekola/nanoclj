@@ -127,9 +127,6 @@ extern "C" {
     nanoclj_cell_t * args;
     nanoclj_cell_t * envir;
     nanoclj_val_t code;
-#ifdef USE_RECUR_REGISTER
-    nanoclj_val_t recur;
-#endif
   } dump_stack_frame_t;
 
   typedef struct {
@@ -147,14 +144,11 @@ extern "C" {
 
   struct nanoclj_s {
 
-/* We use 5 registers. */
+/* We use 4 registers. */
     nanoclj_cell_t * args;               /* register for arguments of function */
     nanoclj_cell_t * envir;              /* stack register for current environment */
     nanoclj_val_t code;               /* register for current code */
     size_t dump;               /* stack register for next evaluation */
-#ifdef USE_RECUR_REGISTER
-    nanoclj_val_t recur;		  /* recursion point */
-#endif
 
     nanoclj_shared_context_t * context;
     
@@ -293,7 +287,6 @@ extern "C" {
   int is_syntax(nanoclj_val_t p);
   
   const char *syntaxname(nanoclj_val_t p);
-  int is_closure(nanoclj_val_t p);
   nanoclj_val_t closure_code(nanoclj_val_t p);
   nanoclj_val_t closure_env(nanoclj_val_t p);
 
