@@ -3713,10 +3713,9 @@ static inline nanoclj_cell_t * get_var_in_env(nanoclj_t * sc, nanoclj_cell_t * e
 static inline void new_slot_in_env(nanoclj_t * sc, nanoclj_val_t variable, nanoclj_val_t value) {
   nanoclj_cell_t * x = decode_pointer(_car_unchecked(sc->envir));
   /* TODO: ensure that x is a linked list with vars */
-  nanoclj_cell_t * slot0 = get_vector_object(sc, T_VAR, 3);
+  nanoclj_cell_t * slot0 = get_vector_object(sc, T_MAPENTRY, 2);
   set_indexed_value(slot0, 0, variable);
   set_indexed_value(slot0, 1, value);
-  set_indexed_value(slot0, 2, mk_nil());
   _car_unchecked(sc->envir) = mk_pointer(cons(sc, mk_pointer(slot0), x));
 }
 
@@ -5806,7 +5805,7 @@ static inline bool unpack_args_1_plus(nanoclj_t * sc, nanoclj_val_t * arg0, nano
   }
   nanoclj_val_t ns = mk_string(sc, "nanoclj.core");
   const char * fn = dispatch_table[(int)sc->op].name;
-  nanoclj_throw(sc, mk_arity_exception(sc, count(sc, sc->args), ns, mk_string(sc, fn.)));
+  nanoclj_throw(sc, mk_arity_exception(sc, count(sc, sc->args), ns, mk_string(sc, fn)));
   return false;
 }
 
