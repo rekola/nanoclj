@@ -3268,14 +3268,15 @@ static inline bool equiv(nanoclj_t * sc, nanoclj_val_t a, nanoclj_val_t b) {
   if (!is_numeric_type(type_a) || !is_numeric_type(type_b)) {
     nanoclj_throw(sc, mk_class_cast_exception(sc, "Argument cannot be cast to java.lang.Number"));
     return false;
-  } else if (a.as_long == b.as_long) {
-    return true;
   } else if (type_a == T_DOUBLE || type_b == T_DOUBLE) {
     if (type_a == T_DOUBLE && type_b == T_DOUBLE) {
       return a.as_double == b.as_double;
     } else {
       return to_double(a) == to_double(b);
     }
+  } else if (a.as_long == b.as_long) {
+    /* value comparison must be done after double comparison, so that ##NaN != ##NaN */
+    return true;
   } else if (type_a == T_RATIO || type_b == T_RATIO) {
     if (type_a == T_RATIO && type_b == T_RATIO) {
       nanoclj_cell_t * ra = decode_pointer(a), * rb = decode_pointer(b);
@@ -5805,7 +5806,7 @@ static inline bool unpack_args_1_plus(nanoclj_t * sc, nanoclj_val_t * arg0, nano
   }
   nanoclj_val_t ns = mk_string(sc, "nanoclj.core");
   const char * fn = dispatch_table[(int)sc->op].name;
-  nanoclj_throw(sc, mk_arity_exception(sc, count(sc, sc->args), ns, mk_string(sc, fn0)));
+  nanoclj_throw(sc, mk_arity_exception(sc, count(sc, sc->args), ns, mk_string(sc, fn.)));
   return false;
 }
 
@@ -7469,10 +7470,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     s_retbool(is_false(arg0));
     
   case OP_EQUIV:                  /* equiv */
-    if (!unpack_args_2_not_nil(sc, &arg0, &arg1)) {
-      return false;
-    } else if (!is_number(arg0) || !is_number(arg1)) {
-      nanoclj_throw(sc, mk_class_cast_exception(sc, "Argument cannot be cast to java.lang.Number"));
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
       return false;
     } else {
       s_retbool(equiv(sc, arg0, arg1));
