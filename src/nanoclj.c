@@ -2986,6 +2986,7 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
     case T_LAZYSEQ:
     case T_MACRO:
     case T_ENVIRONMENT:
+    case T_CLASS:
       if (equals(sc, _car_unchecked(a), _car_unchecked(b))) {
 	return equals(sc, mk_pointer(_cdr_unchecked(a)), mk_pointer(_cdr_unchecked(b)));
       }
@@ -3378,6 +3379,7 @@ static inline int compare(nanoclj_t * sc, nanoclj_val_t a, nanoclj_val_t b) {
 	  case T_LAZYSEQ:
 	  case T_MACRO:
 	  case T_ENVIRONMENT:
+	  case T_CLASS:
 	    {
 	      int r = compare(sc, _car_unchecked(a2), _car_unchecked(b2));
 	      if (r) return r;
