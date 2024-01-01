@@ -47,7 +47,7 @@ static inline void tensor_mutate_pop(nanoclj_tensor_t * tensor) {
 /* Assuments tensor is 1-dimensional and adds an element */
 static inline void tensor_mutate_push(nanoclj_tensor_t * tensor, nanoclj_val_t val) {
   if (tensor->ne[0] * tensor->nb[0] >= tensor->nb[1]) {
-    tensor->nb[1] = 2 * (sizeof(nanoclj_val_t) + tensor->nb[1]);
+    tensor->nb[1] = 2 * (tensor->ne[0] + 1) * tensor->nb[0];
     tensor->data = realloc(tensor->data, tensor->nb[1]);
   }
   ((nanoclj_val_t *)tensor->data)[tensor->ne[0]++] = val;
@@ -416,7 +416,9 @@ static inline void tensor_mutate_fill_i8(nanoclj_tensor_t * tensor, uint8_t v) {
   memset(tensor->data, v, tensor->nb[tensor->n_dims]);
 }
 
-static inline void tensor_mutate_append_vec_f32(nanoclj_tensor_t * t, float * vec) {
+/* Assumes tensor is 2-dimensional and adds a vector.
+ * vec must have the correct size */
+static inline void tensor_mutate_append_vec(nanoclj_tensor_t * t, void * vec) {
   if ((t->ne[1] + 1) * t->nb[1] > t->nb[2]) {
     t->nb[2] = 2 * (t->ne[1] + 1) * t->nb[1];
     t->data = realloc(t->data, t->nb[2]);
@@ -568,7 +570,8 @@ static inline void tensor_mutate_and(nanoclj_tensor_t * a, const nanoclj_tensor_
 }
 
 static inline void tensor_mutate_sort(nanoclj_tensor_t * tensor, int (*compar)(const void *a, const void *b, void *), void * context) {
-  if (tensor->ne[0] >= 2) qsort_r(tensor->data, tensor->ne[0], tensor->nb[0], compar, context);
+  int n = tensor->n_dims;
+  if (tensor->ne[n - 1] >= 2) qsort_r(tensor->data, tensor->ne[n - 1], tensor->nb[n - 1], compar, context);
 }
 
 static inline uint32_t tensor_hashcode(nanoclj_tensor_t * tensor) {

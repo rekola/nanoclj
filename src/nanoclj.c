@@ -5727,7 +5727,7 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
 	nanoclj_color_t c = to_color(first(sc, args));
 	args = next(sc, args);
 	float v[] = { (float)i++ / (n - 1), c.red / 255.0f, c.green / 255.0f, c.blue / 255.0f, c.alpha / 255.0f };
-	tensor_mutate_append_vec_f32(tensor, v);
+	tensor_mutate_append_vec(tensor, v);
       }
       return mk_pointer(mk_object_from_tensor(sc, T_GRADIENT, 0, tensor->ne[0], tensor));
     }
@@ -5743,7 +5743,7 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
 	  nanoclj_cell_t * c = decode_pointer(v0);
 	  args = next(sc, args);
 	  float v[] = { to_double(first(sc, c)), to_double(second(sc, c)) };
-	  tensor_mutate_append_vec_f32(tensor, v);
+	  tensor_mutate_append_vec(tensor, v);
 	}
       }
       return mk_pointer(mk_object_from_tensor(sc, T_SHAPE, 0, tensor->ne[0], tensor));
@@ -8281,26 +8281,50 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       s_return(sc, arg0);
     case T_CELL:
       {
-	nanoclj_cell_t * s = seq(sc, decode_pointer(arg0));
-	if (!s) {
-	  s_return(sc, mk_emptylist());
-	} else {
-	  nanoclj_tensor_t * vec = mk_tensor_1d(nanoclj_val, 0);
-	  for ( ; s; s = next(sc, s)) {
-	    tensor_mutate_push(vec, first(sc, s));
-	  }
+	nanoclj_tensor_t * vec = mk_tensor_1d(nanoclj_val, 0);
+	for ( nanoclj_cell_t * s = seq(sc, decode_pointer(arg0)) ; s; s = next(sc, s)) {
+	  tensor_mutate_push(vec, first(sc, s));
+	}
+	nanoclj_cell_t * r = 0;
+	if (vec->ne[0]) {
 	  tensor_mutate_sort(vec, _compare, sc);
-	  nanoclj_cell_t * r = 0;
 	  for (int64_t i = vec->ne[0] - 1; i >= 0; i--) {
-	    r = conjoin(sc, r, tensor_get(vec, i));
+	    r = cons(sc, tensor_get(vec, i), r);
 	  }
 	  tensor_free(vec);
-	  s_return(sc, mk_pointer(r));
 	}
+	s_return(sc, mk_list(r));
       }
     }
-    Error_0(sc, "Value is not ISeqable");
-    
+
+  case OP_SORT_BY:
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
+      return false;
+    }
+    switch (prim_type(arg1)) {
+    case T_NIL:
+    case T_EMPTYLIST:
+      s_return(sc, arg1);
+    case T_CELL:
+      {
+	nanoclj_tensor_t * vec = mk_tensor_2d(nanoclj_val, 2, 0);
+	for ( nanoclj_cell_t * s = seq(sc, decode_pointer(arg1)); s; s = next(sc, s)) {
+	  nanoclj_val_t v = first(sc, s);
+	  nanoclj_val_t p[] = { nanoclj_call(sc, arg0, mk_pointer(cons(sc, v, NULL))), v };
+	  tensor_mutate_append_vec(vec, p);
+	}
+	nanoclj_cell_t * r = 0;
+	if (vec->ne[1]) {
+	  tensor_mutate_sort(vec, _compare, sc);
+	  for (int64_t i = vec->ne[1] - 1; i >= 0; i--) {
+	    r = cons(sc, tensor_get_2d(vec, 1, i), r);
+	  }
+	  tensor_free(vec);
+	}
+	s_return(sc, mk_list(r));
+      }
+    }
+
   case OP_UTF8MAP:
     if (!unpack_args_2(sc, &arg0, &arg1)) {
       return false;
