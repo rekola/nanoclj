@@ -164,6 +164,7 @@ Windows support is in progress.
   - with-open
   - pop!, conj!, persistent!
   - fnil
+  - trampoline
   - vary-meta, alter-meta!, reset-meta!
   - aset-char, aset-long, amap, areduce, to-array-2d, make-array, long-array, bytes?
   - remove-ns, create-ns, ns-imports, ns-interns, ns-refers, ns-publics, ns-aliases, ns-name, all-ns, ns-unalias, ns-unmap, import, ns, require
