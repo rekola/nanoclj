@@ -15,17 +15,6 @@ static inline void mark(nanoclj_cell_t * p) {
 
 E2:_setmark(p);
   switch (_type(p)) {
-  case T_CLASS:
-  case T_ENVIRONMENT:
-  case T_LIST:
-  case T_CLOSURE:
-  case T_MACRO:
-  case T_LAZYSEQ:
-  case T_DELAY:{
-    nanoclj_cell_t * meta = _cons_metadata(p);
-    if (meta) mark(meta);
-    break;
-  }
   case T_FOREIGN_FUNCTION:{
     nanoclj_cell_t * meta = _ff_metadata(p);
     if (meta) mark(meta);
@@ -94,6 +83,10 @@ E2:_setmark(p);
   
   if (_is_gc_atom(p))
     goto E6;
+
+  /* mark cons cell meta here (not an atom) */
+  nanoclj_cell_t * meta = _cons_metadata(p);
+  if (meta) mark(meta);
   
   /* E4: down car */
   q0 = _car(p);
