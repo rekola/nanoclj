@@ -877,7 +877,7 @@
 (defn into-array
   "Creates an array from aseq. If type is not provided, it's taken from the first element of aseq"
   ([aseq] (into-array (class (first aseq)) aseq))
-  ([type aseq] (tensor (if (class? type) @(ns-resolve type 'TYPE) type) aseq (count aseq))))
+  ([type aseq] (tensor (if (number? type) type @(ns-resolve type 'TYPE)) aseq (count aseq))))
 
 (defn alength
   "Returns the size of an array. For multidimensional arrays, returns the last dimension."

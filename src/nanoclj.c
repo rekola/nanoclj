@@ -1603,20 +1603,22 @@ static inline nanoclj_cell_t * mk_image(nanoclj_t * sc, int32_t width, int32_t h
 }
 
 static inline nanoclj_cell_t * mk_object_from_tensor(nanoclj_t * sc, uint16_t type, size_t offset, size_t size, nanoclj_tensor_t * tensor) {
-  nanoclj_cell_t * x = get_cell_x(sc, type, T_GC_ATOM, NULL, NULL, NULL);
-  if (x) {
-    tensor->refcnt++;
-    x->_collection.tensor = tensor;
-    x->_collection.offset = offset;
-    x->_collection.size = size;
+  if (tensor) {
+    nanoclj_cell_t * x = get_cell_x(sc, type, T_GC_ATOM, NULL, NULL, NULL);
+    if (x) {
+      tensor->refcnt++;
+      x->_collection.tensor = tensor;
+      x->_collection.offset = offset;
+      x->_collection.size = size;
 #ifdef RETAIN_ALLOCS
-    retain(sc, x);
+      retain(sc, x);
 #endif
-    return x;
-  } else if (!tensor->refcnt) {
-    tensor_free(tensor);
+      return x;
+    } else if (!tensor->refcnt) {
+      tensor_free(tensor);
+    }
+    sc->pending_exception = sc->OutOfMemoryError;
   }
-  sc->pending_exception = sc->OutOfMemoryError;
   return NULL;
 }
 
@@ -5676,7 +5678,7 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
 	  }
 	}
 	if (!source_seq && !check_tensor_value_type(sc, typ, source_val)) {
-	  break;
+	  return mk_nil();
 	}
 	nanoclj_tensor_t * tensor = mk_tensor_1d(typ, dim1);
 	for (size_t i = 0; i < dim1; i++) {
@@ -5685,7 +5687,7 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
 	    source_seq = next(sc, source_seq);
 	    if (!check_tensor_value_type(sc, typ, source_val)) {
 	      tensor_free(tensor);
-	      break;
+	      return mk_nil();
 	    }
 	  }
 	  switch (typ) {
