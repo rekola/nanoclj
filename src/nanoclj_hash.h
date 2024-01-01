@@ -67,7 +67,7 @@ static inline uint32_t hash_combine(uint32_t seed, uint32_t hash) {
 }
 
 static inline uint32_t get_string_hashcode(const char * str, size_t size) {
-  int hashcode = 0, m = 1;
+  uint32_t hashcode = 0, m = 1;
   for (int i = (int)size - 1; i >= 0; i--) {
     hashcode += str[i] * m;
     m *= 31;
