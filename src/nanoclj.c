@@ -2986,11 +2986,12 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
     case T_LAZYSEQ:
     case T_MACRO:
     case T_ENVIRONMENT:
-    case T_CLASS:
       if (equals(sc, _car_unchecked(a), _car_unchecked(b))) {
 	return equals(sc, mk_pointer(_cdr_unchecked(a)), mk_pointer(_cdr_unchecked(b)));
       }
       break;
+    case T_CLASS:
+      return a->type == b->type;
     case T_BIGINT:
     case T_BIGDECIMAL:
       return a->_bignum.sign == b->_bignum.sign && a->_bignum.scale == b->_bignum.scale && tensor_eq(a->_bignum.tensor, b->_bignum.tensor);
@@ -3379,7 +3380,6 @@ static inline int compare(nanoclj_t * sc, nanoclj_val_t a, nanoclj_val_t b) {
 	  case T_LAZYSEQ:
 	  case T_MACRO:
 	  case T_ENVIRONMENT:
-	  case T_CLASS:
 	    {
 	      int r = compare(sc, _car_unchecked(a2), _car_unchecked(b2));
 	      if (r) return r;
@@ -3712,13 +3712,17 @@ static inline nanoclj_cell_t * get_var_in_env(nanoclj_t * sc, nanoclj_cell_t * e
   return NULL;
 }
 
-static inline void new_slot_in_env(nanoclj_t * sc, nanoclj_val_t variable, nanoclj_val_t value) {
-  nanoclj_cell_t * x = decode_pointer(_car_unchecked(sc->envir));
+static inline void new_slot_spec_in_env(nanoclj_t * sc, nanoclj_cell_t * env, nanoclj_val_t variable, nanoclj_val_t value) {
+  nanoclj_cell_t * x = decode_pointer(_car_unchecked(env));
   /* TODO: ensure that x is a linked list with vars */
   nanoclj_cell_t * slot0 = get_vector_object(sc, T_MAPENTRY, 2);
   set_indexed_value(slot0, 0, variable);
   set_indexed_value(slot0, 1, value);
-  _car_unchecked(sc->envir) = mk_pointer(cons(sc, mk_pointer(slot0), x));
+  _car_unchecked(env) = mk_pointer(cons(sc, mk_pointer(slot0), x));
+}
+
+static inline void new_slot_in_env(nanoclj_t * sc, nanoclj_val_t variable, nanoclj_val_t value) {
+  new_slot_spec_in_env(sc, sc->envir, variable, value);
 }
 
 static inline bool set_var_in_ns(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t hdl, nanoclj_val_t state, nanoclj_cell_t * meta) {
@@ -6195,7 +6199,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       
     case T_CELL:{
       nanoclj_cell_t * code_cell = decode_pointer(sc->code);
-      bool set_recur_point = false, is_recur = false;
+      bool is_recur = false;
       nanoclj_val_t params0;
       
       switch (_type(code_cell)) {
@@ -6235,7 +6239,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       case T_RECUR_CLOSURE:
 	is_recur = true;
       case T_CLOSURE:
-	set_recur_point = true;
       case T_MACRO:
       case T_LAZYSEQ:
       case T_DELAY:
@@ -6247,28 +6250,18 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	params0 = car(x);
 	params = decode_pointer(params0);
 
+	bool found_match = false;
 	if (!params) { /* lazy-seqs etc. do not have params */
 	  sc->code = mk_pointer(cdr(x));
+	  found_match = true;
 	} else if (_type(params) == T_VECTOR) { /* Clojure style arguments */
 	  int64_t n = count(sc, sc->args);
-	  if (!destructure(sc, params, sc->args, n, true, is_recur)) {
-	    nanoclj_val_t ns = mk_nil(), name_v = mk_nil();
-	    get_elem(sc, _cons_metadata(code_cell), sc->NS, &ns);
-	    get_elem(sc, _cons_metadata(code_cell), sc->NAME, &name_v);
-	    nanoclj_val_t ns_name_v;
-	    if (is_cell(ns)) {
-	      get_elem(sc, get_metadata(decode_pointer(ns)), sc->NAME, &ns_name_v);
-	    }
-	    nanoclj_throw(sc, mk_arity_exception(sc, n, ns_name_v, name_v));
-	    return false;
+	  if (destructure(sc, params, sc->args, n, true, is_recur)) {
+	    sc->code = mk_pointer(cdr(x));
+	    found_match = true;
 	  }
-	  if (set_recur_point) {
-	    new_slot_in_env(sc, sc->RECUR, mk_pointer(get_cell(sc, T_RECUR_CLOSURE, 0, x, closure_env(code_cell), NULL)));
-	  }
-	  sc->code = mk_pointer(cdr(x));
 	} else if (_type(params) == T_LIST && is_vector(_car_unchecked(params))) { /* Clojure style multi-arity arguments */
 	  size_t needed_args = count(sc, sc->args);
-	  bool found_match = false;
 	  nanoclj_cell_t * x2 = decode_pointer(x);
 	  for ( ; x2; x2 = _cdr_unchecked(x2)) {
 	    nanoclj_val_t code = _car_unchecked(x2);
@@ -6277,38 +6270,17 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	    if (destructure(sc, decode_pointer(vec), sc->args, needed_args, true, is_recur)) {
 	      found_match = true;
 	      sc->code = mk_pointer(cdr(code));
-	      if (set_recur_point) {
-		new_slot_in_env(sc, sc->RECUR, mk_pointer(get_cell(sc, T_RECUR_CLOSURE, 0, code, closure_env(code_cell), NULL)));
-	      }
 	      break;
 	    }
-	  }
-	  
-	  if (!found_match) {
-	    nanoclj_val_t ns = mk_nil(), name_v = mk_nil();
-	    get_elem(sc, _cons_metadata(code_cell), sc->NS, &ns);
-	    get_elem(sc, _cons_metadata(code_cell), sc->NAME, &name_v);
-	    nanoclj_val_t ns_name_v;
-	    if (is_cell(ns)) {
-	      get_elem(sc, get_metadata(decode_pointer(ns)), sc->NAME, &ns_name_v);
-	    }
-	    nanoclj_throw(sc, mk_arity_exception(sc, needed_args, ns_name_v, name_v));
-	    return false;
 	  }
 	} else {
 	  x = params0;
 	  nanoclj_cell_t * yy = sc->args;
+	  found_match = true;
 	  for ( ; is_list(x); x = mk_pointer(cdr(x)), yy = next(sc, yy)) {
 	    if (!yy) {
-	      nanoclj_val_t ns = mk_nil(), name_v = mk_nil();
-	      get_elem(sc, _cons_metadata(code_cell), sc->NS, &ns);
-	      get_elem(sc, _cons_metadata(code_cell), sc->NAME, &name_v);
-	      nanoclj_val_t ns_name_v;
-	      if (is_cell(ns)) {
-		get_elem(sc, get_metadata(decode_pointer(ns)), sc->NAME, &ns_name_v);
-	      }
-	      nanoclj_throw(sc, mk_arity_exception(sc, count(sc, sc->args), ns_name_v, name_v));
-	      return false;
+	      found_match = false;
+	      break;
 	    } else {
 	      new_slot_in_env(sc, car(x), first(sc, yy));
 	    }
@@ -6330,8 +6302,23 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  sc->code = mk_pointer(cdr(closure_code(code_cell)));
 	}
 
-	sc->args = NULL;
-	s_goto(sc, OP_DO);
+	if (found_match) {
+	  if (cdr_unchecked(sc->code)) {
+	    s_save(sc, OP_DO, NULL, mk_pointer(cdr_unchecked(sc->code)));
+	  }
+	  sc->code = car_unchecked(sc->code);
+	  s_goto(sc, OP_EVAL);
+	} else {
+	  nanoclj_val_t ns = mk_nil(), name_v = mk_nil();
+	  get_elem(sc, _cons_metadata(code_cell), sc->NS, &ns);
+	  get_elem(sc, _cons_metadata(code_cell), sc->NAME, &name_v);
+	  nanoclj_val_t ns_name_v;
+	  if (is_cell(ns)) {
+	    get_elem(sc, get_metadata(decode_pointer(ns)), sc->NAME, &ns_name_v);
+	  }
+	  nanoclj_throw(sc, mk_arity_exception(sc, count(sc, sc->args), ns_name_v, name_v));
+	  return false;
+	}
 
       case T_LIST:
 	break;
@@ -6375,23 +6362,29 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       }
     }
 
-  case OP_LAMBDA1:{
-    x = sc->value;
-    bool has_name = false;
-    
-    if (is_symbol(car(x)) && is_vector(cadr(x))) {
-      has_name = true;
-    } else if (is_symbol(car(x)) && (is_list(cadr(x)) && is_vector(caadr(x)))) {
-      has_name = true;
-    }
+  case OP_LAMBDA1:
+    {
+      x = sc->value;
+      
+      nanoclj_val_t name = mk_nil();
+      if (is_symbol(car(x)) && is_vector(cadr(x))) {
+	name = car(x);
+	x = mk_pointer(cdr(x));
+      } else if (is_symbol(car(x)) && (is_list(cadr(x)) && is_vector(caadr(x)))) {
+	name = car(x);
+	x = mk_pointer(cdr(x));
+      }
 
-    if (has_name) {
-      x = mk_pointer(cdr(x));
+      /* Create env frame for the closure, and add recursion point and anonymous fn name */
+      nanoclj_cell_t * env = get_cell(sc, T_ENVIRONMENT, 0, mk_emptylist(), sc->envir, NULL);
+      if (!is_nil(name)) {
+	new_slot_spec_in_env(sc, env, name, mk_pointer(get_cell(sc, T_CLOSURE, 0, x, env, NULL)));
+      }
+      new_slot_spec_in_env(sc, env, sc->RECUR, mk_pointer(get_cell(sc, T_RECUR_CLOSURE, 0, x, env, NULL)));
+
+      /* make closure. first is code. second is environment */
+      s_return(sc, mk_pointer(get_cell(sc, T_CLOSURE, 0, x, env, NULL)));
     }
-    
-    /* make closure. first is code. second is environment */
-    s_return(sc, mk_pointer(get_cell(sc, T_CLOSURE, 0, x, sc->envir, NULL)));
-  }
    
   case OP_QUOTE:               /* quote */
     s_return(sc, car(sc->code));
@@ -6513,9 +6506,13 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 
     nanoclj_cell_t * body = cdr(sc->code);
     body = cons(sc, mk_pointer(args), body);
-    body = get_cell(sc, T_CLOSURE, 0, mk_pointer(body), sc->envir, NULL);
+    nanoclj_val_t x = mk_pointer(body);
     
-    sc->code = mk_pointer(cons(sc, mk_pointer(body), values));
+    /* Create env frame for the closure, and add recursion point and anonymous fn name */
+    nanoclj_cell_t * env = get_cell(sc, T_ENVIRONMENT, 0, mk_emptylist(), sc->envir, NULL);
+    new_slot_spec_in_env(sc, env, sc->RECUR, mk_pointer(get_cell(sc, T_RECUR_CLOSURE, 0, x, env, NULL)));
+    
+    sc->code = mk_pointer(cons(sc, mk_pointer(get_cell(sc, T_CLOSURE, 0, x, env, NULL)), values));
     sc->args = NULL;
     s_goto(sc, OP_EVAL);
   }
@@ -6554,9 +6551,12 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       sc->args = NULL;
       s_goto(sc, OP_EVAL);
     } else {
-      sc->code = mk_pointer(cdr(sc->code));
-      sc->args = NULL;
-      s_goto(sc, OP_DO);
+      nanoclj_cell_t * code = cdr(sc->code);
+      if (_cdr_unchecked(code)) {
+	s_save(sc, OP_DO, NULL, mk_pointer(_cdr_unchecked(code)));
+      }
+      sc->code = _car_unchecked(code);
+      s_goto(sc, OP_EVAL);
     }
   }
 
@@ -6585,9 +6585,12 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       for (z = sc->args; z; x = _cdr(x), z = _cdr_unchecked(z)) {
 	new_slot_in_env(sc, _caar(x), _car_unchecked(z));
       }
-      sc->code = mk_pointer(cdr(sc->code));
-      sc->args = NULL;
-      s_goto(sc, OP_DO);
+      nanoclj_cell_t * code = cdr(sc->code);
+      if (_cdr_unchecked(code)) {
+	s_save(sc, OP_DO, NULL, mk_pointer(_cdr_unchecked(code)));
+      }
+      sc->code = _car_unchecked(code);
+      s_goto(sc, OP_EVAL);
     }
 
   case OP_COND0:               /* cond */
@@ -6615,8 +6618,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
         sc->code = mk_pointer(cons(sc, cadr(sc->code), cons(sc, x, NULL)));
         s_goto(sc, OP_EVAL);
       }
-      sc->code = mk_pointer(cons(sc, car_unchecked(sc->code), NULL));
-      s_goto(sc, OP_DO);
+      sc->code = car_unchecked(sc->code);
+      s_goto(sc, OP_EVAL);
     } else {
       sc->code = mk_pointer(cddr(sc->code));
       if (is_nil(sc->code) || is_emptylist(sc->code)) {
