@@ -14,7 +14,7 @@
 (defn blank?
   "Returns true if the argument string is blank"
   [s] (cond (empty? s) true
-            (. (first s) isWhitespace) (recur (rest s))
+            (.isWhitespace (first s)) (recur (rest s))
             :else false))
 
 (defn upper-case

@@ -42,86 +42,86 @@
 
 (defn isAlphabetic
   "Returns true if codepoint is alphabetic"
-  [class c] (let [cat (-category c)] (case cat
-                                       UPPERCASE_LETTER true
-                                       LOWERCASE_LETTER true
-                                       TITLECASE_LETTER true
-                                       MODIFIER_LETTER true
-                                       OTHER_LETTER true
-                                       LETTER_NUMBER true
-                                       false)))
+  [c] (let [cat (-category c)] (case cat
+                                 UPPERCASE_LETTER true
+                                 LOWERCASE_LETTER true
+                                 TITLECASE_LETTER true
+                                 MODIFIER_LETTER true
+                                 OTHER_LETTER true
+                                 LETTER_NUMBER true
+                                 false)))
 
 (defn isLetter
   "Returns true if codepoint is a letter"
-  [class c] (let [cat (-category c)] (case cat
-                                       UPPERCASE_LETTER true
-                                       LOWERCASE_LETTER true
-                                       TITLECASE_LETTER true
-                                       MODIFIER_LETTER true
-                                       OTHER_LETTER true
-                                       false)))
+  [c] (let [cat (-category c)] (case cat
+                                 UPPERCASE_LETTER true
+                                 LOWERCASE_LETTER true
+                                 TITLECASE_LETTER true
+                                 MODIFIER_LETTER true
+                                 OTHER_LETTER true
+                                 false)))
 
 (defn isLetterOrDigit
   "Returns true if codepoint is a letter"
-  [class c] (let [cat (-category c)] (case cat
-                                       UPPERCASE_LETTER true
-                                       LOWERCASE_LETTER true
-                                       TITLECASE_LETTER true
-                                       DECIMAL_DIGIT_NUMBER true
-                                       false)))
+  [c] (let [cat (-category c)] (case cat
+                                 UPPERCASE_LETTER true
+                                 LOWERCASE_LETTER true
+                                 TITLECASE_LETTER true
+                                 DECIMAL_DIGIT_NUMBER true
+                                 false)))
 
 (defn isSpaceChar
   "Returns true if codepoint is a space charater"
-  [class c] (let [cat (-category c)] (case cat
-                                       SPACE_SEPARATOR true
-                                       LINE_SEPARATOR true
-                                       PARAGRAPH_SEPARATOR true
-                                       false)))
+  [c] (let [cat (-category c)] (case cat
+                                 SPACE_SEPARATOR true
+                                 LINE_SEPARATOR true
+                                 PARAGRAPH_SEPARATOR true
+                                 false)))
 
 (defn isWhitespace
   "Returns true if codepoint is whitespace"
-  [class c] (let [cat (-category c)] (case cat
-                                       SPACE_SEPARATOR true
-                                       LINE_SEPARATOR true
-                                       PARAGRAPH_SEPARATOR true
-                                       CONTROL true
-                                       false)))
+  [c] (let [cat (-category c)] (case cat
+                                 SPACE_SEPARATOR true
+                                 LINE_SEPARATOR true
+                                 PARAGRAPH_SEPARATOR true
+                                 CONTROL true
+                                 false)))
 
 (defn isDigit
   "returns true if codepoint is a digit"
-  [class c] (= (-category c) DECIMAL_DIGIT_NUMBER))
+  [c] (= (-category c) DECIMAL_DIGIT_NUMBER))
 
 (defn isISOControl
   "returns true if codepoint is a digit"
-  [class c] (= (-category c) CONTROL))
+  [c] (= (-category c) CONTROL))
 
 (defn isLowerCase
   "Returns true if codepoint is in lower case"
-  [class c] (= (-category c) LOWERCASE_LETTER))
+  [c] (= (-category c) LOWERCASE_LETTER))
 
 (defn isUpperCase
   "Returns true if codepoint is in upper case"
-  [class c] (= (-category c) UPPERCASE_LETTER))
+  [c] (= (-category c) UPPERCASE_LETTER))
 
 (defn isTitleCase
   "Returns true if codepoint is in title case"
-  [class c] (= (-category c) TITLECASE_LETTER))
+  [c] (= (-category c) TITLECASE_LETTER))
 
 (defn isDefined
   "Returns true if the codepoint has been assigned a meaning in Unicode"
-  [class c] (not= (-category c) UNASSIGNED))
+  [c] (not= (-category c) UNASSIGNED))
 
 (defn isValidCodePoint
   "Returns true if codepoint is valid"
-  [class c] (and (>= 0 MIN_CODE_POINT) (<= c MAX_CODE_POINT)))
+  [c] (and (>= 0 MIN_CODE_POINT) (<= c MAX_CODE_POINT)))
 
 (defn isSupplementaryCodePoint
   "Returns true if codepoint is suplementary"
-  [class c] (>= c MIN_SUPPLEMENTARY_CODE_POINT))
+  [c] (>= c MIN_SUPPLEMENTARY_CODE_POINT))
 
 (defn isBmpCodePoint
   "Returns true if the codepoint belongs to the Basic Multilingual Plane"
-  [class c] (and (>= 0 c) (<= c 0xffff)))
+  [c] (and (>= 0 c) (<= c 0xffff)))
 
 (defn toTitleCase
   "Returns the codepoint in title case"
