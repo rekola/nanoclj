@@ -3316,47 +3316,12 @@ static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t
 #include "nanoclj_curl.h"
 #endif
 
-static inline bool equiv(nanoclj_t * sc, nanoclj_val_t a, nanoclj_val_t b) {
-  int type_a = type(a), type_b = type(b);
-  if (!is_numeric_type(type_a) || !is_numeric_type(type_b)) {
-    nanoclj_throw(sc, mk_class_cast_exception(sc, "Argument cannot be cast to java.lang.Number"));
-    return false;
-  } else if (type_a == T_DOUBLE || type_b == T_DOUBLE) {
-    if (type_a == T_DOUBLE && type_b == T_DOUBLE) {
-      return a.as_double == b.as_double;
-    } else {
-      return to_double(a) == to_double(b);
-    }
-  } else if (a.as_long == b.as_long) {
-    /* value comparison must be done after double comparison, so that ##NaN != ##NaN */
-    return true;
-  } else if (type_a == T_RATIO || type_b == T_RATIO) {
-    if (type_a == T_RATIO && type_b == T_RATIO) {
-      nanoclj_cell_t * ra = decode_pointer(a), * rb = decode_pointer(b);
-      return ra->_bignum.sign == rb->_bignum.sign && tensor_eq(ra->_bignum.tensor, rb->_bignum.tensor) &&
-	tensor_eq(ra->_bignum.denominator, rb->_bignum.denominator);
-    } else {
-      return false; /* ratio can only be equivalent to other ratio or double */
-    }
-  } else if (type_a == T_BIGINT || type_b == T_BIGINT) {
-    nanoclj_bignum_t bn_a = to_bigint(a), bn_b = to_bigint(b);
-    bool e = bn_a.sign == bn_b.sign && tensor_eq(bn_a.tensor, bn_b.tensor);
-    if (!bn_a.tensor->refcnt) tensor_free(bn_a.tensor);
-    if (!bn_b.tensor->refcnt) tensor_free(bn_b.tensor);
-    return e;
-  } else if (type_a == T_LONG && type_b == T_LONG) {
-    return decode_integer(a) == decode_integer(b);
-  } else {
-    return to_long(a) == to_long(b);
-  }
-}
 
 static inline int compare(nanoclj_val_t a, nanoclj_val_t b) {
-  if (a.as_long == b.as_long || a.as_long == kNAN || b.as_long == kNAN) {
-    /* NaNs are equal to all number types */
+  /* NaNs equality must have been checked before this */
+  if (a.as_long == b.as_long) {
     return 0;
   }
-  
   int type_a = prim_type(a), type_b = prim_type(b);
   if (type_a == T_NIL) {
     return -1;
@@ -3418,6 +3383,7 @@ static inline int compare(nanoclj_val_t a, nanoclj_val_t b) {
 	else if (la > lb) return +1;
 	else {
 	  for (size_t i = 0; i < la; i++) {
+	    // FIXME: do nan test first
 	    int r = compare(get_indexed_value(a2, i), get_indexed_value(b2, i));
 	    if (r) return r;
 	  }
@@ -3480,8 +3446,13 @@ static inline int compare(nanoclj_val_t a, nanoclj_val_t b) {
   return 0;
 }
 
-static inline int _compare(const void * a, const void * b) {
-  return compare(*(const nanoclj_val_t*)a, *(const nanoclj_val_t*)b);
+static inline int _compare(const void * a0, const void * b0) {
+  nanoclj_val_t a = *(const nanoclj_val_t*)a0, b = *(const nanoclj_val_t*)b0;
+  if (a.as_long == kNAN || b.as_long == kNAN) {
+    /* NaNs are equal to all number types when sorting */
+    return 0;
+  }
+  return compare(a, b);
 }
 
 static inline void ok_to_freely_gc(nanoclj_t * sc) {
@@ -7513,8 +7484,13 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_EQUIV:                  /* equiv */
     if (!unpack_args_2(sc, &arg0, &arg1)) {
       return false;
+    } else if (arg0.as_long == kNAN || arg1.as_long == kNAN) {
+      s_retbool(false);
+    } else if (!is_number(arg0) || !is_number(arg1)) {
+      nanoclj_throw(sc, mk_class_cast_exception(sc, "Argument cannot be cast to java.lang.Number"));
+      return false;
     } else {
-      s_retbool(equiv(sc, arg0, arg1));
+      s_retbool(compare(arg0, arg1) == 0);
     }
     
   case OP_LT:                  /* lt */
@@ -7522,6 +7498,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       return false;
     } else if (!is_comparable(arg0, arg1)) {
       Error_0(sc, "Cannot compare types");
+    } else if (arg0.as_long == kNAN || arg1.as_long == kNAN) {
+      s_retbool(false);
     }
     s_retbool(compare(arg0, arg1) < 0);
 
@@ -7530,6 +7508,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       return false;
     } else if (!is_comparable(arg0, arg1)) {
       Error_0(sc, "Cannot compare types");
+    } else if (arg0.as_long == kNAN || arg1.as_long == kNAN) {
+      s_retbool(false);
     }
     s_retbool(compare(arg0, arg1) > 0);
   
@@ -7538,6 +7518,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       return false;
     } else if (!is_comparable(arg0, arg1)) {
       Error_0(sc, "Cannot compare types");
+    } else if (arg0.as_long == kNAN || arg1.as_long == kNAN) {
+      s_retbool(false);
     }
     s_retbool(compare(arg0, arg1) <= 0);
 
@@ -7546,6 +7528,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       return false;
     } else if (!is_comparable(arg0, arg1)) {
       Error_0(sc, "Cannot compare types");
+    } else if (arg0.as_long == kNAN || arg1.as_long == kNAN) {
+      s_retbool(false);
     }
     s_retbool(compare(arg0, arg1) >= 0);
     
