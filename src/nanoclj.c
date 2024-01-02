@@ -1021,9 +1021,32 @@ static inline bool is_writable(const nanoclj_cell_t * p) {
 }
 
 static inline bool is_comparable(nanoclj_val_t v) {
-  if (!is_cell(v)) return true;
-  uint16_t t = _type(decode_pointer(v));
-  return !is_map_type(t) && !is_set_type(t);
+  switch (prim_type(v)) {
+  case T_EMPTYLIST:
+    return false;
+  case T_CELL:
+    switch (_type(decode_pointer(v))) {
+    case T_LIST:
+    case T_CLOSURE:
+    case T_MACRO:
+    case T_CLASS:
+    case T_ENVIRONMENT:
+    case T_SYMBOL:
+    case T_LAZYSEQ:
+    case T_DELAY:
+    case T_HASHMAP:
+    case T_HASHSET:
+    case T_SORTED_HASHMAP:
+    case T_SORTED_HASHSET:
+    case T_ARRAYMAP:
+    case T_VARMAP:
+      return false;
+    default:
+      return true;
+    }
+  default:
+    return true;
+  }
 }
 
 static inline bool is_writer(nanoclj_val_t p) {
@@ -2899,16 +2922,15 @@ static uint32_t hasheq(nanoclj_val_t v, void * d) {
 static inline size_t find_index(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t key);
 
 static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
-  /* Test primitive equality and nils */
-  if (a0.as_long == b0.as_long) {
-    return true;
-  } else if (is_nil(a0) || is_nil(b0)) {
-    return false;
-  }
   /* Test primitive types */
   int t_a = prim_type(a0), t_b = prim_type(b0);
   if (t_a == T_DOUBLE || t_b == T_DOUBLE) {
-    return a0.as_double == b0.as_double; /* 0.0 == -0.0, double is only equal to another double */
+    /* 0.0 == -0.0, as_double gives NaN for non-doubles, so double is only equal to another double */
+    return a0.as_double == b0.as_double;
+  } else if (a0.as_long == b0.as_long) {
+    return true;
+  } else if (t_a == T_NIL || t_b == T_NIL) {
+    return false;
   } else if (t_a == T_LONG && t_b == T_LONG) {
     return decode_integer(a0) == decode_integer(b0);
   } else if (t_a != T_CELL && t_b != T_CELL) {
@@ -3302,151 +3324,137 @@ static inline bool equiv(nanoclj_t * sc, nanoclj_val_t a, nanoclj_val_t b) {
   }
 }
 
-static inline int compare(nanoclj_t * sc, nanoclj_val_t a, nanoclj_val_t b) {
-  if (a.as_long == b.as_long) {
+static inline int compare(nanoclj_val_t a, nanoclj_val_t b) {
+  if (a.as_long == b.as_long || a.as_long == kNAN || b.as_long == kNAN) {
+    /* NaNs are equal to all number types */
     return 0;
-  } else {
-    int type_a = prim_type(a), type_b = prim_type(b);
-    if (type_a == T_NIL) {
-      return -1;
-    } else if (type_b == T_NIL) {
-      return +1;
-    } else if (type_a == T_DOUBLE || type_b == T_DOUBLE) {
-      double ra = to_double(a), rb = to_double(b);
-      if (ra < rb) return -1;
-      else if (ra > rb) return +1;
-      return 0; /* 0.0 = -0.0 */
-    } else if ((type_a == T_KEYWORD || type_a == T_SYMBOL) &&
-	       (type_b == T_KEYWORD || type_b == T_SYMBOL)) {
-      symbol_t * sa = decode_symbol(a), * sb = decode_symbol(b);
-      int i = strview_cmp(sa->ns, sb->ns);
-      return i ? i : strview_cmp(sa->name, sb->name);
-    } else if (type_a != T_CELL && type_b != T_CELL) {
-      int ia = decode_integer(a), ib = decode_integer(b);
-      if (ia < ib) return -1;
-      else if (ia > ib) return +1;
-      return 0;
-    } else {
-      if (type_a == T_CELL && type_b == T_CELL) {
-	nanoclj_cell_t * a2 = decode_pointer(a), * b2 = decode_pointer(b);
-	type_a = _type(a2);
-	type_b = _type(b2);
-	if (type_a == type_b) {
-	  switch (type_a) {
-	  case T_STRING:
-	  case T_FILE:
-	  case T_URL:
-	  case T_UUID:{
-	    strview_t sv1 = _to_strview(a2), sv2 = _to_strview(b2);
-	    const char * p1 = sv1.ptr, * p2 = sv2.ptr;
-	    const char * end1 = sv1.ptr + sv1.size, * end2 = sv2.ptr + sv2.size;
-	    while ( 1 ) {
-	      if (p1 >= end1 && p2 >= end2) return 0;
-	      else if (p1 >= end1) return -1;
-	      else if (p2 >= end2) return 1;
-	      int d = decode_utf8(p1) - decode_utf8(p2);
-	      if (d) return d;
-	      p1 = utf8_next(p1), p2 = utf8_next(p2);
-	    }
-	  }
-	  case T_LONG:
-	  case T_DATE:{
-	    long long la = _lvalue_unchecked(a2), lb = _lvalue_unchecked(b2);
-	    if (la < lb) return -1;
-	    else if (la > lb) return +1;
-	    else return 0;
-	  }
-	    
-	  case T_VECTOR:
-	  case T_MAPENTRY:
-	  case T_VAR:
-	  case T_QUEUE:{
-	    size_t la = get_size(a2), lb = get_size(b2);
-	    if (la < lb) return -1;
-	    else if (la > lb) return +1;
-	    else {
-	      for (size_t i = 0; i < la; i++) {
-		int r = compare(sc, get_indexed_value(a2, i), get_indexed_value(b2, i));
-		if (r) return r;
-	      }
-	      return 0;
-	    }
-	  }
-	    break;
-	    
-	  case T_CLASS:
-	    return (int)a2->type - (int)b2->type;
-	    
-	  case T_LIST:
-	  case T_CLOSURE:
-	  case T_LAZYSEQ:
-	  case T_MACRO:
-	  case T_ENVIRONMENT:
-	    {
-	      int r = compare(sc, _car_unchecked(a2), _car_unchecked(b2));
-	      if (r) return r;
-	      return compare(sc, mk_pointer(_cdr_unchecked(a2)), mk_pointer(_cdr_unchecked(b2)));
-	    }
-	    
-	  case T_BIGINT:
-	  case T_BIGDECIMAL:
-	    if (a2->_bignum.sign < b2->_bignum.sign) return -1;
-	    if (a2->_bignum.sign > b2->_bignum.sign) return +1;
-	    return tensor_cmp(a2->_bignum.tensor, b2->_bignum.tensor) * a2->_bignum.sign;
-	    
-	  case T_RATIO:
-	    if (a2->_bignum.sign < b2->_bignum.sign) return -1;
-	    if (a2->_bignum.sign > b2->_bignum.sign) return +1;
-	    {
-	      nanoclj_tensor_t * left = tensor_bigint_mul(a2->_bignum.tensor, b2->_bignum.denominator);
-	      nanoclj_tensor_t * right = tensor_bigint_mul(b2->_bignum.tensor, a2->_bignum.denominator);
-	      int cmp = tensor_cmp(left, right) * a2->_bignum.sign;
-	      tensor_free(left);
-	      tensor_free(right);
-	      return cmp;
-	    }
-	  }
-	} else if ((is_seqable_type(type_a) || _is_sequence(a2)) &&
-		   (is_seqable_type(type_b) || _is_sequence(b2))) {
-	  for (a2 = seq(sc, a2), b2 = seq(sc, b2); a2 && b2; a2 = next(sc, a2), b2 = next(sc, b2)) {
-	    int cmp = compare(sc, first(sc, a2), first(sc, b2));
-	    if (cmp) return cmp;
-	  }
-	  if (!a2 && !b2) return 0;
-	  else if (!a2) return -1;
-	  else return +1;
+  }
+  
+  int type_a = prim_type(a), type_b = prim_type(b);
+  if (type_a == T_NIL) {
+    return -1;
+  } else if (type_b == T_NIL) {
+    return +1;
+  } else if (type_a == T_DOUBLE || type_b == T_DOUBLE) {
+    double ra = to_double(a), rb = to_double(b);
+    if (ra < rb) return -1;
+    else if (ra > rb) return +1;
+    return 0; /* 0.0 = -0.0 */
+  } else if ((type_a == T_KEYWORD || type_a == T_SYMBOL) &&
+	     (type_b == T_KEYWORD || type_b == T_SYMBOL)) {
+    symbol_t * sa = decode_symbol(a), * sb = decode_symbol(b);
+    int i = strview_cmp(sa->ns, sb->ns);
+    return i ? i : strview_cmp(sa->name, sb->name);
+  } else if (type_a != T_CELL && type_b != T_CELL) {
+    int ia = decode_integer(a), ib = decode_integer(b);
+    if (ia < ib) return -1;
+    else if (ia > ib) return +1;
+    return 0;
+  }
+
+  if (type_a == T_CELL && type_b == T_CELL) {
+    nanoclj_cell_t * a2 = decode_pointer(a), * b2 = decode_pointer(b);
+    type_a = _type(a2);
+    type_b = _type(b2);
+    if (type_a == type_b) {
+      switch (type_a) {
+      case T_STRING:
+      case T_FILE:
+      case T_URL:
+      case T_UUID:{
+	strview_t sv1 = _to_strview(a2), sv2 = _to_strview(b2);
+	const char * p1 = sv1.ptr, * p2 = sv2.ptr;
+	const char * end1 = sv1.ptr + sv1.size, * end2 = sv2.ptr + sv2.size;
+	while ( 1 ) {
+	  if (p1 >= end1 && p2 >= end2) return 0;
+	  else if (p1 >= end1) return -1;
+	  else if (p2 >= end2) return 1;
+	  int d = decode_utf8(p1) - decode_utf8(p2);
+	  if (d) return d;
+	  p1 = utf8_next(p1), p2 = utf8_next(p2);
 	}
       }
-
-      type_a = expand_type(a, type_a);
-      type_b = expand_type(b, type_b);
-      if (type_a == T_RATIO || type_b == T_RATIO) {
-	double ra = to_double(a), rb = to_double(b);
-	if (ra < rb) return -1;
-	else if (ra > rb) return +1;
-	return 0;
-      } else if (type_a == T_BIGINT || type_b == T_BIGINT) {
-	nanoclj_bignum_t bn_a = to_bigint(a), bn_b = to_bigint(b);
-	int sign = bn_a.sign, cmp;
-	if (sign < bn_b.sign) cmp = -1;
-	else if (sign > bn_b.sign) cmp = 1;
-	else cmp = tensor_cmp(bn_a.tensor, bn_b.tensor) * sign;
-	if (!bn_a.tensor->refcnt) tensor_free(bn_a.tensor);
-	if (!bn_b.tensor->refcnt) tensor_free(bn_b.tensor);
-	return cmp;
-      } else if (type_a == T_LONG || type_b == T_LONG) {
-	long long la = to_long(a), lb = to_long(b);
+      case T_LONG:
+      case T_DATE:{
+	long long la = _lvalue_unchecked(a2), lb = _lvalue_unchecked(b2);
 	if (la < lb) return -1;
 	else if (la > lb) return +1;
 	else return 0;
       }
+	
+      case T_VECTOR:
+      case T_MAPENTRY:
+      case T_VAR:
+      case T_QUEUE:{
+	size_t la = get_size(a2), lb = get_size(b2);
+	if (la < lb) return -1;
+	else if (la > lb) return +1;
+	else {
+	  for (size_t i = 0; i < la; i++) {
+	    int r = compare(get_indexed_value(a2, i), get_indexed_value(b2, i));
+	    if (r) return r;
+	  }
+	  return 0;
+	}
+      }
+	break;
+	
+      case T_CLASS:
+	return (int)a2->type - (int)b2->type;
+	
+      case T_BIGINT:
+      case T_BIGDECIMAL:
+	if (a2->_bignum.sign < b2->_bignum.sign) return -1;
+	if (a2->_bignum.sign > b2->_bignum.sign) return +1;
+	return tensor_cmp(a2->_bignum.tensor, b2->_bignum.tensor) * a2->_bignum.sign;
+	
+      case T_RATIO:
+	if (a2->_bignum.sign < b2->_bignum.sign) return -1;
+	if (a2->_bignum.sign > b2->_bignum.sign) return +1;
+	{
+	  nanoclj_tensor_t * left = tensor_bigint_mul(a2->_bignum.tensor, b2->_bignum.denominator);
+	  nanoclj_tensor_t * right = tensor_bigint_mul(b2->_bignum.tensor, a2->_bignum.denominator);
+	  int cmp = tensor_cmp(left, right) * a2->_bignum.sign;
+	  tensor_free(left);
+	  tensor_free(right);
+	  return cmp;
+	}
+	
+      default:
+	/* Incorrect types */
+	return 0;
+      }
     }
+  } else {
+    type_a = expand_type(a, type_a);
+    type_b = expand_type(b, type_b);
+  }
+  
+  if (type_a == T_RATIO || type_b == T_RATIO) {
+    double ra = to_double(a), rb = to_double(b);
+    if (ra < rb) return -1;
+    else if (ra > rb) return +1;
+    return 0;
+  } else if (type_a == T_BIGINT || type_b == T_BIGINT) {
+    nanoclj_bignum_t bn_a = to_bigint(a), bn_b = to_bigint(b);
+    int sign = bn_a.sign, cmp;
+    if (sign < bn_b.sign) cmp = -1;
+    else if (sign > bn_b.sign) cmp = 1;
+    else cmp = tensor_cmp(bn_a.tensor, bn_b.tensor) * sign;
+    if (!bn_a.tensor->refcnt) tensor_free(bn_a.tensor);
+    if (!bn_b.tensor->refcnt) tensor_free(bn_b.tensor);
+    return cmp;
+  } else if (type_a == T_LONG || type_b == T_LONG) {
+    long long la = to_long(a), lb = to_long(b);
+    if (la < lb) return -1;
+    else if (la > lb) return +1;
+    else return 0;
   }
   return 0;
 }
 
-static inline int _compare(const void * a, const void * b, void * context) {
-  return compare((nanoclj_t*)context, *(const nanoclj_val_t*)a, *(const nanoclj_val_t*)b);
+static inline int _compare(const void * a, const void * b) {
+  return compare(*(const nanoclj_val_t*)a, *(const nanoclj_val_t*)b);
 }
 
 static inline void ok_to_freely_gc(nanoclj_t * sc) {
@@ -3513,7 +3521,7 @@ static inline nanoclj_cell_t * vector_conjoin(nanoclj_t * sc, nanoclj_cell_t * v
       memcpy(get_ptr(new_vec), _smalldata_unchecked(vec), old_size * sizeof(nanoclj_val_t));
       set_indexed_value(new_vec, old_size, new_value);
       if (t == T_SORTED_HASHSET) {
-	qsort_r(get_ptr(new_vec), old_size + 1, sizeof(nanoclj_val_t), _compare, sc);
+	qsort(get_ptr(new_vec), old_size + 1, sizeof(nanoclj_val_t), _compare);
       }
     }
     return new_vec;
@@ -7486,25 +7494,25 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     if (!unpack_args_2(sc, &arg0, &arg1)) {
       return false;
     }
-    s_retbool(compare(sc, arg0, arg1) < 0);
+    s_retbool(compare(arg0, arg1) < 0);
 
   case OP_GT:                  /* gt */
     if (!unpack_args_2(sc, &arg0, &arg1)) {
       return false;
     }
-    s_retbool(compare(sc, arg0, arg1) > 0);
+    s_retbool(compare(arg0, arg1) > 0);
   
   case OP_LE:                  /* le */
     if (!unpack_args_2(sc, &arg0, &arg1)) {
       return false;
     }
-    s_retbool(compare(sc, arg0, arg1) <= 0);
+    s_retbool(compare(arg0, arg1) <= 0);
 
   case OP_GE:                  /* ge */
     if (!unpack_args_2(sc, &arg0, &arg1)) {
       return false;
     }
-    s_retbool(compare(sc, arg0, arg1) >= 0);
+    s_retbool(compare(arg0, arg1) >= 0);
     
   case OP_EQ:                  /* equals? */
     if (!unpack_args_2(sc, &arg0, &arg1)) {
@@ -8268,9 +8276,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     if (!unpack_args_2(sc, &arg0, &arg1)) {
       return false;
     } else if (!is_comparable(arg0) || !is_comparable(arg1)) {
-      Error_0(sc, "Cannot compare type");
+      Error_0(sc, "Cannot compare types");
     } else {
-      s_return(sc, mk_int(compare(sc, arg0, arg1)));
+      s_return(sc, mk_int(compare(arg0, arg1)));
     }
     
   case OP_SORT:
@@ -8289,7 +8297,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	}
 	nanoclj_cell_t * r = 0;
 	if (vec->ne[0]) {
-	  tensor_mutate_sort(vec, _compare, sc);
+	  tensor_mutate_sort(vec, _compare);
 	  for (int64_t i = vec->ne[0] - 1; i >= 0; i--) {
 	    r = cons(sc, tensor_get(vec, i), r);
 	  }
@@ -8317,7 +8325,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	}
 	nanoclj_cell_t * r = 0;
 	if (vec->ne[1]) {
-	  tensor_mutate_sort(vec, _compare, sc);
+	  tensor_mutate_sort(vec, _compare);
 	  for (int64_t i = vec->ne[1] - 1; i >= 0; i--) {
 	    r = cons(sc, tensor_get_2d(vec, 1, i), r);
 	  }

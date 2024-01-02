@@ -5,10 +5,6 @@
 #include "nanoclj_char.h"
 #include "nanoclj_types.h"
 
-#ifdef WIN32
-#define qsort_r qsort_s
-#endif
-
 static inline size_t tensor_get_cell_size(nanoclj_tensor_type_t t) {
   switch (t) {
   case nanoclj_boolean: return sizeof(uint8_t);
@@ -569,9 +565,9 @@ static inline void tensor_mutate_and(nanoclj_tensor_t * a, const nanoclj_tensor_
   }
 }
 
-static inline void tensor_mutate_sort(nanoclj_tensor_t * tensor, int (*compar)(const void *a, const void *b, void *), void * context) {
+static inline void tensor_mutate_sort(nanoclj_tensor_t * tensor, int (*compar)(const void *a, const void *b)) {
   int n = tensor->n_dims;
-  if (tensor->ne[n - 1] >= 2) qsort_r(tensor->data, tensor->ne[n - 1], tensor->nb[n - 1], compar, context);
+  if (n >= 1 && tensor->ne[n - 1] >= 2) qsort(tensor->data, tensor->ne[n - 1], tensor->nb[n - 1], compar);
 }
 
 static inline uint32_t tensor_hashcode(nanoclj_tensor_t * tensor) {
