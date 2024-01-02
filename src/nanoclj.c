@@ -120,6 +120,19 @@
 #define FIRST_CELLSEGS 3
 #endif
 
+typedef enum {
+  comp_none = 0,
+  comp_any,
+  comp_number,
+  comp_vector,
+  comp_codepoint,
+  comp_keyword,
+  comp_symbol,
+  comp_bool,
+  comp_string,
+  comp_type
+} comparison_class_t;
+
 enum nanoclj_types {
   T_NIL = 0,
   T_CELL = 1,
@@ -1020,33 +1033,47 @@ static inline bool is_writable(const nanoclj_cell_t * p) {
   return false;
 }
 
-static inline bool is_comparable(nanoclj_val_t v) {
+static inline comparison_class_t get_comparison_class(nanoclj_val_t v) {
   switch (prim_type(v)) {
-  case T_EMPTYLIST:
-    return false;
+  case T_NIL: return comp_any;
+  case T_CODEPOINT: return comp_codepoint;
+  case T_KEYWORD: return comp_keyword;
+  case T_SYMBOL: return comp_symbol;
+  case T_BOOLEAN: return comp_bool;
+  case T_DOUBLE:
+  case T_LONG:
+    return comp_number;
   case T_CELL:
     switch (_type(decode_pointer(v))) {
-    case T_LIST:
-    case T_CLOSURE:
-    case T_MACRO:
+    case T_STRING:
+    case T_FILE:
+    case T_URL:
+    case T_UUID:
+      return comp_string;
+    case T_RATIO:
+    case T_BIGINT:
+    case T_LONG:
+    case T_BIGDECIMAL:
+    case T_DATE:
+      return comp_number;
+    case T_VECTOR:
+    case T_MAPENTRY:
+    case T_VAR:
+    case T_QUEUE:
+      return comp_vector;
     case T_CLASS:
-    case T_ENVIRONMENT:
-    case T_SYMBOL:
-    case T_LAZYSEQ:
-    case T_DELAY:
-    case T_HASHMAP:
-    case T_HASHSET:
-    case T_SORTED_HASHMAP:
-    case T_SORTED_HASHSET:
-    case T_ARRAYMAP:
-    case T_VARMAP:
-      return false;
-    default:
-      return true;
+      return comp_type;
     }
-  default:
-    return true;
   }
+  return comp_none;
+}
+
+static inline bool is_comparable(nanoclj_val_t a, nanoclj_val_t b) {
+  comparison_class_t ca = get_comparison_class(a), cb = get_comparison_class(b);
+  fprintf(stderr, "ca = %d, cb = %d, t %d %d\n", ca, cb, prim_type(a), prim_type(b));
+  if (ca == comp_none || cb == comp_none) return false;
+  if (ca == comp_any || cb == comp_any) return true;
+  return ca == cb;
 }
 
 static inline bool is_writer(nanoclj_val_t p) {
@@ -7493,24 +7520,32 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_LT:                  /* lt */
     if (!unpack_args_2(sc, &arg0, &arg1)) {
       return false;
+    } else if (!is_comparable(arg0, arg1)) {
+      Error_0(sc, "Cannot compare types");
     }
     s_retbool(compare(arg0, arg1) < 0);
 
   case OP_GT:                  /* gt */
     if (!unpack_args_2(sc, &arg0, &arg1)) {
       return false;
+    } else if (!is_comparable(arg0, arg1)) {
+      Error_0(sc, "Cannot compare types");
     }
     s_retbool(compare(arg0, arg1) > 0);
   
   case OP_LE:                  /* le */
     if (!unpack_args_2(sc, &arg0, &arg1)) {
       return false;
+    } else if (!is_comparable(arg0, arg1)) {
+      Error_0(sc, "Cannot compare types");
     }
     s_retbool(compare(arg0, arg1) <= 0);
 
   case OP_GE:                  /* ge */
     if (!unpack_args_2(sc, &arg0, &arg1)) {
       return false;
+    } else if (!is_comparable(arg0, arg1)) {
+      Error_0(sc, "Cannot compare types");
     }
     s_retbool(compare(arg0, arg1) >= 0);
     
@@ -8275,7 +8310,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_COMPARE:
     if (!unpack_args_2(sc, &arg0, &arg1)) {
       return false;
-    } else if (!is_comparable(arg0) || !is_comparable(arg1)) {
+    } else if (!is_comparable(arg0, arg1)) {
       Error_0(sc, "Cannot compare types");
     } else {
       s_return(sc, mk_int(compare(arg0, arg1)));
