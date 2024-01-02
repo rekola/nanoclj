@@ -1070,7 +1070,7 @@ static inline comparison_class_t get_comparison_class(nanoclj_val_t v) {
 
 static inline bool is_comparable(nanoclj_val_t a, nanoclj_val_t b) {
   comparison_class_t ca = get_comparison_class(a), cb = get_comparison_class(b);
-  fprintf(stderr, "ca = %d, cb = %d, t %d %d\n", ca, cb, prim_type(a), prim_type(b));
+
   if (ca == comp_none || cb == comp_none) return false;
   if (ca == comp_any || cb == comp_any) return true;
   return ca == cb;
