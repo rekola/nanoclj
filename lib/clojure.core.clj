@@ -348,6 +348,12 @@
                m
                (recur (rest coll) (update m (f (first coll)) (fn [v] (conj (or v []) (first coll))))))))
 
+(defn zipmap
+  "Returns a map with the keys and vals"
+  [keys vals] (if (or (empty? keys) (empty? vals))
+                {}
+                (assoc (zipmap (rest keys) (rest vals)) (first keys) (first vals))))
+
 ; Printing and Reading
 
 (defn slurp
