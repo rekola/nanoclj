@@ -41,7 +41,7 @@
     ([x a] (equals? x a))
     ([x a b] (or (equals? x a) (equals? x b)))
     ([x a b c] (or (equals? x a) (equals? x b) (equals? x c)))
-    ([x a b c & args] (or (equals? x a) (equals? x b) (equals? x c) (apply* is-any-of? (cons x (rest args)))))))
+    ([x a b c & args] (or (equals? x a) (equals? x b) (equals? x c) (apply* is-any-of? (cons x args))))))
 
 (def int?
   "Returns true if the argument is fixed-precision integer"
