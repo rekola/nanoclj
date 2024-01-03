@@ -23,3 +23,9 @@
 (defn length
   "Returns the number of codepoints"
   [s] (count s))
+
+(defn startsWith
+  ([s substr] (cond (empty? substr) true
+                    (= (first s) (first substr)) (.startsWith (rest s) (rest substr))
+                    :else false
+                    )))

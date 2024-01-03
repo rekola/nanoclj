@@ -104,3 +104,5 @@ configure_file(lib/nanoclj.graph.clj nanoclj.graph.clj @ONLY)
 configure_file(lib/nanoclj.image.clj nanoclj.image.clj @ONLY)
 configure_file(lib/nanoclj.audio.clj nanoclj.audio.clj @ONLY)
 configure_file(lib/nanoclj.art.clj nanoclj.art.clj @ONLY)
+
+configure_file(tests/basic.clj tests/basic.clj @ONLY)

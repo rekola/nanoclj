@@ -8582,6 +8582,17 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       s_return(sc, mk_string_from_sv(sc, to_strview(arg0)));
     }
 
+  case OP_IS:
+    if (!unpack_args_1(sc, &arg0)) {
+      return false;
+    }
+    if (is_true(arg0)) {
+      s_return(sc, mk_nil());
+    } else {
+      fprintf(stderr, "test failed\n");
+      exit(1);
+    }
+
   case OP_SET_COLOR:
     if (!unpack_args_1_plus(sc, &arg0, &arg_next)) {
       return false;
@@ -9507,7 +9518,7 @@ void nanoclj_deinit_oblist(nanoclj_t * sc) {
 
 bool nanoclj_load_named_file(nanoclj_t * sc, const char *filename) {
   dump_stack_reset(sc);
-  
+
   nanoclj_val_t p = port_from_filename(sc, T_READER, mk_strview(filename));
   if (!sc->pending_exception) {
     sc->envir = sc->current_ns;
@@ -9601,9 +9612,15 @@ int main(int argc, const char **argv) {
     args = cons(&sc, value, args);
   }
   intern(&sc, sc.current_ns, def_symbol(&sc, "*command-line-args*"), mk_pointer(args));
-  
+    
   if (nanoclj_load_named_file(&sc, InitFile)) {
-    if (argc >= 2) {
+    if (argc == 2 && strcmp(argv[1], "--test") == 0) {
+      if (nanoclj_load_named_file(&sc, "tests/basic.clj")) {
+	fprintf(stderr, "Tests succeeded.\n");
+      } else {
+	fprintf(stderr, "Tests failed.\n");
+      }
+    } else if (argc >= 2) {
       if (nanoclj_load_named_file(&sc, argv[1])) {
 	/* Call -main if it exists */
 	nanoclj_val_t main = def_symbol(&sc, "-main");
@@ -9622,7 +9639,7 @@ int main(int argc, const char **argv) {
       nanoclj_eval_string(&sc, expr, strlen(expr));
     }
   }
-
+  
   int rv = 0;
   if (sc.pending_exception) {
     nanoclj_val_t name_v;

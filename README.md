@@ -23,6 +23,7 @@ missing. The project has two main goals:
 - Class and namespace names try to imitate Java and Clojure names when possible (e.g. `(type 1) ;=> java.lang.Long`)
 - BigInts and Ratios
 - Tensors are used for representing most data structures. For example, a vector is a 1D tensor of doubles (with NaN-packing for other data types).
+- Test framework
 
 ### 2D Graphics
 
@@ -87,7 +88,7 @@ As well as printing images in block mode like the plot function does, they can a
 - Namespaces can only contain Vars, not Classes: `(resolve 'Math) ;=> #'java.lang.Math
 - Arrays can only contain primitive values (including Objects), Multidimensional arrays cannot be ragged
 - No type hints
-- Only 64 bit systems are supported
+- Unbound Vars cannot be created
 
 ## Dependencies
 
@@ -103,6 +104,8 @@ As well as printing images in block mode like the plot function does, they can a
 - shapelib
 
 ## Building
+
+C11 support is required for building nanoclj, and currently it has only been tested with gcc. At the moment, it's unlikely that nanoclj would work on a 32 bit system.
 
 ### Ubuntu
 

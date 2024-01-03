@@ -36,10 +36,7 @@
 
 (defn starts-with?
   "Returns true if s starts with substr"
-  [ s substr ] (cond (empty? substr) true
-                     (= (first s) (first substr)) (starts-with? (rest s) (rest substr))
-                     :else false
-                     ))
+  [ s substr ] (.startsWith s substr))
 
 (defn includes?
   "Returns true if s includes substr"
