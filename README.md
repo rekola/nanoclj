@@ -74,7 +74,7 @@ As well as printing images in block mode like the plot function does, they can a
 - Vectors support O(1) append, but update is O(n)
 - Macros use the TinyScheme syntax
 - Tail-call optimization
-- sort is not stable, doesn't throw on mismatching types and doesn't support custom compare function
+- sort is not stable and doesn't support custom compare function
 - License is BSD 2-Clause License instead of EPL
 - Symbols are interned but are temporarily boxed when metadata is added
 - Primitives such as doubles and small integers are passed by value, and are in effect, interned

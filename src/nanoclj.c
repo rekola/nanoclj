@@ -8336,18 +8336,25 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       s_return(sc, arg0);
     case T_CELL:
       {
+	nanoclj_cell_t * s = seq(sc, decode_pointer(arg0));
+	if (!s) s_return(sc, mk_emptylist());
+	nanoclj_val_t f = first(sc, s);
 	nanoclj_tensor_t * vec = mk_tensor_1d(nanoclj_val, 0);
-	for ( nanoclj_cell_t * s = seq(sc, decode_pointer(arg0)) ; s; s = next(sc, s)) {
-	  tensor_mutate_push(vec, first(sc, s));
-	}
-	nanoclj_cell_t * r = 0;
-	if (vec->ne[0]) {
-	  tensor_mutate_sort(vec, _compare);
-	  for (int64_t i = vec->ne[0] - 1; i >= 0; i--) {
-	    r = cons(sc, tensor_get(vec, i), r);
+	tensor_mutate_push(vec, f);
+	for (s = next(sc, s); s; s = next(sc, s)) {
+	  nanoclj_val_t v = first(sc, s);
+	  if (!is_comparable(f, v)) {
+	    tensor_free(vec);
+	    Error_0(sc, "Cannot compare types");
 	  }
-	  tensor_free(vec);
+	  tensor_mutate_push(vec, v);
 	}
+	tensor_mutate_sort(vec, _compare);
+	nanoclj_cell_t * r = 0;
+	for (int64_t i = vec->ne[0] - 1; i >= 0; i--) {
+	  r = cons(sc, tensor_get(vec, i), r);
+	}
+	tensor_free(vec);
 	s_return(sc, mk_list(r));
       }
     }
@@ -8362,20 +8369,27 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       s_return(sc, arg1);
     case T_CELL:
       {
+	nanoclj_cell_t * s = seq(sc, decode_pointer(arg1));
+	if (!s) s_return(sc, mk_emptylist());
+	nanoclj_val_t v0 = first(sc, s), f = nanoclj_call(sc, arg0, mk_pointer(cons(sc, v0, NULL)));
 	nanoclj_tensor_t * vec = mk_tensor_2d(nanoclj_val, 2, 0);
+	nanoclj_val_t p0[] = { f, v0 };
+	tensor_mutate_append_vec(vec, p0);
 	for ( nanoclj_cell_t * s = seq(sc, decode_pointer(arg1)); s; s = next(sc, s)) {
-	  nanoclj_val_t v = first(sc, s);
-	  nanoclj_val_t p[] = { nanoclj_call(sc, arg0, mk_pointer(cons(sc, v, NULL))), v };
+	  nanoclj_val_t v1 = first(sc, s), v2 = nanoclj_call(sc, arg0, mk_pointer(cons(sc, v1, NULL)));
+	  if (!is_comparable(f, v2)) {
+	    tensor_free(vec);
+	    Error_0(sc, "Cannot compare types");
+	  }
+	  nanoclj_val_t p[] = { v2, v1 };
 	  tensor_mutate_append_vec(vec, p);
 	}
+	tensor_mutate_sort(vec, _compare);
 	nanoclj_cell_t * r = 0;
-	if (vec->ne[1]) {
-	  tensor_mutate_sort(vec, _compare);
-	  for (int64_t i = vec->ne[1] - 1; i >= 0; i--) {
-	    r = cons(sc, tensor_get_2d(vec, 1, i), r);
-	  }
-	  tensor_free(vec);
+	for (int64_t i = vec->ne[1] - 1; i >= 0; i--) {
+	  r = cons(sc, tensor_get_2d(vec, 1, i), r);
 	}
+	tensor_free(vec);
 	s_return(sc, mk_list(r));
       }
     }
