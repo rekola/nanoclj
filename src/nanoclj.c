@@ -7964,6 +7964,12 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	    } else {
 	      s_return(sc, x);
 	    }
+	  } else if (strcmp(s, "nil") == 0) {
+	    s_return(sc, mk_nil());
+	  } else if (strcmp(s, "true") == 0) {
+	    s_return(sc, mk_boolean(true));
+	  } else if (strcmp(s, "false") == 0) {
+	    s_return(sc, mk_boolean(false));
 	  } else {
 	    x = def_symbol_or_keyword(sc, s);
 	    if (is_nil(x)) {

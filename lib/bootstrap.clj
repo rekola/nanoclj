@@ -1,7 +1,3 @@
-(def nil (next '()))
-(def true (equals? 1 1))
-(def false (equals? 1 2))
-
 (def force deref)
 (def var-get second)
 
