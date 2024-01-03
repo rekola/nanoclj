@@ -38,4 +38,5 @@ jobs:
       # Test
       - name: Testing
         run: |
+          cd build
           ./nanoclj --test
