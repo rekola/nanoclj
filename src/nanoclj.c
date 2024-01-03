@@ -8587,11 +8587,11 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       return false;
     }
     if (is_true(arg0)) {
-      s_return(sc, mk_nil());
+      sc->tests_passed++;
     } else {
-      fprintf(stderr, "test failed\n");
-      exit(1);
+      sc->tests_failed++;
     }
+    s_return(sc, mk_nil());
 
   case OP_SET_COLOR:
     if (!unpack_args_1_plus(sc, &arg0, &arg_next)) {
@@ -9439,6 +9439,9 @@ bool nanoclj_init(nanoclj_t * sc) {
     intern(sc, sc->current_ns, sc->THEME, def_keyword(sc, "bright"));
   }
 
+  sc->tests_passed = 0;
+  sc->tests_failed = 0;
+
   return sc->pending_exception == NULL;
 }
 
@@ -9615,10 +9618,13 @@ int main(int argc, const char **argv) {
     
   if (nanoclj_load_named_file(&sc, InitFile)) {
     if (argc == 2 && strcmp(argv[1], "--test") == 0) {
-      if (nanoclj_load_named_file(&sc, "tests/basic.clj")) {
-	fprintf(stderr, "Tests succeeded.\n");
-      } else {
-	fprintf(stderr, "Tests failed.\n");
+      if (!nanoclj_load_named_file(&sc, "tests/basic.clj")) {
+	fprintf(stderr, "Failed to load tests.\n");
+      }
+      fprintf(stderr, "TESTS PASSED: %zu\n", sc.tests_passed);
+      fprintf(stderr, "TESTS FAILED: %zu\n", sc.tests_failed);
+      if (!sc.tests_passed || sc.tests_failed) {
+	exit(1);
       }
     } else if (argc >= 2) {
       if (nanoclj_load_named_file(&sc, argv[1])) {

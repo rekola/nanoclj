@@ -263,6 +263,9 @@ extern "C" {
     int window_lines, window_columns;
     double window_scale_factor;
     nanoclj_color_t fg_color, bg_color;
+
+    size_t tests_passed;
+    size_t tests_failed;
   };
 
 #if 0
