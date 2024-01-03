@@ -8338,12 +8338,12 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       {
 	nanoclj_cell_t * s = seq(sc, decode_pointer(arg0));
 	if (!s) s_return(sc, mk_emptylist());
-	nanoclj_val_t f = first(sc, s);
+	nanoclj_val_t rep = mk_nil();
 	nanoclj_tensor_t * vec = mk_tensor_1d(nanoclj_val, 0);
-	tensor_mutate_push(vec, f);
-	for (s = next(sc, s); s; s = next(sc, s)) {
+	for ( ; s; s = next(sc, s)) {
 	  nanoclj_val_t v = first(sc, s);
-	  if (!is_comparable(f, v)) {
+	  if (is_nil(rep)) rep = v;
+	  else if (!is_comparable(rep, v)) {
 	    tensor_free(vec);
 	    Error_0(sc, "Cannot compare types");
 	  }
@@ -8371,13 +8371,12 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       {
 	nanoclj_cell_t * s = seq(sc, decode_pointer(arg1));
 	if (!s) s_return(sc, mk_emptylist());
-	nanoclj_val_t v0 = first(sc, s), f = nanoclj_call(sc, arg0, mk_pointer(cons(sc, v0, NULL)));
+	nanoclj_val_t rep = mk_nil();
 	nanoclj_tensor_t * vec = mk_tensor_2d(nanoclj_val, 2, 0);
-	nanoclj_val_t p0[] = { f, v0 };
-	tensor_mutate_append_vec(vec, p0);
-	for ( nanoclj_cell_t * s = seq(sc, decode_pointer(arg1)); s; s = next(sc, s)) {
+	for ( ; s; s = next(sc, s)) {
 	  nanoclj_val_t v1 = first(sc, s), v2 = nanoclj_call(sc, arg0, mk_pointer(cons(sc, v1, NULL)));
-	  if (!is_comparable(f, v2)) {
+	  if (is_nil(rep)) rep = v2;
+	  else if (!is_comparable(rep, v2)) {
 	    tensor_free(vec);
 	    Error_0(sc, "Cannot compare types");
 	  }
@@ -9168,12 +9167,17 @@ static inline nanoclj_cell_t * mk_properties(nanoclj_t * sc) {
 #include "nanoclj_functions.h"
 
 bool nanoclj_init(nanoclj_t * sc) {
+  static_assert(sizeof(nanoclj_cell_t) == 32, "Cell size is invalid");
+  static_assert(sizeof(nanoclj_val_t) == 8, "Val size is invalid");
+  
 #if USE_INTERFACE
   sc->vptr = &vtbl;
 #endif
 
   sc->context = malloc(sizeof(nanoclj_shared_context_t));
-  
+  if (!sc->context) {
+    return false;
+  }
   sc->context->mutex = nanoclj_mutex_create();
   sc->context->gensym_cnt = 0;
   sc->context->gentypeid_cnt = T_LAST_SYSTEM_TYPE;
