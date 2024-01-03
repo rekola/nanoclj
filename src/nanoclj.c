@@ -1073,7 +1073,19 @@ static inline bool is_comparable(nanoclj_val_t a, nanoclj_val_t b) {
 
   if (ca == comp_none || cb == comp_none) return false;
   if (ca == comp_any || cb == comp_any) return true;
-  return ca == cb;
+  if (ca != cb) return false;
+  if (ca == comp_vector) {
+    nanoclj_cell_t * va = decode_pointer(a), * vb = decode_pointer(b);
+    size_t n = get_size(va);
+    if (n == get_size(vb)) {
+      for (size_t i = 0; i < n; i++) {
+	if (!is_comparable(get_indexed_value(va, i), get_indexed_value(vb, i))) {
+	  return false;
+	}
+      }
+    }
+  }
+  return true;
 }
 
 static inline bool is_writer(nanoclj_val_t p) {
@@ -3383,9 +3395,11 @@ static inline int compare(nanoclj_val_t a, nanoclj_val_t b) {
 	else if (la > lb) return +1;
 	else {
 	  for (size_t i = 0; i < la; i++) {
-	    // FIXME: do nan test first
-	    int r = compare(get_indexed_value(a2, i), get_indexed_value(b2, i));
-	    if (r) return r;
+	    nanoclj_val_t va = get_indexed_value(a2, i), vb = get_indexed_value(b2, i);
+	    if (va.as_long != kNAN && vb.as_long != kNAN) {
+	      int r = compare(va, vb);
+	      if (r) return r;
+	    }
 	  }
 	  return 0;
 	}
@@ -7496,11 +7510,11 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_EQUIV:                  /* equiv */
     if (!unpack_args_2(sc, &arg0, &arg1)) {
       return false;
-    } else if (arg0.as_long == kNAN || arg1.as_long == kNAN) {
-      s_retbool(false);
     } else if (!is_number(arg0) || !is_number(arg1)) {
       nanoclj_throw(sc, mk_class_cast_exception(sc, "Argument cannot be cast to java.lang.Number"));
       return false;
+    } else if (arg0.as_long == kNAN || arg1.as_long == kNAN) {
+      s_retbool(false);
     } else {
       s_retbool(compare(arg0, arg1) == 0);
     }
