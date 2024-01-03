@@ -3076,7 +3076,7 @@ static inline size_t find_hash_index(nanoclj_t * sc, nanoclj_cell_t * coll, nano
   if (_is_small(coll) || _type(coll) == T_ARRAYMAP) {
     size_t size = get_size(coll);
     for (size_t i = 0; i < size; i++) {
-      nanoclj_val_t stored_key = coll->_small_tensor.vals[i];
+      nanoclj_val_t stored_key = get_indexed_key(coll, i);
       if (equals(sc, key, stored_key)) return i;
     }
   } else {
@@ -3577,11 +3577,23 @@ static inline nanoclj_cell_t * assoc_with_meta(nanoclj_t * sc, nanoclj_cell_t * 
 	}
       }
     } else if (t == T_ARRAYMAP) {
-      nanoclj_tensor_t * tensor = coll->_collection.tensor;
       size_t old_size = get_size(coll);
-      nanoclj_val_t vec[2] = { key, value };
-      tensor = tensor_push_vec(tensor, old_size, &vec[0]);
-      coll = get_collection_object(sc, t, _offset_unchecked(coll), old_size + 1, tensor);
+      if (old_size < NANOCLJ_ARRAYMAP_LIMIT) {
+	nanoclj_tensor_t * tensor = coll->_collection.tensor;
+	nanoclj_val_t vec[2] = { key, value };
+	tensor = tensor_push_vec(tensor, old_size, &vec[0]);
+	coll = get_collection_object(sc, t, _offset_unchecked(coll), old_size + 1, tensor);
+      } else {
+	nanoclj_tensor_t * old_tensor = coll->_collection.tensor;
+	nanoclj_tensor_t * tensor = mk_tensor_hash(2, 2, old_size * 2 + 2);
+	for (size_t idx = 0; idx < old_size; idx++) {
+	  nanoclj_val_t old_key = get_indexed_key(coll, idx), old_val = get_indexed_value(coll, idx);
+	  uint32_t h = hasheq(old_key, sc);
+	  tensor = tensor_hash_mutate_set(tensor, h, idx, old_key, old_val, mk_nil(), false, sc, hasheq);
+	}
+	tensor = tensor_hash_mutate_set(tensor, hasheq(key, sc), old_size, key, value, mk_nil(), false, sc, hasheq);
+	coll = get_collection_object(sc, T_HASHMAP, 0, old_size + 1, tensor);
+      }
     } else {
       size_t old_size = get_size(coll);
       uint32_t h = is_ordered ? hashcmp(key, sc) : hasheq(key, sc);
@@ -8170,7 +8182,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     s_return(sc, mk_pointer(cons(sc, sc->HASH_SET, decode_pointer(sc->value))));
     
   case OP_RD_MAP:
-    s_return(sc, mk_pointer(cons(sc, sc->HASH_MAP, decode_pointer(sc->value))));
+    s_return(sc, mk_pointer(cons(sc, sc->ARRAY_MAP, decode_pointer(sc->value))));
 
   case OP_RD_DOT:{
     nanoclj_val_t method = sc->code;
@@ -9245,7 +9257,7 @@ bool nanoclj_init(nanoclj_t * sc) {
   sc->HAIR = def_keyword(sc, "hair");
   
   sc->HASH_SET = def_symbol(sc, "hash-set");
-  sc->HASH_MAP = def_symbol(sc, "hash-map");
+  sc->ARRAY_MAP = def_symbol(sc, "array-map");
   sc->DOT = def_symbol(sc, ".");
   sc->CATCH = def_symbol(sc, "catch");
   sc->FINALLY = def_symbol(sc, "finally");

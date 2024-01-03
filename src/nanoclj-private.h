@@ -5,6 +5,7 @@
 
 #define NANOCLJ_SMALL_VEC_SIZE 3
 #define NANOCLJ_SMALL_STR_SIZE 24
+#define NANOCLJ_ARRAYMAP_LIMIT 8
 
 #define STRBUFFSIZE 256
 
@@ -235,7 +236,7 @@ extern "C" {
     nanoclj_val_t HAIR;	          /* :hair */
     
     nanoclj_val_t HASH_SET;	  /* hash-set */
-    nanoclj_val_t HASH_MAP;	  /* hash-map */
+    nanoclj_val_t ARRAY_MAP;	  /* array-map */
     nanoclj_val_t DOT;		  /* . */
     nanoclj_val_t CATCH;
     nanoclj_val_t FINALLY;
