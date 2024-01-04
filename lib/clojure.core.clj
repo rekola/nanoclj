@@ -754,8 +754,7 @@
   ([f arg1] (fn [& more-args] (apply f arg1 more-args)))
   ([f arg1 arg2] (fn [& more-args] (apply f arg1 arg2 more-args)))
   ([f arg1 arg2 arg3] (fn [& more-args] (apply f arg1 arg2 arg3 more-args)))
-  ([f arg1 arg2 arg3 arg4] (fn [& more-args] (apply f arg1 arg2 arg3 arg4 more-args)))
-  )
+  ([f arg1 arg2 arg3 & more] (fn [& more-args] (apply f arg1 arg2 arg3 (concat more more-args)))))
 
 (defn complement
   "Returns a function that returns an opposite boolean value as the given function f"
