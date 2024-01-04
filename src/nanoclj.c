@@ -3359,6 +3359,8 @@ static inline int compare(nanoclj_val_t a, nanoclj_val_t b) {
     return -1;
   } else if (type_b == T_NIL) {
     return +1;
+  } else if (type_a == T_EMPTYLIST || type_b == T_EMPTYLIST) {
+    return 0; /* error: empty list can only be compared to itself */
   } else if (type_a == T_DOUBLE || type_b == T_DOUBLE) {
     double ra = to_double(a), rb = to_double(b);
     if (ra < rb) return -1;
@@ -3380,7 +3382,21 @@ static inline int compare(nanoclj_val_t a, nanoclj_val_t b) {
     nanoclj_cell_t * a2 = decode_pointer(a), * b2 = decode_pointer(b);
     type_a = _type(a2);
     type_b = _type(b2);
-    if (type_a == type_b) {
+    if (is_vector_type(type_a) && is_vector_type(type_b)) {
+      size_t la = get_size(a2), lb = get_size(b2);
+      if (la < lb) return -1;
+      else if (la > lb) return +1;
+      else {
+	for (size_t i = 0; i < la; i++) {
+	  nanoclj_val_t va = get_indexed_value(a2, i), vb = get_indexed_value(b2, i);
+	  if (va.as_long != kNAN && vb.as_long != kNAN) {
+	    int r = compare(va, vb);
+	    if (r) return r;
+	  }
+	}
+	return 0;
+      }
+    } else if (type_a == type_b) {
       switch (type_a) {
       case T_STRING:
       case T_FILE:
@@ -3405,26 +3421,6 @@ static inline int compare(nanoclj_val_t a, nanoclj_val_t b) {
 	else if (la > lb) return +1;
 	else return 0;
       }
-	
-      case T_VECTOR:
-      case T_MAPENTRY:
-      case T_VAR:
-      case T_QUEUE:{
-	size_t la = get_size(a2), lb = get_size(b2);
-	if (la < lb) return -1;
-	else if (la > lb) return +1;
-	else {
-	  for (size_t i = 0; i < la; i++) {
-	    nanoclj_val_t va = get_indexed_value(a2, i), vb = get_indexed_value(b2, i);
-	    if (va.as_long != kNAN && vb.as_long != kNAN) {
-	      int r = compare(va, vb);
-	      if (r) return r;
-	    }
-	  }
-	  return 0;
-	}
-      }
-	break;
 	
       case T_CLASS:
 	return (int)a2->type - (int)b2->type;

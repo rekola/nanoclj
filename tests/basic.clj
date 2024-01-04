@@ -65,6 +65,9 @@
 (is (= (== 0.5 1/2 2/4) true))
 (is (= (= ##NaN ##NaN) false))
 
+(is (= (compare (first {:a 1}) [:a 1]) 0))
+(is (= (compare (first {:a 1}) [:a 2]) -1))
+
 (is (= (sort '( 5 9 ##Inf nil -10.0 )) '(nil -10.0 5 9 ##Inf)))
 (is (= (sort-by count [ "ab" "" "zab" "cada"]) '("" "ab" "zab" "cada")))
 
