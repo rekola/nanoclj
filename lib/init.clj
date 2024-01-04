@@ -7,6 +7,7 @@
 (load-file "clojure.string.clj")
 (load-file "clojure.repl.clj")
 (load-file "clojure.instant.clj")
+(load-file "clojure.test.clj")
 (load-file "java.lang.Object.clj")
 (load-file "java.lang.Integer.clj")
 (load-file "java.lang.Float.clj")

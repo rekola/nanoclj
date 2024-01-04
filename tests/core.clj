@@ -67,6 +67,9 @@
 
 (is (= (compare (first {:a 1}) [:a 1]) 0))
 (is (= (compare (first {:a 1}) [:a 2]) -1))
+(is (= (first {:a 1}) [:a 1]))
+
+(is (= (compare "abc" "def") -3))
 
 (is (= (sort '( 5 9 ##Inf nil -10.0 )) '(nil -10.0 5 9 ##Inf)))
 (is (= (sort-by count [ "ab" "" "zab" "cada"]) '("" "ab" "zab" "cada")))
@@ -144,3 +147,4 @@
 (is (= (hash true) 1231))
 (is (= (hash 1) 1392991556))
 (is (= (hash "a") 1455541201))
+

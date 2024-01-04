@@ -65,3 +65,10 @@
                                        \return true
                                        false
                                        )) (rseq s)))))
+
+(defn index-of
+  "Returns the index of substring value in s, or nil if not found"
+  [s value] (loop [s (seq s) idx 0]
+              (cond (nil? s) nil
+                    (.startsWith s value) idx
+                    :else (recur (next s) (inc idx)))))

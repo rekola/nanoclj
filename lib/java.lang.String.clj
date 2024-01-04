@@ -25,7 +25,8 @@
   [s] (count s))
 
 (defn startsWith
-  ([s substr] (cond (empty? substr) true
-                    (= (first s) (first substr)) (.startsWith (rest s) (rest substr))
-                    :else false
-                    )))
+  ([s substr] (loop [s s substr substr]
+                (cond (empty? substr) true
+                      (empty? s) false
+                      (= (first s) (first substr)) (recur (rest s) (rest substr))
+                      :else false))))

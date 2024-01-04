@@ -703,6 +703,13 @@ static inline nanoclj_tensor_t * get_tensor(nanoclj_cell_t * c) {
   return NULL;
 }
 
+static inline size_t get_n_dims(nanoclj_cell_t * c) {
+  if (!c) return 0;
+  const nanoclj_tensor_t * tensor = get_tensor(c);
+  if (!tensor) return 1;
+  return tensor->n_dims;
+}
+
 static inline int64_t get_offset(nanoclj_cell_t * c) {
   switch (_type(c)) {
   case T_VECTOR:
@@ -3349,6 +3356,8 @@ static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t
 #endif
 
 
+/* compares a and b
+   a and b must be compatible, and they must not be lists or sequences */
 static inline int compare(nanoclj_val_t a, nanoclj_val_t b) {
   /* NaNs equality must have been checked before this */
   if (a.as_long == b.as_long) {
@@ -9634,7 +9643,8 @@ int main(int argc, const char **argv) {
     
   if (nanoclj_load_named_file(&sc, InitFile)) {
     if (argc == 2 && strcmp(argv[1], "--test") == 0) {
-      if (!nanoclj_load_named_file(&sc, "tests/basic.clj")) {
+      if (!nanoclj_load_named_file(&sc, "tests/core.clj") ||
+	  !nanoclj_load_named_file(&sc, "tests/string.clj")) {
 	fprintf(stderr, "Failed to load tests.\n");
       }
       fprintf(stderr, "TESTS PASSED: %zu\n", sc.tests_passed);
