@@ -2984,6 +2984,7 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
   } else if (a0.as_long == b0.as_long) {
     return true;
   } else if (t_a == T_NIL || t_b == T_NIL) {
+    /* nil == nil was tested in the previous comparison */
     return false;
   } else if (t_a == T_LONG && t_b == T_LONG) {
     return decode_integer(a0) == decode_integer(b0);
@@ -2993,7 +2994,11 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
   /* Test cell types */
   t_a = expand_type(a0, t_a);
   t_b = expand_type(b0, t_b);
-  if (is_map_type(t_a) && is_map_type(t_b)) {
+  if (t_a == T_EMPTYLIST) {
+    return is_sequential_type(t_b) && is_empty(sc, decode_pointer(b0));
+  } else if (t_b == T_EMPTYLIST) {
+    return is_sequential_type(t_a) && is_empty(sc, decode_pointer(a0));
+  } else if (is_map_type(t_a) && is_map_type(t_b)) {
     nanoclj_cell_t * a = decode_pointer(a0), * b = decode_pointer(b0);
     size_t l = get_size(a);
     if (l != get_size(b)) return false;
@@ -3076,8 +3081,6 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
     case T_RATIO:
       return a->_bignum.sign == b->_bignum.sign && tensor_eq(a->_bignum.tensor, b->_bignum.tensor) && tensor_eq(a->_bignum.denominator, b->_bignum.denominator);
     }
-  } else if (t_a == T_CLASS || t_b == T_CLASS) {
-    return false;
   } else if ((is_sequential_type(t_a) || (is_cell(a0) && _is_sequence(decode_pointer(a0)))) &&
 	     (is_sequential_type(t_b) || (is_cell(b0) && _is_sequence(decode_pointer(b0))))) {
     nanoclj_cell_t * a = seq(sc, decode_pointer(a0)), * b = seq(sc, decode_pointer(b0));
@@ -8295,7 +8298,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       {
 	nanoclj_cell_t * c = decode_pointer(arg0);
 	if (_is_sequence(c)) {
-	  s_return(sc, mk_pointer(c));
+	  s_return(sc, arg0);
 	} else if (is_seqable_type(_type(c))) {
 	  s_return(sc, mk_pointer(seq(sc, c)));
 	}
@@ -8606,7 +8609,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     if (is_true(arg0)) {
       sc->tests_passed++;
     } else {
-      fprintf(stderr, "fail\n");
       sc->tests_failed++;
     }
     s_return(sc, mk_nil());
