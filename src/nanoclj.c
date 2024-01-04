@@ -487,6 +487,20 @@ static inline bool is_seqable_type(uint_fast16_t t) {
   return false;
 }
 
+static inline bool is_sequential_type(uint_fast16_t t) {
+  switch (t) {
+  case T_EMPTYLIST:
+  case T_LIST:
+  case T_VECTOR:
+  case T_QUEUE:
+  case T_LAZYSEQ:
+  case T_MAPENTRY:
+  case T_VAR:
+    return true;
+  }
+  return false;
+}
+
 static inline bool is_coll_type(uint_fast16_t t) {
   switch (t) {
   case T_EMPTYLIST:
@@ -3064,8 +3078,8 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
     }
   } else if (t_a == T_CLASS || t_b == T_CLASS) {
     return false;
-  } else if ((is_seqable_type(t_a) || (is_cell(a0) && _is_sequence(decode_pointer(a0)))) &&
-	     (is_seqable_type(t_b) || (is_cell(b0) && _is_sequence(decode_pointer(b0))))) {
+  } else if ((is_sequential_type(t_a) || (is_cell(a0) && _is_sequence(decode_pointer(a0)))) &&
+	     (is_sequential_type(t_b) || (is_cell(b0) && _is_sequence(decode_pointer(b0))))) {
     nanoclj_cell_t * a = seq(sc, decode_pointer(a0)), * b = seq(sc, decode_pointer(b0));
     for (; a && b; a = next(sc, a), b = next(sc, b)) {
       if (!equals(sc, first(sc, a), first(sc, b))) {
@@ -8592,6 +8606,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     if (is_true(arg0)) {
       sc->tests_passed++;
     } else {
+      fprintf(stderr, "fail\n");
       sc->tests_failed++;
     }
     s_return(sc, mk_nil());
