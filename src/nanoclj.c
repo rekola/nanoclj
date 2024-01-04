@@ -123,6 +123,7 @@
 typedef enum {
   comp_none = 0,
   comp_any,
+  comp_emptylist,
   comp_number,
   comp_vector,
   comp_codepoint,
@@ -1057,6 +1058,7 @@ static inline bool is_writable(const nanoclj_cell_t * p) {
 static inline comparison_class_t get_comparison_class(nanoclj_val_t v) {
   switch (prim_type(v)) {
   case T_NIL: return comp_any;
+  case T_EMPTYLIST: return comp_emptylist;
   case T_CODEPOINT: return comp_codepoint;
   case T_KEYWORD: return comp_keyword;
   case T_SYMBOL: return comp_symbol;
