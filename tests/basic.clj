@@ -32,6 +32,18 @@
 (is (= (rationalize 1.25) 5/4))
 (is (= (* 2/3 5/4) 5/6))
 
+(is (= (abs -100N) 100))
+
+(is (= (inc 5) 6))
+(is (= (dec 6) 5))
+
+                                        ; Promotions
+
+(is (instance? BigInt (inc' java.lang.Long/MAX_VALUE)))
+(is (= (dec' java.lang.Long/MIN_VALUE) -9223372036854775809N))
+
+                                        ; Corner cases
+
 (is (= (/ java.lang.Long/MIN_VALUE -1) (+ java.lang.Long/MAX_VALUE 1N)))
 (is (= (rem java.lang.Long/MIN_VALUE -1) 0))
 
@@ -54,6 +66,7 @@
 (is (= (= ##NaN ##NaN) false))
 
 (is (= (sort '( 5 9 ##Inf nil -10.0 )) '(nil -10.0 5 9 ##Inf)))
+(is (= (sort-by count [ "ab" "" "zab" "cada"]) '("" "ab" "zab" "cada")))
 
                                         ; Lists, Vectors and Sequences
 
@@ -61,21 +74,35 @@
 (is (= (conj [] :a :b) [:a :b]))
 (is (= (cons :x '()) '(:x)))
 
+(is (= '() []))
+(is (= '( 1 ) [ 1 ]))
+; (is (not= '() #{}))
+
+(is (= (rseq [ 1 2 3 4 ]) '( 4 3 2 1 )))
+(is (= (rseq [ :a :b ]) '( :b :a )))
+
                                         ; str
 
 (is (= (str \a \b \c) "abc"))
 (is (= (str "ab" "cd") "abcd"))
 (is (= (str [nil]) "[nil]"))
 (is (= (str '( 1 )) "(1)"))
-                                        ; Lazy-seqs
+(is (= (str nil nil) ""))
+(is (= (str :ab) ":ab"))
+
+                                        ; Lazy-seqs and Delays
 
 (is (= (range 5) '( 0 1 2 3 4 )))
 (is (= (last (take 1000 (range))) 999))
+(is (= '() (lazy-seq '())))
+
+(is (= @(delay :a) :a))
+(is (not (realized? (delay :a))))
 
                                         ; Maps and Sets
 
 (is (= (assoc {} :a 1 :b 1) { :a 1 :b 1 }))
-; (is (= (first { :a 1 :b 1 }) [ :a 1 ]))
+(is (= (first { :a 1 :b 1 }) [ :a 1 ]))
 
 (is (= (count (into #{} (range 50))) 50))
 
@@ -88,6 +115,7 @@
 
 (def Q (conj clojure.lang.PersistentQueue/EMPTY :a :b :c :d))
 
+(is (not (empty? Q)))
 (is (= (peek Q) :a))
 (is (= (seq (pop Q)) '( :b :c :d)))
 
@@ -100,3 +128,16 @@
                                         ; Formatting
 
 (is (= (format "%.2f" 0.123) "0.12"))
+
+                                        ; Bit-operations
+
+(is (= (bit-shift-left 1 16) 65536))
+(is (= (bit-shift-right 65536 16) 1))
+
+                                        ; Hashes
+
+(is (= (hash '()) -2017569654))
+(is (= (hash false) 1237))
+(is (= (hash true) 1231))
+(is (= (hash 1) 1392991556))
+(is (= (hash "a") 1455541201))

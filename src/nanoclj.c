@@ -2361,7 +2361,6 @@ static inline nanoclj_cell_t * seq(nanoclj_t * sc, nanoclj_cell_t * coll) {
   switch (_type(coll)) {
   case T_LONG:
   case T_DATE:
-  case T_MAPENTRY:
   case T_CLOSURE:
   case T_MACRO:
     return NULL;
@@ -2379,6 +2378,7 @@ static inline nanoclj_cell_t * seq(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_QUEUE:
   case T_TENSOR:
   case T_GRADIENT:
+  case T_MAPENTRY:
     if (get_size(coll) == 0) {
       return NULL;
     } else {
@@ -2497,6 +2497,7 @@ static inline nanoclj_cell_t * rest(nanoclj_t * sc, nanoclj_cell_t * coll) {
     case T_QUEUE:
     case T_TENSOR:
     case T_GRADIENT:
+    case T_MAPENTRY:
       if (get_size(coll) >= 2) {
 	if (_is_reverse(coll)) {
 	  coll = remove_suffix(sc, coll, 1);
@@ -3061,10 +3062,12 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
     case T_RATIO:
       return a->_bignum.sign == b->_bignum.sign && tensor_eq(a->_bignum.tensor, b->_bignum.tensor) && tensor_eq(a->_bignum.denominator, b->_bignum.denominator);
     }
+  } else if (t_a == T_CLASS || t_b == T_CLASS) {
+    return false;
   } else if ((is_seqable_type(t_a) || (is_cell(a0) && _is_sequence(decode_pointer(a0)))) &&
 	     (is_seqable_type(t_b) || (is_cell(b0) && _is_sequence(decode_pointer(b0))))) {
-    nanoclj_cell_t * a = decode_pointer(a0), * b = decode_pointer(b0);
-    for (a = seq(sc, a), b = seq(sc, b); a && b; a = next(sc, a), b = next(sc, b)) {
+    nanoclj_cell_t * a = seq(sc, decode_pointer(a0)), * b = seq(sc, decode_pointer(b0));
+    for (; a && b; a = next(sc, a), b = next(sc, b)) {
       if (!equals(sc, first(sc, a), first(sc, b))) {
 	return false;
       }

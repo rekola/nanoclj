@@ -581,9 +581,10 @@
 (defn str
   "Converts arguments to string"
   ([] "")
-  ([x] (with-out-str (print x)))
-  ([x & ys] (with-out-str (do (print x)
-                              (run! print ys)))))
+  ([x] (if (nil? x) ""
+           (with-out-str (print x))))
+  ([x & ys] (with-out-str (do (when-not (nil? x) (print x))
+                              (run! (fn [x] (when-not (nil? x) (print x))) ys)))))
 
 ; Logic
 
