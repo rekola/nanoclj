@@ -22,11 +22,11 @@
 #define SIGNATURE_SYMBOL	(MASK_EXPONENT | MASK_QUIET | 6)
 
 /* Predefined primitive values */
-#define kNIL	UINT64_C(18446462598732840960)
-#define kNAN	UINT64_C(9221120237041090560)
-#define kEMPTY	UINT64_C(18444773748872577024)
-#define kTRUE	UINT64_C(9221401712017801217)
-#define kFALSE	UINT64_C(9221401712017801216)
+#define kNIL	UINT64_C(0xffffffffffffffff)
+#define kEMPTY	UINT64_C(0xfff9000000000000)
+#define kNAN	UINT64_C(0x7ff8000000000000)
+#define kFALSE	UINT64_C(0x7ff9000000000000)
+#define kTRUE	UINT64_C(0x7ff9000000000001)
 
 static inline bool is_nil(nanoclj_val_t v) {
   return v.as_long == kNIL;
@@ -93,6 +93,7 @@ static inline nanoclj_val_t mk_list(const nanoclj_cell_t * ptr) {
 }
 
 static inline nanoclj_cell_t * decode_pointer(nanoclj_val_t value) {
+  if (value.as_long == kNIL) return 0;
   return (nanoclj_cell_t *)(value.as_long & MASK_PAYLOAD);
 }
 
