@@ -29,13 +29,19 @@
 
 (is (= 6 (+ 1 2 3)))
 (is (= 1/2 (/ 1 2)))
-(is (= (rationalize 1.25) 5/4))
 (is (= (* 2/3 5/4) 5/6))
 
 (is (= (abs -100N) 100))
 
 (is (= (inc 5) 6))
 (is (= (dec 6) 5))
+
+                                        ; Ratios
+
+(is (= (rationalize 1.25) 5/4))
+(is (= (rationalize -2/4) -1/2))
+(is (= (rationalize 2) 2))
+(is (= (rationalize 2.0) 2N))
 
                                         ; Promotions
 
@@ -148,3 +154,6 @@
 (is (= (hash 1) 1392991556))
 (is (= (hash "a") 1455541201))
 
+                                        ; Special Functions
+
+(is (= ((juxt numerator denominator) 2/3) [ 2 3 ]))

@@ -9607,6 +9607,22 @@ nanoclj_val_t nanoclj_eval(nanoclj_t * sc, nanoclj_val_t obj) {
 
 #if NANOCLJ_STANDALONE
 
+static inline void default_exception_handler(nanoclj_t * sc) {
+  if (sc->pending_exception) {
+    nanoclj_val_t name_v;
+    strview_t sv0;
+    if (get_elem(sc, _cons_metadata(get_type_object(sc, mk_pointer(sc->pending_exception))), sc->NAME, &name_v)) {
+      sv0 = to_strview(name_v);
+    } else {
+      sv0 = (strview_t){ "Unknown exception", 17 };
+    }
+    strview_t sv = to_strview(_car_unchecked(sc->pending_exception));
+    fprintf(stderr, "%.*s: %.*s\n", sv0.size, sv0.ptr, sv.size, sv.ptr);
+    
+    sc->pending_exception = NULL;
+  }
+}
+
 int main(int argc, const char **argv) {
   if (argc == 2 && strcmp(argv[1], "--help") == 0) {
     printf("nanoclj %s\n", NANOCLJ_VERSION);
@@ -9642,17 +9658,23 @@ int main(int argc, const char **argv) {
     args = cons(&sc, value, args);
   }
   intern(&sc, sc.current_ns, def_symbol(&sc, "*command-line-args*"), mk_pointer(args));
-    
+
+  bool test_mode = false;
+  size_t num_errors = 0;
+  int rv = 0;
+  
   if (nanoclj_load_named_file(&sc, InitFile)) {
     if (argc == 2 && strcmp(argv[1], "--test") == 0) {
-      if (!nanoclj_load_named_file(&sc, "tests/core.clj") ||
-	  !nanoclj_load_named_file(&sc, "tests/string.clj")) {
-	fprintf(stderr, "Failed to load tests.\n");
+      test_mode = true;
+      if (!nanoclj_load_named_file(&sc, "tests/core.clj")) {
+	default_exception_handler(&sc);
+	num_errors++;
+	rv |= 1;
       }
-      fprintf(stderr, "TESTS PASSED: %zu\n", sc.tests_passed);
-      fprintf(stderr, "TESTS FAILED: %zu\n", sc.tests_failed);
-      if (!sc.tests_passed || sc.tests_failed) {
-	exit(1);
+      if (!nanoclj_load_named_file(&sc, "tests/string.clj")) {
+	default_exception_handler(&sc);
+	num_errors++;
+	rv |= 1;
       }
     } else if (argc >= 2) {
       if (nanoclj_load_named_file(&sc, argv[1])) {
@@ -9674,18 +9696,23 @@ int main(int argc, const char **argv) {
     }
   }
   
-  int rv = 0;
   if (sc.pending_exception) {
-    nanoclj_val_t name_v;
-    strview_t sv0;
-    if (get_elem(&sc, _cons_metadata(get_type_object(&sc, mk_pointer(sc.pending_exception))), sc.NAME, &name_v)) {
-      sv0 = to_strview(name_v);
-    } else {
-      sv0 = (strview_t){ "Unknown exception", 17 };
-    }
-    strview_t sv = to_strview(_car_unchecked(sc.pending_exception));
-    fprintf(stderr, "%.*s: %.*s\n", sv0.size, sv0.ptr, sv.size, sv.ptr);
-    rv = 1;
+    default_exception_handler(&sc);
+    num_errors++;
+    rv |= 1;
+  }
+
+  if (test_mode) {
+    size_t total = sc.tests_passed + sc.tests_failed;
+    fprintf(stderr, "Ran %zu test%s containing %zu failure%s, %zu error%s.\n",
+	    total, total == 1 ? "" : "s",
+	    sc.tests_failed, sc.tests_failed == 1 ? "" : "s",
+	    num_errors, num_errors == 1 ? "" : "s");
+    
+    if (sc.tests_failed) rv = sc.tests_failed;
+    else if (!sc.tests_passed) rv = 1;
+
+    if (rv) fprintf(stderr, "Tests failed.\n");
   }
 
   nanoclj_deinit_oblist(&sc);
