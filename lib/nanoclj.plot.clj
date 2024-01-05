@@ -20,7 +20,7 @@
                                       :grid [ 0.7 0.7 0.7 ]
                                       :bg [ 1 1 1 ] } })
 
-(def-macro (with-out new-out $ body)
+(def-macro (with-out new-out & body)
   `(let ((prev-out *out*)
          (tmp ,new-out))
      (set! *out* tmp)

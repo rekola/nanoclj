@@ -75,7 +75,7 @@
 #define TOK_RPAREN  	1
 #define TOK_RCURLY  	2
 #define TOK_RSQUARE 	3
-#define TOK_OLD_DOT    	4
+#define TOK_AMP    	4
 #define TOK_PRIMITIVE  	5
 #define TOK_QUOTE   	6
 #define TOK_DEREF   	7
@@ -4122,6 +4122,8 @@ static inline nanoclj_val_t mk_numeric_primitive(nanoclj_t * sc, const char *q) 
 	if (den) {
 	  normalize_ratio_mutate(num, den);
 	  return mk_pointer(mk_ratio_from_tensor(sc, sign, num, den));
+	} else {
+	  tensor_free(num);
 	}
       }
     }
@@ -4764,15 +4766,15 @@ static inline int token(nanoclj_t * sc, nanoclj_cell_t * inport) {
     } else {
       backchar(c, inport);
       return TOK_LPAREN;
-    } 
+    }
 
-  case '$':
+  case '&':
     c = inchar(sc, inport);
     if (is_one_of(" \n\t", c)) {
-      return TOK_OLD_DOT;
+      return TOK_AMP;
     } else {
       backchar(c, inport);
-      backchar('$', inport);
+      backchar('&', inport);
       return TOK_PRIMITIVE;
     }
 
@@ -7928,8 +7930,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  sc->tok = token(sc, inport);
 	  if (sc->tok == TOK_RPAREN) {       /* Empty list */
 	    s_return(sc, mk_emptylist());
-	  } else if (sc->tok == TOK_OLD_DOT) {
-	    Error_0(sc, "Illegal dot expression");
 	  } else {
 	    _nesting_unchecked(inport)++;
 	    s_save(sc, OP_RD_LIST, NULL, mk_emptylist());
@@ -7940,8 +7940,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  sc->tok = token(sc, inport);
 	  if (sc->tok == TOK_RSQUARE) {	/* Empty vector */
 	    s_return(sc, mk_pointer(sc->EMPTYVEC));
-	  } else if (sc->tok == TOK_OLD_DOT) {
-	    Error_0(sc, "Illegal dot expression");
 	  } else {
 	    _nesting_unchecked(inport)++;
 	    s_save(sc, OP_RD_VEC_ELEMENT, sc->EMPTYVEC, mk_emptylist());
@@ -7958,8 +7956,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  sc->tok = token(sc, inport);
 	  if (sc->tok == TOK_RCURLY) {     /* Empty map or set */
 	    s_return(sc, mk_emptylist());
-	  } else if (sc->tok == TOK_OLD_DOT) {
-	    Error_0(sc, "Illegal dot expression");
 	  } else {
 	    _nesting_unchecked(inport)++;
 	    s_save(sc, OP_RD_MAP_ELEMENT, NULL, mk_emptylist());
@@ -8000,6 +7996,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  s_save(sc, OP_RD_UQTSP, NULL, mk_emptylist());
 	  sc->tok = token(sc, inport);
 	  s_goto(sc, OP_RD_SEXPR);
+	case TOK_AMP:
+	  s_return(sc, sc->AMP);
 	case TOK_PRIMITIVE:
 	  s = readstr_upto(sc, DELIMITERS, inport, false);
 	  if (is_numeric_token(s)) {
@@ -8084,8 +8082,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  sc->tok = token(sc, inport);
 	  if (sc->tok == TOK_RPAREN) {       /* Empty list */
 	    s_return(sc, mk_emptylist());
-	  } else if (sc->tok == TOK_OLD_DOT) {
-	    Error_0(sc, "Illegal dot expression");
 	  } else {
 	    _nesting_unchecked(inport)++;
 	    s_save(sc, OP_RD_LIST, NULL, mk_emptylist());
@@ -8137,8 +8133,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	} else if (sc->tok == TOK_RPAREN) {
 	  _nesting_unchecked(inport)--;
 	  s_return(sc, mk_pointer(reverse_in_place(sc, sc->args, NULL)));
-	} else if (sc->tok == TOK_OLD_DOT) {
-	  s_save(sc, OP_RD_OLD_DOT, sc->args, mk_emptylist());
+	} else if (sc->tok == TOK_AMP) {
+	  s_save(sc, OP_RD_AMP, sc->args, mk_emptylist());
 	  sc->tok = token(sc, inport);
 	  s_goto(sc, OP_RD_SEXPR);
 	} else {
@@ -8189,7 +8185,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
     Error_0(sc, "Not a reader");
     
-  case OP_RD_OLD_DOT:
+  case OP_RD_AMP:
     x = get_in_port(sc);
     if (is_cell(x)) {
       nanoclj_cell_t * inport = decode_pointer(x);

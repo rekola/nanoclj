@@ -203,19 +203,19 @@
 
 ; (macro (defn-2 form) `(intern *ns* ',(cadr form) (fn ,(cddr form))))
 ; (def-macro (defn name params body) `(intern *ns* ',name (fn ,params ,body)))
-; (def-macro (defn name params $ body) `(intern *ns* ',name (fn ,params ,@body)))
-(def-macro (defn name $ args) (if (string? (car args))
+; (def-macro (defn name params & body) `(intern *ns* ',name (fn ,params ,@body)))
+(def-macro (defn name & args) (if (string? (car args))
                                 `(def ,name ,(car args) (fn ,(cadr args) ,@(cddr args)))
                                 `(def ,name (fn ,(car args) ,@(cdr args)))))
-(def-macro (defn- name $ args) (if (string? (car args))
+(def-macro (defn- name & args) (if (string? (car args))
                                  `(def ^:private ,name ,(car args) (fn ,(cadr args) ,@(cddr args)))
                                  `(def ^:private ,name (fn ,(car args) ,@(cdr args)))))
-; (def-macro (my-cond $ form) (if (empty? form) '() `(if ,(car form) ,(cadr form) nil)))
+; (def-macro (my-cond & form) (if (empty? form) '() `(if ,(car form) ,(cadr form) nil)))
 ; (macro (my-cond form) (if (empty? (cdr form)) '() (cons 'if (cons (cadr form) (cons (caddr form) (my-cond (cdddr form)))))))
 
 
 (def-macro (set! symbol value) `(-set ',symbol ,value))
-(def-macro (. instance symbol $ args) `(-dot ,instance ',symbol ,@args))
+(def-macro (. instance symbol & args) `(-dot ,instance ',symbol ,@args))
 
 (defn create-ns [sym] (eval (if (defined? sym) sym (intern *ns* sym (clojure.lang.Namespace *ns* (str sym))))))
 (def-macro (ns name) `((create-ns ',name)))
@@ -225,7 +225,7 @@
     x
     (foldr f (f x (car lst)) (cdr lst))))
 
-(def-macro (case e $ clauses)
+(def-macro (case e & clauses)
   (if (empty? clauses) `(throw (new RuntimeException (str "No matching clause: " ,e)))
       (if (empty? (rest clauses))
         (first clauses)
