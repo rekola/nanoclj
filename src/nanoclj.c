@@ -819,6 +819,18 @@ static inline bool is_number(nanoclj_val_t p) {
   return false;
 }
 
+static inline int parse_long(const char * start, const char * end, int radix, long long * r) {
+  char * end2;
+  *r = strtoll(start, &end2, radix);
+  if (end != end2) {
+    return -2;
+  } else if ((*r == LLONG_MIN || *r == LLONG_MAX) && errno == ERANGE) {
+    return -1;
+  } else {
+    return 0;
+  }
+}
+
 static inline bool convert_to_long(nanoclj_val_t p, long long * l) {
   switch (prim_type(p)) {
   case T_BOOLEAN:
@@ -858,11 +870,9 @@ static inline bool convert_to_long(nanoclj_val_t p, long long * l) {
 	  char * tmp = malloc(n + 1);
 	  memcpy(tmp, get_const_ptr(c), n);
 	  tmp[n] = 0;
-	  char * end;
-	  *l = strtoll(tmp, &end, 10);
-	  bool is_ok = tmp + n == end && !((*l == LLONG_MIN || *l == LLONG_MAX) && errno == ERANGE);
+	  int r = parse_long(tmp, tmp + n, 10, l);
 	  free(tmp);
-	  return is_ok;
+	  return r == 0;
 	}
       }
     }
@@ -4099,10 +4109,22 @@ static inline nanoclj_val_t mk_numeric_primitive(nanoclj_t * sc, const char *q) 
   }
   
   if (div) {
-    nanoclj_tensor_t * num = mk_tensor_bigint_from_string(first_digit, div - first_digit, 10);
-    nanoclj_tensor_t * den = mk_tensor_bigint_from_string(div + 1, strlen(div + 1), 10);
-    normalize_ratio_mutate(num, den);
-    return mk_pointer(mk_ratio_from_tensor(sc, sign, num, den));
+    long long i1, i2;
+    if (parse_long(first_digit, div, 10, &i1) == 0 &&
+	parse_long(div + 1, div + 1 + strlen(div + 1), 10, &i2) == 0 &&
+	i2 > 0 &&
+	i1 % i2 == 0) {
+      return mk_long(sc, sign * i1 / i2);
+    } else {
+      nanoclj_tensor_t * num = mk_tensor_bigint_from_string(first_digit, div - first_digit, 10);
+      if (num) {
+	nanoclj_tensor_t * den = mk_tensor_bigint_from_string(div + 1, strlen(div + 1), 10);
+	if (den) {
+	  normalize_ratio_mutate(num, den);
+	  return mk_pointer(mk_ratio_from_tensor(sc, sign, num, den));
+	}
+      }
+    }
   } else {
     char * end;
     const char * actual_end = q + strlen(q);
@@ -4112,17 +4134,14 @@ static inline nanoclj_val_t mk_numeric_primitive(nanoclj_t * sc, const char *q) 
     } else if (bigint_set) {
       return mk_pointer(mk_bigint_from_tensor(sc, sign, mk_tensor_bigint_from_string(first_digit, strlen(first_digit) - 1, radix)));
     } else {
-      long long i = strtoll(q, &end, radix);
-      if (end == actual_end) {
-	if ((i == LLONG_MIN || i == LLONG_MAX) && errno == ERANGE) {
-	  return mk_pointer(mk_bigint_from_tensor(sc, sign, mk_tensor_bigint_from_string(first_digit, strlen(first_digit), radix)));
-	} else {
-	  return mk_long(sc, i * (radix_set ? sign : 1));
-	}
+      long long i;
+      switch (parse_long(q, actual_end, radix, &i)) {
+      case 0: return mk_long(sc, i * (radix_set ? sign : 1));
+      case -1: return mk_pointer(mk_bigint_from_tensor(sc, sign, mk_tensor_bigint_from_string(first_digit, strlen(first_digit), radix)));
       }
     }
-    return mk_nil();
   }
+  return mk_nil();
 }
 
 static inline int32_t parse_char_literal(nanoclj_t * sc, const char *name) {
@@ -8618,7 +8637,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     } else {
       sc->tests_failed++;
     }
-    s_return(sc, mk_nil());
+    s_return(sc, arg0);
 
   case OP_SET_COLOR:
     if (!unpack_args_1_plus(sc, &arg0, &arg_next)) {
