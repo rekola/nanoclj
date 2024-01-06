@@ -5,6 +5,7 @@
 
 #define NANOCLJ_SMALL_VEC_SIZE 3
 #define NANOCLJ_SMALL_STR_SIZE 24
+#define NANOCLJ_SMALL_UINT_VEC_SIZE 6
 #define NANOCLJ_ARRAYMAP_LIMIT 8
 
 #define STRBUFFSIZE 256
@@ -81,6 +82,7 @@ extern "C" {
 	uint8_t bytes[NANOCLJ_SMALL_STR_SIZE];
 	nanoclj_val_t vals[NANOCLJ_SMALL_VEC_SIZE];
 	long long longs[NANOCLJ_SMALL_VEC_SIZE];
+	uint32_t uints[NANOCLJ_SMALL_UINT_VEC_SIZE];
       } _small_tensor;
       nanoclj_bignum_t _bignum;
       struct {

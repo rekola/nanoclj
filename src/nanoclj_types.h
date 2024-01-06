@@ -93,6 +93,11 @@ typedef struct {
 } imageview_t;
 
 typedef struct {
+  const uint32_t * limbs;
+  int32_t size, sign;
+} bigintview_t;
+
+typedef struct {
   const char * ptr;
   int size;
 } strview_t;

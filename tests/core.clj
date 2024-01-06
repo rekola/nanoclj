@@ -21,10 +21,6 @@
 (is (instance? Double ##-Inf))
 (is (instance? Double ##NaN))
 
-                                        ; Other numeric types
-(is (ratio? 1/2))
-(is (instance? BigInt 1N))
-
                                         ; Arithmetics
 
 (is (= 6 (+ 1 2 3)))
@@ -33,12 +29,18 @@
 
 (is (= (inc 5) 6))
 (is (= (dec 6) 5))
+
+                                        ; Bigints
+
+(is (instance? BigInt 1N))
+(is (= (* 1000000000N 1000000000N) 1000000000000000000N))
 (is (= (* 100000000000000000000 100000000000000000000)
        10000000000000000000000000000000000000000))
 (is (= (/ 100000000000000000000000000 1000000000000000000000000) 100N))
 
                                         ; Ratios
 
+(is (ratio? 1/2))
 (is (instance? Long 2/1))
 (is (instance? BigInt 10000000000000000000/2))
 
@@ -54,6 +56,7 @@
 
 (is (instance? BigInt (inc' java.lang.Long/MAX_VALUE)))
 (is (= (dec' java.lang.Long/MIN_VALUE) -9223372036854775809N))
+(is (= (take 8 (str (apply *' (range 1 101)))) (seq (str 93326215))))
 
                                         ; Corner cases
 
@@ -83,6 +86,13 @@
 (is (= (first {:a 1}) [:a 1]))
 
 (is (= (compare "abc" "def") -3))
+
+(is (= (compare 0N 0) 0))
+(is (= (compare -10N -10) 0))
+(is (= (compare 100000000000000000000N 1000000N) 1))
+(is (= (compare 256 -1000000000000000000000N) 1))
+(is (= (compare 10000000000000000000000N 1000000000000) 1))
+(is (= (compare 1000000000000 1000000000000N) 0))
 
 (is (= (sort '( 5 9 ##Inf nil -10.0 )) '(nil -10.0 5 9 ##Inf)))
 (is (= (sort-by count [ "ab" "" "zab" "cada"]) '("" "ab" "zab" "cada")))

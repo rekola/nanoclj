@@ -496,6 +496,31 @@ static inline int tensor_cmp(const nanoclj_tensor_t * a, const nanoclj_tensor_t 
   }
 }
 
+/* Assumes a is bigint and compares it to the absolute value of b0 */
+static inline int tensor_icmp_abs(const nanoclj_tensor_t * a, int64_t b0) {
+  int64_t n = a->ne[0];
+  if (n > 2) {
+    return 1;
+  } else if (n == 0) {
+   return b0 == 0 ? 0 : -1;
+  } else {
+    uint64_t b = b0 == LLONG_MIN ? (uint64_t)LLONG_MAX + 1 : llabs(b0);
+    const uint32_t * limbs = a->data;
+    if (n == 1) {
+      if (limbs[0] > b) return +1;
+      if (limbs[0] < b) return -1;
+      return 0;
+    }
+    if (b <= 0xffffffff) return 1;
+    uint64_t b_hi = b >> 32, b_lo = b & 0xffffffff;
+    if (limbs[1] > b_hi) return 1;
+    if (limbs[1] < b_hi) return -1;
+    if (limbs[0] > b_lo) return 1;
+    if (limbs[0] < b_lo) return -1;
+    return 0;
+  }
+}
+
 static inline void tensor_mutate_trim(nanoclj_tensor_t * tensor) {
   uint32_t * limbs = tensor->data;
   while (tensor->ne[0] > 0) {
@@ -742,18 +767,6 @@ static inline double tensor_bigint_to_double(const nanoclj_tensor_t * tensor) {
   return v;
 }
 
-static inline uint64_t tensor_bigint_to_uint64(const nanoclj_tensor_t * tensor) {
-  uint64_t v = 0;
-  if (!tensor_is_empty(tensor)) {
-    const uint32_t * limbs = tensor->data;
-    for (int64_t i = tensor->ne[0] - 1; i >= 0; i--) {
-      v <<= 32;
-      v += limbs[i];
-    }
-  }
-  return v;
-}
-
 static inline nanoclj_tensor_t * tensor_bigint_inc(const nanoclj_tensor_t * tensor) {
   nanoclj_tensor_t * r = tensor_dup(tensor);
   tensor_bigint_mutate_add_int(r, 1);
@@ -909,27 +922,6 @@ static inline nanoclj_tensor_t * mk_tensor_bigint_from_string(const char * s, si
     tensor_bigint_mutate_add_int(tensor, d);
   }
   return tensor;
-}
-
-static inline size_t tensor_bigint_to_string(const nanoclj_tensor_t * tensor0, char ** buff) {
-  nanoclj_tensor_t * tensor = tensor_dup(tensor0);
-  nanoclj_tensor_t * digits = mk_tensor_1d_padded(nanoclj_i8, 0, 256);
-  while (!tensor_is_empty(tensor)) {
-    /* divide the bigint by 1e9 and put the remainder in r */
-    uint64_t r = tensor_bigint_mutate_idivmod(tensor, 1000000000);
-    /* print the remainder */
-    for (int_fast8_t i = 0; i < 9 && (!tensor_is_empty(tensor) || r > 0); i++, r /= 10) {
-      uint8_t c = '0' + (r % 10);
-      tensor_mutate_append_bytes(digits, &c, 1);
-    }
-  }
-  size_t n = digits->ne[0];
-  *buff = malloc(n + 1);
-  for (size_t i = 0; i < n; i++) (*buff)[n - 1 - i] = *((char *)digits->data + i);
-  (*buff)[n] = 0;
-  tensor_free(digits);
-  tensor_free(tensor);
-  return n;
 }
 
 /* Hashes */
