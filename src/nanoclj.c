@@ -3161,6 +3161,8 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
       return bigint_eq(_to_bigintview(a), _to_bigintview(b));
     case T_RATIO:
       return _sign(a) == _sign(b) && tensor_eq(a->_ratio.numerator, b->_ratio.numerator) && tensor_eq(a->_ratio.denominator, b->_ratio.denominator);
+    case T_TENSOR:
+      return tensor_eq(a->_collection.tensor, b->_collection.tensor);
     }
   } else if ((is_sequential_type(t_a) || (is_cell(a0) && _is_sequence(decode_pointer(a0)))) &&
 	     (is_sequential_type(t_b) || (is_cell(b0) && _is_sequence(decode_pointer(b0))))) {

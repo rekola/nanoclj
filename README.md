@@ -86,7 +86,7 @@ As well as printing images in block mode like the plot function does, they can a
 - Data structures are only partially persistent, and while vectors, maps and sets allow fast reading and insertion, deletion and modification is slow.
 - Vectors, maps, sets and queues cannot have metadata
 - Namespaces can only contain Vars, not Classes: `(resolve 'Math) ;=> #'java.lang.Math
-- Arrays can only contain primitive values (including Objects), Multidimensional arrays cannot be ragged
+- Arrays are compared by value, can only contain primitive values (including Objects) and multidimensional arrays cannot be ragged
 - No type hints
 - Unbound Vars cannot be created
 
