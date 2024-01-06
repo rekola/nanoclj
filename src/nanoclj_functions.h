@@ -302,9 +302,9 @@ static nanoclj_val_t numeric_tower_expt(nanoclj_t * sc, nanoclj_cell_t * args) {
     } else if (tx == T_RATIO) {
       uint64_t exp2 = llabs(exp);
       nanoclj_cell_t * c = decode_pointer(x);
-      int sign = c->_bignum.sign == 1 || (exp & 1) == 0 ? 1 : -1;
-      nanoclj_tensor_t * a = tensor_bigint_pow(c->_bignum.tensor, exp2);
-      nanoclj_tensor_t * b = tensor_bigint_pow(c->_bignum.denominator, exp2);
+      int sign = c->_ratio.sign == 1 || (exp & 1) == 0 ? 1 : -1;
+      nanoclj_tensor_t * a = tensor_bigint_pow(c->_ratio.numerator, exp2);
+      nanoclj_tensor_t * b = tensor_bigint_pow(c->_ratio.denominator, exp2);
       if (exp > 0) {
 	return mk_pointer(mk_ratio_from_tensor(sc, sign, a, b));
       } else {
@@ -322,7 +322,7 @@ static nanoclj_val_t numeric_tower_expt(nanoclj_t * sc, nanoclj_cell_t * args) {
       }
     }
     
-    nanoclj_bignum_t base = to_bigint(x);
+    nanoclj_bigint_t base = to_bigint(x);
     nanoclj_tensor_t * t = tensor_bigint_pow(base.tensor, exp);
     if (!base.tensor->refcnt) tensor_free(base.tensor);
     return mk_pointer(mk_bigint_from_tensor(sc, base.sign > 0 || !(exp & 1) ? 1 : -1, t));
@@ -345,7 +345,7 @@ static nanoclj_val_t numeric_tower_gcd(nanoclj_t * sc, nanoclj_cell_t * args) {
   } else if (tx == T_RATIO || ty == T_RATIO) {
     /* TODO */
   } else if (tx == T_BIGINT || ty == T_BIGINT) {
-    nanoclj_bignum_t a = to_bigint(x), b = to_bigint(y);
+    nanoclj_bigint_t a = to_bigint(x), b = to_bigint(y);
     nanoclj_tensor_t * g = tensor_bigint_gcd(a.tensor, b.tensor);
     if (!a.tensor->refcnt) tensor_free(a.tensor);
     if (!b.tensor->refcnt) tensor_free(b.tensor);
