@@ -302,7 +302,7 @@ static nanoclj_val_t numeric_tower_expt(nanoclj_t * sc, nanoclj_cell_t * args) {
     } else if (tx == T_RATIO) {
       uint64_t exp2 = llabs(exp);
       nanoclj_cell_t * c = decode_pointer(x);
-      int sign = c->_ratio.sign == 1 || (exp & 1) == 0 ? 1 : -1;
+      int sign = _sign(c) == 1 || (exp & 1) == 0 ? 1 : -1;
       nanoclj_tensor_t * a = tensor_bigint_pow(c->_ratio.numerator, exp2);
       nanoclj_tensor_t * b = tensor_bigint_pow(c->_ratio.denominator, exp2);
       if (exp > 0) {

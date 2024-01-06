@@ -84,8 +84,10 @@ extern "C" {
 	long long longs[NANOCLJ_SMALL_VEC_SIZE];
 	uint32_t uints[NANOCLJ_SMALL_UINT_VEC_SIZE];
       } _small_tensor;
-      nanoclj_bigint_t _bigint;
-      nanoclj_ratio_t _ratio;
+      struct {
+	nanoclj_tensor_t * numerator;
+	nanoclj_tensor_t * denominator;
+      } _ratio;
       struct {
 	nanoclj_tensor_t * tensor;
 	size_t offset, size;
