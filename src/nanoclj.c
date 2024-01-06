@@ -176,7 +176,6 @@ enum nanoclj_types {
   T_VAR = 37,
   T_FOREIGN_OBJECT = 38,
   T_BIGINT = 39,
-  T_BIGDECIMAL = 40,
   T_REGEX = 41,
   T_DELAY = 42,
   T_IMAGE = 43,
@@ -698,7 +697,6 @@ static inline nanoclj_tensor_t * get_tensor(nanoclj_cell_t * c) {
   case T_AUDIO:
     return c->_audio.tensor;
   case T_BIGINT:
-  case T_BIGDECIMAL:
     return c->_bignum.tensor;
   }
   return NULL;
@@ -795,7 +793,6 @@ static inline bool is_numeric_type(uint16_t t) {
   case T_LONG:
   case T_RATIO:
   case T_BIGINT:
-  case T_BIGDECIMAL:
     return true;
   }
   return false;
@@ -812,7 +809,6 @@ static inline bool is_number(nanoclj_val_t p) {
     case T_LONG:
     case T_BIGINT:
     case T_RATIO:
-    case T_BIGDECIMAL:
       return true;
     }
   }
@@ -975,12 +971,12 @@ static inline double to_double(nanoclj_val_t v) {
 
 static inline nanoclj_bignum_t mk_bignum(long long v) {
   int32_t sign = (v > 0) - (v < 0);
-  return (nanoclj_bignum_t){ mk_tensor_bigint(llabs(v)), NULL, sign, 0};
+  return (nanoclj_bignum_t){ mk_tensor_bigint(llabs(v)), NULL, sign};
 }
 
 static inline nanoclj_bignum_t mk_bignum_ratio(long long v) {
   int32_t sign = (v > 0) - (v < 0);
-  return (nanoclj_bignum_t){ mk_tensor_bigint(llabs(v)), mk_tensor_bigint(1), sign, 0};
+  return (nanoclj_bignum_t){ mk_tensor_bigint(llabs(v)), mk_tensor_bigint(1), sign};
 }
 
 static inline nanoclj_bignum_t to_bigint(nanoclj_val_t p) {
@@ -992,7 +988,6 @@ static inline nanoclj_bignum_t to_bigint(nanoclj_val_t p) {
       nanoclj_cell_t * c = decode_pointer(p);
       switch (_type(c)) {
       case T_BIGINT:
-      case T_BIGDECIMAL:
 	return c->_bignum;
       case T_LONG:
 	return mk_bignum(_lvalue_unchecked(c));
@@ -1006,12 +1001,12 @@ static inline nanoclj_bignum_t to_bigint(nanoclj_val_t p) {
 	    ptr++;
 	    size--;
 	  }
-	  return (nanoclj_bignum_t){ mk_tensor_bigint_from_string(ptr, size, 10), NULL, sign, 0 };
+	  return (nanoclj_bignum_t){ mk_tensor_bigint_from_string(ptr, size, 10), NULL, sign };
 	}
       }
     }
   }
-  return (nanoclj_bignum_t){ NULL, NULL, 0, 0 };
+  return (nanoclj_bignum_t){ NULL, NULL, 0 };
 }
 
 static inline nanoclj_bignum_t to_ratio(nanoclj_val_t p) {
@@ -1023,46 +1018,45 @@ static inline nanoclj_bignum_t to_ratio(nanoclj_val_t p) {
       nanoclj_cell_t * c = decode_pointer(p);
       switch (_type(c)) {
       case T_BIGINT:
-      case T_BIGDECIMAL:
-	return (nanoclj_bignum_t){ c->_bignum.tensor, mk_tensor_bigint(1), c->_bignum.sign, 0 };
+	return (nanoclj_bignum_t){ c->_bignum.tensor, mk_tensor_bigint(1), c->_bignum.sign };
       case T_RATIO:
-	return (nanoclj_bignum_t){ c->_bignum.tensor, c->_bignum.denominator, c->_bignum.sign, 0 };
+	return (nanoclj_bignum_t){ c->_bignum.tensor, c->_bignum.denominator, c->_bignum.sign };
       case T_LONG:
 	return mk_bignum_ratio(_lvalue_unchecked(c));
       }
     }
   }
-  return (nanoclj_bignum_t){ NULL, NULL, 0, 0 };
+  return (nanoclj_bignum_t){ NULL, NULL, 0 };
 }
 
 static inline nanoclj_bignum_t bignum_add(nanoclj_bignum_t a, nanoclj_bignum_t b) {
   if (a.sign == b.sign) {
     nanoclj_tensor_t * c = tensor_bigint_add(a.tensor, b.tensor);
-    return (nanoclj_bignum_t){ c, NULL, a.sign, 0 };
+    return (nanoclj_bignum_t){ c, NULL, a.sign };
   } else if (tensor_cmp(a.tensor, b.tensor) > 0) {
     nanoclj_tensor_t * c = tensor_bigint_sub(a.tensor, b.tensor);
-    return (nanoclj_bignum_t){ c, NULL, a.sign, 0 };
+    return (nanoclj_bignum_t){ c, NULL, a.sign };
   } else {
     nanoclj_tensor_t * c = tensor_bigint_sub(b.tensor, a.tensor);
-    return (nanoclj_bignum_t){ c, NULL, b.sign, 0 };
+    return (nanoclj_bignum_t){ c, NULL, b.sign };
   }
 }
 
 static inline nanoclj_bignum_t bignum_sub(nanoclj_bignum_t a, nanoclj_bignum_t b) {
   int cmp = tensor_cmp(a.tensor, b.tensor);
   if (cmp == 0) {
-    return (nanoclj_bignum_t){ mk_tensor_bigint(0), NULL, 0, 0 };
+    return (nanoclj_bignum_t){ mk_tensor_bigint(0), NULL, 0 };
   } else if (a.sign == b.sign) {
     if (cmp > 0) {
       nanoclj_tensor_t * c = tensor_bigint_sub(a.tensor, b.tensor);
-      return (nanoclj_bignum_t){ c, NULL, a.sign, 0 };
+      return (nanoclj_bignum_t){ c, NULL, a.sign };
     } else {
       nanoclj_tensor_t * c = tensor_bigint_sub(b.tensor, a.tensor);
-      return (nanoclj_bignum_t){ c, NULL, -a.sign, 0 };
+      return (nanoclj_bignum_t){ c, NULL, -a.sign };
     }
   } else {
     nanoclj_tensor_t * c = tensor_bigint_add(a.tensor, b.tensor);
-    return (nanoclj_bignum_t){ c, NULL, a.sign, 0 };
+    return (nanoclj_bignum_t){ c, NULL, a.sign };
   }
 }
 
@@ -1106,7 +1100,6 @@ static inline comparison_class_t get_comparison_class(nanoclj_val_t v) {
     case T_RATIO:
     case T_BIGINT:
     case T_LONG:
-    case T_BIGDECIMAL:
     case T_DATE:
       return comp_number;
     case T_VECTOR:
@@ -1745,7 +1738,6 @@ static inline nanoclj_cell_t * mk_bigint_from_tensor(nanoclj_t * sc, int sign, n
       x->_bignum.tensor = tensor;
       x->_bignum.denominator = NULL;
       x->_bignum.sign = tensor_is_empty(tensor) ? 0 : sign;
-      x->_bignum.scale = 0;
 #ifdef RETAIN_ALLOCS
       retain(sc, x);
 #endif
@@ -1756,6 +1748,33 @@ static inline nanoclj_cell_t * mk_bigint_from_tensor(nanoclj_t * sc, int sign, n
     sc->pending_exception = sc->OutOfMemoryError;
   }
   return NULL;
+}
+
+static inline nanoclj_cell_t * mk_bigint_from_long(nanoclj_t * sc, long long a) {
+  nanoclj_cell_t * x = get_cell_x(sc, T_BIGINT, T_GC_ATOM | T_SMALL, NULL, NULL, NULL);
+  if (x) {
+    if (a == LLONG_MIN) {
+      x->flags |= T_NEGATIVE | 2;
+      x->_small_tensor.uints[0] = 0;
+      x->_small_tensor.uints[1] = 0x80000000;
+    } else {
+      if (a < 0) {
+	x->flags |= T_NEGATIVE;
+	a = llabs(a);
+      }
+      uint32_t hi = a >> 32, lo = a & 0xffffffff;
+      x->_small_tensor.uints[0] = lo;
+      x->_small_tensor.uints[1] = hi;
+      x->flags |= hi ? 2 : (lo ? 1 : 0);
+    }
+#ifdef RETAIN_ALLOCS
+    retain(sc, x);
+#endif
+    return x;
+  } else {
+    sc->pending_exception = sc->OutOfMemoryError;
+    return NULL;
+  }
 }
 
 static inline nanoclj_cell_t * mk_ratio_from_tensor(nanoclj_t * sc, int sign, nanoclj_tensor_t * num, nanoclj_tensor_t * den) {
@@ -1772,7 +1791,6 @@ static inline nanoclj_cell_t * mk_ratio_from_tensor(nanoclj_t * sc, int sign, na
       x->_bignum.tensor = num;
       x->_bignum.denominator = den;
       x->_bignum.sign = tensor_is_empty(num) ? 0 : sign;
-      x->_bignum.scale = 0;
 #ifdef RETAIN_ALLOCS
       retain(sc, x);
 #endif
@@ -2518,7 +2536,6 @@ static inline bool is_zero(nanoclj_val_t p) {
       case T_BIGINT:
 	if (_is_small(c)) return _sodim0_unchecked(c) == 0;
       case T_RATIO:
-      case T_BIGDECIMAL:
 	return tensor_is_empty(c->_bignum.tensor);
       }
     }
@@ -3117,8 +3134,6 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
       return a->type == b->type;
     case T_BIGINT:
       return bigint_eq(_to_bigintview(a), _to_bigintview(b));
-    case T_BIGDECIMAL:
-      return 0; /* TODO */
     case T_RATIO:
       return a->_bignum.sign == b->_bignum.sign && tensor_eq(a->_bignum.tensor, b->_bignum.tensor) && tensor_eq(a->_bignum.denominator, b->_bignum.denominator);
     }
@@ -3135,13 +3150,10 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
     }
   } else if (t_a == T_RATIO || t_b == T_RATIO) {
     return false;
-  } else if (t_a == T_BIGINT || t_b == T_BIGINT) {
-    /* FIXME */
-    nanoclj_bignum_t bn_a = to_bigint(a0), bn_b = to_bigint(b0);
-    bool e = bn_a.sign == bn_b.sign && tensor_eq(bn_a.tensor, bn_b.tensor);
-    if (!bn_a.tensor->refcnt) tensor_free(bn_a.tensor);
-    if (!bn_b.tensor->refcnt) tensor_free(bn_b.tensor);
-    return e;
+  } else if (t_a == T_BIGINT) {
+    return bigint_icmp(to_bigintview(a0), to_long(b0)) == 0;
+  } else if (t_b == T_BIGINT) {
+    return bigint_icmp(to_bigintview(b0), to_long(a0)) == 0;
   }
   return false;
 }
@@ -3471,10 +3483,6 @@ static inline int compare(nanoclj_val_t a, nanoclj_val_t b) {
 	
       case T_BIGINT:
 	return bigint_cmp(_to_bigintview(a2), _to_bigintview(b2));
-			  
-      case T_BIGDECIMAL:
-	/* TODO */
-	return 0;
 	
       case T_RATIO:
 	if (a2->_bignum.sign < b2->_bignum.sign) return -1;
@@ -5862,12 +5870,21 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
 
   case T_BIGINT:
     if (!args) {
-      /* FIXME */
-      return mk_pointer(mk_bigint_from_tensor(sc, 0, mk_tensor_1d(nanoclj_i32, 0)));
+      return mk_pointer(mk_bigint_from_long(sc, 0));
     } else {
-      /* FIXME */
-      nanoclj_bignum_t bn = to_bigint(first(sc, args));
-      return mk_pointer(mk_bigint_from_tensor(sc, bn.sign, bn.tensor));
+      nanoclj_val_t x = first(sc, args);
+      switch (prim_type(x)) {
+      case T_LONG:
+      case T_DOUBLE:
+	return mk_pointer(mk_bigint_from_long(sc, to_long(x)));
+      case T_CELL:
+	switch (_type(decode_pointer(x))) {
+	case T_BIGINT:
+	  return x;
+	case T_LONG:
+	  return mk_pointer(mk_bigint_from_long(sc, to_long(x)));
+	}
+      }
     }
 
   case T_RUNTIME_EXCEPTION:
@@ -6933,8 +6950,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	}
       case T_RATIO:
 	{
-	  nanoclj_bignum_t num = (nanoclj_bignum_t){ c->_bignum.tensor, NULL, c->_bignum.sign, 0};
-	  nanoclj_bignum_t den = (nanoclj_bignum_t){ c->_bignum.denominator, NULL, 1, 0};
+	  nanoclj_bignum_t num = (nanoclj_bignum_t){ c->_bignum.tensor, NULL, c->_bignum.sign};
+	  nanoclj_bignum_t den = (nanoclj_bignum_t){ c->_bignum.denominator, NULL, 1};
 	  nanoclj_bignum_t num2 = bignum_add(num, den);
 	  s_return(sc, mk_pointer(mk_ratio_from_tensor(sc, num2.sign, num2.tensor, c->_bignum.denominator)));
 	}
@@ -6979,8 +6996,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	}
       case T_RATIO:
 	{
-	  nanoclj_bignum_t num = (nanoclj_bignum_t){ c->_bignum.tensor, NULL, c->_bignum.sign, 0};
-	  nanoclj_bignum_t den = (nanoclj_bignum_t){ c->_bignum.denominator, NULL, 1, 0};
+	  nanoclj_bignum_t num = (nanoclj_bignum_t){ c->_bignum.tensor, NULL, c->_bignum.sign};
+	  nanoclj_bignum_t den = (nanoclj_bignum_t){ c->_bignum.denominator, NULL, 1};
 	  nanoclj_bignum_t num2 = bignum_sub(num, den);
 	  s_return(sc, mk_pointer(mk_ratio_from_tensor(sc, num2.sign, num2.tensor, c->_bignum.denominator)));
 	}
@@ -9464,7 +9481,6 @@ bool nanoclj_init(nanoclj_t * sc) {
   mk_class(sc, "clojure.lang.Symbol", T_SYMBOL, AFn);
   mk_class(sc, "clojure.lang.Keyword", T_KEYWORD, AFn); /* non-standard parent */
   mk_class(sc, "clojure.lang.BigInt", T_BIGINT, Number);
-  mk_class(sc, "clojure.lang.BigDecimal", T_BIGDECIMAL, Number);
   mk_class(sc, "clojure.lang.Ratio", T_RATIO, Number);
   mk_class(sc, "clojure.lang.Delay", T_DELAY, sc->Object);
   mk_class(sc, "clojure.lang.LazySeq", T_LAZYSEQ, Obj);

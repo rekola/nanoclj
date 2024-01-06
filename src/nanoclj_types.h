@@ -45,7 +45,6 @@ typedef struct {
   nanoclj_tensor_t * tensor;
   nanoclj_tensor_t * denominator; /* for Ratios */
   int32_t sign;
-  int32_t scale; /* for bigdecimals */
 } nanoclj_bignum_t;
 
 typedef struct {
