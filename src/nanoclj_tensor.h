@@ -496,31 +496,6 @@ static inline int tensor_cmp(const nanoclj_tensor_t * a, const nanoclj_tensor_t 
   }
 }
 
-/* Assumes a is bigint and compares it to the absolute value of b0 */
-static inline int tensor_icmp_abs(const nanoclj_tensor_t * a, int64_t b0) {
-  int64_t n = a->ne[0];
-  if (n > 2) {
-    return 1;
-  } else if (n == 0) {
-   return b0 == 0 ? 0 : -1;
-  } else {
-    uint64_t b = b0 == LLONG_MIN ? (uint64_t)LLONG_MAX + 1 : llabs(b0);
-    const uint32_t * limbs = a->data;
-    if (n == 1) {
-      if (limbs[0] > b) return +1;
-      if (limbs[0] < b) return -1;
-      return 0;
-    }
-    if (b <= 0xffffffff) return 1;
-    uint64_t b_hi = b >> 32, b_lo = b & 0xffffffff;
-    if (limbs[1] > b_hi) return 1;
-    if (limbs[1] < b_hi) return -1;
-    if (limbs[0] > b_lo) return 1;
-    if (limbs[0] < b_lo) return -1;
-    return 0;
-  }
-}
-
 static inline void tensor_mutate_trim(nanoclj_tensor_t * tensor) {
   uint32_t * limbs = tensor->data;
   while (tensor->ne[0] > 0) {

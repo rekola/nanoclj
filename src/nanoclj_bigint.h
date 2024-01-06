@@ -76,4 +76,53 @@ static inline bool bigint_eq(bigintview_t a, bigintview_t b) {
   return true;
 }
 
+static inline int bigint_cmp(bigintview_t a, bigintview_t b) {
+  if (a.sign < b.sign) return -1;
+  if (a.sign > b.sign) return +1;
+  
+  int64_t n = a.size;
+  if (n < b.size) {
+    return -1;
+  } else if (n > b.size) {
+    return +1;
+  } else {
+    const uint32_t * a_limbs = a.limbs, * b_limbs = b.limbs;
+    while (n > 0) {
+      n--;
+      if (a_limbs[n] > b_limbs[n]) return a.sign;
+      else if (a_limbs[n] < b_limbs[n]) return -a.sign;
+    }
+    return 0;
+  }
+}
+
+/* compares bigint a with integer b0 */
+static inline int bigint_icmp(bigintview_t a, int64_t b0) {
+  int64_t sign = b0 < 0 ? -1 : (b0 > 0 ? 1 : 0);
+  if (a.sign < sign) return -1;
+  if (a.sign > sign) return +1;
+
+  int64_t n = a.size;
+  if (n > 2) {
+    return sign;
+  } else if (n == 0) {
+    return b0 == 0 ? 0 : -sign;
+  } else {
+    uint64_t b = b0 == LLONG_MIN ? (uint64_t)LLONG_MAX + 1 : llabs(b0);
+    const uint32_t * limbs = a.limbs;
+    if (n == 1) {
+      if (limbs[0] > b) return sign;
+      if (limbs[0] < b) return -sign;
+      return 0;
+    }
+    if (b <= 0xffffffff) return sign;
+    uint64_t b_hi = b >> 32, b_lo = b & 0xffffffff;
+    if (limbs[1] > b_hi) return sign;
+    if (limbs[1] < b_hi) return -sign;
+    if (limbs[0] > b_lo) return sign;
+    if (limbs[0] < b_lo) return -sign;
+    return 0;
+  }
+}
+
 #endif

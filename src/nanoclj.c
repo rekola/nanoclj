@@ -3470,11 +3470,11 @@ static inline int compare(nanoclj_val_t a, nanoclj_val_t b) {
 	return (int)a2->type - (int)b2->type;
 	
       case T_BIGINT:
+	return bigint_cmp(_to_bigintview(a2), _to_bigintview(b2));
+			  
       case T_BIGDECIMAL:
-	/* FIXME */
-	if (a2->_bignum.sign < b2->_bignum.sign) return -1;
-	if (a2->_bignum.sign > b2->_bignum.sign) return +1;
-	return tensor_cmp(a2->_bignum.tensor, b2->_bignum.tensor) * a2->_bignum.sign;
+	/* TODO */
+	return 0;
 	
       case T_RATIO:
 	if (a2->_bignum.sign < b2->_bignum.sign) return -1;
@@ -3504,19 +3504,9 @@ static inline int compare(nanoclj_val_t a, nanoclj_val_t b) {
     else if (ra > rb) return +1;
     return 0;
   } else if (type_a == T_BIGINT) {
-    /* FIXME */
-    long long bv = to_long(b), sign = bv < 0 ? -1 : (bv > 0 ? 1 : 0);
-    nanoclj_cell_t * a2 = decode_pointer(a);
-    if (a2->_bignum.sign < sign) return -1;
-    if (a2->_bignum.sign > sign) return +1;
-    return tensor_icmp_abs(a2->_bignum.tensor, bv) * sign;
+    return bigint_icmp(to_bigintview(a), to_long(b));
   } else if (type_b == T_BIGINT) {
-    /* FIXME */
-    long long av = to_long(a), sign = av < 0 ? -1 : (av > 0 ? 1 : 0);
-    nanoclj_cell_t * b2 = decode_pointer(b);
-    if (sign < b2->_bignum.sign) return -1;
-    if (sign > b2->_bignum.sign) return +1;
-    return tensor_icmp_abs(b2->_bignum.tensor, av) * sign;
+    return -1 * bigint_icmp(to_bigintview(b), to_long(a));
   } else if (type_a == T_LONG || type_b == T_LONG) {
     long long la = to_long(a), lb = to_long(b);
     if (la < lb) return -1;
@@ -5832,7 +5822,6 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
 	  tensor = get_tensor(c);
 	}
 	if (tensor) {
-	  fprintf(stderr, "creating tensor, size = %d\n", (int)size);
 	  return mk_pointer(mk_object_from_tensor(sc, T_TENSOR, offset, size, tensor));
 	}
       }
