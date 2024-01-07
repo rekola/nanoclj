@@ -236,8 +236,7 @@ typedef struct {
 #define UNMARK       32767      /* 0111111111111111 */
 
 static uint_fast16_t prim_type_extended(nanoclj_val_t value) {
-  uint64_t signature = value.as_long >> 48;
-  switch (signature) {
+  switch (value.as_long & MASK_SIGNATURE) {
   case SIGNATURE_NIL: return T_NIL;
   case SIGNATURE_CELL: return T_CELL;
   case SIGNATURE_EMPTYLIST: return T_EMPTYLIST;
@@ -252,8 +251,7 @@ static uint_fast16_t prim_type_extended(nanoclj_val_t value) {
 }
 
 static uint_fast16_t prim_type(nanoclj_val_t value) {
-  uint64_t signature = value.as_long >> 48;
-  switch (signature) {
+  switch (value.as_long & MASK_SIGNATURE) {
   case SIGNATURE_NIL: return T_NIL;
   case SIGNATURE_CELL: return T_CELL;
   case SIGNATURE_EMPTYLIST: return T_EMPTYLIST;
@@ -331,7 +329,7 @@ static inline nanoclj_val_t mk_symbol(nanoclj_t * sc, uint16_t t, strview_t ns, 
   s->hash = murmur3_hash_qualified_string(ns.ptr, ns.size, name.ptr, name.size);
   s->ns_sym = s->name_sym = mk_nil();
 
-  return (nanoclj_val_t)((t == T_SYMBOL ? (SIGNATURE_SYMBOL << 48) : (SIGNATURE_KEYWORD << 48)) | (uint64_t)s);
+  return t == T_SYMBOL ? mk_symbol_pointer(s) : mk_keyword_pointer(s);
 }
 
 static inline void free_symbol(symbol_t * s) {
@@ -1619,7 +1617,7 @@ static inline nanoclj_val_t mk_date(nanoclj_t * sc, long long num) {
 /* get number atom (integer) */
 static inline nanoclj_val_t mk_long(nanoclj_t * sc, long long num) {
   if (num >= INT_MIN && num <= INT_MAX) {
-    return (nanoclj_val_t)((SIGNATURE_INTEGER << 48) | (UINT64_C(3) << 32) | (uint32_t)num);
+    return mk_long_prim(num);
   } else {
     nanoclj_cell_t * x = get_cell_x(sc, T_LONG, T_GC_ATOM, NULL, NULL, NULL);
     if (x) {
