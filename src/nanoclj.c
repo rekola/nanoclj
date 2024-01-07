@@ -2426,6 +2426,7 @@ static inline void s_save(nanoclj_t * sc, enum nanoclj_opcode op,
   next_frame->code = code;
 }
 
+/* derefs a lazy-seq */
 static inline nanoclj_cell_t * deref(nanoclj_t * sc, nanoclj_cell_t * c) {
   if (_is_realized(c)) {
     if (is_nil(_car_unchecked(c)) && !_cdr_unchecked(c)) {
@@ -5062,8 +5063,13 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
       case T_CLASS:{
 	nanoclj_val_t ns = mk_nil();
 	nanoclj_cell_t * md = get_metadata(c);
-	get_elem(sc, md, sc->NS, &ns);
-	if (is_nil(name)) get_elem(sc, md, sc->NAME, &name);
+	if (md) {
+	  get_elem(sc, md, sc->NS, &ns);
+	  nanoclj_val_t name2;
+	  if (get_elem(sc, md, sc->NAME, &name2)) {
+	    name = name2;
+	  }
+	}
 	if (!is_nil(name)) {
 	  nanoclj_val_t ns_name = mk_nil();
 	  if (!is_nil(ns)) {
@@ -7905,23 +7911,18 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       return false;
     } else if (is_cell(arg0)) {
       nanoclj_cell_t * c = decode_pointer(arg0);
-      if (_type(c) == T_LAZYSEQ || _type(c) == T_DELAY) {
+      switch (c->type) {
+      case T_DELAY:
 	if (!_is_realized(c)) {
 	  /* Should change type to closure here */
 	  s_save(sc, OP_SAVE_FORCED, NULL, arg0);
 	  sc->code = arg0;
 	  sc->args = NULL;
 	  s_goto(sc, OP_APPLY);
-	} else if (_type(c) == T_LAZYSEQ && is_nil(_car_unchecked(c)) && !_cdr_unchecked(c)) {
-	  s_return(sc, mk_emptylist());
 	}
-      }
-      if (_type(c) == T_DELAY) {
 	s_return(sc, _car_unchecked(c));
-      } else if (_type(c) == T_VAR) {
+      case T_VAR:
 	s_return(sc, get_indexed_value(c, 1));
-      } else {
-	s_return(sc, arg0);
       }
     }
     s_return(sc, arg0);
@@ -7930,7 +7931,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     if (is_cell(sc->code)) {
       nanoclj_cell_t * c = decode_pointer(sc->code);
       _set_realized(c);
-      if (_type(c) == T_DELAY) {
+      if (c->type == T_DELAY) {
 	_car_unchecked(c) = sc->value;
 	_cdr_unchecked(c) = NULL;
 	s_return(sc, sc->value);
@@ -7940,7 +7941,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	s_return(sc, mk_emptylist());
       } else if (is_cell(sc->value) || is_emptylist(sc->value)) {
 	nanoclj_cell_t * c2 = decode_pointer(sc->value);
-	if (_is_sequence(c2) || is_seqable_type(_type(c2))) {
+	if (_is_sequence(c2) || is_sequential_type(c2->type)) {
 	  _car_unchecked(c) = first(sc, c2);
 	  _cdr_unchecked(c) = rest(sc, c2);
 	  s_return(sc, sc->code);
