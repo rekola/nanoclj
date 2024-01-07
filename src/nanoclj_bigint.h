@@ -125,4 +125,44 @@ static inline int bigint_icmp(bigintview_t a, int64_t b0) {
   }
 }
 
+static inline nanoclj_tensor_t * bigint_inc(bigintview_t bv) {
+  nanoclj_tensor_t * r = bigintview_to_tensor(bv);
+  if (bv.sign >= 0) {
+    tensor_bigint_mutate_add_int(r, 1);
+  } else {
+    tensor_bigint_mutate_sub_int(r, 1);
+  }
+  return r;
+}
+
+static inline nanoclj_tensor_t * bigint_dec(bigintview_t bv) {
+  nanoclj_tensor_t * r = bigintview_to_tensor(bv);
+  if (bv.sign > 0) {
+    tensor_bigint_mutate_sub_int(r, 1);
+  } else {
+    tensor_bigint_mutate_add_int(r, 1);
+  }
+  return r;
+}
+
+static inline void bigint_mutate_and(nanoclj_tensor_t * a, bigintview_t b) {
+  if (a->ne[0] > b.size) a->ne[0] = b.size;
+  uint32_t * limbs_a = a->data;
+  const uint32_t * limbs_b = b.limbs;
+  for (int64_t i = 0; i < a->ne[0]; i++) {
+    limbs_a[i] &= limbs_b[i];
+  }
+}
+
+static inline void bigint_mutate_or(nanoclj_tensor_t * a, bigintview_t b) {
+  while (a->ne[0] < b.size) {
+    tensor_mutate_append_i32(a, 0);
+  }
+  uint32_t * limbs_a = a->data;
+  const uint32_t * limbs_b = b.limbs;
+  for (int64_t i = 0; i < b.size; i++) {
+    limbs_a[i] |= limbs_b[i];
+  }
+}
+
 #endif

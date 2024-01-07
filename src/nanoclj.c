@@ -678,7 +678,8 @@ static inline int_fast32_t _sign(const nanoclj_cell_t * c) {
     else if (_lvalue_unchecked(c) < 0) return -1;
     else return 1;
   case T_BIGINT:
-    if (c->_collection.size == 0) {
+    if ((_is_small(c) && _sodim0_unchecked(c) == 0) ||
+	(!_is_small(c) && c->_collection.size == 0)) {
       return 0;
     } else if (c->flags & T_NEGATIVE) {
       return -1;
@@ -806,6 +807,18 @@ static inline void set_metadata(nanoclj_cell_t * c, nanoclj_cell_t * meta) {
     _image_metadata(c) = meta;
     break;
   }
+}
+
+/* returns true if t is a fixed precision integer type */
+static inline bool is_int_type(uint16_t t) {
+  switch (t) {
+  case T_BYTE:
+  case T_SHORT:
+  case T_INTEGER:
+  case T_LONG:
+    return true;
+  }
+  return false;
 }
 
 static inline bool is_numeric_type(uint16_t t) {
@@ -1777,17 +1790,14 @@ static inline nanoclj_cell_t * mk_bigint_from_tensor(nanoclj_t * sc, int sign, n
 }
 
 static inline nanoclj_cell_t * mk_bigint_from_long(nanoclj_t * sc, long long a) {
-  nanoclj_cell_t * x = get_cell_x(sc, T_BIGINT, T_GC_ATOM | T_SMALL, NULL, NULL, NULL);
+  nanoclj_cell_t * x = get_cell_x(sc, T_BIGINT, T_GC_ATOM | T_SMALL | (a < 0 ? T_NEGATIVE : 0), NULL, NULL, NULL);
   if (x) {
     if (a == LLONG_MIN) {
-      x->flags |= T_NEGATIVE | 2;
+      x->flags |= 2;
       x->_small_tensor.uints[0] = 0;
       x->_small_tensor.uints[1] = 0x80000000;
     } else {
-      if (a < 0) {
-	x->flags |= T_NEGATIVE;
-	a = llabs(a);
-      }
+      if (a < 0) a = llabs(a);
       uint32_t hi = a >> 32, lo = a & 0xffffffff;
       x->_small_tensor.uints[0] = lo;
       x->_small_tensor.uints[1] = hi;
@@ -2545,6 +2555,19 @@ static inline bool is_empty(nanoclj_t * sc, nanoclj_cell_t * coll) {
   return false;
 }
 
+static inline bool _is_zero(nanoclj_cell_t * c) {
+  switch (_type(c)) {
+  case T_LONG:
+    return _lvalue_unchecked(c) == 0;
+  case T_BIGINT:
+    if (_is_small(c)) return _sodim0_unchecked(c) == 0;
+    return tensor_is_empty(c->_collection.tensor);
+  case T_RATIO:
+    return tensor_is_empty(c->_ratio.numerator);
+  }
+  return false;
+}
+
 static inline bool is_zero(nanoclj_val_t p) {
   switch (prim_type(p)) {
   case T_LONG:
@@ -2552,18 +2575,7 @@ static inline bool is_zero(nanoclj_val_t p) {
   case T_DOUBLE:
     return p.as_double == 0.0;
   case T_CELL:
-    {
-      const nanoclj_cell_t * c = decode_pointer(p);
-      switch (_type(c)) {
-      case T_LONG:
-	return _lvalue_unchecked(c) == 0;
-      case T_BIGINT:
-	if (_is_small(c)) return _sodim0_unchecked(c) == 0;
-	return tensor_is_empty(c->_collection.tensor);
-      case T_RATIO:
-	return tensor_is_empty(c->_ratio.numerator);
-      }
-    }
+    return _is_zero(decode_pointer(p));
   }
   return false;
 }
@@ -3593,16 +3605,25 @@ static inline nanoclj_val_t oblist_find_item(nanoclj_t * sc, uint16_t type, strv
   return mk_nil();
 }
 
-/* Copies a vector so that the copy can be mutated */
-static inline nanoclj_cell_t * copy_collection(nanoclj_t * sc, const nanoclj_cell_t * vec) {
-  size_t len = get_size(vec);
-  if (_is_small(vec)) {
-    nanoclj_cell_t * new_vec = get_collection_object(sc, _type(vec), 0, len, NULL);
-    memcpy(_smalldata_unchecked(new_vec), _smalldata_unchecked(vec), NANOCLJ_SMALL_VEC_SIZE * sizeof(nanoclj_val_t));
-    return new_vec;
+/* Copies a cell */
+static inline nanoclj_cell_t * copy_cell(nanoclj_t * sc, const nanoclj_cell_t * c) {
+  size_t len = get_size(c);
+  if (_is_small(c)) {
+    nanoclj_cell_t * new_c = get_collection_object(sc, _type(c), 0, len, NULL);
+    memcpy(_smalldata_unchecked(new_c), _smalldata_unchecked(c), NANOCLJ_SMALL_VEC_SIZE * sizeof(nanoclj_val_t));
+    return new_c;
   } else {
-    nanoclj_tensor_t * s = tensor_dup(vec->_collection.tensor);
-    return get_collection_object(sc, _type(vec), 0, len, s);
+    return get_collection_object(sc, _type(c), 0, len, c->_collection.tensor);
+  }
+}
+
+/* Copies a vector so that the copy can be mutated */
+static inline nanoclj_cell_t * copy_for_mutation(nanoclj_t * sc, const nanoclj_cell_t * c) {
+  if (_is_small(c)) {
+    return copy_cell(sc, c);
+  } else {
+    nanoclj_tensor_t * s = tensor_dup(c->_collection.tensor);
+    return get_collection_object(sc, _type(c), 0, get_size(c), s);
   }
 }
 
@@ -3655,7 +3676,7 @@ static inline nanoclj_cell_t * assoc_with_meta(nanoclj_t * sc, nanoclj_cell_t * 
   uint16_t t = _type(coll);
   size_t j = find_index(sc, coll, key);
   if (j != NPOS) {
-    coll = copy_collection(sc, coll);
+    coll = copy_for_mutation(sc, coll);
     set_indexed_value(coll, j, value);
   } else if (is_map_type(t)) {
     bool has_meta = t == T_VARMAP;
@@ -6274,7 +6295,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  
 	case T_VECTOR:
 	  if (get_size(code_cell) > 0) {
-	    s_save(sc, OP_E0VEC, NULL, mk_pointer(copy_collection(sc, decode_pointer(sc->code))));
+	    s_save(sc, OP_E0VEC, NULL, mk_pointer(copy_for_mutation(sc, decode_pointer(sc->code))));
 	    sc->code = get_indexed_value(code_cell, 0);
 	    s_goto(sc, OP_EVAL);
 	  }
@@ -6940,8 +6961,15 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       case T_RATIO:
 	s_return(sc, mk_pointer(mk_ratio_from_tensor(sc, 1, c->_ratio.numerator, c->_ratio.denominator)));
       case T_BIGINT:
-	/* FIXME */
-	s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, 1, c->_collection.tensor)));
+	{
+	  if (_sign(c) == -1) {
+	    nanoclj_cell_t * c2 = copy_cell(sc, c);
+	    c2->flags &= ~T_NEGATIVE;
+	    s_return(sc, mk_pointer(c2));
+	  } else {
+	    s_return(sc, arg0);
+	  }
+	}
       }
     }
     }
@@ -6984,9 +7012,10 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  s_return(sc, mk_pointer(mk_ratio_from_tensor(sc, num2.sign, num2.tensor, c->_ratio.denominator)));
 	}
       case T_BIGINT:
-	{
-	  nanoclj_tensor_t * tensor = _sign(c) > 0 ? tensor_bigint_inc(c->_collection.tensor) : tensor_bigint_dec(c->_collection.tensor);
-	  s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, _sign(c), tensor)));
+	if (_is_zero(c)) {
+	  s_return(sc, mk_pointer(mk_bigint_from_long(sc, 1)));
+	} else {
+	  s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, _sign(c), bigint_inc(_to_bigintview(c)))));
 	}
       }
     }
@@ -7030,10 +7059,10 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  s_return(sc, mk_pointer(mk_ratio_from_tensor(sc, num2.sign, num2.tensor, c->_ratio.denominator)));
 	}
       case T_BIGINT:
-	{
-	  /* FIXME */
-	  nanoclj_tensor_t * tensor = _sign(c) > 0 ? tensor_bigint_dec(c->_collection.tensor) : tensor_bigint_inc(c->_collection.tensor);
-	  s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, _sign(c), tensor)));
+	if (_is_zero(c)) {
+	  s_return(sc, mk_pointer(mk_bigint_from_long(sc, -1)));
+	} else {
+	  s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, _sign(c), bigint_dec(_to_bigintview(c)))));
 	}
       }
     }
@@ -7216,14 +7245,15 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       } else if (tx == T_RATIO || ty == T_RATIO) {
 	s_return(sc, mk_nil());
       } else if (tx == T_BIGINT) {
-	/* FIXME */
-	nanoclj_bigint_t a = to_bigint(arg0);
 	if (prim_type(arg1) == T_LONG) {
-	  nanoclj_tensor_t * t = tensor_dup(a.tensor);
+	  bigintview_t a = to_bigintview(arg0);
+	  nanoclj_tensor_t * t = bigintview_to_tensor(a);
 	  int32_t div = decode_integer(arg1);
 	  tensor_bigint_mutate_idivmod(t, llabs(div));
 	  s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, a.sign == (div > 0) - (div < 0) ? 1 : -1, t)));
 	} else {
+	  /* FIXME */
+	  nanoclj_bigint_t a = to_bigint(arg0);
 	  nanoclj_bigint_t b = to_bigint(arg1);
 	  nanoclj_tensor_t * q;
 	  tensor_bigint_divmod(a.tensor, b.tensor, &q, NULL);
@@ -7506,7 +7536,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     if (!unpack_args_1_not_nil(sc, &arg0)) {
       return false;
     } else if (is_cell(arg0)) { /* arg0 = array, arg1 = idx, arg_rest = idxs */
-      s_return(sc, mk_pointer(copy_collection(sc, decode_pointer(arg0))));
+      s_return(sc, mk_pointer(copy_for_mutation(sc, decode_pointer(arg0))));
     }
     Error_0(sc, "Type doesn't support aclone");
 
@@ -7702,42 +7732,34 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       return false;
     } else {
       uint16_t tx = type(arg0), ty = type(arg1);
-      if (!is_numeric_type(tx) || !is_numeric_type(ty)) {
-      	nanoclj_throw(sc, mk_class_cast_exception(sc, "Argument cannot be cast to java.lang.Number"));
-	return false;
-      } else if (tx == T_BIGINT || ty == T_BIGINT) {
-	/* FIXME */
-	nanoclj_bigint_t a = to_bigint(arg0), b = to_bigint(arg1);
-	nanoclj_tensor_t * t = tensor_dup(a.tensor);
-	tensor_mutate_and(t, b.tensor);
-	if (!a.tensor->refcnt) tensor_free(a.tensor);
-	if (!b.tensor->refcnt) tensor_free(b.tensor);
+      if (tx == T_BIGINT && ty == T_BIGINT) {
+	bigintview_t a = to_bigintview(arg0), b = to_bigintview(arg1);
+	nanoclj_tensor_t * t = bigintview_to_tensor(a);
+	bigint_mutate_and(t, b);
 	s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, 1, t)));
-      } else {
+      } else if (is_int_type(tx) && is_int_type(ty)) {
 	s_return(sc, mk_long(sc, to_long(arg0) & to_long(arg1)));
       }
     }
+    nanoclj_throw(sc, mk_illegal_arg_exception(sc, "Invalid arguments for -bit-and"));
+    return false;
 
   case OP_BIT_OR:
     if (!unpack_args_2_not_nil(sc, &arg0, &arg1)) {
       return false;
     } else {
       uint16_t tx = type(arg0), ty = type(arg1);
-      if (!is_numeric_type(tx) || !is_numeric_type(ty)) {
-      	nanoclj_throw(sc, mk_class_cast_exception(sc, "Argument cannot be cast to java.lang.Number"));
-	return false;
-      } else if (tx == T_BIGINT || ty == T_BIGINT) {
-	/* FIXME */
-	nanoclj_bigint_t a = to_bigint(arg0), b = to_bigint(arg1);
-	nanoclj_tensor_t * t = tensor_dup(a.tensor);
-	tensor_mutate_or(t, b.tensor);
-	if (!a.tensor->refcnt) tensor_free(a.tensor);
-	if (!b.tensor->refcnt) tensor_free(b.tensor);
+      if (tx == T_BIGINT && ty == T_BIGINT) {
+	bigintview_t a = to_bigintview(arg0), b = to_bigintview(arg1);
+	nanoclj_tensor_t * t = bigintview_to_tensor(a);
+	bigint_mutate_or(t, b);
 	s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, 1, t)));
-      } else {
+      } else if (is_int_type(tx) && is_int_type(ty)) {
 	s_return(sc, mk_long(sc, to_long(arg0) | to_long(arg1)));
       }
     }
+    nanoclj_throw(sc, mk_illegal_arg_exception(sc, "Invalid arguments for -bit-or"));
+    return false;
 
   case OP_BIT_XOR:
     if (!unpack_args_2_not_nil(sc, &arg0, &arg1)) {
@@ -7770,10 +7792,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	    }
 	  } /* else: auto-promote to bigint */
 	  if (is_numeric_type(ta)) {
-	    nanoclj_bigint_t a = to_bigint(arg0);
-	    nanoclj_tensor_t * t = tensor_dup(a.tensor);
+	    bigintview_t a = to_bigintview(arg0);
+	    nanoclj_tensor_t * t = bigintview_to_tensor(a);
 	    tensor_mutate_lshift(t, n);
-	    if (!a.tensor->refcnt) tensor_free(a.tensor);
 	    s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, a.sign, t)));
 	  }
 	}
@@ -7790,11 +7811,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       	nanoclj_throw(sc, mk_class_cast_exception(sc, "Argument cannot be cast to java.lang.Number"));
 	return false;
       } else if (tx == T_BIGINT) {
-	/* FIXME */
-	nanoclj_bigint_t a = to_bigint(arg0);
-	nanoclj_tensor_t * t = tensor_dup(a.tensor);
+	bigintview_t a = to_bigintview(arg0);
+	nanoclj_tensor_t * t = bigintview_to_tensor(a);
 	tensor_mutate_rshift(t, to_long(arg1));
-	if (!a.tensor->refcnt) tensor_free(a.tensor);
 	s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, a.sign, t)));
       } else {
 	s_return(sc, mk_long(sc, to_long(arg0) >> to_long(arg1)));
@@ -8667,7 +8686,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	if (wi == NPOS) {
 	  md = assoc(sc, md, sc->WATCHES, mk_pointer(cons(sc, arg2, NULL)));
 	} else {
-	  md = copy_collection(sc, md);
+	  md = copy_for_mutation(sc, md);
 	  nanoclj_val_t old_watches = get_indexed_value(md, wi);
 	  set_indexed_value(md, wi, mk_pointer(cons(sc, arg2, decode_pointer(old_watches))));
 	}
@@ -8721,6 +8740,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       sc->tests_failed++;
     }
     s_return(sc, arg0);
+
+  case OP_REQUIRE:
+    s_return(sc, mk_nil());
 
   case OP_SET_COLOR:
     if (!unpack_args_1_plus(sc, &arg0, &arg_next)) {

@@ -681,6 +681,22 @@ static inline void tensor_bigint_mutate_add_int(nanoclj_tensor_t * tensor, uint3
   }
 }
 
+static inline bool tensor_bigint_mutate_sub_int(nanoclj_tensor_t * tensor, uint32_t v) {
+  if (!v) return true;
+  uint32_t * d = tensor->data;
+  for (int64_t i = 0; i < tensor->ne[0]; i++) {
+    uint32_t tmp = d[i], res = tmp - v;
+    d[i] = res;
+    if (!(res > tmp)) { /* finish if there is no underflow */
+      tensor_mutate_trim(tensor);
+      return true;
+    }
+    v = 1;
+  }
+  tensor_mutate_clear(tensor);
+  return false;
+}
+
 static inline nanoclj_tensor_t * tensor_bigint_mul(const nanoclj_tensor_t * a, const nanoclj_tensor_t * b) {
   int64_t n_a = a->ne[0], n_b = b->ne[0];
   nanoclj_tensor_t * tensor = mk_tensor_1d(nanoclj_i32, n_a + n_b);
@@ -740,27 +756,6 @@ static inline double tensor_bigint_to_double(const nanoclj_tensor_t * tensor) {
     }
   }
   return v;
-}
-
-static inline nanoclj_tensor_t * tensor_bigint_inc(const nanoclj_tensor_t * tensor) {
-  nanoclj_tensor_t * r = tensor_dup(tensor);
-  tensor_bigint_mutate_add_int(r, 1);
-  return r;
-}
-
-static inline nanoclj_tensor_t * tensor_bigint_dec(const nanoclj_tensor_t * tensor) {
-  nanoclj_tensor_t * r = tensor_dup(tensor);
-  uint32_t * d = r->data;
-  for (int64_t i = 0; i < r->ne[0]; i++) {
-    uint32_t tmp = d[i], res = tmp - 1;
-    d[i] = res;
-    if (!(res > tmp)) { /* finish if there is no underflow */
-      tensor_mutate_trim(r);
-      return r;
-    }
-  }
-  tensor_mutate_clear(r);
-  return r;
 }
 
 static inline void tensor_bigint_divmod(const nanoclj_tensor_t * a, const nanoclj_tensor_t * b, nanoclj_tensor_t ** q, nanoclj_tensor_t ** rem) {

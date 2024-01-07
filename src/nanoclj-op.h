@@ -137,6 +137,7 @@ _OP_DEF("-get-cell-flags", 0, OP_GET_CELL_FLAGS)
 _OP_DEF("namespace", 0, OP_NAMESPACE)
 _OP_DEF("name", 0, OP_NAME)
 _OP_DEF("-is", 0, OP_IS)
+_OP_DEF("require", 0, OP_REQUIRE)
 
 /* Canvas ops */
 _OP_DEF("set-color", 0, OP_SET_COLOR)
