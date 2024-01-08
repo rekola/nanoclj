@@ -140,7 +140,6 @@ Windows support is in progress.
 - Locals cleaning
 - Multithreading, transactions, STM and locking
 - Pre- and post-conditions for functions
-- Namespace import
 - Readers and Writers do not accept options such as :encoding or :append
 - Associative destructuring
 - Map namespace syntax
@@ -158,7 +157,7 @@ Windows support is in progress.
   - reduced, reduced?
   - with-local-vars, var-set, find-var, alter-var-root, declare, binding, with-bindings
   - sequence, subseq, rsubseq
-  - make-hierarchy, ancestors, supers, bases
+  - make-hierarchy, ancestors, supers, bases, underive
   - select-keys
   - bound?
   - random-uuid
@@ -168,9 +167,10 @@ Windows support is in progress.
   - pop!, conj!, persistent!
   - fnil
   - trampoline
+  - unchecked-byte, unchecked-short, unchecked-char, unchecked-int, unchecked-long, unchecked-float, unchecked-double
   - vary-meta, alter-meta!, reset-meta!
   - aset-char, aset-long, amap, areduce, to-array-2d, make-array, long-array, bytes?
-  - remove-ns, create-ns, ns-imports, ns-interns, ns-refers, ns-publics, ns-aliases, ns-name, all-ns, ns-unalias, ns-unmap, import, ns, require
+  - remove-ns, create-ns, ns-imports, ns-interns, ns-refers, ns-publics, ns-aliases, ns-name, all-ns, ns-unalias, ns-unmap, import, ns
   - find-keyword
 - clojure.java.io
   - resource

@@ -3937,6 +3937,11 @@ static inline nanoclj_val_t def_symbol_from_sv(nanoclj_t * sc, uint16_t t, strvi
   return x;
 }
 
+static inline nanoclj_val_t def_alias(nanoclj_t * sc, nanoclj_val_t v) {
+  symbol_t * s = decode_symbol(v);
+  return def_symbol_from_sv(sc, T_ALIAS, (strview_t){ 0, 0 }, s->name);
+}
+
 static inline nanoclj_val_t def_keyword(nanoclj_t * sc, const char *name) {
   return def_symbol_from_sv(sc, T_KEYWORD, mk_strview(0), mk_strview(name));
 }
@@ -8758,8 +8763,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_IS:
     if (!unpack_args_1(sc, &arg0)) {
       return false;
-    }
-    if (is_true(arg0)) {
+    } else if (is_true(arg0)) {
       sc->tests_passed++;
     } else {
       sc->tests_failed++;
@@ -8767,7 +8771,28 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     s_return(sc, arg0);
 
   case OP_REQUIRE:
-    s_return(sc, mk_nil());
+    if (!unpack_args_1(sc, &arg0)) {
+      return false;
+    } else {
+      nanoclj_val_t ns_sym = mk_nil(), alias_sym = mk_nil();
+      if (is_symbol(arg0)) {
+	ns_sym = alias_sym = arg0;
+      } else if (is_vector(arg0)) {
+	nanoclj_cell_t * vec = decode_pointer(arg0);
+	if (get_size(vec) == 3 && get_indexed_value(vec, 1).as_long == sc->AS.as_long) {
+	  ns_sym = get_indexed_value(vec, 0);
+	  alias_sym = get_indexed_value(vec, 2);
+	}
+      }
+      if (!is_nil(ns_sym)) {
+	nanoclj_val_t ns = resolve_value(sc, sc->envir, ns_sym);
+	intern_with_meta(sc, sc->current_ns, def_alias(sc, alias_sym), ns, NULL);
+	s_return(sc, mk_nil());
+      }
+    }
+    nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Invalid arguments")));
+    return false;
+    
 
   case OP_SET_COLOR:
     if (!unpack_args_1_plus(sc, &arg0, &arg_next)) {

@@ -1,3 +1,5 @@
+(in-ns 'clojure.test)
+
 (def-macro (is arg)
   `(let ((r ,arg))
      (when-not r

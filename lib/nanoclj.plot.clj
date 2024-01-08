@@ -1,3 +1,5 @@
+(in-ns 'nanoclj.plot)
+
 (def ^:private plot-colors '([0 0.4470 0.7410]
                              [0.8500 0.3250 0.0980]
                              [0.9290 0.6940 0.1250]
@@ -19,14 +21,6 @@
                                       :box [ 0.6 0.6 0.6 ]
                                       :grid [ 0.7 0.7 0.7 ]
                                       :bg [ 1 1 1 ] } })
-
-(def-macro (with-out new-out & body)
-  `(let ((prev-out *out*)
-         (tmp ,new-out))
-     (set! *out* tmp)
-     ,@body
-     (set! *out* prev-out)
-     tmp))
 
 (defn linspace
   "Creates an evenly spaced vector from a to b with n points"
