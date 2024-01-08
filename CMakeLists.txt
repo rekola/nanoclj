@@ -79,6 +79,35 @@ else()
   include_directories(${CURL_INCLUDE_DIR})
 endif()
 
+install(TARGETS nanoclj RUNTIME DESTINATION bin)
+install(FILES lib/init.clj
+	      lib/bootstrap.clj
+	      lib/clojure.core.clj
+	      lib/clojure.java.io.clj
+	      lib/clojure.java.shell.clj
+	      lib/clojure.repl.clj
+	      lib/clojure.string.clj
+	      lib/clojure.instant.clj
+	      lib/clojure.test.clj
+	      lib/java.lang.Object.clj
+	      lib/java.lang.Float.clj
+	      lib/java.lang.Double.clj
+	      lib/java.lang.Boolean.clj
+	      lib/java.lang.Byte.clj
+	      lib/java.lang.Short.clj
+	      lib/java.lang.Integer.clj
+	      lib/java.lang.Long.clj
+	      lib/java.lang.String.clj
+	      lib/java.util.Date.clj
+	      lib/nanoclj.core.Codepoint.clj
+	      lib/nanoclj.core.Tensor.clj
+	      lib/nanoclj.plot.clj
+	      lib/nanoclj.graph.clj
+	      lib/nanoclj.image.clj
+	      lib/nanoclj.audio.clj
+	      lib/nanoclj.art.clj
+        DESTINATION share/nanoclj)
+
 configure_file(lib/init.clj init.clj @ONLY)
 configure_file(lib/bootstrap.clj bootstrap.clj @ONLY)
 configure_file(lib/clojure.core.clj clojure.core.clj @ONLY)
