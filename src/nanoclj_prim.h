@@ -23,6 +23,7 @@
 #define SIGNATURE_PROC		SIGNATURE(4)
 #define SIGNATURE_KEYWORD	SIGNATURE(5)
 #define SIGNATURE_SYMBOL	SIGNATURE(6)
+#define SIGNATURE_ALIAS		SIGNATURE(7)
 
 /* Predefined primitive values */
 #define kNIL	UINT64_C(0xffffffffffffffff)
@@ -99,6 +100,10 @@ static inline nanoclj_val_t mk_keyword_pointer(void * ptr) {
   return (nanoclj_val_t)(SIGNATURE_KEYWORD | (uint64_t)ptr);
 }
 
+static inline nanoclj_val_t mk_alias_pointer(void * ptr) {
+  return (nanoclj_val_t)(SIGNATURE_ALIAS | (uint64_t)ptr);
+}
+
 static inline nanoclj_val_t mk_list(const nanoclj_cell_t * ptr) {
   return ptr ? mk_pointer(ptr) : mk_emptylist();
 }
@@ -118,6 +123,10 @@ static inline bool is_cell(nanoclj_val_t v) {
 
 static inline bool is_symbol(nanoclj_val_t v) {
   return (v.as_long & MASK_SIGNATURE) == SIGNATURE_SYMBOL;
+}
+
+static inline bool is_alias(nanoclj_val_t v) {
+  return (v.as_long & MASK_SIGNATURE) == SIGNATURE_ALIAS;
 }
 
 static inline bool is_keyword(nanoclj_val_t v) {

@@ -928,4 +928,4 @@
 
 (defn alias
   "Adds an alias in the current namespace to another namespace"
-  [alias-sym ns-sym] (intern *ns* alias-sym (the-ns ns-sym)))
+  [alias-sym ns-sym] (intern *ns* (Alias alias-sym) (the-ns ns-sym)))

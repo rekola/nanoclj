@@ -124,7 +124,6 @@ typedef struct nanoclj_cell_t nanoclj_cell_t;
 
     bool (*is_macro) (nanoclj_val_t p);
     bool (*is_mapentry) (nanoclj_val_t p);
-    bool (*is_environment) (nanoclj_val_t p);
     nanoclj_val_t (*eval_string) (nanoclj_t * sc, const char *input, size_t len);
     nanoclj_val_t (*def_symbol) (nanoclj_t * sc, const char *name);
   };

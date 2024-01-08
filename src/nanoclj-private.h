@@ -298,7 +298,6 @@ extern "C" {
   nanoclj_val_t closure_code(nanoclj_val_t p);
   nanoclj_val_t closure_env(nanoclj_val_t p);
 
-  int is_environment(nanoclj_val_t p);
 #endif
 
 #ifdef __cplusplus

@@ -140,7 +140,7 @@ Windows support is in progress.
 - Locals cleaning
 - Multithreading, transactions, STM and locking
 - Pre- and post-conditions for functions
-- Namespace import and aliases
+- Namespace import
 - Readers and Writers do not accept options such as :encoding or :append
 - Associative destructuring
 - Map namespace syntax

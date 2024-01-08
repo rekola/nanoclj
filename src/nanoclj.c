@@ -149,33 +149,34 @@ enum nanoclj_types {
   T_PROC = 10,
   T_KEYWORD = 11,
   T_SYMBOL = 12,
-  T_LIST = 13,
-  T_STRING = 14,
-  T_CLOSURE = 15,
-  T_RECUR_CLOSURE = 16,
-  T_RATIO = 17,
-  T_FOREIGN_FUNCTION = 18,
-  T_READER = 19,
-  T_WRITER = 20,
-  T_INPUT_STREAM = 21,
-  T_OUTPUT_STREAM = 22,
-  T_GZIP_INPUT_STREAM = 23,
-  T_GZIP_OUTPUT_STREAM = 24,
-  T_VECTOR = 25,
-  T_MACRO = 26,
-  T_LAZYSEQ = 27,
-  T_ENVIRONMENT = 28,
-  T_CLASS = 29,
-  T_MAPENTRY = 30,
-  T_ARRAYMAP = 31,
-  T_HASHMAP = 32,
-  T_SORTED_HASHMAP = 33,
-  T_VARMAP = 34,
-  T_HASHSET = 35,
-  T_SORTED_HASHSET = 36,
-  T_VAR = 37,
-  T_FOREIGN_OBJECT = 38,
-  T_BIGINT = 39,
+  T_ALIAS = 13,
+  T_LIST = 14,
+  T_STRING = 15,
+  T_CLOSURE = 16,
+  T_RECUR_CLOSURE = 17,
+  T_RATIO = 18,
+  T_FOREIGN_FUNCTION = 19,
+  T_READER = 20,
+  T_WRITER = 21,
+  T_INPUT_STREAM = 22,
+  T_OUTPUT_STREAM = 23,
+  T_GZIP_INPUT_STREAM = 24,
+  T_GZIP_OUTPUT_STREAM = 25,
+  T_VECTOR = 26,
+  T_MACRO = 27,
+  T_LAZYSEQ = 28,
+  T_NAMESPACE = 29,
+  T_CLASS = 30,
+  T_MAPENTRY = 31,
+  T_ARRAYMAP = 32,
+  T_HASHMAP = 33,
+  T_SORTED_HASHMAP = 34,
+  T_VARMAP = 35,
+  T_HASHSET = 36,
+  T_SORTED_HASHSET = 37,
+  T_VAR = 38,
+  T_FOREIGN_OBJECT = 39,
+  T_BIGINT = 40,
   T_REGEX = 41,
   T_DELAY = 42,
   T_IMAGE = 43,
@@ -210,7 +211,7 @@ typedef struct {
   int_fast16_t syntax;
   strview_t ns, name, full_name;
   uint32_t hash;
-  nanoclj_val_t ns_sym, name_sym;
+  nanoclj_val_t ns_sym, ns_alias, name_sym;
   bool is_amp_qualified;
 } symbol_t;
 
@@ -246,6 +247,7 @@ static uint_fast16_t prim_type_extended(nanoclj_val_t value) {
   case SIGNATURE_PROC: return T_PROC;
   case SIGNATURE_KEYWORD: return T_KEYWORD;
   case SIGNATURE_SYMBOL: return T_SYMBOL;
+  case SIGNATURE_ALIAS: return T_ALIAS;
   }
   return T_DOUBLE;
 }
@@ -261,6 +263,7 @@ static uint_fast16_t prim_type(nanoclj_val_t value) {
   case SIGNATURE_PROC: return T_PROC;
   case SIGNATURE_KEYWORD: return T_KEYWORD;
   case SIGNATURE_SYMBOL: return T_SYMBOL;
+  case SIGNATURE_ALIAS: return T_ALIAS;
   }
   return T_DOUBLE;
 }
@@ -327,9 +330,14 @@ static inline nanoclj_val_t mk_symbol(nanoclj_t * sc, uint16_t t, strview_t ns, 
   s->full_name = (strview_t){ full_name_str, full_name_size };
   s->syntax = syntax;
   s->hash = murmur3_hash_qualified_string(ns.ptr, ns.size, name.ptr, name.size);
-  s->ns_sym = s->name_sym = mk_nil();
+  s->ns_sym = s->ns_alias = s->name_sym = mk_nil();
 
-  return t == T_SYMBOL ? mk_symbol_pointer(s) : mk_keyword_pointer(s);
+  switch (t) {
+  case T_SYMBOL: return mk_symbol_pointer(s);
+  case T_KEYWORD: return mk_keyword_pointer(s);
+  case T_ALIAS: return mk_alias_pointer(s);
+  default: return mk_nil();
+  }
 }
 
 static inline void free_symbol(symbol_t * s) {
@@ -479,7 +487,7 @@ static inline bool is_seqable_type(uint_fast16_t t) {
   case T_TABLE:
   case T_GRADIENT:
   case T_SHAPE:
-  case T_ENVIRONMENT:
+  case T_NAMESPACE:
   case T_TENSOR:
     return true;
   }
@@ -770,7 +778,7 @@ static inline nanoclj_cell_t * get_metadata(nanoclj_cell_t * c) {
   case T_CLOSURE:
   case T_MACRO:
   case T_CLASS:
-  case T_ENVIRONMENT:
+  case T_NAMESPACE:
   case T_SYMBOL:
     return _cons_metadata(c);
   case T_FOREIGN_FUNCTION:
@@ -794,7 +802,7 @@ static inline void set_metadata(nanoclj_cell_t * c, nanoclj_cell_t * meta) {
   case T_CLOSURE:
   case T_MACRO:
   case T_CLASS:
-  case T_ENVIRONMENT:
+  case T_NAMESPACE:
   case T_SYMBOL:
     _cons_metadata(c) = meta;
     break;
@@ -1120,7 +1128,8 @@ static inline comparison_class_t get_comparison_class(nanoclj_val_t v) {
   case T_EMPTYLIST: return comp_emptylist;
   case T_CODEPOINT: return comp_codepoint;
   case T_KEYWORD: return comp_keyword;
-  case T_SYMBOL: return comp_symbol;
+  case T_SYMBOL:
+  case T_ALIAS: return comp_symbol;
   case T_BOOLEAN: return comp_bool;
   case T_DOUBLE:
   case T_LONG:
@@ -1193,10 +1202,11 @@ static inline nanoclj_cell_t * closure_env(nanoclj_cell_t * p) {
   return _cdr(p);
 }
 
-static inline bool is_environment(nanoclj_val_t p) {
+/* Returns true if p is a namespace or class */
+static inline bool is_namespace(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
   const nanoclj_cell_t * c = decode_pointer(p);
-  return _type(c) == T_ENVIRONMENT || _type(c) == T_CLASS;
+  return _type(c) == T_NAMESPACE || _type(c) == T_CLASS;
 }
 
 /* true or false value functions */
@@ -1277,6 +1287,7 @@ static inline strview_t to_strview(nanoclj_val_t x) {
     return decode_integer(x) == 0 ? (strview_t){ "false", 5 } : (strview_t){ "true", 4 };
   case T_SYMBOL:
   case T_KEYWORD:
+  case T_ALIAS:
     return decode_symbol(x)->full_name;
   case T_PROC:
     return mk_strview(dispatch_table[decode_integer(x)].name);
@@ -2593,8 +2604,8 @@ static inline nanoclj_cell_t * rest(nanoclj_t * sc, nanoclj_cell_t * coll) {
     switch (typ) {
     case T_LIST:
     case T_LAZYSEQ:
-    case T_ENVIRONMENT:
     case T_CLASS:
+    case T_NAMESPACE:
       return _cdr_unchecked(coll);
     case T_VECTOR:
     case T_ARRAYMAP:
@@ -2683,10 +2694,10 @@ static inline nanoclj_val_t first(nanoclj_t * sc, nanoclj_cell_t * coll) {
   switch (t) {
   case T_CLOSURE:
   case T_MACRO:
-  case T_ENVIRONMENT:
   case T_LIST:
   case T_LAZYSEQ:
   case T_CLASS:
+  case T_NAMESPACE:
     return _car_unchecked(coll);
   case T_VECTOR:
   case T_MAPENTRY:
@@ -2785,7 +2796,7 @@ static inline size_t count(nanoclj_t * sc, nanoclj_cell_t * coll) {
   switch (_type(coll)) {
   case T_LIST:
   case T_LAZYSEQ:
-  case T_ENVIRONMENT:
+  case T_NAMESPACE:
   case T_CLASS:
 #if 1
     {
@@ -2940,6 +2951,7 @@ static uint32_t hasheq(nanoclj_val_t v, void * d) {
 
   case T_SYMBOL:
   case T_KEYWORD:
+  case T_ALIAS:
     return decode_symbol(v)->hash;
     
   case T_CELL:
@@ -3161,13 +3173,14 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
     case T_CLOSURE:
     case T_LAZYSEQ:
     case T_MACRO:
-    case T_ENVIRONMENT:
       if (equals(sc, _car_unchecked(a), _car_unchecked(b))) {
 	return equals(sc, mk_pointer(_cdr_unchecked(a)), mk_pointer(_cdr_unchecked(b)));
       }
       break;
     case T_CLASS:
       return a->type == b->type;
+    case T_NAMESPACE:
+      return false;
     case T_BIGINT:
       return bigint_eq(_to_bigintview(a), _to_bigintview(b));
     case T_RATIO:
@@ -3796,7 +3809,7 @@ static inline void new_frame_in_env(nanoclj_t * sc, nanoclj_cell_t * old_env) {
 #else
   nanoclj_val_t coll = mk_emptylist();
 #endif
-  sc->envir = get_cell(sc, T_ENVIRONMENT, 0, coll, old_env, NULL);
+  sc->envir = get_cell(sc, T_LIST, 0, coll, old_env, NULL);
 }
 
 static inline void new_var_in_ns(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t variable, nanoclj_val_t value, nanoclj_cell_t * meta) {
@@ -3916,6 +3929,7 @@ static inline nanoclj_val_t def_symbol_from_sv(nanoclj_t * sc, uint16_t t, strvi
     if (ns.size || t == T_KEYWORD) {
       symbol_t * s = decode_symbol(x);
       s->ns_sym = def_symbol_from_sv(sc, T_SYMBOL, mk_strview(0), ns);
+      s->ns_alias = def_symbol_from_sv(sc, T_ALIAS, mk_strview(0), ns);
       s->name_sym = def_symbol_from_sv(sc, T_SYMBOL, mk_strview(0), name);
     }
   }
@@ -4024,7 +4038,7 @@ static inline nanoclj_val_t def_symbol_or_keyword(nanoclj_t * sc, const char *na
 
 static inline nanoclj_cell_t * def_namespace_with_sym(nanoclj_t *sc, nanoclj_val_t sym, nanoclj_cell_t * md) {
   nanoclj_cell_t * s = get_vector_object(sc, T_VARMAP, 0);
-  nanoclj_cell_t * ns = get_cell(sc, T_ENVIRONMENT, 0, mk_pointer(s), sc->root_ns, md);
+  nanoclj_cell_t * ns = get_cell(sc, T_NAMESPACE, 0, mk_pointer(s), sc->root_ns, md);
 
   if (sc->current_ns) {
     intern_with_meta(sc, sc->current_ns, sym, mk_pointer(ns), md);
@@ -5156,7 +5170,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
 	}
       }
 	break;
-      case T_ENVIRONMENT:{
+      case T_NAMESPACE:{
 	nanoclj_val_t name_v;
 	if (get_elem(sc, _cons_metadata(c), sc->NAME, &name_v)) {
 	  sv = to_strview(name_v);
@@ -5415,14 +5429,14 @@ static inline valarrayview_t resolve(nanoclj_t * sc, nanoclj_cell_t * env0, nano
   nanoclj_val_t sym;
   bool all_namespaces = true;
   if (s->ns.size) {
-    valarrayview_t c = find_slot_in_env(sc, env0, s->ns_sym, true);
+    valarrayview_t c = find_slot_in_env(sc, env0, s->ns_alias, true);
+    if (!c.ptr) c = find_slot_in_env(sc, env0, s->ns_sym, true);
     if (c.ptr) {
       env = decode_pointer(slot_value_in_env(c));
       sym = s->name_sym;
       all_namespaces = false;
     } else {
-      symbol_t * s2 = decode_symbol(s->ns_sym);
-      nanoclj_val_t msg = mk_string_fmt(sc, "%.*s is not defined", s2->name.size, s2->name.ptr);
+      nanoclj_val_t msg = mk_string_fmt(sc, "%.*s is not defined", s->ns.size, s->ns.ptr);
       nanoclj_throw(sc, mk_runtime_exception(sc, msg));
       return (valarrayview_t){ NULL, 0 };
     }
@@ -5719,6 +5733,10 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
         
   case T_SYMBOL:
   case T_KEYWORD:
+  case T_ALIAS:
+    if (!args) {
+      return nanoclj_throw(sc, mk_arity_exception(sc, count(sc, args), mk_nil(), mk_nil()));
+    }
     x = first(sc, args);
     args = next(sc, args);
     if (args) {
@@ -5887,7 +5905,7 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
 	}
       }
     }
-    nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Invalid arguments for tensor")));
+    nanoclj_throw(sc, mk_illegal_arg_exception(sc, "Invalid arguments for tensor"));
     break;
 
   case T_GRADIENT:
@@ -6559,7 +6577,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       }
 
       /* Create env frame for the closure, and add recursion point and anonymous fn name */
-      nanoclj_cell_t * env = get_cell(sc, T_ENVIRONMENT, 0, mk_emptylist(), sc->envir, NULL);
+      nanoclj_cell_t * env = get_cell(sc, T_LIST, 0, mk_emptylist(), sc->envir, NULL);
       if (!is_nil(name)) {
 	new_slot_spec_in_env(sc, env, name, mk_pointer(get_cell(sc, T_CLOSURE, 0, x, env, NULL)));
       }
@@ -6575,9 +6593,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_INTERN:
     if (!unpack_args_2_plus(sc, &arg0, &arg1, &arg_next)) {
       return false;
-    } else if (!is_environment(arg0) || !is_symbol(arg1)) {
-      Error_0(sc, "Invalid types");
-    } else { /* arg0: namespace, arg1: symbol */
+    } else if (is_namespace(arg0) && (is_symbol(arg1) || is_alias(arg1))) {
+      /* arg0: namespace, arg1: symbol */
       nanoclj_cell_t * ns = decode_pointer(arg0);
       nanoclj_cell_t * meta = update_meta_from_reader(sc, mk_hashmap(sc), tensor_peek(sc->load_stack));
       meta = assoc(sc, meta, sc->NAME, arg1);
@@ -6589,7 +6606,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       }
       s_return(sc, mk_pointer(get_var_in_env(sc, ns, arg1, false)));
     }
-    
+    nanoclj_throw(sc, mk_illegal_arg_exception(sc, "Invalid arguments for tensor"));
+    return false;
+
   case OP_DEF0:{                /* define */
     nanoclj_cell_t * code = decode_pointer(sc->code);
     x = first(sc, code);
@@ -6692,7 +6711,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     nanoclj_val_t x = mk_pointer(body);
     
     /* Create env frame for the closure, and add recursion point and anonymous fn name */
-    nanoclj_cell_t * env = get_cell(sc, T_ENVIRONMENT, 0, mk_emptylist(), sc->envir, NULL);
+    nanoclj_cell_t * env = get_cell(sc, T_LIST, 0, mk_emptylist(), sc->envir, NULL);
     new_slot_spec_in_env(sc, env, sc->RECUR, mk_pointer(get_cell(sc, T_RECUR_CLOSURE, 0, x, env, NULL)));
     
     sc->code = mk_pointer(cons(sc, mk_pointer(get_cell(sc, T_CLOSURE, 0, x, env, NULL)), values));
@@ -7911,7 +7930,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       return false;
     } else if (is_cell(arg0)) {
       nanoclj_cell_t * c = decode_pointer(arg0);
-      switch (c->type) {
+      switch (_type(c)) {
       case T_DELAY:
 	if (!_is_realized(c)) {
 	  /* Should change type to closure here */
@@ -8612,7 +8631,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       nanoclj_cell_t * c = decode_pointer(arg0);
       uint_fast16_t t = _type(c);
       if (t == T_VAR || t == T_LIST || t == T_CLOSURE || t == T_MACRO ||
-	  t == T_CLASS || t == T_ENVIRONMENT || t == T_FOREIGN_FUNCTION || t == T_IMAGE) {
+	  t == T_CLASS || t == T_NAMESPACE || t == T_FOREIGN_FUNCTION || t == T_IMAGE) {
 	nanoclj_cell_t * new_c = get_cell_x(sc, T_NIL, T_GC_ATOM, NULL, NULL, NULL);
 	memcpy(new_c, c, sizeof(nanoclj_cell_t));
 	set_metadata(new_c, decode_pointer(arg1));
@@ -9221,8 +9240,7 @@ static struct nanoclj_interface vtbl = {
   is_keyword,
 
   is_macro,
-  is_mapentry,  
-  is_environment,
+  is_mapentry,
   
   nanoclj_eval_string,
   def_symbol
@@ -9529,12 +9547,13 @@ bool nanoclj_init(nanoclj_t * sc) {
   mk_class(sc, "clojure.lang.PersistentTreeMap", T_SORTED_HASHMAP, APersistentMap);
   mk_class(sc, "clojure.lang.Symbol", T_SYMBOL, AFn);
   mk_class(sc, "clojure.lang.Keyword", T_KEYWORD, AFn); /* non-standard parent */
+  mk_class(sc, "clojure.lang.Alias", T_ALIAS, AFn);
   mk_class(sc, "clojure.lang.BigInt", T_BIGINT, Number);
   mk_class(sc, "clojure.lang.Ratio", T_RATIO, Number);
   mk_class(sc, "clojure.lang.Delay", T_DELAY, sc->Object);
   mk_class(sc, "clojure.lang.LazySeq", T_LAZYSEQ, Obj);
   mk_class(sc, "clojure.lang.Cons", T_LIST, ASeq);
-  mk_class(sc, "clojure.lang.Namespace", T_ENVIRONMENT, AReference);
+  mk_class(sc, "clojure.lang.Namespace", T_NAMESPACE, AReference);
   mk_class(sc, "clojure.lang.Var", T_VAR, AReference);
   mk_class(sc, "clojure.lang.MapEntry", T_MAPENTRY, PersistentVector);
   nanoclj_cell_t * PersistentQueue = mk_class(sc, "clojure.lang.PersistentQueue", T_QUEUE, Obj);
