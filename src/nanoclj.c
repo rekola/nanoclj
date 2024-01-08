@@ -899,6 +899,7 @@ static inline bool convert_to_long(nanoclj_val_t p, long long * l) {
     *l = decode_integer(p);
     return true;
   case T_DOUBLE:
+    if (p.as_double < LLONG_MIN || p.as_double > LLONG_MAX) return false;
     *l = (long long)p.as_double;
     return true;
   case T_CELL:
@@ -2008,8 +2009,8 @@ static inline nanoclj_cell_t * mk_arity_exception(nanoclj_t * sc, int n_args, na
   return get_cell(sc, T_ARITY_EXCEPTION, 0, msg, NULL, NULL);
 }
 
-static inline nanoclj_cell_t * mk_illegal_arg_exception(nanoclj_t * sc, const char * msg) {
-  return get_cell(sc, T_ILLEGAL_ARG_EXCEPTION, 0, mk_string(sc, msg), NULL, NULL);
+static inline nanoclj_cell_t * mk_illegal_arg_exception(nanoclj_t * sc, nanoclj_val_t msg) {
+  return get_cell(sc, T_ILLEGAL_ARG_EXCEPTION, 0, msg, NULL, NULL);
 }
 
 static inline nanoclj_cell_t * mk_number_format_exception(nanoclj_t * sc, nanoclj_val_t msg) {
@@ -4481,7 +4482,7 @@ static inline nanoclj_cell_t * mk_reader(nanoclj_t * sc, uint16_t t, nanoclj_cel
 	  return c;
 	}
       default:
-	nanoclj_throw(sc, mk_illegal_arg_exception(sc, "Invalid arguments for Reader"));
+	nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Invalid arguments for Reader")));
       }
     }
   }
@@ -5647,15 +5648,21 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
       long long l;
       if (convert_to_long(first(sc, args), &l)) {
 	switch (t) {
-	case T_BYTE: return mk_byte(l);
-	case T_SHORT: return mk_short(l);
-	case T_INTEGER: return mk_int(l);
-	case T_LONG: return mk_long(sc, l);
+	case T_BYTE:
+	  if (l >= INT8_MIN && l <= INT8_MAX) return mk_byte(l);
+	  break;
+	case T_SHORT:
+	  if (l >= INT16_MIN && l <= INT16_MAX) return mk_short(l);
+	  break;
+	case T_INTEGER:
+	  if (l >= INT32_MIN && l <= INT32_MAX) return mk_int(l);
+	  break;
+	case T_LONG:
+	  return mk_long(sc, l);
 	}
-      } else {
-	nanoclj_throw(sc, mk_number_format_exception(sc, mk_string(sc, "Unable to convert to Number")));
-	return mk_nil();
+	return nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string_fmt(sc, "Value out of range: %lld", l)));
       }
+      return nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Invalid arguments for primitive")));
     }
 
   case T_DATE:
@@ -5703,7 +5710,7 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
   case T_CODEPOINT:
     i = to_int(first(sc, args));
     if (i <= 0 || i > 0x10ffff) {
-      return nanoclj_throw(sc, mk_illegal_arg_exception(sc, "Invalid codepoint"));
+      return nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Invalid codepoint")));
     } else {
       return mk_codepoint(i);
     }
@@ -5905,7 +5912,7 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
 	}
       }
     }
-    nanoclj_throw(sc, mk_illegal_arg_exception(sc, "Invalid arguments for tensor"));
+    nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Invalid arguments for tensor")));
     break;
 
   case T_GRADIENT:
@@ -6606,7 +6613,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       }
       s_return(sc, mk_pointer(get_var_in_env(sc, ns, arg1, false)));
     }
-    nanoclj_throw(sc, mk_illegal_arg_exception(sc, "Invalid arguments for tensor"));
+    nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Invalid arguments for tensor")));
     return false;
 
   case OP_DEF0:{                /* define */
@@ -7682,7 +7689,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       nanoclj_throw(sc, sc->NullPointerException);
       return false;
     } else {
-      nanoclj_throw(sc, mk_illegal_arg_exception(sc, "Invalid argument for -slice"));
+      nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Invalid argument for -slice")));
       return false;
     }
     
@@ -7764,7 +7771,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	s_return(sc, mk_long(sc, to_long(arg0) & to_long(arg1)));
       }
     }
-    nanoclj_throw(sc, mk_illegal_arg_exception(sc, "Invalid arguments for -bit-and"));
+    nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Invalid arguments for -bit-and")));
     return false;
 
   case OP_BIT_OR:
@@ -7781,7 +7788,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	s_return(sc, mk_long(sc, to_long(arg0) | to_long(arg1)));
       }
     }
-    nanoclj_throw(sc, mk_illegal_arg_exception(sc, "Invalid arguments for -bit-or"));
+    nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Invalid arguments for -bit-or")));
     return false;
 
   case OP_BIT_XOR:
@@ -7916,7 +7923,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	}
       }
     }
-    nanoclj_throw(sc, mk_illegal_arg_exception(sc, "Invalid argument types"));
+    nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Invalid argument types")));
     return false;
 
   case OP_IDENTICALP:                  /* identical? */
@@ -7977,7 +7984,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     } else {
       x = get_out_port(sc);
       if (!is_writer(x)) {
-	nanoclj_throw(sc, mk_illegal_arg_exception(sc, "Not a Writer"));
+	nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Not a Writer")));
 	return false;
       } else {
 	print_primitive(sc, arg0, op == OP_PR, decode_pointer(x));
@@ -8000,7 +8007,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	s_return(sc, mk_nil());
       }
     }
-    nanoclj_throw(sc, mk_illegal_arg_exception(sc, "Not a Writer"));
+    nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Not a Writer")));
     return false;
 
   case OP_FORMAT:
@@ -8688,7 +8695,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	}
       }
     }
-    nanoclj_throw(sc, mk_illegal_arg_exception(sc, "Invalid argument types"));
+    nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Invalid argument types")));
     return false;
 
   case OP_ADD_WATCH:
@@ -8733,7 +8740,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       x = decode_symbol(arg0)->ns_sym;
       s_return(sc, is_nil(x) ? x : mk_string_from_sv(sc, to_strview(x))); 
     } else {
-      nanoclj_throw(sc, mk_illegal_arg_exception(sc, "Invalid argument"));
+      nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Invalid argument")));
       return false;
     }
     
@@ -8771,7 +8778,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     } else {
       x = get_out_port(sc);
       if (!is_writer(x)) {
-	nanoclj_throw(sc, mk_illegal_arg_exception(sc, "Not a Writer"));
+	nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Not a Writer")));
 	return false;
       } else if (type(arg0) == T_GRADIENT) {
 	set_linear_gradient(sc, get_tensor(decode_pointer(arg0)), decode_pointer(first(sc, arg_next)), decode_pointer(second(sc, arg_next)), x);
