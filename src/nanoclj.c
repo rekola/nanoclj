@@ -7707,7 +7707,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     s_retbool(is_false(arg0));
     
   case OP_EQUIV:                  /* equiv */
-    if (!unpack_args_2(sc, &arg0, &arg1)) {
+    if (!unpack_args_2_not_nil(sc, &arg0, &arg1)) {
       return false;
     } else if (!is_number(arg0) || !is_number(arg1)) {
       nanoclj_throw(sc, mk_class_cast_exception(sc, "Argument cannot be cast to java.lang.Number"));
@@ -7719,40 +7719,44 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
     
   case OP_LT:                  /* lt */
-    if (!unpack_args_2(sc, &arg0, &arg1)) {
+    if (!unpack_args_2_not_nil(sc, &arg0, &arg1)) {
       return false;
-    } else if (!is_comparable(arg0, arg1)) {
-      Error_0(sc, "Cannot compare types");
+    } else if (!is_number(arg0) || !is_number(arg1)) {
+      nanoclj_throw(sc, mk_class_cast_exception(sc, "Argument cannot be cast to java.lang.Number"));
+      return false;
     } else if (arg0.as_long == kNAN || arg1.as_long == kNAN) {
       s_retbool(false);
     }
     s_retbool(compare(arg0, arg1) < 0);
 
   case OP_GT:                  /* gt */
-    if (!unpack_args_2(sc, &arg0, &arg1)) {
+    if (!unpack_args_2_not_nil(sc, &arg0, &arg1)) {
       return false;
-    } else if (!is_comparable(arg0, arg1)) {
-      Error_0(sc, "Cannot compare types");
+    } else if (!is_number(arg0) || !is_number(arg1)) {
+      nanoclj_throw(sc, mk_class_cast_exception(sc, "Argument cannot be cast to java.lang.Number"));
+      return false;
     } else if (arg0.as_long == kNAN || arg1.as_long == kNAN) {
       s_retbool(false);
     }
     s_retbool(compare(arg0, arg1) > 0);
   
   case OP_LE:                  /* le */
-    if (!unpack_args_2(sc, &arg0, &arg1)) {
+    if (!unpack_args_2_not_nil(sc, &arg0, &arg1)) {
       return false;
-    } else if (!is_comparable(arg0, arg1)) {
-      Error_0(sc, "Cannot compare types");
+    } else if (!is_number(arg0) || !is_number(arg1)) {
+      nanoclj_throw(sc, mk_class_cast_exception(sc, "Argument cannot be cast to java.lang.Number"));
+      return false;
     } else if (arg0.as_long == kNAN || arg1.as_long == kNAN) {
       s_retbool(false);
     }
     s_retbool(compare(arg0, arg1) <= 0);
 
   case OP_GE:                  /* ge */
-    if (!unpack_args_2(sc, &arg0, &arg1)) {
+    if (!unpack_args_2_not_nil(sc, &arg0, &arg1)) {
       return false;
-    } else if (!is_comparable(arg0, arg1)) {
-      Error_0(sc, "Cannot compare types");
+    } else if (!is_number(arg0) || !is_number(arg1)) {
+      nanoclj_throw(sc, mk_class_cast_exception(sc, "Argument cannot be cast to java.lang.Number"));
+      return false;
     } else if (arg0.as_long == kNAN || arg1.as_long == kNAN) {
       s_retbool(false);
     }
@@ -7767,16 +7771,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_BIT_AND:
     if (!unpack_args_2_not_nil(sc, &arg0, &arg1)) {
       return false;
-    } else {
-      uint16_t tx = type(arg0), ty = type(arg1);
-      if (tx == T_BIGINT && ty == T_BIGINT) {
-	bigintview_t a = to_bigintview(arg0), b = to_bigintview(arg1);
-	nanoclj_tensor_t * t = bigintview_to_tensor(a);
-	bigint_mutate_and(t, b);
-	s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, 1, t)));
-      } else if (is_int_type(tx) && is_int_type(ty)) {
-	s_return(sc, mk_long(sc, to_long(arg0) & to_long(arg1)));
-      }
+    } else if (is_int_type(type(arg0)) && is_int_type(type(arg1))) {
+      s_return(sc, mk_long(sc, to_long(arg0) & to_long(arg1)));
     }
     nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Invalid arguments for -bit-and")));
     return false;
@@ -7784,16 +7780,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_BIT_OR:
     if (!unpack_args_2_not_nil(sc, &arg0, &arg1)) {
       return false;
-    } else {
-      uint16_t tx = type(arg0), ty = type(arg1);
-      if (tx == T_BIGINT && ty == T_BIGINT) {
-	bigintview_t a = to_bigintview(arg0), b = to_bigintview(arg1);
-	nanoclj_tensor_t * t = bigintview_to_tensor(a);
-	bigint_mutate_or(t, b);
-	s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, 1, t)));
-      } else if (is_int_type(tx) && is_int_type(ty)) {
-	s_return(sc, mk_long(sc, to_long(arg0) | to_long(arg1)));
-      }
+    } else if (is_int_type(type(arg0)) && is_int_type(type(arg1))) {
+      s_return(sc, mk_long(sc, to_long(arg0) | to_long(arg1)));
     }
     nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Invalid arguments for -bit-or")));
     return false;
@@ -7801,68 +7789,38 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_BIT_XOR:
     if (!unpack_args_2_not_nil(sc, &arg0, &arg1)) {
       return false;
-    } else {
+    } else if (is_int_type(type(arg0)) && is_int_type(type(arg1))) {
       s_return(sc, mk_long(sc, to_long(arg0) ^ to_long(arg1)));
     }
+    nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Invalid arguments for -bit-xor")));
+    return false;
 
   case OP_BIT_SHIFT_LEFT:
     if (!unpack_args_2(sc, &arg0, &arg1)) {
       return false;
-    } else if (is_numeric_type(type(arg1))) {
-      long long n = to_long(arg1);
-      switch (prim_type(arg0)) {
-      case T_NIL:
-	nanoclj_throw(sc, sc->NullPointerException);
-	return false;
-
-      case T_LONG:
-	s_return(sc, mk_long(sc, decode_integer(arg0) << n));
-	
-      case T_CELL:
-	{
-	  nanoclj_cell_t * c = decode_pointer(arg0);
-	  uint16_t ta = _type(c);
-	  if (ta == T_LONG && n < 32) {
-	    long long a = _lvalue_unchecked(c);
-	    if (a <= (LLONG_MAX >> n)) {
-	      s_return(sc, mk_long(sc, a << n));
-	    }
-	  } /* else: auto-promote to bigint */
-	  if (is_numeric_type(ta)) {
-	    bigintview_t a = to_bigintview(arg0);
-	    nanoclj_tensor_t * t = bigintview_to_tensor(a);
-	    tensor_mutate_lshift(t, n);
-	    s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, a.sign, t)));
-	  }
-	}
-      }
+    } else if (is_int_type(type(arg0)) && is_int_type(type(arg1))) {
+      s_return(sc, mk_long(sc, to_long(arg0) << to_long(arg1)));
     }
-    nanoclj_throw(sc, mk_class_cast_exception(sc, "Argument cannot be cast to java.lang.Number"));
+    nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Invalid arguments for bit-shift-left")));
+    return false;
 
   case OP_BIT_SHIFT_RIGHT:
     if (!unpack_args_2_not_nil(sc, &arg0, &arg1)) {
       return false;
-    } else {
-      uint16_t tx = type(arg0), ty = type(arg1);
-      if (!is_numeric_type(tx) || !is_numeric_type(ty)) {
-      	nanoclj_throw(sc, mk_class_cast_exception(sc, "Argument cannot be cast to java.lang.Number"));
-	return false;
-      } else if (tx == T_BIGINT) {
-	bigintview_t a = to_bigintview(arg0);
-	nanoclj_tensor_t * t = bigintview_to_tensor(a);
-	tensor_mutate_rshift(t, to_long(arg1));
-	s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, a.sign, t)));
-      } else {
-	s_return(sc, mk_long(sc, to_long(arg0) >> to_long(arg1)));
-      }
+    } else if (is_int_type(type(arg0)) && is_int_type(type(arg1))) {
+      s_return(sc, mk_long(sc, to_long(arg0) >> to_long(arg1)));
     }
+    nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Invalid arguments for bit-shift-right")));
+    return false;
 
   case OP_UNSIGNED_BIT_SHIFT_RIGHT:
     if (!unpack_args_2_not_nil(sc, &arg0, &arg1)) {
       return false;
-    } else {
+    } else if (is_int_type(type(arg0)) && is_int_type(type(arg1))) {
       s_return(sc, mk_long(sc, (unsigned long long)to_long(arg0) >> to_long(arg1)));
     }
+    nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Invalid arguments for unsigned-bit-shift-right")));
+    return false;
     
   case OP_TYPE:                /* type */
   case OP_CLASS:

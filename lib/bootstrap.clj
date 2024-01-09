@@ -313,7 +313,7 @@
 
 (defn bit-xor
   "Returns a bitwise xor"
-  ([x y] (-bot-xor x y))
+  ([x y] (-bit-xor x y))
   ([x y & more] (reduce -bit-xor (-bit-xor x y) args)))
 
 (defn bit-not 
