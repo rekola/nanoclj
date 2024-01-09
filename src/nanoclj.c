@@ -9430,6 +9430,8 @@ bool nanoclj_init(nanoclj_t * sc) {
     return false;
   }
   dump_stack_initialize(sc);
+
+  sc->args = NULL;
   sc->code = mk_emptylist();
 
   /* init sink */
