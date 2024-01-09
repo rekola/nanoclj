@@ -189,7 +189,6 @@ Windows support is in progress.
   - deftest, set-test, with-test
 - clojure.pprint
   - print-table
-- clojure.set
 - clojure.data
 - clojure.walk
 - clojure.zip

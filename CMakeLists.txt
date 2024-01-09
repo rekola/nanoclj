@@ -87,6 +87,7 @@ install(FILES lib/init.clj
 	      lib/clojure.java.shell.clj
 	      lib/clojure.repl.clj
 	      lib/clojure.string.clj
+	      lib/clojure.set.clj
 	      lib/clojure.instant.clj
 	      lib/clojure.test.clj
 	      lib/java.lang.Object.clj
@@ -115,6 +116,7 @@ configure_file(lib/clojure.java.io.clj clojure.java.io.clj @ONLY)
 configure_file(lib/clojure.java.shell.clj clojure.java.shell.clj @ONLY)
 configure_file(lib/clojure.repl.clj clojure.repl.clj @ONLY)
 configure_file(lib/clojure.string.clj clojure.string.clj @ONLY)
+configure_file(lib/clojure.set.clj clojure.set.clj @ONLY)
 configure_file(lib/clojure.instant.clj clojure.instant.clj @ONLY)
 configure_file(lib/clojure.test.clj clojure.test.clj @ONLY)
 configure_file(lib/java.lang.Object.clj java.lang.Object.clj @ONLY)
@@ -138,4 +140,5 @@ configure_file(lib/nanoclj.art.clj nanoclj.art.clj @ONLY)
 configure_file(tests/run.clj tests/run.clj @ONLY)
 configure_file(tests/core.clj tests/core.clj @ONLY)
 configure_file(tests/string.clj tests/string.clj @ONLY)
+configure_file(tests/set.clj tests/set.clj @ONLY)
 configure_file(tests/shell.clj tests/shell.clj @ONLY)
