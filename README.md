@@ -58,14 +58,12 @@ enabled. The following terminals have been tested:
 | GNOME Terminal | None | ? | Sixel support is not enabled by default |
 | mintty | ? | ? | Not tested yet. |
 
-![Plotting from nanoclj](https://user-images.githubusercontent.com/6755525/277504459-737b498e-005b-49ad-92b2-0917a1a10b7e.jpg "Plotting from nanoclj")
+![Plotting from nanoclj](https://github.com/rekola/nanoclj/assets/6755525/194a6914-f87a-446f-8bae-53b12c75b327 "Plotting from nanoclj")
 *The plot function returns a canvas, which can be converted to an image, and then saved with Image/save or modified using other functions in the Image namespace.*
 
-As well as printing images in block mode like the plot function does, they can also be printed in inline mode which is shown in the following examples:
+As well as printing images in block mode like the plot function does, they can also be printed in inline mode which is shown in the following example:
 
-![Inline images](https://user-images.githubusercontent.com/6755525/277514315-6b5f26a0-a1ab-4f66-95b7-4c976f288ff3.jpg "Inline images")
-
-![Inline gradients](https://user-images.githubusercontent.com/6755525/283999369-87e10299-9ab6-4f49-b5bb-62e653cba226.png "Inline gradients")
+![Inline gradients](https://github.com/rekola/nanoclj/assets/6755525/170b337f-d9b1-4c6c-9d5d-7e80e1e9fb37 "Inline gradients")
 
 ## Differences to Clojure:
 

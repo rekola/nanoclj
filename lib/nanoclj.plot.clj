@@ -24,7 +24,7 @@
 
 (defn linspace
   "Creates an evenly spaced vector from a to b with n points"
-  ([a b] (linspace a b 100))
+  ([a b] (linspace a b 200))
   ([a b n] (let [n (dec n)
                  step (/ (- b a) (double n))
                  ]
@@ -105,7 +105,7 @@
   ([& args]
    (let [args (parse-args (seq args))
          width (*window-size* 0)
-         height (int (/ width 3))
+         height (int (/ width 3.0))
          theme (theme-colors *theme*)
          text-color (theme :text)
          box-color (theme :box)
@@ -126,14 +126,14 @@
          range-y (- max-y min-y)
          fit-x (fn [x] (+ (* (/ (- (double x) (double min-x)) range-x) content-width) margin-left))
          fit-y (fn [y] (+ (* (/ (- max-y y) range-y) content-height) margin-top))
-         x-tick-step (Math/pow 10 (dec (Math/round (Math/log10 range-x))))
-         y-tick-step (Math/pow 10 (dec (Math/round (Math/log10 (* range-y 2)))))
+         x-tick-step (/ (Math/pow 10 (Math/round (Math/log10 range-x))) 20)
+         y-tick-step (/ (Math/pow 10 (Math/round (Math/log10 (* range-y 2)))) 20)
          x-grid-step (/ x-tick-step 2.0)
          y-grid-step (/ y-tick-step 2.0)
          format-x (case (class min-x)
                     java.util.Date (fn [x] (str (java.util.Date x)))
                     (fn [x] (format "%.2f" x)))
-         format-y (fn [x] (format "%.2f" x))
+         format-y (fn [y] (format "%.2f" y))
          draw-x-grid (fn [x] (when (<= x max-x)
                                (let [fx (fit-x x)]
                                  (move-to fx margin-top)
@@ -155,10 +155,10 @@
                                   (line-to fx (- height margin-bottom -3))
                                   (stroke)
                                   (set-color text-color)
-                                  (move-to (- fx (/ (e 0) 2)) (- height (/ margin-bottom 2)))
+                                  (move-to (- fx (/ (e 0) 2.0)) (- height (/ margin-bottom 2.0)))
                                   (print label)
                                   (recur (+ x x-tick-step)))))
-         draw-y-ticks (fn [y] (when (<= y max-y)
+         draw-y-ticks (fn [y] (when (<= y (* 1.1 max-y))
                                 (let [fy (fit-y y)
                                       label (format-y y)
                                       e (get-text-extents label)]
@@ -167,7 +167,7 @@
                                   (line-to (- margin-left 3) fy)
                                   (stroke)
                                   (set-color text-color)
-                                  (move-to (- margin-left (e 0) 5) (+ fy (/ (e 1) 2)))
+                                  (move-to (- margin-left (e 0) 5) (+ fy (/ (e 1) 2.0)))
                                   (print label)
                                   (recur (+ y y-tick-step)))))
          draw-line (fn [x y] (if (or (empty? x) (empty? y))
@@ -194,19 +194,8 @@
                 (stroke)
                                         ; Draw ticks
                 (draw-x-ticks (* (int (/ (double min-x) x-tick-step)) x-tick-step))
-                (draw-y-ticks (* (int (/ min-y y-tick-step)) y-tick-step))
+                (draw-y-ticks (* (int (/ (* 1.1 min-y) y-tick-step)) y-tick-step))
 
-                                        ; Draw shading
-                (run! (fn [p]
-                        (let [[x y color] p
-                              x2 (reverse x)
-                              y2 (map #( * 0.8 %1) (reverse y))
-                              ]
-                          (set-color (conj color 0.25))
-                          (move-to (fit-x (first x)) (fit-y (first y)))
-                          (draw-line (rest x) (rest y))
-                          (draw-line x2 y2)
-                          (fill))) plots)
                                         ; Draw the plots
                 (set-line-width 2)
                 (run! (fn [p]
@@ -220,7 +209,7 @@
                   (let [title-size (get-text-extents title)]
                     (set-font-size 15)
                     (set-color text-color)
-                    (move-to (+ margin-left (/ content-width 2) (/ (title-size 0) -2)) (+ 15 (/ (title-size 1) 2)))
+                    (move-to (+ margin-left (/ content-width 2.0) (/ (title-size 0) -2.0)) (+ 15 (/ (title-size 1) 2.0)))
                     (print title)))
                 )
          ]
