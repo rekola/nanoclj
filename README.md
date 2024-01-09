@@ -59,7 +59,7 @@ enabled. The following terminals have been tested:
 | mintty | ? | ? | Not tested yet. |
 
 ![Plotting from nanoclj](https://github.com/rekola/nanoclj/assets/6755525/194a6914-f87a-446f-8bae-53b12c75b327 "Plotting from nanoclj")
-*The plot function returns a canvas, which can be converted to an image, and then saved with Image/save or modified using other functions in the Image namespace.*
+*The plot function returns a canvas, which can be saved with nanoclj.image/save or modified using other functions in the nanoclj.image namespace.*
 
 As well as printing images in block mode like the plot function does, they can also be printed in inline mode which is shown in the following example:
 
