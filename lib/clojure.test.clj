@@ -4,6 +4,6 @@
   `(let ((r ,arg))
      (when-not r
        (println "FAIL in (" *file* ")")
-       (println "expected: " ',arg)
+       (println "expected: " (pr-str ',arg))
        (println "  actual: " r))
      (-is r)))

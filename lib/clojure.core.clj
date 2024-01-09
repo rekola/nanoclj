@@ -594,6 +594,12 @@
   ([x & ys] (with-out-str (do (when-not (nil? x) (print x))
                               (run! (fn [x] (when-not (nil? x) (print x))) ys)))))
 
+(def maps
+  "Returns a string with each element mapped using f"
+  (fn
+    ([f coll] (loop [ coll coll acc "" ] (if (empty? coll) acc (recur (rest coll) (conj acc (f (first coll)))))))
+    ([f c1 c2] (loop [ c1 c1 c2 c2 acc "" ] (if (or (empty? c1) (empty? c2)) acc (recur (rest c1) (rest c2) (conj acc (f (first c1) (first c2)))))))))
+
 ; Logic
 
 (defn every?

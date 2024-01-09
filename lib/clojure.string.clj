@@ -1,16 +1,5 @@
 (in-ns 'clojure.string)
 
-(def UTF8PROC_COMPOSE 4)
-(def UTF8PROC_IGNORE 32)
-(def UTF8PROC_STRIPCC 512)
-(def UTF8PROC_CASEFOLD 1024)
-
-(def ^:private maps
-  "Returns a string with each element mapped using f"
-  (fn
-    ([f coll] (loop [ coll coll acc "" ] (if (empty? coll) acc (recur (rest coll) (conj acc (f (first coll)))))))
-    ([f c1 c2] (loop [ c1 c1 c2 c2 acc "" ] (if (or (empty? c1) (empty? c2)) acc (recur (rest c1) (rest c2) (conj acc (f (first c1) (first c2)))))))))
-
 (defn blank?
   "Returns true if the argument string is blank"
   [s] (cond (empty? s) true
@@ -19,11 +8,11 @@
 
 (defn upper-case
   "Converts all letters to upper-case"
-  [s] (maps -toupper s))
+  [s] (.toUpperCase s))
 
 (defn lower-case
   "Converts all letters to lower-case"
-  [s] (utf8map s (bit-or UTF8PROC_IGNORE UTF8PROC_STRIPCC UTF8PROC_CASEFOLD UTF8PROC_COMPOSE)))
+  [s] (.toLowerCase s))
 
 (defn capitalize
   "Capitalizes the first letter and puts the rest in lower-case"

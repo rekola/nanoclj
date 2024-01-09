@@ -8793,7 +8793,12 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	nanoclj_val_t ns = resolve_value(sc, sc->envir, ns_sym);
 	if (!is_namespace(ns)) {
 	  strview_t sv = to_strview(ns_sym);
-	  nanoclj_throw(sc, mk_runtime_exception(sc, mk_string_fmt(sc, "No such namespace: %.*s", sv.size, sv.ptr)));
+	  if (nanoclj_load_named_file(sc, mk_string_fmt(sc, "%.*s.clj", sv.size, sv.ptr))) {
+	    ns = resolve_value(sc, sc->envir, ns_sym);
+	  }
+	  if (!is_namespace(ns)) {
+	    nanoclj_throw(sc, mk_runtime_exception(sc, mk_string_fmt(sc, "No such namespace: %.*s", sv.size, sv.ptr)));
+	  }
 	}
 	intern_with_meta(sc, sc->current_ns, def_alias(sc, alias_sym), ns, NULL);
       }
@@ -9725,10 +9730,10 @@ void nanoclj_deinit_oblist(nanoclj_t * sc) {
   sc->oblist = NULL;
 }
 
-bool nanoclj_load_named_file(nanoclj_t * sc, const char *filename) {
-  dump_stack_reset(sc);
+bool nanoclj_load_named_file(nanoclj_t * sc, nanoclj_val_t filename) {
+  save_from_C_call(sc);
 
-  nanoclj_val_t p = port_from_filename(sc, T_READER, mk_strview(filename));
+  nanoclj_val_t p = port_from_filename(sc, T_READER, to_strview(filename));
   if (!sc->pending_exception) {
     sc->envir = sc->current_ns;
     tensor_mutate_push(sc->load_stack, p);
@@ -9842,21 +9847,16 @@ int main(int argc, const char **argv) {
   size_t num_errors = 0;
   int rv = 0;
   
-  if (nanoclj_load_named_file(&sc, InitFile)) {
+  if (nanoclj_load_named_file(&sc, mk_string(&sc, InitFile))) {
     if (argc == 2 && strcmp(argv[1], "--test") == 0) {
       test_mode = true;
-      if (!nanoclj_load_named_file(&sc, "tests/core.clj")) {
-	default_exception_handler(&sc);
-	num_errors++;
-	rv |= 1;
-      }
-      if (!nanoclj_load_named_file(&sc, "tests/string.clj")) {
+      if (!nanoclj_load_named_file(&sc, mk_string(&sc, "tests/run.clj"))) {
 	default_exception_handler(&sc);
 	num_errors++;
 	rv |= 1;
       }
     } else if (argc >= 2) {
-      if (nanoclj_load_named_file(&sc, argv[1])) {
+      if (nanoclj_load_named_file(&sc, mk_string(&sc, argv[1]))) {
 	/* Call -main if it exists */
 	nanoclj_val_t main = def_symbol(&sc, "-main");
 	valarrayview_t x = find_slot_in_env(&sc, sc.envir, main, true);

@@ -1,10 +1,11 @@
-(require '[ clojure.test :as t ])
+(require '[ clojure.test :as t ]
+         '[ clojure.string :as str ])
 
-(t/is (clojure.string/blank? "    "))
-(t/is (not (clojure.string/blank? "abc")))
+(t/is (str/blank? "    "))
+(t/is (not (str/blank? "abc")))
 
-(t/is (= (clojure.string/upper-case "abc") "ABC"))
-(t/is (= (clojure.string/lower-case "ÄÄÄ") "äää"))
-(t/is (= (clojure.string/capitalize "michael") "Michael"))
+(t/is (= (str/upper-case "abc") "ABC"))
+(t/is (= (str/lower-case "ÄÄÄ") "äää"))
+(t/is (= (str/capitalize "michael") "Michael"))
 
-(t/is (= (clojure.string/index-of "Hélen" "len") 2))
+(t/is (= (str/index-of "Hélen" "len") 2))

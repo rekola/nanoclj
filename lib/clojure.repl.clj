@@ -1,4 +1,5 @@
 (in-ns 'clojure.repl)
+(require 'clojure.string 'clojure.java.io)
 
 (defn source
   "Returns the source for a macro or function"

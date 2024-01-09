@@ -135,5 +135,7 @@ configure_file(lib/nanoclj.image.clj nanoclj.image.clj @ONLY)
 configure_file(lib/nanoclj.audio.clj nanoclj.audio.clj @ONLY)
 configure_file(lib/nanoclj.art.clj nanoclj.art.clj @ONLY)
 
+configure_file(tests/run.clj tests/run.clj @ONLY)
 configure_file(tests/core.clj tests/core.clj @ONLY)
 configure_file(tests/string.clj tests/string.clj @ONLY)
+configure_file(tests/shell.clj tests/shell.clj @ONLY)
