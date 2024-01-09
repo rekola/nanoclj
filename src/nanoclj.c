@@ -8771,29 +8771,35 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     s_return(sc, arg0);
 
   case OP_REQUIRE:
-    if (!unpack_args_1(sc, &arg0)) {
+    if (!unpack_args_0_plus(sc, &arg_next)) {
       return false;
     } else {
-      nanoclj_val_t ns_sym = mk_nil(), alias_sym = mk_nil();
-      if (is_symbol(arg0)) {
-	ns_sym = alias_sym = arg0;
-      } else if (is_vector(arg0)) {
-	nanoclj_cell_t * vec = decode_pointer(arg0);
-	if (get_size(vec) == 3 && get_indexed_value(vec, 1).as_long == sc->AS.as_long) {
-	  ns_sym = get_indexed_value(vec, 0);
-	  alias_sym = get_indexed_value(vec, 2);
+      for (; arg_next; arg_next = next(sc, arg_next)) {
+	nanoclj_val_t arg = first(sc, arg_next);
+	nanoclj_val_t ns_sym = mk_nil(), alias_sym = mk_nil();
+	if (is_symbol(arg)) {
+	  ns_sym = alias_sym = arg;
+	} else if (is_vector(arg)) {
+	  nanoclj_cell_t * vec = decode_pointer(arg);
+	  if (get_size(vec) == 3 && get_indexed_value(vec, 1).as_long == sc->AS.as_long) {
+	    ns_sym = get_indexed_value(vec, 0);
+	    alias_sym = get_indexed_value(vec, 2);
+	  }
 	}
-      }
-      if (!is_nil(ns_sym)) {
+	if (is_nil(ns_sym) || is_nil(alias_sym)) {
+	  nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Invalid arguments")));
+	  return false;
+	}
 	nanoclj_val_t ns = resolve_value(sc, sc->envir, ns_sym);
+	if (!is_namespace(ns)) {
+	  strview_t sv = to_strview(ns_sym);
+	  nanoclj_throw(sc, mk_runtime_exception(sc, mk_string_fmt(sc, "No such namespace: %.*s", sv.size, sv.ptr)));
+	}
 	intern_with_meta(sc, sc->current_ns, def_alias(sc, alias_sym), ns, NULL);
-	s_return(sc, mk_nil());
       }
+      s_return(sc, mk_nil());
     }
-    nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Invalid arguments")));
-    return false;
-    
-
+  
   case OP_SET_COLOR:
     if (!unpack_args_1_plus(sc, &arg0, &arg_next)) {
       return false;
