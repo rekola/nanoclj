@@ -6664,7 +6664,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     } else if (set_var_in_ns(sc, sc->current_ns, arg0, arg1, NULL)) {
       s_return(sc, arg1);
     } else {
-      Error_0(sc, "Use of undeclared var");
+      strview_t sv = to_strview(arg0);
+      nanoclj_val_t msg = mk_string_fmt(sc, "Use of undeclared Var %.*s", sv.size, sv.ptr);
+      nanoclj_throw(sc, mk_runtime_exception(sc, msg));
     }
 
   case OP_DO:               /* do */
@@ -8795,9 +8797,12 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  strview_t sv = to_strview(ns_sym);
 	  if (nanoclj_load_named_file(sc, mk_string_fmt(sc, "%.*s.clj", sv.size, sv.ptr))) {
 	    ns = resolve_value(sc, sc->envir, ns_sym);
+	  } else if (!isa(sc, sc->FileNotFoundException, mk_pointer(sc->pending_exception))) {
+	    return false; // abort, if loading a file threw anything else but FileNotFoundException
 	  }
 	  if (!is_namespace(ns)) {
 	    nanoclj_throw(sc, mk_runtime_exception(sc, mk_string_fmt(sc, "No such namespace: %.*s", sv.size, sv.ptr)));
+	    return false;
 	  }
 	}
 	intern_with_meta(sc, sc->current_ns, def_alias(sc, alias_sym), ns, NULL);
@@ -9733,14 +9738,13 @@ void nanoclj_deinit_oblist(nanoclj_t * sc) {
 }
 
 bool nanoclj_load_named_file(nanoclj_t * sc, nanoclj_val_t filename) {
-  save_from_C_call(sc);
-
   nanoclj_val_t p = port_from_filename(sc, T_READER, to_strview(filename));
   if (!sc->pending_exception) {
     sc->envir = sc->current_ns;
     tensor_mutate_push(sc->load_stack, p);
     sc->args = NULL;
   
+    save_from_C_call(sc);
     Eval_Cycle(sc, OP_T0LVL);
   }
 
