@@ -63,7 +63,7 @@ enabled. The following terminals have been tested:
 
 As well as printing images in block mode like the plot function does, they can also be printed in inline mode which is shown in the following example:
 
-![Inline gradients](https://github.com/rekola/nanoclj/assets/6755525/170b337f-d9b1-4c6c-9d5d-7e80e1e9fb37 "Inline gradients")
+![Inline gradients](https://github.com/rekola/nanoclj/assets/6755525/74249581-0fb5-4433-9761-15b97385ee3c "Inline gradients")
 
 ## Differences to Clojure:
 
