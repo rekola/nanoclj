@@ -132,7 +132,13 @@ static inline void dump_stack_mark(nanoclj_t * sc) {
   size_t nframes = sc->dump;
   for (size_t i = 0; i < nframes; i++) {
     dump_stack_frame_t * frame = sc->dump_base + i;
-    if (frame->args) mark(frame->args);
+    if (frame->args) {
+      if (frame->args < (void*)0x256) {
+	fprintf(stderr, "invalid ptr in frame args: %p\n", frame->args);
+      } else {
+	mark(frame->args);
+      }
+    }
     mark(frame->envir);
     mark_value(frame->code);
   }
