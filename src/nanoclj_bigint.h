@@ -165,4 +165,13 @@ static inline void bigint_mutate_or(nanoclj_tensor_t * a, bigintview_t b) {
   }
 }
 
+static inline bool bigint_is_representable_as_long(bigintview_t bv) {
+  if (bv.size > 2) return false;
+  if (bv.size <= 1) return true;
+  uint64_t v = bv.limbs[0] + ((uint64_t)bv.limbs[1] << 32);
+  if (v <= (uint64_t)LLONG_MAX) return true;
+  if (bv.sign == -1 && v <= (uint64_t)LLONG_MAX + 1) return true;
+  return false;
+}
+
 #endif

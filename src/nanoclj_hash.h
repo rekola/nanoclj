@@ -1,6 +1,8 @@
 #ifndef _NANOCLJ_HASH_H_
 #define _NANOCLJ_HASH_H_
 
+#include "nanoclj_utf8.h"
+
 /* MurmurHash3 was written by Austin Appleby, and is placed in the public
    domain. The author hereby disclaims copyright to this source code.
 */
@@ -66,18 +68,22 @@ static inline uint32_t hash_combine(uint32_t seed, uint32_t hash) {
   return seed;
 }
 
-static inline uint32_t get_string_hashcode(const char * str, size_t size) {
-  uint32_t hashcode = 0, m = 1;
-  for (int i = (int)size - 1; i >= 0; i--) {
-    hashcode += str[i] * m;
-    m *= 31;
+/* TODO: to get a better match to Clojure, the UTF8 input should be first encoded as UTF16 */
+static inline uint32_t murmur3_hash_unencoded_chars(const char * p, size_t size) {
+  uint32_t h1 = 0;
+  const char * end = p + size;
+  while (p < end) {
+    uint32_t k1 = decode_utf8(p);
+    p = utf8_next(p);
+    if (p < end) {
+      k1 |= decode_utf8(p) << 16;
+      p = utf8_next(p);
+      h1 = murmur3_mix_h1(h1, murmur3_mix_k1(k1));
+    } else {
+      h1 ^= murmur3_mix_k1(k1);
+    }
   }
-  return hashcode;
-}
-
-static inline uint32_t murmur3_hash_qualified_string(const char * ns, size_t ns_size, const char * name, size_t name_size) {
-  return murmur3_hash_int(hash_combine(get_string_hashcode(name, name_size),
-				       get_string_hashcode(ns, ns_size)));
+  return murmur3_finalize(h1, 2 * size);
 }
 
 #endif

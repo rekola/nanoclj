@@ -301,6 +301,25 @@ static inline bool is_list(nanoclj_val_t value) {
   return is_cell(value) && _type(decode_pointer(value)) == T_LIST;
 }
 
+static inline uint32_t get_string_hashcode(strview_t sv) {
+  const char * p = sv.ptr, * end = sv.ptr + sv.size;
+  uint32_t h = 0;
+  while (p < end) {
+    h = 31 * h + decode_utf8(p);
+    p = utf8_next(p);
+  }
+  return h;
+}
+
+static inline uint32_t get_symbol_hash(uint_fast16_t t, strview_t ns, strview_t name) {
+  uint32_t h = hash_combine(murmur3_hash_unencoded_chars(name.ptr, name.size), get_string_hashcode(ns));
+  switch (t) {
+  case T_KEYWORD: h += 0x9e3779b9; break; /* the constant has been copied from Clojure */
+  case T_ALIAS: h += 0x29f1c424; break; /* a random number, probably not a prime */
+  }
+  return h;
+}
+
 static inline nanoclj_val_t mk_symbol(nanoclj_t * sc, uint16_t t, strview_t ns, strview_t name, int_fast16_t syntax) {
   char * ns_str = malloc(ns.size);
   memcpy(ns_str, ns.ptr, ns.size);
@@ -329,7 +348,7 @@ static inline nanoclj_val_t mk_symbol(nanoclj_t * sc, uint16_t t, strview_t ns, 
   s->name = (strview_t){ name_str, name.size };
   s->full_name = (strview_t){ full_name_str, full_name_size };
   s->syntax = syntax;
-  s->hash = murmur3_hash_qualified_string(ns.ptr, ns.size, name.ptr, name.size);
+  s->hash = get_symbol_hash(t, ns, name);
   s->ns_sym = s->ns_alias = s->name_sym = mk_nil();
 
   switch (t) {
@@ -914,13 +933,22 @@ static inline bool convert_to_long(nanoclj_val_t p, long long * l) {
 	*l = c->type;
 	return true;
       case T_BIGINT:
-	*l = bigintview_to_long(_to_bigintview(c));
+	{
+	  bigintview_t bv = _to_bigintview(c);
+	  if (!bigint_is_representable_as_long(bv)) return false;
+	  *l = bigintview_to_long(bv);
+	}
 	return true;
       case T_RATIO:
 	{
 	  nanoclj_tensor_t * q;
 	  tensor_bigint_divmod(c->_ratio.numerator, c->_ratio.denominator, &q, NULL);
-	  *l = bigintview_to_long((bigintview_t){ q->data, q->ne[0], _sign(c) });
+	  bigintview_t bv = (bigintview_t){ q->data, q->ne[0], _sign(c) };
+	  if (!bigint_is_representable_as_long(bv)) {
+	    tensor_free(q);
+	    return false;
+	  }
+	  *l = bigintview_to_long(bv);
 	  tensor_free(q);
 	  return true;
 	}
@@ -2937,6 +2965,8 @@ static uint32_t hasheq(nanoclj_val_t v, void * d) {
     return -2017569654;
 
   case T_CODEPOINT: /* Clojure doesn't use murmur3 for characters */
+    return decode_integer(v);
+
   case T_PROC:
     return murmur3_hash_int(decode_integer(v));
 
@@ -2972,7 +3002,14 @@ static uint32_t hasheq(nanoclj_val_t v, void * d) {
 	break;
 
       case T_BIGINT:
-	h = bigint_hashcode(_to_bigintview(c));
+	{
+	  bigintview_t bv = _to_bigintview(c);
+	  if (bigint_is_representable_as_long(bv)) {
+	    h = murmur3_hash_long(bigintview_to_long(bv));
+	  } else {
+	    h = bigint_hashcode(bv);
+	  }
+	}
 	break;
 
       case T_RATIO:
@@ -2980,13 +3017,14 @@ static uint32_t hasheq(nanoclj_val_t v, void * d) {
 	break;
 
       case T_STRING:
-      case T_FILE:
       case T_URL:
       case T_UUID:
-	{
-	  strview_t sv = _to_strview(c);
-	  h = murmur3_hash_int(get_string_hashcode(sv.ptr, sv.size));
-	}
+	h = murmur3_hash_int(get_string_hashcode(_to_strview(c)));
+	break;
+	
+      case T_FILE:
+	/* TODO: on win32, the string hashcode needs to be converted to lowercase (without locale) */
+	h = get_string_hashcode(_to_strview(c)) ^ 1234321;
 	break;
 
       case T_MAPENTRY:
@@ -3014,7 +3052,7 @@ static uint32_t hasheq(nanoclj_val_t v, void * d) {
 	      uint32_t h2 = 1;
 	      h2 = 31 * h2 + hasheq(get_indexed_key(c, i), sc);
 	      h2 = 31 * h2 + hasheq(get_indexed_value(c, i), sc);
-	      h += murmur3_hash_coll(h2, n);
+	      h += murmur3_hash_coll(h2, 2);
 	    }
 	  } else {
 	    nanoclj_tensor_t * tensor = c->_collection.tensor;
@@ -3024,7 +3062,7 @@ static uint32_t hasheq(nanoclj_val_t v, void * d) {
 		uint32_t h2 = 1;
 		h2 = 31 * h2 + hasheq(get_indexed_key(c, i), sc);
 		h2 = 31 * h2 + hasheq(get_indexed_value(c, i), sc);
-		h += murmur3_hash_coll(h2, n);
+		h += murmur3_hash_coll(h2, 2);
 	      }
 	    }
 	  }
@@ -3054,7 +3092,7 @@ static uint32_t hasheq(nanoclj_val_t v, void * d) {
 	}
 	break;
 
-      case T_TYPE:
+      case T_CLASS:
 	h = murmur3_hash_int(c->type);
 	break;
 
@@ -3598,7 +3636,7 @@ static inline nanoclj_val_t oblist_add_item(nanoclj_t * sc, strview_t ns, strvie
 }
 
 static inline nanoclj_val_t oblist_find_item(nanoclj_t * sc, uint16_t type, strview_t ns, strview_t name) {
-  uint_fast32_t h = murmur3_hash_qualified_string(ns.ptr, ns.size, name.ptr, name.size);
+  uint_fast32_t h = get_symbol_hash(type, ns, name);
   size_t num_buckets = tensor_hash_get_bucket_count(sc->oblist);
   size_t location = tensor_hash_get_bucket(h, num_buckets, false);
   while ( 1 ) {
@@ -4943,7 +4981,7 @@ static inline void print_slashstring(nanoclj_t * sc, strview_t sv, nanoclj_cell_
   putstr(sc, "\"", out);
   const char * end = p + sv.size;
   while (p < end) {
-    int c = decode_utf8(p);
+    int32_t c = decode_utf8(p);
     putstr(sc, escape_char(c, sc->strbuff, true), out);
     p = utf8_next(p);
   }
