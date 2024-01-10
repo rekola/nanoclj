@@ -3937,9 +3937,13 @@ static inline nanoclj_val_t def_symbol_from_sv(nanoclj_t * sc, uint16_t t, strvi
   return x;
 }
 
-static inline nanoclj_val_t def_alias(nanoclj_t * sc, nanoclj_val_t v) {
-  symbol_t * s = decode_symbol(v);
-  return def_symbol_from_sv(sc, T_ALIAS, (strview_t){ 0, 0 }, s->name);
+/* creates an ns alias with the same name as v */
+static inline nanoclj_val_t def_alias_from_val(nanoclj_t * sc, nanoclj_val_t v) {
+  return def_symbol_from_sv(sc, T_ALIAS, (strview_t){ 0, 0 }, to_strview(v));
+}
+
+static inline nanoclj_val_t def_alias(nanoclj_t * sc, const char *name) {
+  return def_symbol_from_sv(sc, T_ALIAS, (strview_t){ 0, 0 }, mk_strview(name));
 }
 
 static inline nanoclj_val_t def_keyword(nanoclj_t * sc, const char *name) {
@@ -3986,7 +3990,8 @@ static inline nanoclj_cell_t * mk_class_with_meta(nanoclj_t * sc, nanoclj_val_t 
   }
   tensor_mutate_set(sc->types, type_id, mk_pointer(t));
   intern_with_meta(sc, sc->current_ns, sym, mk_pointer(t), md);
-
+  intern_with_meta(sc, sc->current_ns, def_alias_from_val(sc, sym), mk_pointer(t), md);
+  
   return t;
 }
 
@@ -4000,6 +4005,7 @@ static inline nanoclj_cell_t * mk_class_with_fn(nanoclj_t * sc, const char * nam
   char * p = strrchr(name, '.');
   if (p && p[1]) {
     intern_with_meta(sc, sc->current_ns, def_symbol(sc, p + 1), mk_pointer(t), md);
+    intern_with_meta(sc, sc->current_ns, def_alias(sc, p + 1), mk_pointer(t), md);
   }
   return t;
 }
@@ -4048,6 +4054,7 @@ static inline nanoclj_cell_t * def_namespace_with_sym(nanoclj_t *sc, nanoclj_val
 
   if (sc->current_ns) {
     intern_with_meta(sc, sc->current_ns, sym, mk_pointer(ns), md);
+    intern_with_meta(sc, sc->current_ns, def_alias_from_val(sc, sym), mk_pointer(ns), md);
   }
   return ns;
 }
@@ -5436,7 +5443,6 @@ static inline valarrayview_t resolve(nanoclj_t * sc, nanoclj_cell_t * env0, nano
   bool all_namespaces = true;
   if (s->ns.size) {
     valarrayview_t c = find_slot_in_env(sc, env0, s->ns_alias, true);
-    if (!c.ptr) c = find_slot_in_env(sc, env0, s->ns_sym, true);
     if (c.ptr) {
       env = decode_pointer(slot_value_in_env(c));
       sym = s->name_sym;
@@ -6534,6 +6540,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	}
 
       case T_LIST:
+      case T_LONG:
+      case T_DATE:
+      case T_BIGINT:
 	break;
 	
       default:
@@ -8763,7 +8772,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	    return false;
 	  }
 	}
-	intern_with_meta(sc, sc->current_ns, def_alias(sc, alias_sym), ns, NULL);
+	intern_with_meta(sc, sc->current_ns, def_alias_from_val(sc, alias_sym), ns, NULL);
       }
       s_return(sc, mk_nil());
     }
