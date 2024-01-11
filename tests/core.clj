@@ -191,3 +191,7 @@
                                         ; Special Functions
 
 (t/is (= ((juxt numerator denominator) 2/3) [ 2 3 ]))
+
+                                        ; Namespaces
+
+(t/is (resolve 'clojure.string/upper-case))
