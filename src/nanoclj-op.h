@@ -138,6 +138,8 @@ _OP_DEF("namespace", 0, OP_NAMESPACE)
 _OP_DEF("name", 0, OP_NAME)
 _OP_DEF("-is", 0, OP_IS)
 _OP_DEF("require", 0, OP_REQUIRE)
+_OP_DEF("find-ns", "Returns the namespace with the symbol x or nil", OP_FIND_NS)
+_OP_DEF("find-keyword", 0, OP_FIND_KEYWORD)
 
 /* Canvas ops */
 _OP_DEF("set-color", 0, OP_SET_COLOR)

@@ -4047,8 +4047,8 @@ static inline nanoclj_cell_t * mk_class_with_meta(nanoclj_t * sc, nanoclj_val_t 
     tensor_mutate_push(sc->types, mk_nil());
   }
   tensor_mutate_set(sc->types, type_id, mk_pointer(t));
-  intern_with_meta(sc, sc->current_ns, sym, mk_pointer(t), md);
-  intern_with_meta(sc, sc->current_ns, def_alias_from_val(sc, sym), mk_pointer(t), md);
+  intern_with_meta(sc, sc->root_ns, sym, mk_pointer(t), md);
+  intern_with_meta(sc, sc->root_ns, def_alias_from_val(sc, sym), mk_pointer(t), md);
   
   return t;
 }
@@ -4062,8 +4062,8 @@ static inline nanoclj_cell_t * mk_class_with_fn(nanoclj_t * sc, const char * nam
 
   char * p = strrchr(name, '.');
   if (p && p[1]) {
-    intern_with_meta(sc, sc->current_ns, def_symbol(sc, p + 1), mk_pointer(t), md);
-    intern_with_meta(sc, sc->current_ns, def_alias(sc, p + 1), mk_pointer(t), md);
+    intern_with_meta(sc, sc->root_ns, def_symbol(sc, p + 1), mk_pointer(t), md);
+    intern_with_meta(sc, sc->root_ns, def_alias(sc, p + 1), mk_pointer(t), md);
   }
   return t;
 }
@@ -4110,10 +4110,10 @@ static inline nanoclj_cell_t * def_namespace_with_sym(nanoclj_t *sc, nanoclj_val
   nanoclj_cell_t * s = get_vector_object(sc, T_VARMAP, 0);
   nanoclj_cell_t * ns = get_cell(sc, T_NAMESPACE, 0, mk_pointer(s), sc->root_ns, md);
 
-  if (sc->current_ns) {
-    intern_with_meta(sc, sc->current_ns, sym, mk_pointer(ns), md);
-    intern_with_meta(sc, sc->current_ns, def_alias_from_val(sc, sym), mk_pointer(ns), md);
-  }
+  if (!sc->root_ns) sc->root_ns = ns;
+
+  intern_with_meta(sc, sc->root_ns, sym, mk_pointer(ns), md);
+  intern_with_meta(sc, sc->root_ns, def_alias_from_val(sc, sym), mk_pointer(ns), md);
   return ns;
 }
 
@@ -6047,7 +6047,7 @@ static inline bool unpack_args_0(nanoclj_t * sc) {
   if (!sc->args) {
     return true;
   } else {
-    nanoclj_val_t ns = mk_string(sc, "nanoclj.core");
+    nanoclj_val_t ns = mk_string(sc, "clojure.core");
     const char * fn = dispatch_table[(int)sc->op].name;
     nanoclj_throw(sc, mk_arity_exception(sc, count(sc, sc->args), ns, mk_string(sc, fn)));
     return false;
@@ -6066,7 +6066,7 @@ static inline bool unpack_args_1(nanoclj_t * sc, nanoclj_val_t * arg0) {
       return true;
     }
   }
-  nanoclj_val_t ns = mk_string(sc, "nanoclj.core");
+  nanoclj_val_t ns = mk_string(sc, "clojure.core");
   const char * fn = dispatch_table[(int)sc->op].name;
   nanoclj_throw(sc, mk_arity_exception(sc, count(sc, sc->args), ns, mk_string(sc, fn)));
   return false;
@@ -6087,7 +6087,7 @@ static inline bool unpack_args_1_plus(nanoclj_t * sc, nanoclj_val_t * arg0, nano
     *arg_next = next(sc, sc->args);
     return true;
   }
-  nanoclj_val_t ns = mk_string(sc, "nanoclj.core");
+  nanoclj_val_t ns = mk_string(sc, "clojure.core");
   const char * fn = dispatch_table[(int)sc->op].name;
   nanoclj_throw(sc, mk_arity_exception(sc, count(sc, sc->args), ns, mk_string(sc, fn)));
   return false;
@@ -6104,7 +6104,7 @@ static inline bool unpack_args_2(nanoclj_t * sc, nanoclj_val_t * arg0, nanoclj_v
       }
     }
   }
-  nanoclj_val_t ns = mk_string(sc, "nanoclj.core");
+  nanoclj_val_t ns = mk_string(sc, "clojure.core");
   const char * fn = dispatch_table[(int)sc->op].name;
   nanoclj_throw(sc, mk_arity_exception(sc, count(sc, sc->args), ns, mk_string(sc, fn)));
   return false;
@@ -6134,7 +6134,7 @@ static inline bool unpack_args_3(nanoclj_t * sc, nanoclj_val_t * arg0, nanoclj_v
       }
     }
   }
-  nanoclj_val_t ns = mk_string(sc, "nanoclj.core");
+  nanoclj_val_t ns = mk_string(sc, "clojure.core");
   const char * fn = dispatch_table[(int)sc->op].name;
   nanoclj_throw(sc, mk_arity_exception(sc, count(sc, sc->args), ns, mk_string(sc, fn)));
   return false;
@@ -6164,7 +6164,7 @@ static inline bool unpack_args_5(nanoclj_t * sc, nanoclj_val_t * arg0, nanoclj_v
       }
     }
   }
-  nanoclj_val_t ns = mk_string(sc, "nanoclj.core");
+  nanoclj_val_t ns = mk_string(sc, "clojure.core");
   const char * fn = dispatch_table[(int)sc->op].name;
   nanoclj_throw(sc, mk_arity_exception(sc, count(sc, sc->args), ns, mk_string(sc, fn)));
   return false;
@@ -6180,7 +6180,7 @@ static inline bool unpack_args_2_plus(nanoclj_t * sc, nanoclj_val_t * arg0, nano
       return true;
     }
   }
-  nanoclj_val_t ns = mk_string(sc, "nanoclj.core");
+  nanoclj_val_t ns = mk_string(sc, "clojure.core");
   const char * fn = dispatch_table[(int)sc->op].name;
   nanoclj_throw(sc, mk_arity_exception(sc, count(sc, sc->args), ns, mk_string(sc, fn)));
   return false;
@@ -8837,6 +8837,23 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       }
       s_return(sc, mk_nil());
     }
+
+  case OP_FIND_NS:
+    if (!unpack_args_1(sc, &arg0)) {
+      return false;
+    } else {
+      nanoclj_val_t ns = resolve_value(sc, sc->envir, arg0);
+      s_return(sc, ns);
+    }
+
+  case OP_FIND_KEYWORD:
+    if (!unpack_args_1_plus(sc, &arg0, &arg_next)) {
+      return false;
+    } else if (arg_next) {
+      s_return(sc, oblist_find_item(sc, T_KEYWORD, to_strview(arg0), to_strview(first(sc, arg_next))));
+    } else {
+      s_return(sc, oblist_find_item(sc, T_KEYWORD, (strview_t){ 0, 0 }, to_strview(arg0)));
+    }
   
   case OP_SET_COLOR:
     if (!unpack_args_1_plus(sc, &arg0, &arg_next)) {
@@ -9559,8 +9576,9 @@ bool nanoclj_init(nanoclj_t * sc) {
 
   sc->EMPTYVEC = mk_vector(sc, 0);
 
-  /* Init root namespace nanoclj.core */
-  sc->root_ns = sc->current_ns = sc->envir = def_namespace(sc, "nanoclj.core", __FILE__);
+  /* Init root namespace clojure.core */
+  sc->root_ns = NULL;
+  sc->current_ns = sc->envir = def_namespace(sc, "clojure.core", __FILE__);
 
   size_t n = sizeof(dispatch_table) / sizeof(dispatch_table[0]);
   for (size_t i = 0; i < n; i++) {

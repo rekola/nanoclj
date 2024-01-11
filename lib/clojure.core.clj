@@ -915,10 +915,6 @@
 
 ; Namespaces
 
-(defn find-ns
-  "Returns the namespace with the symbol x or nil"
-  [x] (let [ns (deref (resolve x))] (if (isa? clojure.lang.Namespace ns) ns nil)))
-
 (defn ns-resolve
   [ns sym] (if (namespace sym)
              (find (car (find-ns (symbol (namespace sym)))) (symbol (name sym)))
