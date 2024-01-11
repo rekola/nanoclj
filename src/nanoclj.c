@@ -2066,7 +2066,21 @@ static inline int32_t inchar_raw(nanoclj_cell_t * p) {
 }
 
 static inline int32_t inchar_utf8(nanoclj_cell_t * p) {
-  int c = inchar_raw(p);
+  if (_port_type_unchecked(p) == port_file) {
+    nanoclj_port_rep_t * pr = _rep_unchecked(p);
+    int32_t c = pr->stdio.backchars[1];
+    if (c != -1) {
+      pr->stdio.backchars[1] = -1;
+      return c;
+    }
+    c = pr->stdio.backchars[0];
+    if (c != -1) {
+      pr->stdio.backchars[0] = -1;
+      return c;
+    }
+  }
+
+  int32_t c = inchar_raw(p);
   if (c < 0) return EOF;
   uint32_t codepoint = c;
   switch (utf8_sequence_length(c)) {
@@ -2146,26 +2160,28 @@ static inline int32_t inchar(nanoclj_t * sc, nanoclj_cell_t * p) {
 }
 
 /* back codepoint to input buffer */
-static inline void backchar_raw(uint8_t c, nanoclj_cell_t * p) {
+static inline void backchar(int32_t c, nanoclj_cell_t * p) {
   if (c == EOF) return;
   nanoclj_port_rep_t *pr = _rep_unchecked(p);
   switch (_port_type_unchecked(p)) {
   case port_file:
-    ungetc(c, pr->stdio.file);
-    break;
-  case port_string:
-    if (pr->string.read_pos > 0) {
-      --pr->string.read_pos;
+    if (pr->stdio.backchars[0] == -1) {
+      pr->stdio.backchars[0] = c;
+    } else if (pr->stdio.backchars[1] == -1) {
+      pr->stdio.backchars[1] = c;
     }
     break;
-  }
-}
-
-static inline void backchar(int32_t c, nanoclj_cell_t * p) {
-  utf8proc_uint8_t buff[4];
-  size_t l = utf8proc_encode_char(c, &buff[0]);
-  for (size_t i = 0; i < l; i++) {
-    backchar_raw(buff[i], p);
+  case port_string:
+    {
+      utf8proc_uint8_t buff[4];
+      size_t l = utf8proc_encode_char(c, &buff[0]);
+      for (size_t i = 0; i < l; i++) {
+	if (pr->string.read_pos > 0) {
+	  --pr->string.read_pos;
+	}
+      }
+    }
+    break;
   }
 }
 
@@ -4409,6 +4425,7 @@ static inline nanoclj_val_t port_rep_from_file(nanoclj_t * sc, uint16_t type, FI
   pr->stdio.mode = nanoclj_mode_unknown;
   pr->stdio.fg = sc->fg_color;
   pr->stdio.bg = sc->bg_color;
+  pr->stdio.backchars[0] = pr->stdio.backchars[1] = -1;
 
   nanoclj_val_t v = slot_value_in_env(find_slot_in_env(sc, sc->envir, sc->FLUSH_ON_NEWLINE, true));
   if (is_true(v)) {
@@ -4693,7 +4710,7 @@ static inline bool is_one_of(const char *s, int c) {
 static inline char *readstr_upto(nanoclj_t * sc, char *delim, nanoclj_cell_t * inport, bool is_escaped) {
   nanoclj_tensor_t * rdbuff = sc->rdbuff;
   tensor_mutate_clear(rdbuff);
-  
+
   while (1) {
     int c = inchar(sc, inport);
     if (c == EOF || sc->pending_exception) break;
@@ -4939,7 +4956,7 @@ static inline int token(nanoclj_t * sc, nanoclj_cell_t * inport) {
       return TOK_ATMARK;
     } else if (is_one_of("\n\r ", c)) {
       backchar(c, inport);
-      return (token(sc, inport));
+      return token(sc, inport);
     } else {
       backchar(c, inport);
       return TOK_COMMA;
@@ -8147,7 +8164,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  s_return(sc, sc->AMP);
 	case TOK_PRIMITIVE:
 	  s = readstr_upto(sc, DELIMITERS, inport, false);
-	  if (is_numeric_token(s)) {
+	  if (sc->pending_exception) {
+	    return false;
+	  } else if (is_numeric_token(s)) {
 	    x = mk_numeric_primitive(sc, s);
 	    if (is_nil(x)) {
 	      nanoclj_throw(sc, mk_number_format_exception(sc, mk_string_fmt(sc, "Invalid number format [%s]", s)));

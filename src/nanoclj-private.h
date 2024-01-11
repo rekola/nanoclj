@@ -52,6 +52,7 @@ extern "C" {
       nanoclj_color_t bg;
       int32_t num_states;
       nanoclj_term_state_t states[256];
+      int32_t backchars[2];
     } stdio;
     struct {
       size_t read_pos;
