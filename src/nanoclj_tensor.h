@@ -570,15 +570,6 @@ static inline void tensor_mutate_sort(nanoclj_tensor_t * tensor, int (*compar)(c
   if (n >= 1 && tensor->ne[n - 1] >= 2) qsort(tensor->data, tensor->ne[n - 1], tensor->nb[n - 1], compar);
 }
 
-static inline uint32_t tensor_hashcode(nanoclj_tensor_t * tensor) {
-  uint32_t h = 0;
-  uint32_t * data = tensor->data;
-  for (int64_t i = 0; i < tensor->ne[0]; i++) {
-    h = 31 * h + data[i];
-  }
-  return h;
-}
-
 static inline bool tensor_is_sparse(const nanoclj_tensor_t * tensor) {
   return tensor->sparse_indices != NULL;
 }

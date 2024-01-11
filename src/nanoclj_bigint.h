@@ -60,7 +60,8 @@ static inline size_t bigintview_to_string(bigintview_t bv, char ** buff) {
 static inline uint32_t bigint_hashcode(bigintview_t bv) {
   uint32_t h = 0;
   const uint32_t * data = bv.limbs;
-  for (int64_t i = 0; i < bv.size; i++) {
+  /* In Java BigInts are Big-endian */
+  for (int64_t i = bv.size - 1; i >= 0; i--) {
     h = 31 * h + data[i];
   }
   return bv.sign * (int32_t)h;

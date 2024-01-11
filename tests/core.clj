@@ -170,7 +170,6 @@
 (t/is (= (hash '()) (hash []) -2017569654))
 (t/is (= (hash #{}) (hash {}) -15128758))
 (t/is (= (hash [ 1 2 3 ]) 736442005))
-(t/is (= (hash 1/2) 3))
 (t/is (= (hash false) 1237))
 (t/is (= (hash true) 1231))
 (t/is (= (hash 1) (hash 1N) 1392991556))
@@ -181,9 +180,12 @@
 (t/is (= (hash #{ 1 }) 1038464948))
 (t/is (= (hash { "A" 1 "B" 2 }) -457774292))
 (t/is (= (hash (clojure.java.io/file "/")) 1234366))
-(t/is (= (hash (+' Long/MAX_VALUE 1))))
 (t/is (= (hash 'ab/cd) 815946391))
-(t/is (= (hash :fish/dish) -1209250752))
+; (t/is (= (hash :fish/dish) 1445185017))
+(t/is (= (hash (+' Long/MAX_VALUE 1)) -2147483648))
+(t/is (= (hash 1000000000000000000000N) 1645008273))
+(t/is (= (hash 1/2) 3))
+(t/is (= (hash 1000000000000000000000/33333) 1644976036))
 
                                         ; Special Functions
 

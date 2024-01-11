@@ -3013,7 +3013,11 @@ static uint32_t hasheq(nanoclj_val_t v, void * d) {
 	break;
 
       case T_RATIO:
-	h = _sign(c) * (int32_t)tensor_hashcode(c->_ratio.numerator) ^ (int32_t)tensor_hashcode(c->_ratio.denominator);
+	{
+	  bigintview_t num = (bigintview_t){ c->_ratio.numerator->data, c->_ratio.numerator->ne[0], _sign(c) };
+	  bigintview_t den = (bigintview_t){ c->_ratio.denominator->data, c->_ratio.denominator->ne[0], 1 };
+	  h = bigint_hashcode(num) ^ bigint_hashcode(den);
+	}
 	break;
 
       case T_STRING:
