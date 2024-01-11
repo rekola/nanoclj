@@ -181,6 +181,7 @@
 (t/is (= (hash { "A" 1 "B" 2 }) -457774292))
 (t/is (= (hash (clojure.java.io/file "/")) 1234366))
 (t/is (= (hash 'ab/cd) 815946391))
+(t/is (= (hash :ääää) -1406749036))
 ; (t/is (= (hash :fish/dish) 1445185017))
 (t/is (= (hash (+' Long/MAX_VALUE 1)) -2147483648))
 (t/is (= (hash 1000000000000000000000N) 1645008273))

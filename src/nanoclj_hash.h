@@ -72,6 +72,7 @@ static inline uint32_t hash_combine(uint32_t seed, uint32_t hash) {
 static inline uint32_t murmur3_hash_unencoded_chars(const char * p, size_t size) {
   uint32_t h1 = 0;
   const char * end = p + size;
+  size_t n = 0;
   while (p < end) {
     uint32_t k1 = decode_utf8(p);
     p = utf8_next(p);
@@ -79,11 +80,13 @@ static inline uint32_t murmur3_hash_unencoded_chars(const char * p, size_t size)
       k1 |= decode_utf8(p) << 16;
       p = utf8_next(p);
       h1 = murmur3_mix_h1(h1, murmur3_mix_k1(k1));
+      n += 2;
     } else {
       h1 ^= murmur3_mix_k1(k1);
+      n += 1;
     }
   }
-  return murmur3_finalize(h1, 2 * size);
+  return murmur3_finalize(h1, 2 * n);
 }
 
 #endif
