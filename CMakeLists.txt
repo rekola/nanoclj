@@ -91,6 +91,7 @@ install(FILES lib/init.clj
 	      lib/clojure.instant.clj
 	      lib/clojure.test.clj
 	      lib/java.lang.Object.clj
+	      lib/java.lang.Class.clj
 	      lib/java.lang.Float.clj
 	      lib/java.lang.Double.clj
 	      lib/java.lang.Boolean.clj
@@ -120,6 +121,7 @@ configure_file(lib/clojure.set.clj clojure.set.clj @ONLY)
 configure_file(lib/clojure.instant.clj clojure.instant.clj @ONLY)
 configure_file(lib/clojure.test.clj clojure.test.clj @ONLY)
 configure_file(lib/java.lang.Object.clj java.lang.Object.clj @ONLY)
+configure_file(lib/java.lang.Class.clj java.lang.Class.clj @ONLY)
 configure_file(lib/java.lang.Float.clj java.lang.Float.clj @ONLY)
 configure_file(lib/java.lang.Double.clj java.lang.Double.clj @ONLY)
 configure_file(lib/java.lang.Boolean.clj java.lang.Boolean.clj @ONLY)

@@ -6,6 +6,7 @@
 (load-file "clojure.string.clj")
 (load-file "clojure.repl.clj")
 (load-file "java.lang.Object.clj")
+(load-file "java.lang.Class.clj")
 (load-file "java.lang.Integer.clj")
 (load-file "java.lang.Float.clj")
 (load-file "java.lang.Double.clj")
