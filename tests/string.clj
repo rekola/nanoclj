@@ -9,3 +9,7 @@
 (t/is (= (str/capitalize "michael") "Michael"))
 
 (t/is (= (str/index-of "Hélen" "len") 2))
+
+(t/is (= (str/triml "   xxx   ") "xxx   "))
+(t/is (= (str/trimr "   xxx   ") "   xxx"))
+(t/is (= (str/trim "   xxx   ") "xxx"))

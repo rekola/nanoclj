@@ -176,6 +176,7 @@ extern "C" {
     
     nanoclj_cell_t sink;	      /* when mem. alloc. fails */
     nanoclj_tensor_t * oblist;         /* pointer to symbol table */
+    nanoclj_tensor_t * namespaces;
     nanoclj_cell_t * current_ns;         /* pointer to global environment */
     nanoclj_cell_t * root_ns;		/* pointer to the initial root env */
     nanoclj_cell_t * user_ns;

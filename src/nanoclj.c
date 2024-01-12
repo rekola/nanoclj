@@ -92,11 +92,12 @@
 #define TOK_MAP	    	17
 #define TOK_SET	    	18
 #define TOK_FN      	19
-#define TOK_REGEX   	20
-#define TOK_IGNORE  	21
-#define TOK_VAR	    	22
-#define TOK_DOT		23
-#define TOK_META	24
+#define TOK_FN_DOT	20
+#define TOK_REGEX   	21
+#define TOK_IGNORE  	22
+#define TOK_VAR	    	23
+#define TOK_DOT		24
+#define TOK_META	25
 
 #define BACKQUOTE 	'`'
 #define DELIMITERS  	"()[]{}\";\f\t\v\n\r, "
@@ -4965,7 +4966,13 @@ static inline int token(nanoclj_t * sc, nanoclj_cell_t * inport) {
   case '#':
     c = inchar(sc, inport);
     if (c == '(') {
-      return TOK_FN;
+      int32_t c2 = skipspace(sc, inport);
+      if (c2 == '.') {
+	return TOK_FN_DOT;
+      } else {
+	backchar(c2, inport);
+	return TOK_FN;
+      }
     } else if (c == '{') {
       return TOK_SET;
     } else if (c == '"') {
@@ -8241,6 +8248,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  }
 	}
 
+	case TOK_FN_DOT:
+	  s_save(sc, OP_RD_FN, NULL, mk_emptylist());
 	case TOK_DOT:{
  	  nanoclj_val_t m = def_symbol_or_keyword(sc, readstr_upto(sc, DELIMITERS, inport, false));
 	  strview_t sv = to_strview(m);
@@ -9239,9 +9248,9 @@ static inline void update_window_info(nanoclj_t * sc, nanoclj_cell_t * out) {
     pr->stdio.bg = sc->bg_color;
   }
   
-  intern(sc, sc->current_ns, sc->WINDOW_SIZE, size);
-  intern(sc, sc->current_ns, sc->CELL_SIZE, cell_size);
-  intern(sc, sc->current_ns, sc->WINDOW_SCALE_F, mk_double(sc->window_scale_factor));
+  intern(sc, sc->root_ns, sc->WINDOW_SIZE, size);
+  intern(sc, sc->root_ns, sc->CELL_SIZE, cell_size);
+  intern(sc, sc->root_ns, sc->WINDOW_SCALE_F, mk_double(sc->window_scale_factor));
 }
 
 /* initialization of nanoclj_t */
@@ -9492,6 +9501,7 @@ bool nanoclj_init(nanoclj_t * sc) {
   _cons_metadata(&(sc->sink)) = NULL;
   
   sc->oblist = mk_tensor_hash(1, 0, 727);
+  sc->namespaces = mk_tensor_hash(2, 2, 73);
 
   assign_syntax(sc, "fn", OP_LAMBDA);
   assign_syntax(sc, "quote", OP_QUOTE);
@@ -9682,7 +9692,7 @@ bool nanoclj_init(nanoclj_t * sc) {
   nanoclj_val_t EMPTY = def_symbol(sc, "EMPTY");
   intern(sc, PersistentQueue, EMPTY, mk_pointer(mk_collection(sc, T_QUEUE, NULL)));
   
-  intern(sc, sc->current_ns, sc->MOUSE_POS, mk_nil());
+  intern(sc, sc->root_ns, sc->MOUSE_POS, mk_nil());
 
   register_functions(sc);
 
@@ -9698,9 +9708,9 @@ bool nanoclj_init(nanoclj_t * sc) {
   sc->context->properties = mk_properties(sc);
   
   if (sc->bg_color.red < 128 && sc->bg_color.green < 128 && sc->bg_color.blue < 128) {
-    intern(sc, sc->current_ns, sc->THEME, def_keyword(sc, "dark"));
+    intern(sc, sc->root_ns, sc->THEME, def_keyword(sc, "dark"));
   } else {
-    intern(sc, sc->current_ns, sc->THEME, def_keyword(sc, "bright"));
+    intern(sc, sc->root_ns, sc->THEME, def_keyword(sc, "bright"));
   }
 
   sc->tests_passed = 0;
@@ -9710,7 +9720,7 @@ bool nanoclj_init(nanoclj_t * sc) {
 }
 
 void nanoclj_set_input_port_file(nanoclj_t * sc, FILE * fin) {
-  intern(sc, sc->current_ns, sc->IN_SYM, port_rep_from_file(sc, T_READER, fin, NULL));
+  intern(sc, sc->root_ns, sc->IN_SYM, port_rep_from_file(sc, T_READER, fin, NULL));
 }
 
 void nanoclj_set_output_port_file(nanoclj_t * sc, FILE * fout) {
@@ -9732,11 +9742,11 @@ void nanoclj_set_output_port_callback(nanoclj_t * sc,
 
 void nanoclj_set_error_port_callback(nanoclj_t * sc, void (*text) (const char *, size_t, void *)) {
   nanoclj_val_t p = mk_writer_from_callback(sc, text, NULL, NULL, NULL);
-  intern(sc, sc->current_ns, sc->ERR, p);
+  intern(sc, sc->root_ns, sc->ERR, p);
 }
 
 void nanoclj_set_error_port_file(nanoclj_t * sc, FILE * fout) {
-  intern(sc, sc->current_ns, sc->ERR, port_rep_from_file(sc, T_WRITER, fout, NULL));
+  intern(sc, sc->root_ns, sc->ERR, port_rep_from_file(sc, T_WRITER, fout, NULL));
 }
 
 void nanoclj_set_external_data(nanoclj_t * sc, void *p) {

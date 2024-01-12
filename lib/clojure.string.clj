@@ -37,11 +37,11 @@
 
 (defn triml
   "Trims whitespace from the left side of a string"
-  [s] (apply str (drop-while #( . % isWhitespace) s)))
+  [s] (apply str (drop-while #( .isWhitespace % ) s)))
 
 (defn trimr
   "Trims whitespace from the right side of a string"
-  [s] (apply str (reverse (drop-while #( . % isWhitespace ) (rseq s)))))
+  [s] (apply str (reverse (drop-while #( .isWhitespace % ) (rseq s)))))
 
 (defn trim
   "Trims whitespace from both sides of a string"
