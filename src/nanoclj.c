@@ -2193,9 +2193,9 @@ static inline nanoclj_cell_t * cons(nanoclj_t * sc, nanoclj_val_t head, nanoclj_
   return get_cell(sc, T_LIST, 0, head, tail, NULL);
 }
 
-static inline nanoclj_cell_t * get_vector_object(nanoclj_t * sc, int_fast16_t t, size_t size) {
+static inline nanoclj_cell_t * get_vector_object_with_tensor_type(nanoclj_t * sc, int_fast16_t t, nanoclj_tensor_type_t tensor_type, size_t size) {
   nanoclj_tensor_t * store = NULL;
-  if (size > NANOCLJ_SMALL_VEC_SIZE || (size > 1 && is_map_type(t))) {
+  if (size > NANOCLJ_SMALL_VEC_SIZE || (size > 1 && is_map_type(t)) || tensor_type != nanoclj_val) {
     if (t == T_HASHSET || t == T_SORTED_HASHSET) {
       store = mk_tensor_hash(1, 0, size * 2);
     } else if (t == T_HASHMAP || t == T_SORTED_HASHMAP) {
@@ -2205,11 +2205,15 @@ static inline nanoclj_cell_t * get_vector_object(nanoclj_t * sc, int_fast16_t t,
     } else if (t == T_ARRAYMAP) {
       store = mk_tensor_2d_padded(nanoclj_val, 2, 0, size);
     } else {
-      store = mk_tensor_1d(nanoclj_val, size);
+      store = mk_tensor_1d(tensor_type, size);
     }
     if (!store) return NULL;
   }
   return get_collection_object(sc, t, 0, size, store);
+}
+
+static inline nanoclj_cell_t * get_vector_object(nanoclj_t * sc, int_fast16_t t, size_t size) {
+  return get_vector_object_with_tensor_type(sc, t, nanoclj_val, size);
 }
 
 static inline nanoclj_cell_t * mk_vector(nanoclj_t * sc, size_t len) {
@@ -5336,8 +5340,8 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, print_scheme
 }
 
 /* Creates a collection, args are seqed */
-static inline nanoclj_cell_t * mk_collection(nanoclj_t * sc, int type, nanoclj_cell_t * args) {
-  nanoclj_cell_t * coll = get_vector_object(sc, type, 0);
+static inline nanoclj_cell_t * mk_collection_with_tensor_type(nanoclj_t * sc, uint_fast16_t type, nanoclj_tensor_type_t tensor_type, nanoclj_cell_t * args) {
+  nanoclj_cell_t * coll = get_vector_object_with_tensor_type(sc, type, tensor_type, 0);
   if (coll) {
     if (is_map_type(type)) {
       for ( ; args; args = next(sc, args)) {
@@ -5355,6 +5359,10 @@ static inline nanoclj_cell_t * mk_collection(nanoclj_t * sc, int type, nanoclj_c
     }
   }
   return coll;
+}
+
+static inline nanoclj_cell_t * mk_collection(nanoclj_t * sc, uint_fast16_t type, nanoclj_cell_t * args) {
+  return mk_collection_with_tensor_type(sc, type, nanoclj_val, args);
 }
 
 static inline nanoclj_val_t mk_format(nanoclj_t * sc, strview_t fmt0, nanoclj_cell_t * args) {
@@ -8884,7 +8892,31 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     } else {
       s_return(sc, oblist_find_item(sc, T_KEYWORD, (strview_t){ 0, 0 }, to_strview(arg0)));
     }
-  
+
+  case OP_VECTOR_OF:
+    if (!unpack_args_1_plus(sc, &arg0, &arg_next)) {
+      return false;
+    } else {
+      nanoclj_tensor_type_t t;
+      if (arg0.as_long == sc->INT.as_long) {
+	t = nanoclj_i32;
+      } else if (arg0.as_long == sc->FLOAT.as_long) {
+	t = nanoclj_f32;
+      } else if (arg0.as_long == sc->DOUBLE.as_long) {
+	t = nanoclj_f64;
+      } else if (arg0.as_long == sc->BYTE.as_long) {
+	t = nanoclj_i8;
+      } else if (arg0.as_long == sc->SHORT.as_long) {
+	t = nanoclj_i16;
+      } else if (arg0.as_long == sc->BOOLEAN.as_long) {
+	t = nanoclj_boolean;
+      } else {
+	nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Invalid vector type")));
+	return false;
+      }
+      s_return(sc, mk_pointer(mk_collection_with_tensor_type(sc, T_VECTOR, t, arg_next)));
+    }
+
   case OP_SET_COLOR:
     if (!unpack_args_1_plus(sc, &arg0, &arg_next)) {
       return false;
@@ -9598,6 +9630,12 @@ bool nanoclj_init(nanoclj_t * sc) {
   sc->TARGET = def_keyword(sc, "target");
   sc->DATA = def_keyword(sc, "data");
   sc->HAIR = def_keyword(sc, "hair");
+  sc->INT = def_keyword(sc, "int");
+  sc->FLOAT = def_keyword(sc, "float");
+  sc->DOUBLE = def_keyword(sc, "double");
+  sc->BYTE = def_keyword(sc, "byte");
+  sc->SHORT = def_keyword(sc, "short");
+  sc->BOOLEAN = def_keyword(sc, "boolean");
   
   sc->HASH_SET = def_symbol(sc, "hash-set");
   sc->ARRAY_MAP = def_symbol(sc, "array-map");

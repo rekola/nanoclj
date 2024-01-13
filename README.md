@@ -80,13 +80,12 @@ As well as printing images in block mode like the plot function does, they can a
 - Strings are not interned: `(identical? "abc" "abc") ;=> false`
 - `rationalize` returns exact result for doubles: `(rationalize 0.1) ;=> 3602879701896397/36028797018963968`
 - No chunked or buffered lazy sequences
-- No homogenous vectors (They are not necessary since most data types are unboxed by default)
 - Data structures are only partially persistent, and while vectors, maps and sets allow fast reading and insertion, deletion and modification is slow.
-- Vectors, maps, sets and queues cannot have metadata
 - Namespaces can only contain Vars, not Classes: `(resolve 'Math) ;=> #'java.lang.Math`
 - Arrays are compared by value, can only contain primitive values (including Objects) and multidimensional arrays cannot be ragged
 - No type hints
 - Unbound Vars cannot be created
+- Dividing Long/MIN_VALUE by -1 doesn't fail
 
 ## Dependencies
 
@@ -170,7 +169,6 @@ Windows support is in progress.
   - vary-meta, alter-meta!, reset-meta!
   - aset-char, aset-long, amap, areduce, to-array-2d, make-array, long-array, bytes?
   - remove-ns, create-ns, ns-imports, ns-interns, ns-refers, ns-publics, ns-aliases, ns-name, all-ns, ns-unalias, ns-unmap, import, ns
-  - find-keyword
 - clojure.java.io
   - resource
   - make-parents

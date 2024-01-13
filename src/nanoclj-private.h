@@ -241,6 +241,12 @@ extern "C" {
     nanoclj_val_t TARGET;         /* :target */
     nanoclj_val_t DATA;		  /* :data */
     nanoclj_val_t HAIR;	          /* :hair */
+    nanoclj_val_t INT;	 	  /* :int */
+    nanoclj_val_t FLOAT;	  /* :float */
+    nanoclj_val_t DOUBLE;	  /* :double */
+    nanoclj_val_t BYTE;	          /* :byte */
+    nanoclj_val_t SHORT;          /* :short */
+    nanoclj_val_t BOOLEAN;        /* :boolean */
     
     nanoclj_val_t HASH_SET;	  /* hash-set */
     nanoclj_val_t ARRAY_MAP;	  /* array-map */
