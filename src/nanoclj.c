@@ -3012,7 +3012,7 @@ static uint32_t hasheq(nanoclj_val_t v, void * d) {
   case T_EMPTYLIST:
     return -2017569654;
 
-  case T_CODEPOINT: /* Clojure doesn't use murmur3 for characters */
+  case T_CODEPOINT: /* Clojure doesn't hash characters */
     return decode_integer(v);
 
   case T_PROC:
@@ -6464,12 +6464,12 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 
   case OP_E0VEC:{	       /* eval vector element */
     nanoclj_cell_t * vec = decode_pointer(sc->code);
-    long long i = sc->args ? to_long(_car_unchecked(sc->args)) : 0;
+    long long i = sc->args ? decode_integer(_car_unchecked(sc->args)) : 0;
     set_indexed_value(vec, i, sc->value);
     if (i + 1 < get_size(vec)) {
       nanoclj_cell_t * args = sc->args;
-      if (args) _car_unchecked(args) = mk_long(sc, i + 1);
-      else args = cons(sc, mk_long(sc, i + 1), NULL);
+      if (args) _car_unchecked(args) = mk_int(i + 1);
+      else args = cons(sc, mk_int(i + 1), NULL);
       s_save(sc, OP_E0VEC, args, sc->code);
       sc->code = get_indexed_value(vec, i + 1);
       s_goto(sc, OP_EVAL);
@@ -6880,13 +6880,13 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 
   case OP_LET1_VEC:{
     nanoclj_cell_t * vec = decode_pointer(car(sc->code));
-    long long i = sc->args ? to_long(_car_unchecked(sc->args)) : 0;
+    long long i = sc->args ? decode_integer(_car_unchecked(sc->args)) : 0;
     destructure_value(sc, get_indexed_value(vec, i), sc->value);
     
     if (i + 2 < get_size(vec)) {
       nanoclj_cell_t * args = sc->args;
-      if (args) _car_unchecked(args) = mk_long(sc, i + 2);
-      else args = cons(sc, mk_long(sc, i + 2), NULL);
+      if (args) _car_unchecked(args) = mk_int(i + 2);
+      else args = cons(sc, mk_int(i + 2), NULL);
       s_save(sc, OP_LET1_VEC, args, sc->code);
       
       sc->code = get_indexed_value(vec, i + 3);
@@ -7109,7 +7109,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     case T_NIL:
       nanoclj_throw(sc, sc->NullPointerException);
       return false;
-    case T_LONG: s_return(sc, mk_long(sc, abs(decode_integer(arg0))));
+    case T_LONG:
+      s_return(sc, mk_long(sc, llabs(decode_integer(arg0))));
     case T_DOUBLE: s_return(sc, mk_double(fabs(arg0.as_double)));
     case T_CELL: {
       nanoclj_cell_t * c = decode_pointer(arg0);
@@ -7148,7 +7149,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     case T_NIL:
       nanoclj_throw(sc, sc->NullPointerException);
       return false;
-    case T_LONG: s_return(sc, mk_long(sc, decode_integer(arg0) + 1));
+    case T_LONG: s_return(sc, mk_long(sc, decode_integer(arg0) + 1LL));
     case T_DOUBLE: s_return(sc, mk_double(arg0.as_double + 1.0));
     case T_CELL: {
       nanoclj_cell_t * c = decode_pointer(arg0);
@@ -7195,7 +7196,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     case T_NIL:
       nanoclj_throw(sc, sc->NullPointerException);
       return false;
-    case T_LONG: s_return(sc, mk_long(sc, decode_integer(arg0) - 1));
+    case T_LONG: s_return(sc, mk_long(sc, decode_integer(arg0) - 1LL));
     case T_DOUBLE: s_return(sc, mk_double(arg0.as_double - 1.0));
     case T_CELL: {
       nanoclj_cell_t * c = decode_pointer(arg0);
@@ -7761,7 +7762,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     switch (prim_type(arg0)) {
     case T_NIL:
     case T_EMPTYLIST:
-      s_return(sc, mk_int(0));
+      s_return(sc, mk_long_prim(0));
     case T_CELL:
       {
 	nanoclj_cell_t * c = decode_pointer(arg0);

@@ -26,10 +26,13 @@
 
 (t/is (= 6 (+ 1 2 3)))
 
-(t/is (= (abs -100N) 100))
+(t/is (= (abs -100N) (abs -100) 100))
+(t/is (= (abs Integer/MIN_VALUE) 2147483648))
 
 (t/is (= (inc 5) 6))
 (t/is (= (dec 6) 5))
+(t/is (= (dec Integer/MIN_VALUE) -2147483649))
+(t/is (= (inc Integer/MAX_VALUE) 2147483648))
 
                                         ; Bigints
 
