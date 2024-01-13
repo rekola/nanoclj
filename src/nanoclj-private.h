@@ -91,7 +91,8 @@ extern "C" {
       } _ratio;
       struct {
 	nanoclj_tensor_t * tensor;
-	size_t offset, size;
+	int32_t offset, size;
+	nanoclj_cell_t * meta;
       } _collection;
       struct {
 	nanoclj_tensor_t * tensor;

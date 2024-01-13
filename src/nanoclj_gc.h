@@ -66,6 +66,8 @@ E2:_setmark(p);
 	  if (is_cell(v)) mark(decode_pointer(v));
 	}
       }
+
+      if (p->_collection.meta) mark(p->_collection.meta);
     }
     break;
 
