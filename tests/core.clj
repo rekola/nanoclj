@@ -112,14 +112,20 @@
 (t/is (= (rseq [ 1 2 3 4 ]) '( 4 3 2 1 )))
 (t/is (= (rseq [ :a :b ]) '( :b :a )))
 
-                                        ; str
+                                        ; Printing and str
 
 (t/is (= (str \a \b \c) "abc"))
 (t/is (= (str "ab" "cd") "abcd"))
 (t/is (= (str [nil]) "[nil]"))
 (t/is (= (str '( 1 )) "(1)"))
+(t/is (= (str 1N) "1"))
 (t/is (= (str nil nil) ""))
 (t/is (= (str :ab) ":ab"))
+(t/is (= (str ["a"]) "[\"a\"]"))
+
+(t/is (= (print-str nil) (pr-str nil) "nil"))
+(t/is (= (print-str ["a"]) "[a]"))
+(t/is (= (pr-str ["a"]) "[\"a\"]"))
 
                                         ; Lazy-seqs and Delays
 

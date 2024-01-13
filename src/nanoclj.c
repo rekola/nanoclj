@@ -5088,13 +5088,12 @@ static inline void print_double(nanoclj_t * sc, double v, nanoclj_cell_t * out) 
 
 static inline void print_bigint(nanoclj_t * sc, bigintview_t bv, nanoclj_cell_t * out) {
   if (!bv.size) {
-    putchars(sc, "0N", 2, out);
+    putchars(sc, "0", 2, out);
   } else {
     char * b;
     size_t n = bigintview_to_string(bv, &b);
     putchars(sc, b, n, out);
     free(b);
-    putchars(sc, "N", 1, out);
   }
 }
 
@@ -5113,8 +5112,14 @@ static inline void print_ratio(nanoclj_t * sc, int sign, nanoclj_tensor_t * num,
   }
 }
 
+typedef enum {
+  print_scheme_str = 1,
+  print_scheme_print,
+  print_scheme_pr
+} print_scheme_t;
+
 /* Uses internal buffer unless string pointer is already available */
-static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_flag, nanoclj_cell_t * out) {
+static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, print_scheme_t ps, nanoclj_cell_t * out) {
   strview_t sv = { 0, 0 };
   nanoclj_val_t name = mk_nil();
   
@@ -5129,7 +5134,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
     print_double(sc, l.as_double, out);
     return;
   case T_CODEPOINT:
-    if (print_flag) {
+    if (ps == print_scheme_pr) {
       sv = mk_strview(escape_char(decode_integer(l), sc->strbuff, false));
     } else {
       sv = (strview_t){
@@ -5145,7 +5150,11 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
     sv = to_strview(l);
     break;
   case T_NIL:
-    sv = (strview_t){ "nil", 3 };
+    if (ps == print_scheme_str) {
+      sv = (strview_t){ "", 0 };
+    } else {
+      sv = (strview_t){ "nil", 3 };
+    }
     break;
   case T_CELL:
     {
@@ -5193,7 +5202,10 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
 	break;
       case T_DATE:{
 	time_t t = _lvalue_unchecked(c) / 1000;
-	if (print_flag) {
+	if (ps == print_scheme_str) {
+	  sv = mk_strview(ctime_r(&t, sc->strbuff));
+	  sv.size--;
+	} else {
 	  int msec = _lvalue_unchecked(c) % 1000;
 	  struct tm tm;
 	  gmtime_r(&t, &tm);
@@ -5203,15 +5215,12 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
 		    1900 + tm.tm_year, 1 + tm.tm_mon, tm.tm_mday,
 		    tm.tm_hour, tm.tm_min, tm.tm_sec, msec)
 	  };
-	} else {
-	  sv = mk_strview(ctime_r(&t, sc->strbuff));
-	  sv.size--;
 	}
       }
 	break;
       case T_UUID:
 	sv = _to_strview(c);
-	if (print_flag) {
+	if (ps != print_scheme_str) {
 	  sv = (strview_t){
 	    sc->strbuff,
 	    snprintf(sc->strbuff, STRBUFFSIZE, "#uuid \"%.*s\"", sv.size, sv.ptr)
@@ -5220,7 +5229,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
 	break;
       case T_STRING:
 	sv = _to_strview(c);
-	if (print_flag) {
+	if (ps == print_scheme_pr) {
 	  print_slashstring(sc, sv, out);
 	  return;
 	}
@@ -5254,7 +5263,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
 	if (get_elem(sc, _cons_metadata(c), sc->NAME, &name_v)) {
 	  sv = to_strview(name_v);
 	}
-	if (print_flag) {
+	if (ps != print_scheme_str) {
 	  sv = (strview_t){
 	    sc->strbuff,
 	    snprintf(sc->strbuff, STRBUFFSIZE, "#<Namespace %.*s>", sv.size, sv.ptr)
@@ -5264,7 +5273,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
 	break;
       case T_FILE:
 	sv = _to_strview(c);
-	if (print_flag) {
+	if (ps != print_scheme_str) {
 	  sv = (strview_t){
 	    sc->strbuff,
 	    snprintf(sc->strbuff, STRBUFFSIZE, "#<File %.*s>", sv.size, sv.ptr)
@@ -5273,7 +5282,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
 	break;
       case T_URL:
 	sv = _to_strview(c);
-	if (print_flag) {
+	if (ps != print_scheme_str) {
 	  sv = (strview_t){
 	    sc->strbuff,
 	    snprintf(sc->strbuff, STRBUFFSIZE, "#<URL %.*s>", sv.size, sv.ptr)
@@ -5293,6 +5302,9 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, bool print_f
 	break;
       case T_BIGINT:
 	print_bigint(sc, _to_bigintview(c), out);
+	if (ps != print_scheme_str) {
+	  putchars(sc, "N", 1, out);
+	}
 	return;
       case T_RATIO:
 	print_ratio(sc, _sign(c), c->_ratio.numerator, c->_ratio.denominator, out);
@@ -8017,8 +8029,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
     s_return(sc, sc->code);
     
-  case OP_PR:               /* pr- */
-  case OP_PRINT:            /* print- */
+  case OP_PR:               /* -pr- */
+  case OP_PRINT:            /* -print */
+  case OP_STR:		    /* -str */
     if (!unpack_args_1(sc, &arg0)) {
       return false;
     } else {
@@ -8027,7 +8040,15 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Not a Writer")));
 	return false;
       } else {
-	print_primitive(sc, arg0, op == OP_PR, decode_pointer(x));
+	print_scheme_t ps;
+	switch (sc->op) {
+	case OP_PR: ps = print_scheme_pr; break;
+	case OP_PRINT: ps = print_scheme_print; break;
+	case OP_STR:
+	default:
+	  ps = print_scheme_str;
+	}
+	print_primitive(sc, arg0, ps, decode_pointer(x));
 	s_return(sc, mk_nil());
       }
     }
@@ -8042,7 +8063,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  char c = to_int(arg1);
 	  putchars(sc, &c, 1, out);
 	} else {
-	  print_primitive(sc, arg1, false, out);
+	  print_primitive(sc, arg1, print_scheme_print, out);
 	}
 	s_return(sc, mk_nil());
       }
@@ -9183,8 +9204,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
 
   default:
-    snprintf(sc->strbuff, STRBUFFSIZE, "%d: illegal operator", sc->op);
-    Error_0(sc, sc->strbuff);
+    fprintf(stderr, "%d: illegal operator", sc->op);
+    exit(1);
   }
   return false;                 /* NOTREACHED */
 }

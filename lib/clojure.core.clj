@@ -586,13 +586,15 @@
 (defn read-string [s] (with-in-str s (read)))
 (defn load-string [s] (eval (read-string s)))
 
+(defn ^:private str-print
+  [& more] (run! #( if (coll? %) (pr-block (fn [class v] (-pr v)) %) (-str %) ) more))
+
 (defn str
   "Converts arguments to string"
   ([] "")
-  ([x] (if (nil? x) ""
-           (with-out-str (print x))))
-  ([x & ys] (with-out-str (do (when-not (nil? x) (print x))
-                              (run! (fn [x] (when-not (nil? x) (print x))) ys)))))
+  ([x] (with-out-str (str-print x)))
+  ([x & ys] (with-out-str (do (str-print x)
+                              (run! #( str-print % ) ys)))))
 
 (def maps
   "Returns a string with each element mapped using f"

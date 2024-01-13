@@ -92,6 +92,7 @@ _OP_DEF("deref", "Returns the current state of Var or Delay, which it also force
 _OP_DEF(0, 0, OP_SAVE_FORCED)
 _OP_DEF("-pr", 0, OP_PR)
 _OP_DEF("-print", 0, OP_PRINT)
+_OP_DEF("-str", 0, OP_STR)
 _OP_DEF("-write", 0, OP_WRITEM)
 _OP_DEF("format", 0, OP_FORMAT)
 _OP_DEF("throw", 0, OP_THROW)
