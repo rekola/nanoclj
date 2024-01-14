@@ -254,7 +254,7 @@ extern "C" {
     nanoclj_val_t DOT;		  /* . */
     nanoclj_val_t CATCH;
     nanoclj_val_t FINALLY;
-    nanoclj_cell_t * EMPTYVEC;
+    nanoclj_cell_t * EMPTYVEC, * EMPTYSET, * EMPTYMAP;
     
     nanoclj_val_t save_inport;
     nanoclj_tensor_t * load_stack;

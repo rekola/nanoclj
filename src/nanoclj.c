@@ -6452,10 +6452,11 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  
 	case T_VECTOR:
 	  if (get_size(code_cell) > 0) {
-	    s_save(sc, OP_E0VEC, NULL, mk_pointer(copy_for_mutation(sc, decode_pointer(sc->code))));
+	    s_save(sc, OP_E0VEC, NULL, mk_pointer(copy_for_mutation(sc, code_cell)));
 	    sc->code = get_indexed_value(code_cell, 0);
 	    s_goto(sc, OP_EVAL);
 	  }
+	  break;
 	}
       }
     }
@@ -8179,17 +8180,23 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  }
 	
 	case TOK_SET:
-	case TOK_MAP:
-	  if (sc->tok == TOK_SET) {
-	    s_save(sc, OP_RD_SET, NULL, mk_emptylist());
-	  } else {
-	    s_save(sc, OP_RD_MAP, NULL, mk_emptylist());
-	  }
 	  sc->tok = token(sc, inport);
-	  if (sc->tok == TOK_RCURLY) {     /* Empty map or set */
-	    s_return(sc, mk_emptylist());
+	  if (sc->tok == TOK_RCURLY) {     /* Empty set */
+	    s_return(sc, mk_pointer(sc->EMPTYSET));
 	  } else {
 	    _nesting_unchecked(inport)++;
+	    s_save(sc, OP_RD_SET, NULL, mk_emptylist());
+	    s_save(sc, OP_RD_MAP_ELEMENT, NULL, mk_emptylist());
+	    s_goto(sc, OP_RD_SEXPR);
+	  }
+	
+	case TOK_MAP:
+	  sc->tok = token(sc, inport);
+	  if (sc->tok == TOK_RCURLY) {     /* Empty map */
+	    s_return(sc, mk_pointer(sc->EMPTYMAP));
+	  } else {
+	    _nesting_unchecked(inport)++;
+	    s_save(sc, OP_RD_MAP, NULL, mk_emptylist());
 	    s_save(sc, OP_RD_MAP_ELEMENT, NULL, mk_emptylist());
 	    s_goto(sc, OP_RD_SEXPR);
 	  }
@@ -9679,6 +9686,8 @@ bool nanoclj_init(nanoclj_t * sc) {
   sc->FINALLY = def_symbol(sc, "finally");
 
   sc->EMPTYVEC = mk_vector(sc, 0);
+  sc->EMPTYMAP = get_vector_object(sc, T_ARRAYMAP, 0);
+  sc->EMPTYSET = get_vector_object(sc, T_HASHSET, 0);
 
   /* Init root namespace clojure.core */
   sc->root_ns = NULL;
