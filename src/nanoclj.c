@@ -644,6 +644,18 @@ static inline nanoclj_val_t get_indexed_meta(const nanoclj_cell_t * coll, int64_
   return mk_nil();
 }
 
+static inline void set_indexed_key(nanoclj_cell_t * coll, size_t ielem, nanoclj_val_t a) {
+  switch (_type(coll)) {
+  case T_ARRAYMAP:
+    if (_is_small(coll)) {
+      _smalldata_unchecked(coll)[0] = a;
+    } else {
+      tensor_mutate_set_2d(_tensor_unchecked(coll), 0, _offset_unchecked(coll) + ielem, a);
+    }
+    break;
+  }
+}
+
 static inline void set_indexed_value(nanoclj_cell_t * coll, size_t ielem, nanoclj_val_t a) {
   switch (_type(coll)) {
   case T_HASHMAP:
@@ -6457,6 +6469,14 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	    s_goto(sc, OP_EVAL);
 	  }
 	  break;
+	  
+	case T_ARRAYMAP:
+	  if (get_size(code_cell) > 0) {
+	    s_save(sc, OP_E0MAP, NULL, mk_pointer(copy_for_mutation(sc, code_cell)));
+	    sc->code = get_indexed_key(code_cell, 0);
+	    s_goto(sc, OP_EVAL);
+	  }
+	  break;
 	}
       }
     }
@@ -6478,7 +6498,27 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       s_return(sc, sc->code);
     }
   }
-    
+
+  case OP_E0MAP:{	       /* eval map key/value */
+    nanoclj_cell_t * map = decode_pointer(sc->code);
+    long long i = sc->args ? decode_integer(_car_unchecked(sc->args)) : 0;
+    if (i & 1) {
+      set_indexed_value(map, i / 2, sc->value);
+    } else {
+      set_indexed_key(map, i / 2, sc->value);
+    }
+    if (++i < 2 * get_size(map)) {
+      nanoclj_cell_t * args = sc->args;
+      if (args) _car_unchecked(args) = mk_int(i);
+      else args = cons(sc, mk_int(i), NULL);
+      s_save(sc, OP_E0MAP, args, sc->code);
+      sc->code = i & 1 ? get_indexed_value(map, i / 2) : get_indexed_key(map, i / 2);
+      s_goto(sc, OP_EVAL);
+    } else {
+      s_return(sc, sc->code);
+    }
+  }
+
   case OP_E0ARGS:              /* eval arguments */
     if (is_macro(sc->value)) {  /* macro expansion */
       s_save(sc, OP_DOMACRO, NULL, mk_emptylist());
@@ -8186,7 +8226,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  } else {
 	    _nesting_unchecked(inport)++;
 	    s_save(sc, OP_RD_SET, NULL, mk_emptylist());
-	    s_save(sc, OP_RD_MAP_ELEMENT, NULL, mk_emptylist());
+	    s_save(sc, OP_RD_SET_ELEMENT, NULL, mk_emptylist());
 	    s_goto(sc, OP_RD_SEXPR);
 	  }
 	
@@ -8196,8 +8236,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	    s_return(sc, mk_pointer(sc->EMPTYMAP));
 	  } else {
 	    _nesting_unchecked(inport)++;
-	    s_save(sc, OP_RD_MAP, NULL, mk_emptylist());
-	    s_save(sc, OP_RD_MAP_ELEMENT, NULL, mk_emptylist());
+	    s_save(sc, OP_RD_MAP_KEY, sc->EMPTYMAP, mk_emptylist());
 	    s_goto(sc, OP_RD_SEXPR);
 	  }
 	
@@ -8407,8 +8446,46 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       }
     }
     Error_0(sc, "Not a reader");
+    
+  case OP_RD_MAP_KEY:
+    x = get_in_port(sc);
+    if (is_cell(x)) {
+      nanoclj_cell_t * inport = decode_pointer(x);
+      if (is_readable(inport)) {
+	sc->tok = token(sc, inport);
+	if (sc->tok == TOK_EOF) {
+	  s_return(sc, mk_codepoint(EOF));
+	} else if (sc->tok == TOK_RCURLY) {
+	  Error_0(sc, "Map literal must contain an even number of forms");
+	} else {
+	  s_save(sc, OP_RD_MAP_VALUE, sc->args, sc->value);
+	  s_goto(sc, OP_RD_SEXPR);
+	}
+      }
+    }
+    Error_0(sc, "Not a reader");
 
-  case OP_RD_MAP_ELEMENT:
+  case OP_RD_MAP_VALUE:
+    x = get_in_port(sc);
+    if (is_cell(x)) {
+      nanoclj_cell_t * inport = decode_pointer(x);
+      if (is_readable(inport)) {
+	sc->args = assoc(sc, sc->args, sc->code, sc->value);
+	sc->tok = token(sc, inport);
+	if (sc->tok == TOK_EOF) {
+	  s_return(sc, mk_codepoint(EOF));
+	} else if (sc->tok == TOK_RCURLY) {
+	  _nesting_unchecked(inport)--;
+	  s_return(sc, mk_pointer(sc->args));
+	} else {
+	  s_save(sc, OP_RD_MAP_KEY, sc->args, mk_emptylist());
+	  s_goto(sc, OP_RD_SEXPR);
+	}
+      }
+    }
+    Error_0(sc, "Not a reader");
+
+  case OP_RD_SET_ELEMENT:
     x = get_in_port(sc);
     if (is_cell(x)) {
       nanoclj_cell_t * inport = decode_pointer(x);
@@ -8421,13 +8498,13 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  _nesting_unchecked(inport)--;
 	  s_return(sc, mk_pointer(reverse_in_place(sc, sc->args, NULL)));
 	} else {
-	  s_save(sc, OP_RD_MAP_ELEMENT, sc->args, mk_emptylist());
+	  s_save(sc, OP_RD_SET_ELEMENT, sc->args, mk_emptylist());
 	  s_goto(sc, OP_RD_SEXPR);
 	}
       }
     }
     Error_0(sc, "Not a reader");
-    
+
   case OP_RD_AMP:
     x = get_in_port(sc);
     if (is_cell(x)) {
@@ -8486,9 +8563,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_RD_SET:
     s_return(sc, mk_pointer(cons(sc, sc->HASH_SET, decode_pointer(sc->value))));
     
-  case OP_RD_MAP:
-    s_return(sc, mk_pointer(cons(sc, sc->ARRAY_MAP, decode_pointer(sc->value))));
-
   case OP_RD_DOT:{
     nanoclj_val_t method = sc->code;
     nanoclj_val_t inst = car(sc->value);
@@ -9680,7 +9754,6 @@ bool nanoclj_init(nanoclj_t * sc) {
   sc->BOOLEAN = def_keyword(sc, "boolean");
   
   sc->HASH_SET = def_symbol(sc, "hash-set");
-  sc->ARRAY_MAP = def_symbol(sc, "array-map");
   sc->DOT = def_symbol(sc, ".");
   sc->CATCH = def_symbol(sc, "catch");
   sc->FINALLY = def_symbol(sc, "finally");
