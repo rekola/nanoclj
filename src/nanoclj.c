@@ -3866,7 +3866,27 @@ static inline nanoclj_cell_t * conjoin(nanoclj_t * sc, nanoclj_cell_t * coll, na
     } else {
       return coll;
     }
+  } else if (is_map_type(t)) {
+    if (is_cell(new_value)) {
+      nanoclj_cell_t * c = decode_pointer(new_value);
+      if (_type(c) == T_VECTOR || _type(c) == T_MAPENTRY) {
+	return assoc(sc, coll, first(sc, c), second(sc, c));
+      } else if (is_map_type(_type(c))) {
+	for (; c; c = next(sc, c)) {
+	  nanoclj_cell_t * mapentry = decode_pointer(first(sc, c));
+	  coll = assoc(sc, coll, first(sc, mapentry), second(sc, mapentry));
+	}
+	return coll;
+      }
+    }
   } else if (is_vector_type(t) || t == T_TENSOR) {
+    if (t == T_VECTOR && is_cell(new_value)) {
+      nanoclj_cell_t * arg = decode_pointer(new_value);
+      if (arg && _type(arg) == T_MAPENTRY) {
+	/* If MapEntry is conjoined to a vector, it is an index value pair */
+	return assoc(sc, coll, first(sc, arg), second(sc, arg));
+      }
+    }
     return vector_conjoin(sc, coll, new_value);
   } else if (is_string_type(t)) {
     int32_t c = decode_integer(new_value);
@@ -3884,9 +3904,8 @@ static inline nanoclj_cell_t * conjoin(nanoclj_t * sc, nanoclj_cell_t * coll, na
       if (!tensor) return NULL;
       return get_collection_object(sc, t, offset, tensor->ne[0] - offset, tensor, NULL);
     }
-  } else {
-    return NULL;
   }
+  return NULL;
 }
 
 static inline nanoclj_cell_t * disj(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t key) {
@@ -6462,14 +6481,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	    s_goto(sc, OP_EVAL);
 	  }
 
-	case T_HASHSET:
-	  if (get_size(code_cell) > 0) {
-	    s_save(sc, OP_E0SET, sc->EMPTYSET, mk_pointer(next(sc, code_cell)));
-	    sc->code = first(sc, code_cell);
-	    s_goto(sc, OP_EVAL);
-	  }
-	  break;
-	  
 	case T_VECTOR:
 	  if (get_size(code_cell) > 0) {
 	    s_save(sc, OP_E0VEC, NULL, mk_pointer(copy_for_mutation(sc, code_cell)));
@@ -6477,11 +6488,26 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	    s_goto(sc, OP_EVAL);
 	  }
 	  break;
+
+	case T_MAPENTRY:
+	  if (get_size(code_cell) > 0) {
+	    s_save(sc, OP_E0COLL, sc->EMPTYVEC, mk_pointer(next(sc, code_cell)));
+	    sc->code = first(sc, code_cell);
+	    s_goto(sc, OP_EVAL);
+	  }
+
+	case T_HASHSET:
+	  if (get_size(code_cell) > 0) {
+	    s_save(sc, OP_E0COLL, sc->EMPTYSET, mk_pointer(next(sc, code_cell)));
+	    sc->code = first(sc, code_cell);
+	    s_goto(sc, OP_EVAL);
+	  }
+	  break;
 	  
 	case T_ARRAYMAP:
 	  if (get_size(code_cell) > 0) {
-	    s_save(sc, OP_E0MAP, NULL, mk_pointer(copy_for_mutation(sc, code_cell)));
-	    sc->code = get_indexed_key(code_cell, 0);
+	    s_save(sc, OP_E0COLL, sc->EMPTYMAP, mk_pointer(next(sc, code_cell)));
+	    sc->code = first(sc, code_cell);
 	    s_goto(sc, OP_EVAL);
 	  }
 	  break;
@@ -6507,32 +6533,12 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
   }
 
-  case OP_E0MAP:{	       /* eval map key/value */
-    nanoclj_cell_t * map = decode_pointer(sc->code);
-    long long i = sc->args ? decode_integer(_car_unchecked(sc->args)) : 0;
-    if (i & 1) {
-      set_indexed_value(map, i / 2, sc->value);
-    } else {
-      set_indexed_key(map, i / 2, sc->value);
-    }
-    if (++i < 2 * get_size(map)) {
-      nanoclj_cell_t * args = sc->args;
-      if (args) _car_unchecked(args) = mk_int(i);
-      else args = cons(sc, mk_int(i), NULL);
-      s_save(sc, OP_E0MAP, args, sc->code);
-      sc->code = i & 1 ? get_indexed_value(map, i / 2) : get_indexed_key(map, i / 2);
-      s_goto(sc, OP_EVAL);
-    } else {
-      s_return(sc, sc->code);
-    }
-  }
-
-  case OP_E0SET:
+  case OP_E0COLL:
     sc->args = conjoin(sc, sc->args, sc->value);
     if (is_nil(sc->code)) {
       s_return(sc, mk_pointer(sc->args));
     } else {
-      s_save(sc, OP_E0SET, sc->args, mk_pointer(next(sc, decode_pointer(sc->code))));
+      s_save(sc, OP_E0COLL, sc->args, mk_pointer(next(sc, decode_pointer(sc->code))));
       sc->code = first(sc, decode_pointer(sc->code));
       sc->args = NULL;
       s_goto(sc, OP_EVAL);
@@ -7775,37 +7781,12 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     case T_CELL:
       {
 	nanoclj_cell_t * coll = decode_pointer(arg0);
-	if (is_map_type(_type(coll))) {
-	  if (is_cell(arg1)) {
-	    nanoclj_cell_t * arg = decode_pointer(arg1);
-	    if (arg) {
-	      if (is_map_type(_type(arg))) {
-		size_t other_len = get_size(arg);
-		for (size_t i = 0; i < other_len; i++) {
-		  nanoclj_val_t key = get_indexed_key(arg, i), val = get_indexed_value(arg, i);
-		  coll = assoc(sc, coll, key, val);
-		}
-		s_return(sc, mk_pointer(coll));
-	      } else if (_is_sequence(arg) || is_seqable_type(_type(arg))) {
-		nanoclj_val_t key = first(sc, arg), val = second(sc, arg);
-		s_return(sc, mk_pointer(assoc(sc, coll, key, val)));
-	      }
-	    }
-	  }
-	  Error_0(sc, "Value is not ISeqable");
-	} else if (_type(coll) == T_VECTOR && is_cell(arg1)) {
-	  nanoclj_cell_t * arg = decode_pointer(arg1);
-	  if (arg && _type(arg) == T_MAPENTRY) {
-	    /* If MapEntry is conjoined to a vector, it is an index value pair */
-	    s_return(sc, mk_pointer(assoc(sc, coll, first(sc, arg), second(sc, arg))));
-	  }
-	}
-	if (_is_sequence(coll) || is_seqable_type(_type(coll))) {
-	  s_return(sc, mk_pointer(conjoin(sc, coll, arg1)));
-	}
+	coll = conjoin(sc, coll, arg1);
+	if (coll) s_return(sc, mk_pointer(coll));
       }
     }
-    Error_0(sc, "No protocol method ICollection.-conj defined");
+    nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Invalid arguments for -conj")));
+    return false;
 
   case OP_DISJ:
     if (!unpack_args_2(sc, &arg0, &arg1)) {

@@ -144,6 +144,10 @@
 (t/is (= (assoc {} :a 1 :b 1) { :a 1 :b 1 }))
 (t/is (= (first { :a 1 :b 1 }) [ :a 1 ]))
 (t/is (= (count (into #{} (range 50))) 50))
+(t/is (= (conj { :a 1 } [ :b 2 ]) { :a 1 :b 2}))
+(t/is (= (conj #{ :a } :b ) #{ :a :b }))
+(t/is (= (conj { :a 1 } { :b 2 }) { :a 1 :b 2 }))
+(t/is (= (assoc [ :a :b :c :d ] 0 :A) [ :A :b :c :d ]))
 
                                         ; Dates
 
