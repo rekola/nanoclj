@@ -249,8 +249,6 @@ extern "C" {
     nanoclj_val_t SHORT;          /* :short */
     nanoclj_val_t BOOLEAN;        /* :boolean */
     
-    nanoclj_val_t HASH_SET;	  /* hash-set */
-    nanoclj_val_t ARRAY_MAP;	  /* array-map */
     nanoclj_val_t DOT;		  /* . */
     nanoclj_val_t CATCH;
     nanoclj_val_t FINALLY;

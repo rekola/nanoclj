@@ -6461,6 +6461,14 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	    sc->code = _car_unchecked(code_cell);
 	    s_goto(sc, OP_EVAL);
 	  }
+
+	case T_HASHSET:
+	  if (get_size(code_cell) > 0) {
+	    s_save(sc, OP_E0SET, sc->EMPTYSET, mk_pointer(next(sc, code_cell)));
+	    sc->code = first(sc, code_cell);
+	    s_goto(sc, OP_EVAL);
+	  }
+	  break;
 	  
 	case T_VECTOR:
 	  if (get_size(code_cell) > 0) {
@@ -6518,6 +6526,17 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       s_return(sc, sc->code);
     }
   }
+
+  case OP_E0SET:
+    sc->args = conjoin(sc, sc->args, sc->value);
+    if (is_nil(sc->code)) {
+      s_return(sc, mk_pointer(sc->args));
+    } else {
+      s_save(sc, OP_E0SET, sc->args, mk_pointer(next(sc, decode_pointer(sc->code))));
+      sc->code = first(sc, decode_pointer(sc->code));
+      sc->args = NULL;
+      s_goto(sc, OP_EVAL);
+    }
 
   case OP_E0ARGS:              /* eval arguments */
     if (is_macro(sc->value)) {  /* macro expansion */
@@ -8225,8 +8244,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	    s_return(sc, mk_pointer(sc->EMPTYSET));
 	  } else {
 	    _nesting_unchecked(inport)++;
-	    s_save(sc, OP_RD_SET, NULL, mk_emptylist());
-	    s_save(sc, OP_RD_SET_ELEMENT, NULL, mk_emptylist());
+	    s_save(sc, OP_RD_SET_ELEMENT, sc->EMPTYSET, mk_emptylist());
 	    s_goto(sc, OP_RD_SEXPR);
 	  }
 	
@@ -8490,13 +8508,13 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     if (is_cell(x)) {
       nanoclj_cell_t * inport = decode_pointer(x);
       if (is_readable(inport)) {
-	sc->args = cons(sc, sc->value, sc->args);
+	sc->args = conjoin(sc, sc->args, sc->value);
 	sc->tok = token(sc, inport);
 	if (sc->tok == TOK_EOF) {
 	  s_return(sc, mk_codepoint(EOF));
 	} else if (sc->tok == TOK_RCURLY) {
 	  _nesting_unchecked(inport)--;
-	  s_return(sc, mk_pointer(reverse_in_place(sc, sc->args, NULL)));
+	  s_return(sc, mk_pointer(sc->args));
 	} else {
 	  s_save(sc, OP_RD_SET_ELEMENT, sc->args, mk_emptylist());
 	  s_goto(sc, OP_RD_SEXPR);
@@ -8559,9 +8577,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
     s_return(sc, mk_pointer(cons(sc, sc->LAMBDA, cons(sc, mk_pointer(vec), cons(sc, sc->value, NULL)))));
   }
-    
-  case OP_RD_SET:
-    s_return(sc, mk_pointer(cons(sc, sc->HASH_SET, decode_pointer(sc->value))));
     
   case OP_RD_DOT:{
     nanoclj_val_t method = sc->code;
@@ -9753,7 +9768,6 @@ bool nanoclj_init(nanoclj_t * sc) {
   sc->SHORT = def_keyword(sc, "short");
   sc->BOOLEAN = def_keyword(sc, "boolean");
   
-  sc->HASH_SET = def_symbol(sc, "hash-set");
   sc->DOT = def_symbol(sc, ".");
   sc->CATCH = def_symbol(sc, "catch");
   sc->FINALLY = def_symbol(sc, "finally");
