@@ -25,6 +25,10 @@
 #include <glob.h>
 #include <unistd.h>
 
+#if !USE_ARC4RANDOM
+#include <sys/random.h>
+#endif
+
 #endif
 
 #define STB_IMAGE_STATIC
