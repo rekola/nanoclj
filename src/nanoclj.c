@@ -5824,16 +5824,20 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
       x = first(sc, args);
       if (is_string(x)) {
 	strview_t sv = to_strview(x);
-	uint64_t c0, c1, c2, c3, c4;
-	if (sscanf(sv.ptr, "%08lx-%04lx-%04lx-%04lx-%012lx", &c0, &c1, &c2, &c3, &c4) == 5) {
-	  ms = c0;
-	  ms <<= 16;
-	  ms |= c1;
-	  ms <<= 16;
-	  ms |= c2;
-	  ls = c3;
-	  ls <<= 48;
-	  ls |= c4;
+	if (sv.size == 36) {
+	  char * tmp = alloc_c_str(sv);
+	  uint64_t c0, c1, c2, c3, c4;
+	  if (sscanf(tmp, "%8lx-%4lx-%4lx-%4lx-%12lx", &c0, &c1, &c2, &c3, &c4) == 5) {
+	    ms = c0;
+	    ms <<= 16;
+	    ms |= c1;
+	    ms <<= 16;
+	    ms |= c2;
+	    ls = c3;
+	    ls <<= 48;
+	    ls |= c4;
+	  }
+	  free(tmp);
 	}
       } else if (type(x) == T_TENSOR) {
 	const uint8_t * b = get_const_ptr(decode_pointer(x));
@@ -5906,8 +5910,8 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
 	strview_t sv = to_strview(x);
 	struct tm tm;
 	bool is_valid = false;
-	if (sv.size >= 10 && sscanf(sv.ptr, "%04d-%02d-%02d", &tm.tm_year, &tm.tm_mon, &tm.tm_mday) == 3) {
-	  if (sv.size >= 19 && sv.ptr[10] == 'T' && sscanf(sv.ptr + 11, "%02d:%02d:%02d", &tm.tm_hour, &tm.tm_min, &tm.tm_sec) == 3) {
+	if (sv.size >= 10 && sscanf(sv.ptr, "%4d-%2d-%2d", &tm.tm_year, &tm.tm_mon, &tm.tm_mday) == 3) {
+	  if (sv.size >= 19 && sv.ptr[10] == 'T' && sscanf(sv.ptr + 11, "%2d:%2d:%2d", &tm.tm_hour, &tm.tm_min, &tm.tm_sec) == 3) {
 	    if (sv.size == 19 || (sv.size == 20 && sv.ptr[19] == 'Z')) {
 	      is_valid = true;
 	    }

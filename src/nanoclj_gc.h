@@ -45,20 +45,25 @@ E2:_setmark(p);
       }
     } else {
       nanoclj_tensor_t * tensor = p->_collection.tensor;
-      nanoclj_val_t * data = (nanoclj_val_t *)tensor->data;
       size_t num = _size_unchecked(p);
       if (tensor_is_sparse(tensor)) {
 	int64_t num_buckets = tensor_hash_get_bucket_count(tensor);
 	for (int64_t offset = 0; offset < num_buckets; offset++) {
 	  int64_t idx = tensor->sparse_indices[offset];
 	  if (idx >= 0 && idx < num) {
-	    for (int64_t i = 0; i < tensor->ne[0]; i++) {
-	      nanoclj_val_t v = tensor_get_2d(tensor, i, offset);
+	    if (tensor->n_dims == 1) {
+	      nanoclj_val_t v = tensor_get(tensor, offset);
 	      if (is_cell(v)) mark(decode_pointer(v));
+	    } else {
+	      for (int64_t i = 0; i < tensor->ne[0]; i++) {
+		nanoclj_val_t v = tensor_get_2d(tensor, i, offset);
+		if (is_cell(v)) mark(decode_pointer(v));
+	      }
 	    }
 	  }
 	}
       } else {
+	nanoclj_val_t * data = (nanoclj_val_t *)tensor->data;
 	size_t offset = _offset_unchecked(p);
 	for (size_t i = 0; i < num; i++) {
 	  /* Vector cells will be treated like ordinary cells */
