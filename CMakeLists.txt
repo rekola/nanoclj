@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.5)
 project(nanoclj C)
 
+include(CheckSymbolExists)
+
 IF (MSVC)
   set(VCPKG_TARGET_TRIPLET "x64-windows")
   set(VCPKG_ROOT "vcpkg")
@@ -77,6 +79,13 @@ else()
   find_package(CURL REQUIRED)
   target_link_libraries(nanoclj CURL::libcurl)
   include_directories(${CURL_INCLUDE_DIR})
+
+  check_symbol_exists("arc4random" "stdlib.h" HAVE_ARC4RANDOM)
+  check_symbol_exists("arc4random_buf" "stdlib.h" HAVE_ARC4RANDOM_BUF)
+
+  if (HAVE_ARC4RANDOM AND HAVE_ARC4RANDOM_BUF)
+    add_definitions(-DUSE_ARC4RANDOM=1)
+  endif()
 endif()
 
 install(TARGETS nanoclj RUNTIME DESTINATION bin)
