@@ -252,6 +252,10 @@ static nanoclj_val_t Math_round(nanoclj_t * sc, nanoclj_cell_t * args) {
   return mk_double(round(to_double(first(sc, args))));
 }
 
+static nanoclj_val_t Math_random(nanoclj_t * sc, nanoclj_cell_t * args) {
+  return mk_double((double)arc4random() / UINT32_MAX);
+}
+
 /* SecureRandom */
 
 static nanoclj_val_t SecureRandom_nextBytes(nanoclj_t * sc, nanoclj_cell_t * args) {
@@ -264,11 +268,9 @@ static nanoclj_val_t SecureRandom_nextBytes(nanoclj_t * sc, nanoclj_cell_t * arg
   if (tensor->type != nanoclj_i8) {
     return mk_nil();
   }
-  size_t n = get_size(c), offset = get_offset(c);
-  for (size_t idx = offset; idx < n + offset; idx++) {
-    uint8_t v = rand() % 256;
-    tensor_mutate_set_i8(tensor, idx, v);
-  }
+  uint8_t * ptr = get_ptr(c);
+  size_t n = get_size(c);
+  arc4random_buf(ptr, n);
 
   return mk_nil();
 }
@@ -1254,11 +1256,12 @@ static inline void register_functions(nanoclj_t * sc) {
   intern_foreign_func(sc, Math, "floor", Math_floor, 1, 1);
   intern_foreign_func(sc, Math, "ceil", Math_ceil, 1, 1);
   intern_foreign_func(sc, Math, "round", Math_round, 1, 1);
-
-  intern_foreign_func(sc, sc->SecureRandom, "nextBytes", SecureRandom_nextBytes, 2, 2);
-
+  intern_foreign_func(sc, Math, "random", Math_random, 0, 0);
+  
   intern(sc, Math, def_symbol(sc, "E"), mk_double(M_E));
   intern(sc, Math, def_symbol(sc, "PI"), mk_double(M_PI));
+
+  intern_foreign_func(sc, sc->SecureRandom, "nextBytes", SecureRandom_nextBytes, 2, 2);
 
   intern_foreign_func(sc, numeric_tower, "expt", numeric_tower_expt, 2, 2);
   intern_foreign_func(sc, numeric_tower, "gcd", numeric_tower_gcd, 2, 2);

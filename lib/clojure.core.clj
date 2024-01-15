@@ -808,28 +808,14 @@
 
 ; Random numbers
 
-; Random number generator (maximum cycle)
-(def ^:private *seed* 1)
-(defn ^:private -rand []
-  (let [a 16807
-        m 2147483647
-        q (quot m a)
-        r (mod m a)]
-    (set! *seed*
-          (-   (* a (- *seed*
-                       (* (quot *seed* q) q)))
-               (* (quot *seed* q) r)))
-    (if (< *seed* 0) (set! *seed* (+ *seed* m)))
-    *seed*))
-
 (defn rand
-  "Returns a random double in [0, 1["
-  ([] (-rand))
-  ([n] (* n (/ (-rand) 2147483647.0))))
+  "Returns a random double in [0, n[. By default n is 1."
+  ([] (Math/random))
+  ([n] (* n (Math/random))))
 
 (defn rand-int
   "Returns a random integer in [0, n["
-  [n] (mod (-rand) n))
+  [n] (int (* n (Math/random))))
 
 (defn rand-nth [coll] (nth coll (rand-int (count coll))))
 
