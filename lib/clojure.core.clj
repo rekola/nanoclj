@@ -755,6 +755,10 @@
   "Parses an UUID"
   [s] (java.util.UUID s))
 
+(defn random-uuid
+  "Creates a random UUID"
+  [] (java.util.UUID/randomUUID))
+
 ; Functional
 
 (defn partial
@@ -806,7 +810,7 @@
 
 ; Random number generator (maximum cycle)
 (def ^:private *seed* 1)
-(defn ^:private rand- []
+(defn ^:private -rand []
   (let [a 16807
         m 2147483647
         q (quot m a)
@@ -820,12 +824,12 @@
 
 (defn rand
   "Returns a random double in [0, 1["
-  ([] (rand 1))
-  ([n] (* n (/ (rand-) 2147483647.0))))
+  ([] (-rand))
+  ([n] (* n (/ (-rand) 2147483647.0))))
 
 (defn rand-int
   "Returns a random integer in [0, n["
-  [n] (mod (rand-) n))
+  [n] (mod (-rand) n))
 
 (defn rand-nth [coll] (nth coll (rand-int (count coll))))
 

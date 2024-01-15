@@ -70,7 +70,6 @@ As well as printing images in block mode like the plot function does, they can a
 - Characters are 32 bit, strings are UTF-8 (count is O(n)) and char-array creates a byte array
 - Strings are sequences, and they are compared and sorted as such.
 - List count has complexity of O(n)
-- Vectors support O(1) append, but update is O(n)
 - Macros use the TinyScheme syntax
 - Tail-call optimization
 - sort is not stable and doesn't support custom compare function
@@ -158,7 +157,6 @@ Windows support is in progress.
   - make-hierarchy, ancestors, supers, bases, underive
   - select-keys
   - bound?
-  - random-uuid
   - re-groups, re-matcher, re-seq, re-matches
   - assert-args
   - with-open

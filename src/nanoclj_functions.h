@@ -252,6 +252,27 @@ static nanoclj_val_t Math_round(nanoclj_t * sc, nanoclj_cell_t * args) {
   return mk_double(round(to_double(first(sc, args))));
 }
 
+/* SecureRandom */
+
+static nanoclj_val_t SecureRandom_nextBytes(nanoclj_t * sc, nanoclj_cell_t * args) {
+  nanoclj_val_t ba0 = second(sc, args);
+  if (type(ba0) != T_TENSOR) {
+    return mk_nil();
+  }
+  nanoclj_cell_t * c = decode_pointer(ba0);
+  nanoclj_tensor_t * tensor = get_tensor(c);
+  if (tensor->type != nanoclj_i8) {
+    return mk_nil();
+  }
+  size_t n = get_size(c), offset = get_offset(c);
+  for (size_t idx = offset; idx < n + offset; idx++) {
+    uint8_t v = rand() % 256;
+    tensor_mutate_set_i8(tensor, idx, v);
+  }
+
+  return mk_nil();
+}
+
 /* clojure.math.numeric-tower */
 
 #define SQRT_INT64_MAX (INT64_C(0xB504F333))
@@ -1205,7 +1226,7 @@ static inline void register_functions(nanoclj_t * sc) {
   nanoclj_cell_t * Geo = def_namespace(sc, "Geo", __FILE__);
   nanoclj_cell_t * xml = def_namespace(sc, "clojure.xml", __FILE__);
   nanoclj_cell_t * csv = def_namespace(sc, "clojure.data.csv", __FILE__);
-  
+
   intern_foreign_func(sc, Thread, "sleep", Thread_sleep, 1, 1);
   
   intern_foreign_func(sc, System, "exit", System_exit, 1, 1);
@@ -1233,6 +1254,8 @@ static inline void register_functions(nanoclj_t * sc) {
   intern_foreign_func(sc, Math, "floor", Math_floor, 1, 1);
   intern_foreign_func(sc, Math, "ceil", Math_ceil, 1, 1);
   intern_foreign_func(sc, Math, "round", Math_round, 1, 1);
+
+  intern_foreign_func(sc, sc->SecureRandom, "nextBytes", SecureRandom_nextBytes, 2, 2);
 
   intern(sc, Math, def_symbol(sc, "E"), mk_double(M_E));
   intern(sc, Math, def_symbol(sc, "PI"), mk_double(M_PI));
