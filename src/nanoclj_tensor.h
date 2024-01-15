@@ -945,7 +945,7 @@ static inline nanoclj_tensor_t * tensor_hash_mutate_set(nanoclj_tensor_t * tenso
   if (rebuild) {
     nanoclj_tensor_t * old_tensor = tensor;
     int64_t old_num_buckets = tensor_hash_get_bucket_count(old_tensor);
-    int64_t num_buckets = (overload ? 2 : 1) * old_num_buckets;
+    int64_t num_buckets = overload ? 2 * (old_num_buckets + 1) : old_num_buckets;
     tensor = mk_tensor_hash(old_tensor->n_dims, old_tensor->ne[0], num_buckets);
     if (!tensor) return NULL;
     int64_t * old_sparse_indices = old_tensor->sparse_indices;

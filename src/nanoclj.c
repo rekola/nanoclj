@@ -2232,9 +2232,9 @@ static inline nanoclj_cell_t * cons(nanoclj_t * sc, nanoclj_val_t head, nanoclj_
   return get_cell(sc, T_LIST, 0, head, tail, NULL);
 }
 
-static inline nanoclj_cell_t * get_vector_object_with_tensor_type(nanoclj_t * sc, int_fast16_t t, nanoclj_tensor_type_t tensor_type, size_t size) {
+static inline nanoclj_cell_t * get_vector_object_with_tensor_type(nanoclj_t * sc, int_fast16_t t, nanoclj_tensor_type_t tensor_type, size_t size, nanoclj_cell_t * meta) {
   nanoclj_tensor_t * store = NULL;
-  if (size > NANOCLJ_SMALL_VEC_SIZE || (size > 1 && is_map_type(t)) || tensor_type != nanoclj_val) {
+  if (size > NANOCLJ_SMALL_VEC_SIZE || (size > 1 && is_map_type(t)) || tensor_type != nanoclj_val || meta) {
     if (t == T_HASHSET || t == T_SORTED_HASHSET) {
       store = mk_tensor_hash(1, 0, size * 2);
     } else if (t == T_HASHMAP || t == T_SORTED_HASHMAP) {
@@ -2248,11 +2248,11 @@ static inline nanoclj_cell_t * get_vector_object_with_tensor_type(nanoclj_t * sc
     }
     if (!store) return NULL;
   }
-  return get_collection_object(sc, t, 0, size, store, NULL);
+  return get_collection_object(sc, t, 0, size, store, meta);
 }
 
 static inline nanoclj_cell_t * get_vector_object(nanoclj_t * sc, int_fast16_t t, size_t size) {
-  return get_vector_object_with_tensor_type(sc, t, nanoclj_val, size);
+  return get_vector_object_with_tensor_type(sc, t, nanoclj_val, size, NULL);
 }
 
 static inline nanoclj_cell_t * mk_vector(nanoclj_t * sc, size_t len) {
@@ -3738,8 +3738,24 @@ static inline nanoclj_cell_t * copy_for_mutation(nanoclj_t * sc, const nanoclj_c
     return copy_cell(sc, c);
   } else {
     nanoclj_tensor_t * s = tensor_dup(c->_collection.tensor);
-    return  get_collection_object(sc, _type(c), 0, get_size(c), s, c->_collection.meta);
+    return get_collection_object(sc, _type(c), 0, get_size(c), s, c->_collection.meta);
   }
+}
+
+static inline nanoclj_cell_t * copy_as_empty(nanoclj_t * sc, nanoclj_cell_t * c) {
+  nanoclj_cell_t * meta = get_metadata(c);
+  if (!meta) {
+    switch (_type(c)) {
+    case T_HASHMAP:
+    case T_ARRAYMAP:
+      return sc->EMPTYMAP;
+    case T_VECTOR:
+      return sc->EMPTYVEC;
+    case T_HASHSET:
+      return sc->EMPTYSET;
+    }
+  }
+  return get_vector_object_with_tensor_type(sc, _type(c), nanoclj_val, 0, meta);
 }
 
 static inline nanoclj_cell_t * vector_conjoin(nanoclj_t * sc, nanoclj_cell_t * vec, nanoclj_val_t new_value) {
@@ -5403,7 +5419,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, print_scheme
 
 /* Creates a collection, args are seqed */
 static inline nanoclj_cell_t * mk_collection_with_tensor_type(nanoclj_t * sc, uint_fast16_t type, nanoclj_tensor_type_t tensor_type, nanoclj_cell_t * args) {
-  nanoclj_cell_t * coll = get_vector_object_with_tensor_type(sc, type, tensor_type, 0);
+  nanoclj_cell_t * coll = get_vector_object_with_tensor_type(sc, type, tensor_type, 0, NULL);
   if (coll) {
     if (is_map_type(type)) {
       for ( ; args; args = next(sc, args)) {
@@ -6482,31 +6498,12 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  }
 
 	case T_VECTOR:
-	  if (get_size(code_cell) > 0) {
-	    s_save(sc, OP_E0VEC, NULL, mk_pointer(copy_for_mutation(sc, code_cell)));
-	    sc->code = get_indexed_value(code_cell, 0);
-	    s_goto(sc, OP_EVAL);
-	  }
-	  break;
-
 	case T_MAPENTRY:
-	  if (get_size(code_cell) > 0) {
-	    s_save(sc, OP_E0COLL, sc->EMPTYVEC, mk_pointer(next(sc, code_cell)));
-	    sc->code = first(sc, code_cell);
-	    s_goto(sc, OP_EVAL);
-	  }
-
 	case T_HASHSET:
-	  if (get_size(code_cell) > 0) {
-	    s_save(sc, OP_E0COLL, sc->EMPTYSET, mk_pointer(next(sc, code_cell)));
-	    sc->code = first(sc, code_cell);
-	    s_goto(sc, OP_EVAL);
-	  }
-	  break;
-	  
 	case T_ARRAYMAP:
+	case T_HASHMAP:
 	  if (get_size(code_cell) > 0) {
-	    s_save(sc, OP_E0COLL, sc->EMPTYMAP, mk_pointer(next(sc, code_cell)));
+	    s_save(sc, OP_E0COLL, copy_as_empty(sc, code_cell), mk_pointer(next(sc, code_cell)));
 	    sc->code = first(sc, code_cell);
 	    s_goto(sc, OP_EVAL);
 	  }
@@ -6516,22 +6513,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
     /* Default */
     s_return(sc, sc->code);
-
-  case OP_E0VEC:{	       /* eval vector element */
-    nanoclj_cell_t * vec = decode_pointer(sc->code);
-    long long i = sc->args ? decode_integer(_car_unchecked(sc->args)) : 0;
-    set_indexed_value(vec, i, sc->value);
-    if (i + 1 < get_size(vec)) {
-      nanoclj_cell_t * args = sc->args;
-      if (args) _car_unchecked(args) = mk_int(i + 1);
-      else args = cons(sc, mk_int(i + 1), NULL);
-      s_save(sc, OP_E0VEC, args, sc->code);
-      sc->code = get_indexed_value(vec, i + 1);
-      s_goto(sc, OP_EVAL);
-    } else {
-      s_return(sc, sc->code);
-    }
-  }
 
   case OP_E0COLL:
     sc->args = conjoin(sc, sc->args, sc->value);
