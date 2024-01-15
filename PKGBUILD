@@ -33,4 +33,8 @@ package() {
   for f in *.clj; do
      install -Dm644 ${f} "$pkgdir/usr/share/nanoclj/${f}"
   done
+  cd tests
+  for f in *.clj; do
+     install -Dm644 ${f} "$pkgdir/usr/share/nanoclj/tests/${f}"
+  done
 }
