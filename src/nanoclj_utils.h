@@ -56,6 +56,10 @@ static inline int strview_cmp(strview_t a, strview_t b) {
   }
 }
 
+static inline strview_t strview_remove_prefix(strview_t sv, size_t n) {
+  return n >= sv.size ? (strview_t){ sv.ptr + sv.size, 0 } : (strview_t){ sv.ptr + n, sv.size - n };
+}
+
 static inline int strview_ncmp(strview_t a, size_t n, const char * b) {
   return a.size < n ? -1 : memcmp(a.ptr, b, n);
 }

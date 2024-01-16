@@ -34,6 +34,8 @@
 (t/is (= (dec Integer/MIN_VALUE) -2147483649))
 (t/is (= (inc Integer/MAX_VALUE) 2147483648))
 
+(t/is (= (+ 1/2 1/2) 1))
+(t/is (= (- 10 10/3) 20/3))
                                         ; Bigints
 
 (t/is (instance? BigInt 1N))

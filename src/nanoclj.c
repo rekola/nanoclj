@@ -1697,7 +1697,7 @@ static inline nanoclj_val_t mk_long(nanoclj_t * sc, long long num) {
   if (num >= INT_MIN && num <= INT_MAX) {
     return mk_long_prim(num);
   } else {
-    nanoclj_cell_t * x = get_cell_x(sc, T_LONG, T_GC_ATOM, NULL, NULL, NULL);
+    nanoclj_cell_t * x = get_cell_x(sc, T_LONG, T_GC_ATOM | T_SMALL | 1, NULL, NULL, NULL);
     if (x) {
       _lvalue_unchecked(x) = num;
 
@@ -2014,6 +2014,16 @@ static inline nanoclj_val_t mk_string_fmt(nanoclj_t * sc, char *fmt, ...) {
     va_end(ap);
   }
   return mk_pointer(r);
+}
+
+static inline int sv_scanf(strview_t sv, char * fmt, ...) {
+  char * tmp = alloc_c_str(sv);
+  va_list ap;
+  va_start(ap, fmt);
+  int n = vsscanf(tmp, fmt, ap);
+  va_end(ap);
+  free(tmp);
+  return n;
 }
 
 static inline nanoclj_val_t mk_string_from_sv(nanoclj_t * sc, strview_t sv) {
@@ -5824,20 +5834,16 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
       x = first(sc, args);
       if (is_string(x)) {
 	strview_t sv = to_strview(x);
-	if (sv.size == 36) {
-	  char * tmp = alloc_c_str(sv);
-	  uint64_t c0, c1, c2, c3, c4;
-	  if (sscanf(tmp, "%8lx-%4lx-%4lx-%4lx-%12lx", &c0, &c1, &c2, &c3, &c4) == 5) {
-	    ms = c0;
-	    ms <<= 16;
-	    ms |= c1;
-	    ms <<= 16;
-	    ms |= c2;
-	    ls = c3;
-	    ls <<= 48;
-	    ls |= c4;
-	  }
-	  free(tmp);
+	uint64_t c0, c1, c2, c3, c4;
+	if (sv_scanf(sv, "%8lx-%4lx-%4lx-%4lx-%12lx", &c0, &c1, &c2, &c3, &c4) == 5) {
+	  ms = c0;
+	  ms <<= 16;
+	  ms |= c1;
+	  ms <<= 16;
+	  ms |= c2;
+	  ls = c3;
+	  ls <<= 48;
+	  ls |= c4;
 	}
       } else if (type(x) == T_TENSOR) {
 	const uint8_t * b = get_const_ptr(decode_pointer(x));
@@ -5910,8 +5916,8 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
 	strview_t sv = to_strview(x);
 	struct tm tm;
 	bool is_valid = false;
-	if (sv.size >= 10 && sscanf(sv.ptr, "%4d-%2d-%2d", &tm.tm_year, &tm.tm_mon, &tm.tm_mday) == 3) {
-	  if (sv.size >= 19 && sv.ptr[10] == 'T' && sscanf(sv.ptr + 11, "%2d:%2d:%2d", &tm.tm_hour, &tm.tm_min, &tm.tm_sec) == 3) {
+	if (sv.size >= 10 && sv_scanf(sv, "%4d-%2d-%2d", &tm.tm_year, &tm.tm_mon, &tm.tm_mday) == 3) {
+	  if (sv.size >= 19 && sv.ptr[10] == 'T' && sv_scanf(strview_remove_prefix(sv, 11), "%2d:%2d:%2d", &tm.tm_hour, &tm.tm_min, &tm.tm_sec) == 3) {
 	    if (sv.size == 19 || (sv.size == 20 && sv.ptr[19] == 'Z')) {
 	      is_valid = true;
 	    }
@@ -7268,8 +7274,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  if (v < LLONG_MAX) {
 	    s_return(sc, mk_long(sc, v + 1));
 	  } else if (sc->op == OP_INCP) {
-	    nanoclj_tensor_t * tensor = mk_tensor_bigint(v);
-	    tensor_bigint_mutate_add_int(tensor, 1);
+	    nanoclj_tensor_t * tensor = mk_tensor_bigint((uint64_t)LLONG_MAX + 1);
 	    s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, 1, tensor)));
 	  } else {
 	    nanoclj_throw(sc, mk_arithmetic_exception(sc, "Integer overflow"));
@@ -7315,8 +7320,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  if (v > LLONG_MIN) {
 	    s_return(sc, mk_long(sc, v - 1));
 	  } else if (sc->op == OP_DECP) {
-	    nanoclj_tensor_t * tensor = mk_tensor_bigint(llabs(v));
-	    tensor_bigint_mutate_add_int(tensor, 1);
+	    nanoclj_tensor_t * tensor = mk_tensor_bigint((uint64_t)LLONG_MAX + 2);
 	    s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, -1, tensor)));
 	  } else {
 	    nanoclj_throw(sc, mk_arithmetic_exception(sc, "Integer overflow"));
@@ -7356,7 +7360,25 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       } else if (tx == T_DOUBLE || ty == T_DOUBLE) {
 	s_return(sc, mk_double(to_double(arg0) + to_double(arg1)));
       } else if (tx == T_RATIO || ty == T_RATIO) {
-	s_return(sc, mk_nil());
+	nanoclj_ratio_t a = to_ratio(arg0), b = to_ratio(arg1);
+	nanoclj_tensor_t * n1 = tensor_bigint_mul(a.numerator, b.denominator);
+	nanoclj_tensor_t * n2 = tensor_bigint_mul(b.numerator, a.denominator);
+	nanoclj_bigint_t num = bignum_add((nanoclj_bigint_t){ n1, a.sign }, (nanoclj_bigint_t){ n2, b.sign });
+	nanoclj_tensor_t * den = tensor_bigint_mul(a.denominator, b.denominator);
+
+	tensor_free(n1);
+	tensor_free(n2);
+	if (!a.numerator->refcnt) tensor_free(a.numerator);
+	if (!a.denominator->refcnt) tensor_free(a.denominator);
+	if (!b.numerator->refcnt) tensor_free(b.numerator);
+	if (!b.denominator->refcnt) tensor_free(b.denominator);
+
+	normalize_ratio_mutate(num.tensor, den);
+	if (tensor_is_identity(den)) {
+	  s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, num.sign, num.tensor)));
+	} else {
+	  s_return(sc, mk_pointer(mk_ratio_from_tensor(sc, num.sign, num.tensor, den)));
+	}
       } else {
 	if (tx != T_BIGINT && ty != T_BIGINT) {
 	  long long res;
@@ -7388,7 +7410,25 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       } else if (tx == T_DOUBLE || ty == T_DOUBLE) {
 	s_return(sc, mk_double(to_double(arg0) - to_double(arg1)));
       } else if (tx == T_RATIO || ty == T_RATIO) {
-	s_return(sc, mk_nil());
+	nanoclj_ratio_t a = to_ratio(arg0), b = to_ratio(arg1);
+	nanoclj_tensor_t * n1 = tensor_bigint_mul(a.numerator, b.denominator);
+	nanoclj_tensor_t * n2 = tensor_bigint_mul(b.numerator, a.denominator);
+	nanoclj_bigint_t num = bignum_sub((nanoclj_bigint_t){ n1, a.sign }, (nanoclj_bigint_t){ n2, b.sign });
+	nanoclj_tensor_t * den = tensor_bigint_mul(a.denominator, b.denominator);
+
+	tensor_free(n1);
+	tensor_free(n2);
+	if (!a.numerator->refcnt) tensor_free(a.numerator);
+	if (!a.denominator->refcnt) tensor_free(a.denominator);
+	if (!b.numerator->refcnt) tensor_free(b.numerator);
+	if (!b.denominator->refcnt) tensor_free(b.denominator);
+
+	normalize_ratio_mutate(num.tensor, den);
+	if (tensor_is_identity(den)) {
+	  s_return(sc, mk_pointer(mk_bigint_from_tensor(sc, num.sign, num.tensor)));
+	} else {
+	  s_return(sc, mk_pointer(mk_ratio_from_tensor(sc, num.sign, num.tensor, den)));
+	}
       } else {
 	if (tx != T_BIGINT && ty != T_BIGINT) {
 	  long long res;
