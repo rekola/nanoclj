@@ -212,7 +212,7 @@
 
 (defn take-last
   "Take last n elements from coll"
-  [n coll] (let [cnt (count coll)] (if (< cnt n) coll (drop n coll))))
+  [n coll] (let [nd (- (count coll) n)] (if (> nd 0) (drop nd coll) coll)))
 
 (defn drop-last
   "Drop last n elements from coll"
