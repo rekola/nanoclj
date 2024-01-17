@@ -2132,20 +2132,30 @@ static inline int32_t inchar_utf8(nanoclj_cell_t * p) {
   int32_t c = inchar_raw(p);
   if (c < 0) return EOF;
   uint32_t codepoint = c;
+  uint32_t b2, b3, b4;
   switch (utf8_sequence_length(c)) {
   case 0:
     return 0;
   case 2:
-    codepoint = ((codepoint << 6) & 0x7ff) + (inchar_raw(p) & 0x3f);
+    b2 = inchar_raw(p);
+    if ((b2 & 0xc0) != 0x80) return 0;
+    codepoint = ((codepoint << 6) & 0x7ff) + (b2 & 0x3f);
     break;
   case 3:
-    codepoint = ((codepoint << 12) & 0xffff) + ((inchar_raw(p) << 6) & 0xfff);
-    codepoint += inchar_raw(p) & 0x3f;
+    b2 = inchar_raw(p);
+    b3 = inchar_raw(p);
+    if ((b2 & 0xc0) != 0x80 || (b3 & 0xc0) != 0x80) return 0;
+    codepoint = ((codepoint << 12) & 0xffff) + ((b2 << 6) & 0xfff);
+    codepoint += b3 & 0x3f;
     break;
   case 4:
-    codepoint = ((codepoint << 18) & 0x1fffff) + ((inchar_raw(p) << 12) & 0x3ffff);
-    codepoint += (inchar_raw(p) << 6) & 0xfff;
-    codepoint += inchar_raw(p) & 0x3f;
+    b2 = inchar_raw(p);
+    b3 = inchar_raw(p);
+    b4 = inchar_raw(p);
+    if ((b2 & 0xc0) != 0x80 || (b3 & 0xc0) != 0x80 || (b4 & 0xc0) != 0x80) return 0;
+    codepoint = ((codepoint << 18) & 0x1fffff) + ((b2 << 12) & 0x3ffff);
+    codepoint += (b3 << 6) & 0xfff;
+    codepoint += b4 & 0x3f;
     break;
   }
   if (_port_flags_unchecked(p) & PORT_SAW_EOF) {
@@ -4900,7 +4910,7 @@ static inline nanoclj_val_t readstrexp(nanoclj_t * sc, nanoclj_cell_t * inport, 
   bool fin = false;
 
   do {
-    int c = inchar(sc, inport);
+    int32_t c = inchar(sc, inport);
     if (c == EOF || sc->pending_exception) {
       return mk_nil();
     }
