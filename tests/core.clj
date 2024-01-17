@@ -211,3 +211,7 @@
                                         ; Namespaces
 
 (t/is (resolve 'clojure.string/upper-case))
+
+                                        ; Control
+
+(t/is (= (with-out-str (dotimes [n 4] (print "X"))) "XXXX"))

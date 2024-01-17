@@ -106,7 +106,7 @@ typedef struct {
 } strview_t;
 
 typedef struct {
-  const nanoclj_val_t * ptr;
+  nanoclj_val_t * ptr;
   size_t size;
 } valarrayview_t;
 

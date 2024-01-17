@@ -142,7 +142,7 @@ Windows support is in progress.
 - Map namespace syntax
 - `*print-length*`, `*print-level*`, `*clojure-version*`, `*load-tests*`
 - Missing core functions and macros
-  - doseq, for, dotimes
+  - doseq, for
   - sorted-set-by, sorted-set, sorted-map, sorted-map-by
   - update-in, merge-with
   - doto, ->, -->, some->, some->>

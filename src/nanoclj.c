@@ -229,7 +229,7 @@ typedef struct {
 
 #define T_NEGATIVE     128	/* 000000001yyxxxxx */
 #define T_TYPE	       256	/* 000000010yyxxxxx */
-#define T_HASHED       512      /* 000000100yyxxxxx */
+#define T_CONST        512      /* 000000100yyxxxxx */
 #define T_SEQUENCE    1024	/* 000001000yyxxxxx */
 #define T_REALIZED    2048	/* 000010000yyxxxxx */
 #define T_REVERSE     4096      /* 000100000yyxxxxx */
@@ -1611,21 +1611,21 @@ static inline nanoclj_cell_t * get_cell_x(nanoclj_t * sc, uint16_t type_id, uint
     if (!context->free_cell || context->fcells < min_to_be_recovered) {
       /* if only a few recovered, get more to avoid fruitless gc's */
       alloc_cellseg(sc, 1);
+      if (!context->free_cell) {
+	sc->pending_exception = sc->OutOfMemoryError;
+	return NULL;
+      }
     }
   }
 
-  nanoclj_cell_t * x = NULL;
-  if (context->free_cell) {
-    x = context->free_cell;
-    context->free_cell = _cdr_unchecked(x);
-    --context->fcells;
+  nanoclj_cell_t * x = context->free_cell;
+  context->free_cell = _cdr_unchecked(x);
+  --context->fcells;
 
-    x->type = type_id;
-    x->flags = flags;
-    x->hasheq = 0;
-  } else {
-    sc->pending_exception = sc->OutOfMemoryError;
-  }
+  x->type = type_id;
+  x->flags = flags;
+  x->hasheq = 0;
+
   return x;
 }
 
@@ -2527,7 +2527,7 @@ static inline nanoclj_cell_t * rseq(nanoclj_t * sc, nanoclj_cell_t * coll) {
 }
 
 static inline void s_save(nanoclj_t * sc, enum nanoclj_opcode op,
-			  nanoclj_cell_t * args, nanoclj_val_t code) {  
+			  nanoclj_cell_t * args, nanoclj_val_t code) {
   dump_stack_frame_t * next_frame = s_add_frame(sc);
   next_frame->op = op;
   next_frame->args = args;
@@ -3055,9 +3055,8 @@ static uint32_t hasheq(nanoclj_val_t v, void * d) {
   case T_CELL:
     {
       nanoclj_cell_t * c = decode_pointer(v);
-      if (c->flags & T_HASHED) {
-	return c->hasheq;
-      }
+      if (c->hasheq) return c->hasheq;
+
       int32_t h = 0;
       switch (_type(c)) {
       case T_LONG:
@@ -3186,7 +3185,6 @@ static uint32_t hasheq(nanoclj_val_t v, void * d) {
       }
 
       c->hasheq = h;
-      c->flags |= T_HASHED;
       return h;
     }
   }
@@ -3933,7 +3931,7 @@ static inline nanoclj_cell_t * conjoin(nanoclj_t * sc, nanoclj_cell_t * coll, na
       }
     }
     return vector_conjoin(sc, coll, new_value);
-  } else if (is_string_type(t)) {
+  } else if (is_string_type(t) && prim_type(new_value) == T_CODEPOINT) {
     int32_t c = decode_integer(new_value);
     size_t size = get_size(coll);
     if (_is_small(coll)) {
@@ -4083,6 +4081,10 @@ static inline nanoclj_val_t slot_value_in_env(valarrayview_t slot) {
   } else {
     return mk_nil();
   }
+}
+
+static inline void mutate_slot_value_in_env(valarrayview_t slot, nanoclj_val_t v) {
+  slot.ptr[1] = v;
 }
 
 static inline nanoclj_cell_t * mk_hashmap(nanoclj_t * sc) {
@@ -6973,6 +6975,59 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     s_goto(sc, OP_EVAL);
   }
 
+  case OP_DOTIMES0:
+    {
+      x = car(sc->code);
+      if (!is_cell(x)) {
+	Error_0(sc, "Syntax error");
+      }
+      nanoclj_cell_t * input_vec = decode_pointer(x);
+      if (_type(input_vec) != T_VECTOR || get_size(input_vec) != 2) {
+	Error_0(sc, "Syntax error");
+      }
+      nanoclj_val_t sym = get_indexed_value(input_vec, 0);
+      nanoclj_val_t count = get_indexed_value(input_vec, 1);
+      nanoclj_cell_t * body = cdr(sc->code);
+
+      s_save(sc, OP_DOTIMES1, body, sym);
+      sc->code = count;
+      sc->args = NULL;
+      s_goto(sc, OP_EVAL);
+    }
+
+  case OP_DOTIMES1:
+    {
+      int n = to_int(sc->value);
+      if (n <= 0) s_return(sc, mk_nil());
+
+      new_frame_in_env(sc, sc->envir);
+      new_slot_in_env(sc, sc->code, mk_int(0));
+
+      if (n > 1) {
+	s_save(sc, OP_DOTIMES2, decode_pointer(mk_mapentry(sc, sc->code, sc->value)), mk_pointer(sc->args));
+      }
+
+      sc->code = mk_pointer(sc->args);
+      sc->args = NULL;
+      s_goto(sc, OP_DO);
+    }
+
+  case OP_DOTIMES2:
+    {
+      nanoclj_val_t sym = get_indexed_value(sc->args, 0);
+      nanoclj_val_t n = get_indexed_value(sc->args, 1);
+
+      valarrayview_t f = find_slot_in_env(sc, sc->envir, sym, true);
+      int idx = to_int(slot_value_in_env(f));
+      mutate_slot_value_in_env(f, mk_int(idx + 1));
+
+      if (idx + 2 < to_int(n)) {
+	s_save(sc, OP_DOTIMES2, decode_pointer(mk_mapentry(sc, sym, n)), sc->code);
+      }
+      sc->args = NULL;
+      s_goto(sc, OP_DO);
+    }
+
   case OP_LET0:                /* let */
     x = car(sc->code);
     
@@ -9762,6 +9817,7 @@ bool nanoclj_init(nanoclj_t * sc) {
   assign_syntax(sc, "macro", OP_MACRO0);
   assign_syntax(sc, "try", OP_TRY);
   assign_syntax(sc, "loop", OP_LOOP);
+  assign_syntax(sc, "dotimes", OP_DOTIMES0);
   assign_syntax(sc, "thread", OP_THREAD);
 
   /* initialization of global nanoclj_val_ts to special symbols */
