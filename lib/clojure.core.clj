@@ -7,6 +7,7 @@
 (defn map-entry? [x] (instance? clojure.lang.MapEntry x))
 (defn set? [x] (instance? clojure.lang.APersistentSet x))
 (defn map? [x] (instance? clojure.lang.APersistentMap x))
+(defn list-map? [x] (instance? nanoclj.core.ListMap x))
 (defn image? [x] (instance? nanoclj.core.Image x))
 (defn gradient? [x] (instance? nanoclj.core.Gradient x))
 (defn inst? [x] (instance? java.util.Date x))
@@ -262,15 +263,64 @@
 
 ; Maps & Sets
 
-(def key first)
-(def val second)
+(defn hash-set
+  "Creates a hash set from the arguments"
+  ([] (clojure.lang.PersistentHashSet))
+  ([& keys] (reduce -conj (clojure.lang.PersistentHashSet) keys)))
+
+(defn sorted-set
+  "Creates a sorted hash set from the arguments"
+  ([] (clojure.lang.PersistentTreeSet))
+  ([& keys] (reduce -conj (clojure.lang.PersistentTreeSet) keys)))
+
+(defn array-map
+  "Creates an array-map from the arguments"
+  ([] (clojure.lang.PersistentArrayMap))
+  ([& keyvals] (let [f (fn [val seq]
+                         (if (empty? seq)
+                           val
+                           (recur (-conj val
+                                         (map-entry
+                                          (first seq)
+                                          (first (rest seq))))
+                                  (rest (rest seq))
+                                  )))]
+                 (f (clojure.lang.PersistentArrayMap) keyvals))))
+
+(defn hash-map
+  "Creates an array-map from the arguments"
+  ([] (clojure.lang.PersistentHashMap))
+  ([& keyvals] (let [f (fn [val seq]
+                         (if (empty? seq)
+                           val
+                           (recur (-conj val
+                                         (map-entry
+                                          (first seq)
+                                          (first (rest seq))))
+                                  (rest (rest seq))
+                                  )))]
+                 (f (clojure.lang.PersistentHashMap) keyvals))))
+
+(defn sorted-map
+  "Creates a sorted map from the arguments"
+  ([] (clojure.lang.PersistentTreeMap))
+  ([& keyvals] (let [f (fn [val seq]
+                         (if (empty? seq)
+                           val
+                           (recur (-conj val
+                                         (map-entry
+                                          (first seq)
+                                          (first (rest seq))))
+                                  (rest (rest seq))
+                                  )))]
+                 (f (clojure.lang.PersistentTreeMap) keyvals))))
 
 (defn keys
-  "Returns the values in the map" 
+  "Returns the values in the map"
   [coll] (map (fn [e] (key e)) coll))
 
 (defn vals
-  "Returns the values in the map" 
+  "Returns the values in the map"
   [coll] (map (fn [e] (val e)) coll))
 
 (defn assoc
@@ -341,6 +391,10 @@
              (if (empty? coll)
                m
                (recur (rest coll) (update m (f (first coll)) (fn [v] (conj (or v []) (first coll))))))))
+
+(defn list-map
+  "Creates a list-map from the arguments"
+  [& keyvals] (apply* nanoclj.core.ListMap keyvals))
 
 (defn zipmap
   "Returns a map with the keys and vals"
@@ -444,6 +498,16 @@
                                               (pr-inline print-fn (first x))
                                               (run! (fn [x] (-print \space) (pr-inline print-fn x)) (rest x))
                                               (-print \})))
+                     (list-map? x) (do (-print \{)
+                                       (pr-inline print-fn (key x))
+                                       (-print \space)
+                                       (pr-inline print-fn (val x))
+                                       (run! (fn [x]
+                                               (-print ", ")
+                                               (pr-inline print-fn (key x))
+                                               (-print \space)
+                                               (pr-inline print-fn (val x))) (rest x))
+                                       (-print \}))
                      (map? x) (cond (empty? x) (-print "{}")
                                     (and *print-length* (<= *print-length* 0)) (-print "{...}")
                                     :else (do (-print \{)

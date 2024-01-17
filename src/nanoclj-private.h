@@ -124,7 +124,10 @@ extern "C" {
       struct {
         nanoclj_val_t car;
 	nanoclj_cell_t * cdr;
-	struct nanoclj_cell_t * meta;
+	union {
+	  struct nanoclj_cell_t * meta;
+	  nanoclj_val_t value;
+	};
       } _cons;
     };
   } nanoclj_cell_t;

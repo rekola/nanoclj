@@ -410,56 +410,6 @@
   ([x y] (not (equals? x y)))
   ([x y & more] (not (apply equals? x y more))))
 
-(def hash-set
-  "Creates a hash set from the arguments"
-  (fn [& keys] (reduce -conj (clojure.lang.PersistentHashSet) keys)))
-
-(def sorted-set
-  "Creates a sorted hash set from the arguments"
-  (fn [& keys] (reduce -conj (clojure.lang.PersistentTreeSet) keys)))
-
-(def array-map
-  "Creates an array-map from the arguments"
-  (fn [& keyvals]
-    (let [f (fn [val seq]
-              (if (empty? seq)
-                val
-                (recur (-conj val
-                              (map-entry
-                               (first seq)
-                               (first (rest seq))))
-                       (rest (rest seq))
-                       )))]
-      (f (clojure.lang.PersistentArrayMap) keyvals))))
-
-(def hash-map
-  "Creates an array-map from the arguments"
-  (fn [& keyvals]
-    (let [f (fn [val seq]
-              (if (empty? seq)
-                val
-                (recur (-conj val
-                              (map-entry
-                               (first seq)
-                               (first (rest seq))))
-                       (rest (rest seq))
-                       )))]
-      (f (clojure.lang.PersistentHashMap) keyvals))))
-
-(def sorted-map
-  "Creates a sorted map from the arguments"
-  (fn [& keyvals]
-    (let [f (fn [val seq]
-              (if (empty? seq)
-                val
-                (recur (-conj val
-                              (map-entry
-                               (first seq)
-                               (first (rest seq))))
-                       (rest (rest seq))
-                       )))]
-      (f (clojure.lang.PersistentHashMap) keyvals))))
-
 (defn boolean?
   "Returns true if argument is a boolean"
   [x] (instance? java.lang.Boolean x))

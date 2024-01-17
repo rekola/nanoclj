@@ -153,61 +153,62 @@ enum nanoclj_types {
   T_SYMBOL = 12,
   T_ALIAS = 13,
   T_LIST = 14,
-  T_STRING = 15,
-  T_CLOSURE = 16,
-  T_RECUR_CLOSURE = 17,
-  T_RATIO = 18,
-  T_FOREIGN_FUNCTION = 19,
-  T_READER = 20,
-  T_WRITER = 21,
-  T_INPUT_STREAM = 22,
-  T_OUTPUT_STREAM = 23,
-  T_GZIP_INPUT_STREAM = 24,
-  T_GZIP_OUTPUT_STREAM = 25,
-  T_VECTOR = 26,
-  T_MACRO = 27,
-  T_LAZYSEQ = 28,
-  T_NAMESPACE = 29,
-  T_CLASS = 30,
-  T_MAPENTRY = 31,
-  T_ARRAYMAP = 32,
-  T_HASHMAP = 33,
-  T_SORTED_HASHMAP = 34,
-  T_VARMAP = 35,
-  T_HASHSET = 36,
-  T_SORTED_HASHSET = 37,
-  T_VAR = 38,
-  T_FOREIGN_OBJECT = 39,
-  T_BIGINT = 40,
-  T_REGEX = 41,
-  T_DELAY = 42,
-  T_IMAGE = 43,
-  T_VIDEO = 44,
-  T_AUDIO = 45,
-  T_FILE = 46,
-  T_URL = 47,
-  T_DATE = 48,
-  T_UUID = 49,
-  T_QUEUE = 50,
-  T_RUNTIME_EXCEPTION = 51,
-  T_ARITY_EXCEPTION = 52,
-  T_ILLEGAL_ARG_EXCEPTION = 53,
-  T_NUM_FMT_EXCEPTION = 54,
-  T_ARITHMETIC_EXCEPTION = 55,
-  T_CLASS_CAST_EXCEPTION = 56,
-  T_ILLEGAL_STATE_EXCEPTION = 57,
-  T_FILE_NOT_FOUND_EXCEPTION = 58,
-  T_INDEX_EXCEPTION = 59,
-  T_TENSOR = 60,
-  T_GRAPH = 61,
-  T_GRAPH_NODE = 62,
-  T_GRAPH_EDGE = 63,
-  T_GRADIENT = 64,
-  T_MESH = 65,
-  T_SHAPE = 66,
-  T_TABLE = 67,
-  T_SECURERANDOM = 68,
-  T_LAST_SYSTEM_TYPE = 69
+  T_LISTMAP = 15,
+  T_STRING = 16,
+  T_CLOSURE = 17,
+  T_RECUR_CLOSURE = 18,
+  T_RATIO = 19,
+  T_FOREIGN_FUNCTION = 20,
+  T_READER = 21,
+  T_WRITER = 22,
+  T_INPUT_STREAM = 23,
+  T_OUTPUT_STREAM = 24,
+  T_GZIP_INPUT_STREAM = 25,
+  T_GZIP_OUTPUT_STREAM = 26,
+  T_VECTOR = 27,
+  T_MACRO = 28,
+  T_LAZYSEQ = 29,
+  T_NAMESPACE = 30,
+  T_CLASS = 31,
+  T_MAPENTRY = 32,
+  T_ARRAYMAP = 33,
+  T_HASHMAP = 34,
+  T_SORTED_HASHMAP = 35,
+  T_VARMAP = 36,
+  T_HASHSET = 37,
+  T_SORTED_HASHSET = 38,
+  T_VAR = 39,
+  T_FOREIGN_OBJECT = 40,
+  T_BIGINT = 41,
+  T_REGEX = 42,
+  T_DELAY = 43,
+  T_IMAGE = 44,
+  T_VIDEO = 45,
+  T_AUDIO = 46,
+  T_FILE = 47,
+  T_URL = 48,
+  T_DATE = 49,
+  T_UUID = 50,
+  T_QUEUE = 51,
+  T_RUNTIME_EXCEPTION = 52,
+  T_ARITY_EXCEPTION = 53,
+  T_ILLEGAL_ARG_EXCEPTION = 54,
+  T_NUM_FMT_EXCEPTION = 55,
+  T_ARITHMETIC_EXCEPTION = 56,
+  T_CLASS_CAST_EXCEPTION = 57,
+  T_ILLEGAL_STATE_EXCEPTION = 58,
+  T_FILE_NOT_FOUND_EXCEPTION = 59,
+  T_INDEX_EXCEPTION = 60,
+  T_TENSOR = 61,
+  T_GRAPH = 62,
+  T_GRAPH_NODE = 63,
+  T_GRAPH_EDGE = 64,
+  T_GRADIENT = 65,
+  T_MESH = 66,
+  T_SHAPE = 67,
+  T_TABLE = 68,
+  T_SECURERANDOM = 69,
+  T_LAST_SYSTEM_TYPE = 70
 };
 
 typedef struct {
@@ -486,6 +487,7 @@ static inline bool is_seqable_type(uint_fast16_t t) {
   switch (t) {
   case T_EMPTYLIST:
   case T_LIST:
+  case T_LISTMAP:
   case T_LAZYSEQ:
   case T_STRING:
   case T_FILE:
@@ -2066,8 +2068,9 @@ static inline nanoclj_cell_t * mk_index_exception(nanoclj_t * sc, const char * m
   return get_cell(sc, T_INDEX_EXCEPTION, 0, mk_string(sc, msg), NULL, NULL);
 }
 
-static inline nanoclj_cell_t * mk_class_cast_exception(nanoclj_t * sc, const char * msg) {
-  return get_cell(sc, T_CLASS_CAST_EXCEPTION, 0, mk_string(sc, msg), NULL, NULL);
+static inline nanoclj_cell_t * mk_class_cast_exception(nanoclj_t * sc, const char * msg0) {
+  nanoclj_val_t msg = add_exception_source(sc, mk_strview(msg0));
+  return get_cell(sc, T_CLASS_CAST_EXCEPTION, 0, msg, NULL, NULL);
 }
 
 static inline nanoclj_cell_t * mk_illegal_state_exception(nanoclj_t * sc, const char * msg) {
@@ -2569,19 +2572,15 @@ static inline nanoclj_cell_t * deref(nanoclj_t * sc, nanoclj_cell_t * c) {
 static inline nanoclj_cell_t * seq(nanoclj_t * sc, nanoclj_cell_t * coll) {
   if (!coll) {
     return NULL;
-  }
-  if (_type(coll) == T_LAZYSEQ) {
-    coll = deref(sc, coll);
-    if (!coll) {
-      return NULL;
-    }
-  }
-
-  if (_is_sequence(coll)) {
+  } else if (_is_sequence(coll)) {
     return coll;
   }
 
   switch (_type(coll)) {
+  case T_LAZYSEQ:
+    coll = deref(sc, coll);
+    if (!coll) return NULL;
+    break;
   case T_LONG:
   case T_DATE:
   case T_CLOSURE:
@@ -2638,12 +2637,12 @@ static inline bool is_empty(nanoclj_t * sc, nanoclj_cell_t * coll) {
     return true;
   } else if (_is_sequence(coll)) {
     return false;
-  } else if (_type(coll) == T_LAZYSEQ) {
-    coll = deref(sc, coll);
-    if (!coll) return true;
   }
-
   switch (_type(coll)) {
+  case T_LAZYSEQ:
+    coll = deref(sc, coll);
+    return coll == NULL;
+
   case T_STRING:
   case T_FILE:
   case T_URL:
@@ -2701,17 +2700,15 @@ static inline bool is_zero(nanoclj_val_t p) {
 static inline nanoclj_cell_t * rest(nanoclj_t * sc, nanoclj_cell_t * coll) {
   if (coll) {
     int typ = _type(coll);
-    
-    if (typ == T_LAZYSEQ) {
+        
+    switch (typ) {
+    case T_LAZYSEQ:
       coll = deref(sc, coll);
       if (!coll) return NULL;
-    }
-    
-    switch (typ) {
     case T_LIST:
-    case T_LAZYSEQ:
     case T_CLASS:
     case T_NAMESPACE:
+    case T_LISTMAP:
       return _cdr_unchecked(coll);
     case T_VECTOR:
     case T_ARRAYMAP:
@@ -2791,17 +2788,16 @@ static inline nanoclj_cell_t * next(nanoclj_t * sc, nanoclj_cell_t * coll) {
 static inline nanoclj_val_t first(nanoclj_t * sc, nanoclj_cell_t * coll) {
   if (coll == NULL) {
     return mk_nil();
-  } else if (_type(coll) == T_LAZYSEQ) {
-    coll = deref(sc, coll);
-    if (!coll) return mk_nil();
   }
-
   uint_fast16_t t = _type(coll);
   switch (t) {
+  case T_LAZYSEQ:
+    coll = deref(sc, coll);
+    if (!coll) return mk_nil();
   case T_CLOSURE:
   case T_MACRO:
   case T_LIST:
-  case T_LAZYSEQ:
+  case T_LISTMAP:
   case T_CLASS:
   case T_NAMESPACE:
     return _car_unchecked(coll);
@@ -5985,9 +5981,27 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
       if (!_is_sequence(tail) && t != T_LAZYSEQ && t != T_LIST && is_seqable_type(t)) {
 	tail = seq(sc, tail);
       }
-      return mk_pointer(get_cell(sc, T_LIST, 0, x, tail, NULL)); 
+      return mk_pointer(get_cell(sc, T_LIST, 0, x, tail, NULL));
     }
     return mk_pointer(get_cell(sc, T_LIST, 0, x, NULL, NULL));
+
+  case T_LISTMAP:
+    {
+      nanoclj_cell_t * c = NULL;
+      for (; args; args = next(sc, args)) {
+	x = first(sc, args);
+	args = next(sc, args);
+	if (args) {
+	  y = first(sc, args);
+	  nanoclj_cell_t * c2 = get_cell_x(sc, t, T_GC_ATOM, NULL, NULL, NULL);
+	  c2->_cons.car = x;
+	  c2->_cons.value = y;
+	  c2->_cons.cdr = c;
+	  c = c2;
+	}
+      }
+      return mk_pointer(c);
+    }
 
   case T_MAPENTRY:
     return mk_mapentry(sc, first(sc, args), second(sc, args));
@@ -7740,7 +7754,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       }
     }
     Error_0(sc, "No protocol method IStack.-peek defined for type");
-    
+
+  case OP_KEY:
   case OP_FIRST:                 /* first */
     if (!unpack_args_1(sc, &arg0)) {
       return false;
@@ -7752,7 +7767,10 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     case T_CELL:
       {
 	nanoclj_cell_t * c = decode_pointer(arg0);
-	if (_is_sequence(c) || is_seqable_type(_type(c))) {
+	uint_fast16_t t = _type(c);
+	if (sc->op == OP_FIRST && t == T_LISTMAP) {
+	  s_return(sc, arg0);
+	} else if (_is_sequence(c) || is_seqable_type(_type(c))) {
 	  s_return(sc, first(sc, c));
 	}
       }
@@ -7776,6 +7794,28 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       }
     }
     Error_0(sc, "Value is not ISeqable");
+
+  case OP_VAL:
+    if (!unpack_args_1(sc, &arg0)) {
+      return false;
+    }
+    switch (prim_type(arg0)) {
+    case T_NIL:
+    case T_EMPTYLIST:
+      s_return(sc, mk_nil());
+    case T_CELL:
+      {
+	nanoclj_cell_t * c = decode_pointer(arg0);
+	switch (_type(c)) {
+	case T_LISTMAP:
+	  s_return(sc, c->_cons.value);
+	case T_MAPENTRY:
+	  s_return(sc, first(sc, c));
+	}
+      }
+    }
+    s_return(sc, mk_nil());
+    
 
   case OP_REST:
     if (!unpack_args_1(sc, &arg0)) {
@@ -9992,7 +10032,7 @@ bool nanoclj_init(nanoclj_t * sc) {
   mk_class(sc, "nanoclj.core.RecurClosure", T_RECUR_CLOSURE, Closure);
   mk_class(sc, "nanoclj.core.ForeignFunction", T_FOREIGN_FUNCTION, AFn);
   mk_class(sc, "nanoclj.core.ForeignObject", T_FOREIGN_OBJECT, AFn);
-
+  mk_class(sc, "nanoclj.core.ListMap", T_LISTMAP, AFn);
   mk_class(sc, "nanoclj.core.Codepoint", T_CODEPOINT, sc->Object);
   sc->Image = mk_class(sc, "nanoclj.core.Image", T_IMAGE, sc->Object);
   mk_class(sc, "nanoclj.core.Gradient", T_GRADIENT, sc->Object);
