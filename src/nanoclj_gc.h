@@ -92,8 +92,13 @@ E2:_setmark(p);
     goto E6;
 
   /* mark cons cell meta here (not an atom) */
-  nanoclj_cell_t * meta = _cons_metadata(p);
-  if (meta) mark(meta);
+  if (_type(p) == T_LISTMAP) {
+    nanoclj_val_t value = p->_cons.value;
+    if (is_cell(value)) mark(decode_pointer(value));
+  } else {
+    nanoclj_cell_t * meta = _cons_metadata(p);
+    if (meta) mark(meta);
+  }
   
   /* E4: down car */
   q0 = _car(p);

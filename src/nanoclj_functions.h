@@ -1105,12 +1105,10 @@ static inline nanoclj_val_t clojure_data_csv_read_csv(nanoclj_t * sc, nanoclj_ce
 static nanoclj_t * linenoise_sc = NULL;
 
 static inline void completion(const char *input, linenoiseCompletions *lc) {
-  valarrayview_t f = find_slot_in_env(linenoise_sc, linenoise_sc->root_ns, linenoise_sc->AUTOCOMPLETE_HOOK, false);
-  if (f.ptr) {
-    nanoclj_val_t hook = slot_value_in_env(f);
+  nanoclj_val_t hook;
+  if (find_slot_in_env(linenoise_sc, linenoise_sc->root_ns, linenoise_sc->AUTOCOMPLETE_HOOK, false, &hook)) {
     if (!is_nil(hook)) {
       nanoclj_val_t line = mk_string(linenoise_sc, input);
-      
     }
   }
 }

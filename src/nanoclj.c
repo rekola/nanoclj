@@ -565,7 +565,7 @@ static inline bool is_vector_type_when_small(uint_fast16_t t) {
 }
 
 static inline bool is_map_type(uint_fast16_t t) {
-  return t == T_HASHMAP || t == T_SORTED_HASHMAP || t == T_VARMAP || t == T_ARRAYMAP;
+  return t == T_HASHMAP || t == T_SORTED_HASHMAP || t == T_VARMAP || t == T_ARRAYMAP || t == T_LISTMAP;
 }
 
 static inline bool is_set_type(uint_fast16_t t) {
@@ -1256,14 +1256,12 @@ static inline bool is_writer(nanoclj_val_t p) {
 
 static inline bool is_mapentry(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
-  const nanoclj_cell_t * c = decode_pointer(p);
-  return _type(c) == T_MAPENTRY;
+  return _type(decode_pointer(p)) == T_MAPENTRY;
 }
 
 static inline bool is_macro(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
-  const nanoclj_cell_t * c = decode_pointer(p);
-  return _type(c) == T_MACRO;
+  return _type(decode_pointer(p)) == T_MACRO;
 }
 static inline nanoclj_val_t closure_code(nanoclj_cell_t * p) {
   return _car(p);
@@ -3838,6 +3836,13 @@ static inline nanoclj_cell_t * vector_conjoin(nanoclj_t * sc, nanoclj_cell_t * v
 
 static inline nanoclj_cell_t * assoc_with_meta(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t key, nanoclj_val_t value, nanoclj_val_t meta) {
   uint16_t t = _type(coll);
+  if (t == T_LISTMAP) {
+    nanoclj_cell_t * new_coll = get_cell_x(sc, t, 0, NULL, NULL, NULL);
+    new_coll->_cons.car = key;
+    new_coll->_cons.value = value;
+    new_coll->_cons.cdr = coll;
+    return new_coll;
+  }
   size_t j = find_index(sc, coll, key);
   if (j != NPOS) {
     coll = copy_for_mutation(sc, coll);
@@ -3915,18 +3920,17 @@ static inline nanoclj_cell_t * conjoin(nanoclj_t * sc, nanoclj_cell_t * coll, na
     } else {
       return coll;
     }
-  } else if (is_map_type(t)) {
-    if (is_cell(new_value)) {
-      nanoclj_cell_t * c = decode_pointer(new_value);
-      if (_type(c) == T_VECTOR || _type(c) == T_MAPENTRY) {
-	return assoc(sc, coll, first(sc, c), second(sc, c));
-      } else if (is_map_type(_type(c))) {
-	for (; c; c = next(sc, c)) {
-	  nanoclj_cell_t * mapentry = decode_pointer(first(sc, c));
-	  coll = assoc(sc, coll, first(sc, mapentry), second(sc, mapentry));
-	}
-	return coll;
+  } else if (is_map_type(t) && is_cell(new_value)) {
+    nanoclj_cell_t * c = decode_pointer(new_value);
+    uint_fast16_t arg_type = _type(c);
+    if (arg_type == T_VECTOR || arg_type == T_MAPENTRY) {
+      return assoc(sc, coll, first(sc, c), second(sc, c));
+    } else if (is_map_type(arg_type)) {
+      for (; c; c = next(sc, c)) {
+	nanoclj_cell_t * mapentry = decode_pointer(first(sc, c));
+	coll = assoc(sc, coll, first(sc, mapentry), second(sc, mapentry));
       }
+      return coll;
     }
   } else if (is_vector_type(t) || t == T_TENSOR) {
     if (t == T_VECTOR && is_cell(new_value)) {
@@ -3977,12 +3981,7 @@ static inline nanoclj_cell_t * disj(nanoclj_t * sc, nanoclj_cell_t * coll, nanoc
  */
 
 static inline void new_frame_in_env(nanoclj_t * sc, nanoclj_cell_t * old_env) {
-#if 0
-  nanoclj_val_t coll = mk_pointer(get_vector_object(sc, T_HASHMAP, 0));
-#else
-  nanoclj_val_t coll = mk_emptylist();
-#endif
-  sc->envir = get_cell(sc, T_LIST, 0, coll, old_env, NULL);
+  sc->envir = get_cell(sc, T_LIST, 0, mk_emptylist(), old_env, NULL);
 }
 
 static inline void new_var_in_ns(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t variable, nanoclj_val_t value, nanoclj_cell_t * meta) {
@@ -3991,36 +3990,56 @@ static inline void new_var_in_ns(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_va
   _car_unchecked(ns) = mk_pointer(assoc_with_meta(sc, x, variable, value, mk_pointer(meta)));
 }
 
-static inline valarrayview_t find_slot_in_env(nanoclj_t * sc, nanoclj_cell_t * env, nanoclj_val_t hdl, bool all) {
+static inline bool find_slot_in_env(nanoclj_t * sc, nanoclj_cell_t * env, nanoclj_val_t hdl, bool all, nanoclj_val_t * r) {
   for (nanoclj_cell_t * x = env; x; x = _cdr_unchecked(x)) {
     nanoclj_cell_t * y = decode_pointer(_car_unchecked(x));
     if (y && _type(y) == T_VARMAP) {
       size_t idx = find_varmap_index(y, hdl);
       if (idx != NPOS) {
 	if (_is_small(y)) {
-	  return (valarrayview_t){ &(y->_small_tensor.vals[0]), _sodim0_unchecked(y) };
+	  *r = y->_small_tensor.vals[1];
 	} else {
-	  nanoclj_tensor_t * tensor = y->_collection.tensor;
-	  return (valarrayview_t){ tensor->data + tensor->nb[1] * idx, tensor->ne[0] };
+	  *r = get_indexed_value(y, idx);
 	}
+	return true;
       }
     } else {
       for (; y; y = _cdr_unchecked(y)) {
-	nanoclj_cell_t * var = decode_pointer(_car_unchecked(y));
-	nanoclj_val_t sym = get_indexed_value(var, 0);
-	if (sym.as_long == hdl.as_long) {
-	  return (valarrayview_t){_smalldata_unchecked(var), 2};
+	if (y->_cons.car.as_long == hdl.as_long) {
+	  *r = y->_cons.value;
+	  return true;
 	}
       }
     }
     if (!all) break;
   }
-  return (valarrayview_t){0, 0};
+  return false;
 }
 
-static inline nanoclj_cell_t * get_var_in_env(nanoclj_t * sc, nanoclj_cell_t * env, nanoclj_val_t hdl, bool all) {
+static inline nanoclj_val_t inc_slot_in_env(nanoclj_t * sc, nanoclj_cell_t * env, nanoclj_val_t hdl, bool all) {
   for (nanoclj_cell_t * x = env; x; x = _cdr_unchecked(x)) {
     nanoclj_cell_t * y = decode_pointer(_car_unchecked(x));
+    if (y && _type(y) == T_VARMAP) {
+
+    } else {
+      for (; y; y = _cdr_unchecked(y)) {
+	if (y->_cons.car.as_long == hdl.as_long) {
+	  nanoclj_val_t v = y->_cons.value;
+	  y->_cons.value = mk_int(to_int(v) + 1);
+	  return v;
+	}
+      }
+    }
+    if (!all) break;
+  }
+  return mk_nil();
+}
+
+static inline nanoclj_cell_t * get_var_in_ns(nanoclj_t * sc, nanoclj_cell_t * env, nanoclj_val_t hdl, bool all) {
+  for (nanoclj_cell_t * x = env; x; x = _cdr_unchecked(x)) {
+    nanoclj_val_t y0 = _car_unchecked(x);
+    if (!is_cell(y0)) continue;
+    nanoclj_cell_t * y = decode_pointer(y0);
     if (_type(y) == T_VARMAP) {
       size_t idx = find_varmap_index(y, hdl);
       if (idx != NPOS) {
@@ -4028,14 +4047,6 @@ static inline nanoclj_cell_t * get_var_in_env(nanoclj_t * sc, nanoclj_cell_t * e
 	  return mk_var(sc, y->_small_tensor.vals[0], y->_small_tensor.vals[1], y->_small_tensor.vals[2]);
 	} else {
 	  return get_collection_object(sc, T_VAR, idx * 3, 3, y->_collection.tensor, NULL);
-	}
-      }
-    } else {
-      for (; y; y = _cdr_unchecked(y)) {
-	nanoclj_cell_t * var = decode_pointer(_car_unchecked(y));
-	nanoclj_val_t sym = get_indexed_value(var, 0);
-	if (sym.as_long == hdl.as_long) {
-	  return var;
 	}
       }
     }
@@ -4047,10 +4058,11 @@ static inline nanoclj_cell_t * get_var_in_env(nanoclj_t * sc, nanoclj_cell_t * e
 static inline void new_slot_spec_in_env(nanoclj_t * sc, nanoclj_cell_t * env, nanoclj_val_t variable, nanoclj_val_t value) {
   nanoclj_cell_t * x = decode_pointer(_car_unchecked(env));
   /* TODO: ensure that x is a linked list with vars */
-  nanoclj_cell_t * slot0 = get_vector_object(sc, T_MAPENTRY, 2);
-  set_indexed_value(slot0, 0, variable);
-  set_indexed_value(slot0, 1, value);
-  _car_unchecked(env) = mk_pointer(cons(sc, mk_pointer(slot0), x));
+  nanoclj_cell_t * slot = get_cell_x(sc, T_LISTMAP, 0, NULL, NULL, NULL);
+  slot->_cons.car = variable;
+  slot->_cons.value = value;
+  slot->_cons.cdr = x;
+  _car_unchecked(env) = mk_pointer(slot);
 }
 
 static inline void new_slot_in_env(nanoclj_t * sc, nanoclj_val_t variable, nanoclj_val_t value) {
@@ -4079,18 +4091,6 @@ static inline bool set_var_in_ns(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_va
   }
 
   return true;
-}
-
-static inline nanoclj_val_t slot_value_in_env(valarrayview_t slot) {
-  if (slot.size) {
-    return slot.ptr[1];
-  } else {
-    return mk_nil();
-  }
-}
-
-static inline void mutate_slot_value_in_env(valarrayview_t slot, nanoclj_val_t v) {
-  slot.ptr[1] = v;
 }
 
 static inline nanoclj_cell_t * mk_hashmap(nanoclj_t * sc) {
@@ -4141,8 +4141,8 @@ static inline void intern(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t sym
 }
 
 static inline void intern_with_nil(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t symbol, nanoclj_cell_t * meta) {
-  valarrayview_t var = find_slot_in_env(sc, ns, symbol, false);
-  if (!var.ptr) new_var_in_ns(sc, ns, symbol, mk_nil(), meta);
+  nanoclj_cell_t * var = get_var_in_ns(sc, ns, symbol, false);
+  if (!var) new_var_in_ns(sc, ns, symbol, mk_nil(), meta);
 }
 
 static inline nanoclj_val_t intern_foreign_func(nanoclj_t * sc, nanoclj_cell_t * ns, const char * name, foreign_func fptr, int min_arity, int max_arity) {
@@ -4533,7 +4533,7 @@ static inline int http_open_thread(nanoclj_t * sc, strview_t sv) {
 static inline nanoclj_val_t port_rep_from_file(nanoclj_t * sc, uint16_t type, FILE * f, char * filename) {
   nanoclj_cell_t * p = get_port_object(sc, type, port_file);
   if (!p) return mk_nil();
-
+ 
   _line_unchecked(p) = _column_unchecked(p) = 0;
 
   nanoclj_port_rep_t * pr = _rep_unchecked(p);
@@ -4545,8 +4545,8 @@ static inline nanoclj_val_t port_rep_from_file(nanoclj_t * sc, uint16_t type, FI
   pr->stdio.bg = sc->bg_color;
   pr->stdio.backchars[0] = pr->stdio.backchars[1] = -1;
 
-  nanoclj_val_t v = slot_value_in_env(find_slot_in_env(sc, sc->envir, sc->FLUSH_ON_NEWLINE, true));
-  if (is_true(v)) {
+  nanoclj_cell_t * var = get_var_in_ns(sc, sc->root_ns, sc->FLUSH_ON_NEWLINE, true);
+  if (var && is_true(get_indexed_value(var, 1))) {
     setlinebuf(f);
   }
 
@@ -5643,31 +5643,36 @@ static inline bool _Error_1(nanoclj_t * sc, const char *msg) {
 
 #define Error_0(sc,s)    return _Error_1(sc, s)
 
-static inline valarrayview_t resolve(nanoclj_t * sc, nanoclj_cell_t * env0, nanoclj_val_t sym0) {
+static inline bool resolve(nanoclj_t * sc, nanoclj_cell_t * env0, nanoclj_val_t sym0, nanoclj_val_t * r) {
   symbol_t * s = decode_symbol(sym0);
   nanoclj_cell_t * env;
   nanoclj_val_t sym;
   bool all_namespaces = true;
   if (s->ns.size) {
-    valarrayview_t c = find_slot_in_env(sc, env0, s->ns_alias, true);
-    if (c.ptr) {
-      env = decode_pointer(slot_value_in_env(c));
+    nanoclj_cell_t * var = get_var_in_ns(sc, sc->root_ns, s->ns_alias, true);
+    if (var) {
+      env = decode_pointer(get_indexed_value(var, 1));
       sym = s->name_sym;
       all_namespaces = false;
     } else {
       nanoclj_val_t msg = mk_string_fmt(sc, "%.*s is not defined", s->ns.size, s->ns.ptr);
       nanoclj_throw(sc, mk_runtime_exception(sc, msg));
-      return (valarrayview_t){ NULL, 0 };
+      return false;
     }
   } else {
     env = env0;
     sym = sym0;
   }
-  return find_slot_in_env(sc, env, sym, all_namespaces);
+  return find_slot_in_env(sc, env, sym, all_namespaces, r);
 }
 
 static inline nanoclj_val_t resolve_value(nanoclj_t * sc, nanoclj_cell_t * env, nanoclj_val_t sym) {
-  return slot_value_in_env(resolve(sc, env, sym));
+  nanoclj_val_t v;
+  if (resolve(sc, env, sym, &v)) {
+    return v;
+  } else {
+    return mk_nil();
+  }
 }
 
 static nanoclj_val_t get_out_port(nanoclj_t * sc) {
@@ -6548,11 +6553,10 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_EVAL:                /* main part of evaluation */
     switch (prim_type(sc->code)) {
     case T_SYMBOL:
-      valarrayview_t c = resolve(sc, sc->envir, sc->code);
-      if (sc->pending_exception) {
+      if (resolve(sc, sc->envir, sc->code, &x)) {
+	s_return(sc, x);
+      } else if (sc->pending_exception) {
 	return false;
-      } else if (c.ptr) {
-	s_return(sc, slot_value_in_env(c));
       } else if (sc->code.as_long == sc->CURRENT_NS.as_long) { /* special symbols */
 	s_return(sc, mk_pointer(sc->current_ns));
       } else if (sc->code.as_long == sc->CURRENT_FILE.as_long) {
@@ -6829,15 +6833,15 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     /* If the hook is defined, apply it to sc->code, otherwise
        set sc->value fall thru */
     {
-      valarrayview_t f = find_slot_in_env(sc, sc->envir, sc->COMPILE_HOOK, true);
-      if (!f.ptr) {
-        sc->value = sc->code;
-        /* Fallthru */
-      } else {
+      nanoclj_val_t v;
+      if (find_slot_in_env(sc, sc->envir, sc->COMPILE_HOOK, true, &v)) {
         s_save(sc, OP_LAMBDA1, sc->args, sc->code);
         sc->args = cons(sc, sc->code, NULL);
-        sc->code = slot_value_in_env(f);
+        sc->code = v;
         s_goto(sc, OP_APPLY);
+      } else {
+        sc->value = sc->code;
+        /* Fallthru */
       }
     }
 
@@ -6882,7 +6886,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       } else {
 	intern_with_nil(sc, ns, arg1, meta);
       }
-      s_return(sc, mk_pointer(get_var_in_env(sc, ns, arg1, false)));
+      s_return(sc, mk_pointer(get_var_in_ns(sc, ns, arg1, false)));
     }
     nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Invalid arguments for tensor")));
     return false;
@@ -6922,7 +6926,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     if (!set_var_in_ns(sc, sc->current_ns, sc->code, sc->value, meta)) {
       new_var_in_ns(sc, sc->current_ns, sc->code, sc->value, meta);
     }
-    s_return(sc, mk_pointer(get_var_in_env(sc, sc->current_ns, sc->code, false)));
+    s_return(sc, mk_pointer(get_var_in_ns(sc, sc->current_ns, sc->code, false)));
 
   case OP_SET:
     if (!unpack_args_2(sc, &arg0, &arg1)) {
@@ -7041,9 +7045,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       nanoclj_val_t sym = get_indexed_value(sc->args, 0);
       nanoclj_val_t n = get_indexed_value(sc->args, 1);
 
-      valarrayview_t f = find_slot_in_env(sc, sc->envir, sym, true);
-      int idx = to_int(slot_value_in_env(f));
-      mutate_slot_value_in_env(f, mk_int(idx + 1));
+      nanoclj_val_t idx0 = inc_slot_in_env(sc, sc->envir, sym, true);
+      int idx = to_int(idx0);
 
       if (idx + 2 < to_int(n)) {
 	s_save(sc, OP_DOTIMES2, decode_pointer(mk_mapentry(sc, sym, n)), sc->code);
@@ -7777,6 +7780,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
     Error_0(sc, "Value is not ISeqable");
 
+  case OP_VAL:
   case OP_SECOND:
     if (!unpack_args_1(sc, &arg0)) {
       return false;
@@ -7788,34 +7792,15 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     case T_CELL:
       {
 	nanoclj_cell_t * c = decode_pointer(arg0);
-	if (_is_sequence(c) || is_seqable_type(_type(c))) {
+	uint_fast16_t t = _type(c);
+	if (sc->op == OP_VAL && t == T_LISTMAP) {
+	  s_return(sc, c->_cons.value);
+	} else if (_is_sequence(c) || is_seqable_type(_type(c))) {
 	  s_return(sc, second(sc, c));
 	}
       }
     }
     Error_0(sc, "Value is not ISeqable");
-
-  case OP_VAL:
-    if (!unpack_args_1(sc, &arg0)) {
-      return false;
-    }
-    switch (prim_type(arg0)) {
-    case T_NIL:
-    case T_EMPTYLIST:
-      s_return(sc, mk_nil());
-    case T_CELL:
-      {
-	nanoclj_cell_t * c = decode_pointer(arg0);
-	switch (_type(c)) {
-	case T_LISTMAP:
-	  s_return(sc, c->_cons.value);
-	case T_MAPENTRY:
-	  s_return(sc, first(sc, c));
-	}
-      }
-    }
-    s_return(sc, mk_nil());
-    
 
   case OP_REST:
     if (!unpack_args_1(sc, &arg0)) {
@@ -8205,9 +8190,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     } else {
       nanoclj_cell_t * typ = is_type(arg0) ? decode_pointer(arg0) : get_type_object(sc, arg0);
       while (typ) {
-	valarrayview_t slot = resolve(sc, typ, arg1);
-	if (slot.ptr) {
-	  nanoclj_val_t v = slot_value_in_env(slot);
+	nanoclj_val_t v;
+	if (resolve(sc, typ, arg1, &v)) {
 	  if (type(v) == T_FOREIGN_FUNCTION || type(v) == T_CLOSURE || type(v) == T_PROC) {
 	    sc->code = v;
 	    sc->args = cons(sc, arg0, arg_next);
@@ -9022,10 +9006,10 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     if (!unpack_args_1(sc, &arg0)) {
       return false;
     } else {
-      valarrayview_t var = find_slot_in_env(sc, sc->root_ns, arg0, true);
+      nanoclj_cell_t * var = get_var_in_ns(sc, sc->root_ns, arg0, true);
       nanoclj_cell_t * ns;
-      if (var.ptr) {
-	ns = decode_pointer(slot_value_in_env(var));
+      if (var) {
+	ns = decode_pointer(get_indexed_value(var, 1));
       } else {
 	nanoclj_cell_t * meta = update_meta_from_reader(sc, mk_hashmap(sc), tensor_peek(sc->load_stack));
 	meta = assoc(sc, meta, sc->NAME, arg0);
@@ -10279,11 +10263,10 @@ int main(int argc, const char **argv) {
     } else if (argc >= 2) {
       if (nanoclj_load_named_file(&sc, mk_string(&sc, argv[1]))) {
 	/* Call -main if it exists */
-	nanoclj_val_t main = def_symbol(&sc, "-main");
-	valarrayview_t x = find_slot_in_env(&sc, sc.envir, main, true);
-	if (x.ptr) {
-	  nanoclj_val_t v = slot_value_in_env(x);
-	  nanoclj_call(&sc, v, mk_emptylist());
+	nanoclj_val_t main_sym = def_symbol(&sc, "-main");
+	nanoclj_val_t main = resolve_value(&sc, sc.envir, main_sym);
+	if (!is_nil(main)) {
+	  nanoclj_call(&sc, main, mk_emptylist());
 	}
       }
     } else {

@@ -106,11 +106,6 @@ typedef struct {
 } strview_t;
 
 typedef struct {
-  nanoclj_val_t * ptr;
-  size_t size;
-} valarrayview_t;
-
-typedef struct {
   float x, y;
 } nanoclj_vec2f;
 
