@@ -10106,6 +10106,11 @@ bool nanoclj_init(nanoclj_t * sc) {
   sc->tests_passed = 0;
   sc->tests_failed = 0;
 
+  if (sc->term_graphics == nanoclj_sixel && isatty(fileno(stderr))) {
+    /* If Sixels are used and stderr is a tty, mute it */
+    if (freopen("/dev/null", "w", stderr) == NULL) { }
+  }
+
   return sc->pending_exception == NULL;
 }
 
