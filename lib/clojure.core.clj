@@ -132,7 +132,7 @@
 				:else (some pred (rest coll)))))
 (def-macro (time body)
    `(let [ t0 (System/currentTimeMillis) ]
-        (let ((e ,body))
+        (let ((e ~body))
 	     (println (str "Elapsed time: " (- (System/currentTimeMillis) t0) " msecs"))
 	     e)))
 
@@ -603,17 +603,17 @@
 
 (def-macro (with-out new-out & body)
   `(let ((prev-out *out*)
-         (tmp ,new-out))
+         (tmp ~new-out))
      (set! *out* tmp)
-     ,@body
+     ~@body
      (set! *out* prev-out)
      tmp))
 
 (def-macro (with-out-pdf filename width height & body)
   `(let ((prev-out *out*)
-         (w (clojure.java.io/writer ,width ,height :pdf ,filename)))
+         (w (clojure.java.io/writer ~width ~height :pdf ~filename)))
      (set! *out* w)
-     ,@body
+     ~@body
      (set! *out* prev-out)
      (-close w)
      nil))
@@ -622,16 +622,16 @@
    `(let [ prev-out *out*
            w (clojure.java.io/writer)
          ] (set! *out* w)
-	   ,body
+	   ~body
            (set! *out* prev-out)
            (java.lang.String w)))
 
 (def-macro (with-in-str s & body)
   `(let ((prev-in *in*)
-         (rdr (clojure.java.io/reader (char-array ,s)))
+         (rdr (clojure.java.io/reader (char-array ~s)))
          )
      (set! *in* rdr)
-     (let ((r ,@body))
+     (let ((r ~@body))
        (set! *in* prev-in)
        r
        )))
@@ -973,10 +973,10 @@
 (defn resolve
   [sym] (ns-resolve *ns* sym))
 
-(def-macro (var symbol) `(or (and (namespace ',symbol)
-                                  (ns-resolve (find-ns (symbol (namespace ',symbol))) (symbol (name ',symbol))))
-                             (resolve ',symbol)
-                             (throw (new RuntimeException (str "Use of undeclared Var " ',symbol)))))
+(def-macro (var symbol) `(or (and (namespace '~symbol)
+                                  (ns-resolve (find-ns (symbol (namespace '~symbol))) (symbol (name '~symbol))))
+                             (resolve '~symbol)
+                             (throw (new RuntimeException (str "Use of undeclared Var " '~symbol)))))
 
 (defn ns-map
   "Returns the var-map of namespace ns"

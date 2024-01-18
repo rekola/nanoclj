@@ -183,10 +183,10 @@
 ; DEFINE-MACRO Contributed by Andy Gaynor
 (macro def-macro (fn [dform]
                    (if (symbol? (cadr dform))
-                     `(macro ,@(cdr dform))
+                     `(macro ~@(cdr dform))
                      (let [form (gensym)]
-                       `(macro (,(caadr dform) ,form)
-                               (apply (fn ,(cdadr dform) ,@(cddr dform)) (cdr ,form)))))))
+                       `(macro (~(caadr dform) ~form)
+                               (apply (fn ~(cdadr dform) ~@(cddr dform)) (cdr ~form)))))))
 
 ;;;; Utility to ease macro creation
 (def macroexpand (fn [form] ((eval (source (eval (car form)))) form)))
@@ -198,27 +198,27 @@
 
 (def *compile-hook* macro-expand-all)
 
-; (macro (defn form) `(intern *ns* ',(cadr form) (fn ,(caddr form) ,(cadddr form))))
+; (macro (defn form) `(intern *ns* '~(cadr form) (fn ~(caddr form) ~(cadddr form))))
 ; (macro my-def (fn [name expression] (cons 'intern (cons '*ns* (cons (symbol name) (cons 1 '()))))))
 
-; (macro (defn-2 form) `(intern *ns* ',(cadr form) (fn ,(cddr form))))
-; (def-macro (defn name params body) `(intern *ns* ',name (fn ,params ,body)))
-; (def-macro (defn name params & body) `(intern *ns* ',name (fn ,params ,@body)))
+; (macro (defn-2 form) `(intern *ns* '~(cadr form) (fn ~(cddr form))))
+; (def-macro (defn name params body) `(intern *ns* '~name (fn ~params ~body)))
+; (def-macro (defn name params & body) `(intern *ns* '~name (fn ~params ~@body)))
 (def-macro (defn name & args) (if (string? (car args))
-                                `(def ,name ,(car args) (fn ,(cadr args) ,@(cddr args)))
-                                `(def ,name (fn ,(car args) ,@(cdr args)))))
+                                `(def ~name ~(car args) (fn ~(cadr args) ~@(cddr args)))
+                                `(def ~name (fn ~(car args) ~@(cdr args)))))
 (def-macro (defn- name & args) (if (string? (car args))
-                                 `(def ^:private ,name ,(car args) (fn ,(cadr args) ,@(cddr args)))
-                                 `(def ^:private ,name (fn ,(car args) ,@(cdr args)))))
-; (def-macro (my-cond & form) (if (empty? form) '() `(if ,(car form) ,(cadr form) nil)))
+                                 `(def ^:private ~name ~(car args) (fn ~(cadr args) ~@(cddr args)))
+                                 `(def ^:private ~name (fn ~(car args) ~@(cdr args)))))
+; (def-macro (my-cond & form) (if (empty? form) '() `(if ~(car form) ~(cadr form) nil)))
 ; (macro (my-cond form) (if (empty? (cdr form)) '() (cons 'if (cons (cadr form) (cons (caddr form) (my-cond (cdddr form)))))))
 
 
-(def-macro (set! symbol value) `(-set ',symbol ,value))
-(def-macro (. instance symbol & args) `(-dot ,instance ',symbol ,@args))
+(def-macro (set! symbol value) `(-set '~symbol ~value))
+(def-macro (. instance symbol & args) `(-dot ~instance '~symbol ~@args))
 
 (defn create-ns [sym] (eval (if (defined? sym) sym (intern *ns* sym (clojure.lang.Namespace *ns* (str sym))))))
-(def-macro (ns name) `((create-ns ',name)))
+(def-macro (ns name) `((create-ns '~name)))
 
 (defn foldr [f x lst]
   (if (empty? lst)
@@ -226,12 +226,12 @@
     (foldr f (f x (car lst)) (cdr lst))))
 
 (def-macro (case e & clauses)
-  (if (empty? clauses) `(throw (new RuntimeException (str "No matching clause: " ,e)))
+  (if (empty? clauses) `(throw (new RuntimeException (str "No matching clause: " ~e)))
       (if (empty? (rest clauses))
         (first clauses)
-        `(if (equals? ,e ,(car clauses))
-           ,(cadr clauses)
-           (case ,e ,@(cddr clauses))))))
+        `(if (equals? ~e ~(car clauses))
+           ~(cadr clauses)
+           (case ~e ~@(cddr clauses))))))
   
 ; Add multiarity versions of basic operators
 
@@ -419,12 +419,12 @@
   [x] (instance? nanoclj.core.Closure x))
 
 (macro when (fn [form]
-              `(if ,(cadr form) (do ,@(cddr form)))))
+              `(if ~(cadr form) (do ~@(cddr form)))))
 
 (macro when-not (fn [form]
-                  `(if (not ,(cadr form)) (do ,@(cddr form)))))
+                  `(if (not ~(cadr form)) (do ~@(cddr form)))))
 
 (macro if-not (fn [form]
-                `(if ,(cadr form) ,(cadddr form) ,(caddr form))))
+                `(if ~(cadr form) ~(cadddr form) ~(caddr form))))
 
-(macro delay (fn [form] `(clojure.lang.Delay ',(cdr form))))
+(macro delay (fn [form] `(clojure.lang.Delay '~(cdr form))))

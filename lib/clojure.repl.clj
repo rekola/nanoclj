@@ -8,8 +8,8 @@
 (def-macro (doc name)
   (println "-------------------------")
   `(do
-     (println ',name)
-     (println (:doc (meta (var ,name))))))
+     (println '~name)
+     (println (:doc (meta (var ~name))))))
 
 (defn apropos
   "Returns a list of functions whose name contains str"

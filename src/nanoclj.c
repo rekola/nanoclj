@@ -83,7 +83,7 @@
 #define TOK_COMMENT 	8
 #define TOK_DQUOTE  	9
 #define TOK_BQUOTE  	10
-#define TOK_COMMA   	11
+#define TOK_UNQUOTE   	11
 #define TOK_ATMARK  	12
 #define TOK_TAG     	13
 #define TOK_CHAR_CONST	14
@@ -5080,17 +5080,17 @@ static inline int token(nanoclj_t * sc, nanoclj_cell_t * inport) {
       return token(sc, inport);
     }
 
-  case ',':
+  case '~':
     if ((c = inchar(sc, inport)) == '@') {
       return TOK_ATMARK;
-    } else if (is_one_of("\n\r ", c)) {
-      backchar(c, inport);
-      return token(sc, inport);
     } else {
       backchar(c, inport);
-      return TOK_COMMA;
+      return TOK_UNQUOTE;
     }
-    
+
+  case ',':
+    return token(sc, inport);
+
   case '#':
     c = inchar(sc, inport);
     if (c == '(') {
@@ -8482,7 +8482,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  }
 	  s_goto(sc, OP_RD_SEXPR);
 	
-	case TOK_COMMA:
+	case TOK_UNQUOTE:
 	  s_save(sc, OP_RD_UNQUOTE, NULL, mk_emptylist());
 	  sc->tok = token(sc, inport);
 	  s_goto(sc, OP_RD_SEXPR);
@@ -10106,11 +10106,6 @@ bool nanoclj_init(nanoclj_t * sc) {
   sc->tests_passed = 0;
   sc->tests_failed = 0;
 
-  if (sc->term_graphics == nanoclj_sixel && isatty(fileno(stderr))) {
-    /* If Sixels are used and stderr is a tty, mute it */
-    if (freopen("/dev/null", "w", stderr) == NULL) { }
-  }
-
   return sc->pending_exception == NULL;
 }
 
@@ -10284,6 +10279,16 @@ int main(int argc, const char **argv) {
     fprintf(stderr, "Could not initialize!\n");
     return 2;
   }
+
+  bool test_mode = false;
+  if (argc == 2 && strcmp(argv[1], "--test") == 0) {
+    test_mode = true;
+  }
+  
+  if (!test_mode && sc.term_graphics == nanoclj_sixel && isatty(fileno(stderr))) {
+    /* If Sixels are used and stderr is a tty, mute it */
+    if (freopen("/dev/null", "w", stderr) == NULL) { }
+  }
   
   nanoclj_set_input_port_file(&sc, stdin);
   nanoclj_set_output_port_file(&sc, stdout);
@@ -10300,13 +10305,11 @@ int main(int argc, const char **argv) {
   }
   intern(&sc, sc.current_ns, def_symbol(&sc, "*command-line-args*"), mk_pointer(args));
 
-  bool test_mode = false;
   size_t num_errors = 0;
   int rv = 0;
   
   if (nanoclj_load_named_file(&sc, mk_string(&sc, InitFile))) {
-    if (argc == 2 && strcmp(argv[1], "--test") == 0) {
-      test_mode = true;
+    if (test_mode) {
       if (!nanoclj_load_named_file(&sc, mk_string(&sc, "tests/run.clj"))) {
 	default_exception_handler(&sc);
 	num_errors++;
