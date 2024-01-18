@@ -409,6 +409,7 @@ static inline void _set_cdr(nanoclj_cell_t * c, nanoclj_cell_t * v) {
 #define _set_seq(p)	  	  (p->flags |= T_SEQUENCE)
 #define _set_rseq(p)	  	  (p->flags |= T_SEQUENCE | T_REVERSE)
 #define _is_small(p)	          (p->flags & T_SMALL)
+#define _is_const(p)		  (p->flags & T_CONST)
 #define _set_gc_atom(p)           (p->flags |= T_GC_ATOM)
 #define _clr_gc_atom(p)           (p->flags &= CLR_GC_ATOM)
 
@@ -481,6 +482,16 @@ static inline bool is_tensor(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
   const nanoclj_cell_t * c = decode_pointer(p);
   return _type(c) == T_TENSOR;
+}
+static inline bool is_const(nanoclj_val_t p) {
+  switch (prim_type(p)) {
+  case T_SYMBOL:
+    return false;
+  case T_CELL:
+    return _is_const(decode_pointer(p));
+  default:
+    return true;
+  }
 }
 
 static inline bool is_seqable_type(uint_fast16_t t) {
@@ -6970,7 +6981,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
     s_goto(sc, OP_EVAL);
 
-  case OP_LOOP:{                /* loop */
+  case OP_LOOP0:{                /* loop */
     x = car(sc->code);
     if (!is_cell(x)) {
       Error_0(sc, "Syntax error");
@@ -6979,30 +6990,61 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     if (_type(input_vec) != T_VECTOR) {
       Error_0(sc, "Syntax error");
     }
-
+    nanoclj_cell_t * body0 = cdr(sc->code);
+    if (!body0) s_return(sc, mk_nil());
+    
     size_t n = get_size(input_vec) / 2;
-
-    nanoclj_cell_t * values = 0;
     nanoclj_cell_t * args = mk_vector(sc, n);
 
-    for (int i = (int)n - 1; i >= 0; i--) {
-      set_indexed_value(args, i, get_indexed_value(input_vec, 2 * i + 0));
-      values = cons(sc, get_indexed_value(input_vec, 2 * i + 1), values);
+    for (int i = 0; i < n; i++) {
+      set_indexed_value(args, i, get_indexed_value(input_vec, 2 * i));
     }
 
-    nanoclj_cell_t * body = cdr(sc->code);
-    body = cons(sc, mk_pointer(args), body);
-    nanoclj_val_t x = mk_pointer(body);
+    nanoclj_cell_t * body = cons(sc, mk_pointer(args), body0);
     
-    /* Create env frame for the closure, and add recursion point and anonymous fn name */
-    nanoclj_cell_t * env = get_cell(sc, T_LIST, 0, mk_emptylist(), sc->envir, NULL);
-    new_slot_spec_in_env(sc, env, sc->RECUR, mk_pointer(get_cell(sc, T_RECUR_CLOSURE, 0, x, env, NULL)));
-    
-    sc->code = mk_pointer(cons(sc, mk_pointer(get_cell(sc, T_CLOSURE, 0, x, env, NULL)), values));
-    sc->args = NULL;
-    s_goto(sc, OP_EVAL);
+    /* Create env frame for the closure, and add recursion point */
+    new_frame_in_env(sc, sc->envir);
+    new_slot_in_env(sc, sc->RECUR, mk_pointer(get_cell(sc, T_RECUR_CLOSURE, 0, mk_pointer(body), sc->envir, NULL)));
+
+    if (n) {
+      s_save(sc, OP_LOOP1, NULL, sc->code);
+      sc->code = get_indexed_value(input_vec, 1);
+      sc->args = NULL;
+      s_goto(sc, OP_EVAL);
+    } else {
+      if (_cdr_unchecked(body0)) {
+	s_save(sc, OP_DO, NULL, mk_pointer(_cdr_unchecked(body0)));
+      }
+      sc->code = _car_unchecked(body0);
+      s_goto(sc, OP_EVAL);
+    }
   }
 
+  case OP_LOOP1:{
+    nanoclj_cell_t * vec = decode_pointer(car(sc->code));
+    long long i = sc->args ? decode_integer(_car_unchecked(sc->args)) : 0;
+    destructure_value(sc, get_indexed_value(vec, i), sc->value);
+    
+    if (i + 2 < get_size(vec)) {
+      nanoclj_cell_t * args = sc->args;
+      if (args) _car_unchecked(args) = mk_int(i + 2);
+      else args = cons(sc, mk_int(i + 2), NULL);
+      s_save(sc, OP_LOOP1, args, sc->code);
+      
+      sc->code = get_indexed_value(vec, i + 3);
+      sc->args = NULL;
+      s_goto(sc, OP_EVAL);
+    } else {
+      nanoclj_cell_t * code = cdr(sc->code);
+      if (_cdr_unchecked(code)) {
+	s_save(sc, OP_DO, NULL, mk_pointer(_cdr_unchecked(code)));
+      }
+      sc->code = _car_unchecked(code);
+      s_goto(sc, OP_EVAL);
+    }
+  }
+
+    
   case OP_DOTIMES0:
     {
       x = car(sc->code);
@@ -9855,7 +9897,7 @@ bool nanoclj_init(nanoclj_t * sc) {
   assign_syntax(sc, "or", OP_OR0);
   assign_syntax(sc, "macro", OP_MACRO0);
   assign_syntax(sc, "try", OP_TRY);
-  assign_syntax(sc, "loop", OP_LOOP);
+  assign_syntax(sc, "loop", OP_LOOP0);
   assign_syntax(sc, "dotimes", OP_DOTIMES0);
   assign_syntax(sc, "thread", OP_THREAD);
 

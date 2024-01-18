@@ -215,3 +215,5 @@
                                         ; Control
 
 (t/is (= (with-out-str (dotimes [n 4] (print "X"))) "XXXX"))
+(t/is (= (loop [a 4 b a] (if (zero? b) 1000 (recur a (dec b)))) 1000))
+(t/is (= (loop []) nil))
