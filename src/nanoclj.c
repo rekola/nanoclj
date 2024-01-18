@@ -7034,10 +7034,11 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       if (n > 1) {
 	s_save(sc, OP_DOTIMES2, decode_pointer(mk_mapentry(sc, sc->code, sc->value)), mk_pointer(sc->args));
       }
-
-      sc->code = mk_pointer(sc->args);
-      sc->args = NULL;
-      s_goto(sc, OP_DO);
+      if (_cdr_unchecked(sc->args)) {
+	s_save(sc, OP_DO, NULL, mk_pointer(_cdr_unchecked(sc->args)));
+      }
+      sc->code = _car_unchecked(sc->args);
+      s_goto(sc, OP_EVAL);
     }
 
   case OP_DOTIMES2:
@@ -7051,8 +7052,12 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       if (idx + 2 < to_int(n)) {
 	s_save(sc, OP_DOTIMES2, decode_pointer(mk_mapentry(sc, sym, n)), sc->code);
       }
+      if (cdr_unchecked(sc->code)) {
+	s_save(sc, OP_DO, NULL, mk_pointer(cdr_unchecked(sc->code)));
+      }
       sc->args = NULL;
-      s_goto(sc, OP_DO);
+      sc->code = car_unchecked(sc->code);
+      s_goto(sc, OP_EVAL);
     }
 
   case OP_LET0:                /* let */

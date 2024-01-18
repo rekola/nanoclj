@@ -152,7 +152,7 @@ Windows support is in progress.
   - condp
   - when-let, letfn, if-let, if-some
   - reduced, reduced?
-  - with-local-vars, var-set, find-var, alter-var-root, declare, binding, with-bindings
+  - with-local-vars, var-set, find-var, alter-var-root, declare, binding, with-bindings, defonce
   - sequence, subseq, rsubseq
   - make-hierarchy, ancestors, supers, bases, underive
   - select-keys
