@@ -15,6 +15,7 @@
 
 #define SIGNATURE_CELL		SIGNATURE(MASK_SIGN | 0)
 #define SIGNATURE_EMPTYLIST	SIGNATURE(MASK_SIGN | 1)
+#define SIGNATURE_REGEX		SIGNATURE(MASK_SIGN | 2)
 #define SIGNATURE_NIL		SIGNATURE(MASK_SIGN | 7)
 #define SIGNATURE_NAN		SIGNATURE(0)
 #define SIGNATURE_BOOLEAN	SIGNATURE(1)
@@ -104,6 +105,10 @@ static inline nanoclj_val_t mk_alias_pointer(void * ptr) {
   return (nanoclj_val_t)(SIGNATURE_ALIAS | (uint64_t)ptr);
 }
 
+static inline nanoclj_val_t mk_regex_pointer(void * ptr) {
+  return (nanoclj_val_t)(SIGNATURE_REGEX | (uint64_t)ptr);
+}
+
 static inline nanoclj_val_t mk_list(const nanoclj_cell_t * ptr) {
   return ptr ? mk_pointer(ptr) : mk_emptylist();
 }
@@ -135,6 +140,10 @@ static inline bool is_keyword(nanoclj_val_t v) {
 
 static inline bool is_boolean(nanoclj_val_t v) {
   return (v.as_long & MASK_SIGNATURE) == SIGNATURE_BOOLEAN;
+}
+
+static inline bool is_regex(nanoclj_val_t v) {
+  return (v.as_long & MASK_SIGNATURE) == SIGNATURE_REGEX;
 }
 
 #endif

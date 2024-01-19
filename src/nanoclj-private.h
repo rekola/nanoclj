@@ -18,8 +18,6 @@ extern "C" {
 
 #include "nanoclj_types.h"
 #include "nanoclj_threads.h"
-
-  struct pcre2_real_code_8;
   
   typedef enum {
     port_free = 0,
@@ -104,10 +102,6 @@ extern "C" {
 	uint32_t frame_offset, frame_count;
 	uint8_t channel_offset, channel_count;
       } _audio;
-      struct {
-	struct pcre2_real_code_8 * impl;
-	char * pattern;
-      } _regex;
       struct {
 	nanoclj_port_rep_t * rep;
 	int nesting;

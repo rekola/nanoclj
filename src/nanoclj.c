@@ -216,8 +216,13 @@ typedef struct {
   strview_t ns, name, full_name;
   uint32_t hash;
   nanoclj_val_t ns_sym, ns_alias, name_sym;
-  bool is_amp_qualified;
 } symbol_t;
+
+typedef struct {
+  strview_t pattern, full_name;
+  uint32_t hash;
+  struct pcre2_real_code_8 * impl;
+} regex_t;
 
 typedef struct {
   char * url;
@@ -252,6 +257,7 @@ static uint_fast16_t prim_type_extended(nanoclj_val_t value) {
   case SIGNATURE_KEYWORD: return T_KEYWORD;
   case SIGNATURE_SYMBOL: return T_SYMBOL;
   case SIGNATURE_ALIAS: return T_ALIAS;
+  case SIGNATURE_REGEX: return T_REGEX;
   }
   return T_DOUBLE;
 }
@@ -268,6 +274,7 @@ static uint_fast16_t prim_type(nanoclj_val_t value) {
   case SIGNATURE_KEYWORD: return T_KEYWORD;
   case SIGNATURE_SYMBOL: return T_SYMBOL;
   case SIGNATURE_ALIAS: return T_ALIAS;
+  case SIGNATURE_REGEX: return T_REGEX;
   }
   return T_DOUBLE;
 }
@@ -280,6 +287,10 @@ static inline uint_fast16_t _type(const nanoclj_cell_t * a) {
 
 static inline symbol_t * decode_symbol(nanoclj_val_t value) {
   return (symbol_t *)(value.as_long & MASK_PAYLOAD);
+}
+
+static inline regex_t * decode_regex(nanoclj_val_t value) {
+  return (regex_t *)(value.as_long & MASK_PAYLOAD);
 }
 
 static inline bool is_type(nanoclj_val_t value) {
@@ -315,13 +326,17 @@ static inline uint32_t get_string_hashcode(strview_t sv) {
   return h;
 }
 
-static inline uint32_t get_symbol_hash(uint_fast16_t t, strview_t ns, strview_t name) {
-  uint32_t h = hash_combine(murmur3_hash_unencoded_chars(name.ptr, name.size), get_string_hashcode(ns));
-  switch (t) {
-  case T_KEYWORD: h += 0x9e3779b9; break; /* the constant has been copied from Clojure */
-  case T_ALIAS: h += 0x29f1c424; break; /* a random number, probably not a prime */
+static inline uint32_t get_interned_hash(uint_fast16_t t, strview_t ns, strview_t name) {
+  if (t == T_REGEX) {
+    return get_string_hashcode(name);
+  } else {
+    uint32_t h = hash_combine(murmur3_hash_unencoded_chars(name.ptr, name.size), get_string_hashcode(ns));
+    switch (t) {
+    case T_KEYWORD: h += 0x9e3779b9; break; /* the constant has been copied from Clojure */
+    case T_ALIAS: h += 0x29f1c424; break; /* a random number, probably not a prime */
+    }
+    return h;
   }
-  return h;
 }
 
 static inline nanoclj_val_t mk_symbol(nanoclj_t * sc, uint16_t t, strview_t ns, strview_t name, int_fast16_t syntax) {
@@ -352,7 +367,7 @@ static inline nanoclj_val_t mk_symbol(nanoclj_t * sc, uint16_t t, strview_t ns, 
   s->name = (strview_t){ name_str, name.size };
   s->full_name = (strview_t){ full_name_str, full_name_size };
   s->syntax = syntax;
-  s->hash = get_symbol_hash(t, ns, name);
+  s->hash = get_interned_hash(t, ns, name);
   s->ns_sym = s->ns_alias = s->name_sym = mk_nil();
 
   switch (t) {
@@ -368,6 +383,46 @@ static inline void free_symbol(symbol_t * s) {
   free((char *)s->name.ptr);
   free((char *)s->full_name.ptr);
   free(s);
+}
+
+static inline nanoclj_val_t mk_regex(nanoclj_t * sc, strview_t pattern) {
+  int errornumber;
+  PCRE2_SIZE erroroffset;
+  struct pcre2_real_code_8 * re = pcre2_compile((PCRE2_SPTR8)pattern.ptr,
+						pattern.size,
+						PCRE2_UTF | PCRE2_NEVER_BACKSLASH_C,
+						&errornumber,
+						&erroroffset,
+						NULL);
+  if (re) {
+    char * pattern_str = malloc(pattern.size);
+    memcpy(pattern_str, pattern.ptr, pattern.size);
+
+    char * full_name = malloc(2 * pattern.size + 2);
+    size_t full_name_size = 2;
+    full_name[0] = '#';
+    full_name[1] = '"';
+    for (size_t i = 0; i < pattern.size; i++) {
+      if (pattern_str[i] == '"') full_name[full_name_size++] = '\\';
+      full_name[full_name_size++] = pattern_str[i];
+    }
+    full_name[full_name_size++] = '"';
+
+    regex_t * r = malloc(sizeof(regex_t));
+    r->pattern = (strview_t){ pattern_str, pattern.size };
+    r->full_name = (strview_t){ full_name, full_name_size };
+    r->hash = get_interned_hash(T_REGEX, (strview_t){0}, pattern);
+    r->impl = re;
+
+    return mk_regex_pointer(r);
+  }
+  return mk_nil();
+}
+
+static inline void free_regex(regex_t * re) {
+  free((char *)re->pattern.ptr);
+  free((char *)re->full_name.ptr);
+  free(re);
 }
 
 #define _is_gc_atom(p)            (p->flags & T_GC_ATOM)
@@ -1366,6 +1421,8 @@ static inline strview_t to_strview(nanoclj_val_t x) {
   case T_KEYWORD:
   case T_ALIAS:
     return decode_symbol(x)->full_name;
+  case T_REGEX:
+    return decode_regex(x)->full_name;
   case T_PROC:
     return mk_strview(dispatch_table[decode_integer(x)].name);
   case T_CELL:
@@ -1583,10 +1640,6 @@ static inline void finalize_cell(nanoclj_t * sc, nanoclj_cell_t * a) {
   case T_GZIP_OUTPUT_STREAM:
     port_close(sc, a);
     free(_rep_unchecked(a));
-    break;
-  case T_REGEX:
-    pcre2_code_free(a->_regex.impl);
-    free(a->_regex.pattern);
     break;
   case T_FOREIGN_OBJECT:
     break;
@@ -2394,31 +2447,6 @@ static inline nanoclj_cell_t * mk_ratio_from_double(nanoclj_t * sc, nanoclj_val_
   }
 }
 
-static inline nanoclj_val_t mk_regex(nanoclj_t * sc, nanoclj_val_t pattern) {
-  nanoclj_cell_t * x = get_cell_x(sc, T_REGEX, T_GC_ATOM, NULL, NULL, NULL);
-  if (x) {
-    int errornumber;
-    PCRE2_SIZE erroroffset;
-    strview_t sv = to_strview(pattern);
-    struct pcre2_real_code_8 * re = pcre2_compile((PCRE2_SPTR8)sv.ptr,
-						  sv.size,
-						  PCRE2_UTF | PCRE2_NEVER_BACKSLASH_C,
-						  &errornumber,
-						  &erroroffset,
-						  NULL);
-    if (re) {
-      x->_regex.impl = re;
-      x->_regex.pattern = alloc_c_str(sv);
-
-#if RETAIN_ALLOCS
-      retain(sc, x);
-#endif
-      return mk_pointer(x);
-    }
-  }
-  return mk_nil();
-}
-
 static inline dump_stack_frame_t * s_add_frame(nanoclj_t * sc) {
   /* enough room for the next frame? */
   if (sc->dump >= sc->dump_size) {
@@ -3067,6 +3095,9 @@ static uint32_t hasheq(nanoclj_val_t v, void * d) {
   case T_KEYWORD:
   case T_ALIAS:
     return decode_symbol(v)->hash;
+
+  case T_REGEX:
+    return decode_regex(v)->hash;
     
   case T_CELL:
     {
@@ -3217,8 +3248,8 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
     return a0.as_double == b0.as_double;
   } else if (a0.as_long == b0.as_long) {
     return true;
-  } else if (t_a == T_NIL || t_b == T_NIL) {
-    /* nil == nil was tested in the previous comparison */
+  } else if (t_a == T_NIL || t_b == T_NIL || t_a == T_REGEX || t_b == T_REGEX) {
+    /* nil == nil was tested in the previous comparison, regexes compared by value */
     return false;
   } else if (t_a == T_LONG && t_b == T_LONG) {
     return decode_integer(a0) == decode_integer(b0);
@@ -3743,7 +3774,7 @@ static inline nanoclj_val_t oblist_add_item(nanoclj_t * sc, strview_t ns, strvie
 }
 
 static inline nanoclj_val_t oblist_find_item(nanoclj_t * sc, uint16_t type, strview_t ns, strview_t name) {
-  uint_fast32_t h = get_symbol_hash(type, ns, name);
+  uint_fast32_t h = get_interned_hash(type, ns, name);
   size_t num_buckets = tensor_hash_get_bucket_count(sc->oblist);
   size_t location = tensor_hash_get_bucket(h, num_buckets, false);
   while ( 1 ) {
@@ -3752,9 +3783,16 @@ static inline nanoclj_val_t oblist_find_item(nanoclj_t * sc, uint16_t type, strv
     } else {
       nanoclj_val_t y = tensor_get(sc->oblist, location);
       if (prim_type(y) == type) {
-	symbol_t * s = decode_symbol(y);
-	if (strview_eq(ns, s->ns) && strview_eq(name, s->name)) {
-	  return y;
+	if (type == T_REGEX) {
+	  regex_t * r = decode_regex(y);
+	  if (strview_eq(name, r->pattern)) {
+	    return y;
+	  }
+	} else {
+	  symbol_t * s = decode_symbol(y);
+	  if (strview_eq(ns, s->ns) && strview_eq(name, s->name)) {
+	    return y;
+	  }
 	}
       }
       location = (location + 1) % num_buckets;
@@ -4121,6 +4159,14 @@ static inline nanoclj_val_t def_symbol_from_sv(nanoclj_t * sc, uint16_t t, strvi
       s->ns_alias = def_symbol_from_sv(sc, T_ALIAS, mk_strview(0), ns);
       s->name_sym = def_symbol_from_sv(sc, T_SYMBOL, mk_strview(0), name);
     }
+  }
+  return x;
+}
+
+static inline nanoclj_val_t def_regex_from_sv(nanoclj_t * sc, strview_t pattern) {
+  nanoclj_val_t x = oblist_find_item(sc, T_REGEX, (strview_t){ 0, 0 }, pattern);
+  if (is_nil(x)) {
+    x = oblist_add_item(sc, (strview_t){ 0, 0 }, pattern, mk_regex(sc, pattern));
   }
   return x;
 }
@@ -5276,6 +5322,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, print_scheme
   case T_BOOLEAN:
   case T_SYMBOL:
   case T_KEYWORD:
+  case T_REGEX:
     sv = to_strview(l);
     break;
   case T_NIL:
@@ -5444,11 +5491,6 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, print_scheme
 	return;
       case T_RATIO:
 	print_ratio(sc, _sign(c), c->_ratio.numerator, c->_ratio.denominator, out);
-	return;
-      case T_REGEX:
-	putchars(sc, "#\"", 2, out);
-	putstr(sc, c->_regex.pattern, out);
-	putchars(sc, "\"", 1, out);
 	return;
       }
       break;
@@ -6257,7 +6299,7 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
 
   case T_REGEX:
     if (args) {
-      nanoclj_val_t x = mk_regex(sc, first(sc, args));
+      nanoclj_val_t x = def_regex_from_sv(sc, to_strview(first(sc, args)));
       if (is_nil(x)) {
 	nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Invalid regular expression")));
 	return mk_nil();
@@ -8545,7 +8587,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	case TOK_REGEX:
 	  x = readstrexp(sc, inport, true);
 	  if (!is_nil(x)) {
-	    x = mk_regex(sc, x);
+	    x = def_regex_from_sv(sc, to_strview(x));
 	    if (!is_nil(x)) {
 	      s_return(sc, x);
 	    }
@@ -9089,29 +9131,27 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_RE_FIND_INDEX:
     if (!unpack_args_2_not_nil(sc, &arg0, &arg1)) {
       return false;
-    } else if (is_cell(arg0)) {
-      nanoclj_cell_t * c = decode_pointer(arg0);
-      if (_type(c) == T_REGEX) {
-	struct pcre2_real_code_8 * re = c->_regex.impl;
-	strview_t sv = to_strview(arg1);
-	pcre2_match_data * md = pcre2_match_data_create_from_pattern(re, NULL);
-	int rc = pcre2_match(re, (PCRE2_SPTR8)sv.ptr, sv.size, 0, 0, md, NULL);
-	if (rc <= 0) {
+    } else if (is_regex(arg0)) {
+      regex_t * r = decode_regex(arg0);
+      struct pcre2_real_code_8 * re = r->impl;
+      strview_t sv = to_strview(arg1);
+      pcre2_match_data * md = pcre2_match_data_create_from_pattern(re, NULL);
+      int rc = pcre2_match(re, (PCRE2_SPTR8)sv.ptr, sv.size, 0, 0, md, NULL);
+      if (rc <= 0) {
+	pcre2_match_data_free(md);
+	s_return(sc, mk_nil());
+      } else {
+	PCRE2_SIZE * ovec = pcre2_get_ovector_pointer(md);
+	if (sc->op == OP_RE_FIND_INDEX) {
+	  nanoclj_cell_t * vec = mk_vector(sc, 2);
+	  set_indexed_value(vec, 0, mk_int(utf8_num_codepoints(sv.ptr, ovec[0])));
+	  set_indexed_value(vec, 1, mk_int(utf8_num_codepoints(sv.ptr, ovec[1])));
 	  pcre2_match_data_free(md);
-	  s_return(sc, mk_nil());
+	  s_return(sc, mk_pointer(vec));
 	} else {
-	  PCRE2_SIZE * ovec = pcre2_get_ovector_pointer(md);
-	  if (sc->op == OP_RE_FIND_INDEX) {
-	    nanoclj_cell_t * vec = mk_vector(sc, 2);
-	    set_indexed_value(vec, 0, mk_int(utf8_num_codepoints(sv.ptr, ovec[0])));
-	    set_indexed_value(vec, 1, mk_int(utf8_num_codepoints(sv.ptr, ovec[1])));
-	    pcre2_match_data_free(md);
-	    s_return(sc, mk_pointer(vec));
-	  } else {
-	    strview_t rsv = (strview_t){ sv.ptr + ovec[0], ovec[1] - ovec[0] };
-	    pcre2_match_data_free(md);
-	    s_return(sc, mk_string_from_sv(sc, rsv));
-	  }
+	  strview_t rsv = (strview_t){ sv.ptr + ovec[0], ovec[1] - ovec[0] };
+	  pcre2_match_data_free(md);
+	  s_return(sc, mk_string_from_sv(sc, rsv));
 	}
       }
     }
@@ -10194,7 +10234,17 @@ void nanoclj_deinit_oblist(nanoclj_t * sc) {
   int64_t * sparse_indices = sc->oblist->sparse_indices;
   for (int64_t offset = 0; offset < num_buckets; offset++) {
     if (sparse_indices[offset] != -1) {
-      free_symbol(decode_symbol(tensor_get(sc->oblist, offset)));
+      nanoclj_val_t v = tensor_get(sc->oblist, offset);
+      switch (prim_type(v)) {
+      case T_SYMBOL:
+      case T_KEYWORD:
+      case T_ALIAS:
+	free_symbol(decode_symbol(v));
+	break;
+      case T_REGEX:
+	free_regex(decode_regex(v));
+	break;
+      }
     }
   }
   tensor_free(sc->oblist);
