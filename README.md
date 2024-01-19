@@ -169,7 +169,7 @@ Windows support is in progress.
   - aset-char, aset-long, amap, areduce, to-array-2d, make-array, long-array, bytes?
   - remove-ns, create-ns, ns-imports, ns-interns, ns-refers, ns-publics, ns-aliases, ns-name, all-ns, ns-unalias, ns-unmap, import, ns, use
 - clojure.string
-  - replace, replace-first
+  - escape, last-index-of, re-quote-replacement, split-lines
 - clojure.java.io
   - resource
   - make-parents

@@ -72,3 +72,17 @@
                       (if indices
                         (recur (conj acc (subs s 0 (indices 0))) (subs s (indices 1)))
                         (if (and (= limit 0) (empty? s)) acc (conj acc s))))))))
+
+(defn replace-first
+  "Replaces the first occurence of match with replacement"
+  [s match replacement] (let [indices (re-find-index match s)]
+                          (if indices
+                            (str (subs s 0 (indices 0)) replacement (subs s (indices 1)))
+                            s)))
+
+(defn replace
+  "Replaces all occurences of match with replacement"
+  [s match replacement] (let [indices (re-find-index match s)]
+                          (if indices
+                            (str (subs s 0 (indices 0)) replacement (replace (subs s (indices 1)) match replacement))
+                            s)))

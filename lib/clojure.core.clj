@@ -62,6 +62,7 @@
 (def long java.lang.Long)
 (def bigint clojure.lang.BigInt)
 (def biginteger clojure.lang.BigInt)
+(def re-pattern java.util.regex.Pattern)
 
 (defn inst-ms
   "Returns millisecond time of java.util.Date"

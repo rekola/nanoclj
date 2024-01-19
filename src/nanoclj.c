@@ -426,7 +426,6 @@ static inline void _set_cdr(nanoclj_cell_t * c, nanoclj_cell_t * v) {
 #define _column_unchecked(p)	  ((p)->_port.column)
 
 #define _lvalue_unchecked(p)      ((p)->_small_tensor.longs[0])
-#define _re_unchecked(p)	  ((p)->_re)
 #define _ff_unchecked(p)	  ((p)->_ff.ptr)
 #define _min_arity_unchecked(p)	  ((p)->_ff.min_arity)
 #define _max_arity_unchecked(p)	  ((p)->_ff.max_arity)
@@ -1586,7 +1585,8 @@ static inline void finalize_cell(nanoclj_t * sc, nanoclj_cell_t * a) {
     free(_rep_unchecked(a));
     break;
   case T_REGEX:
-    pcre2_code_free(_re_unchecked(a));
+    pcre2_code_free(a->_regex.impl);
+    free(a->_regex.pattern);
     break;
   case T_FOREIGN_OBJECT:
     break;
@@ -2400,14 +2400,15 @@ static inline nanoclj_val_t mk_regex(nanoclj_t * sc, nanoclj_val_t pattern) {
     int errornumber;
     PCRE2_SIZE erroroffset;
     strview_t sv = to_strview(pattern);
-    pcre2_code * re = pcre2_compile((PCRE2_SPTR8)sv.ptr,
-				    sv.size,
-				    PCRE2_UTF | PCRE2_NEVER_BACKSLASH_C,
-				    &errornumber,
-				    &erroroffset,
-				    NULL);
+    struct pcre2_real_code_8 * re = pcre2_compile((PCRE2_SPTR8)sv.ptr,
+						  sv.size,
+						  PCRE2_UTF | PCRE2_NEVER_BACKSLASH_C,
+						  &errornumber,
+						  &erroroffset,
+						  NULL);
     if (re) {
-      _re_unchecked(x) = re;
+      x->_regex.impl = re;
+      x->_regex.pattern = alloc_c_str(sv);
 
 #if RETAIN_ALLOCS
       retain(sc, x);
@@ -5444,6 +5445,11 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, print_scheme
       case T_RATIO:
 	print_ratio(sc, _sign(c), c->_ratio.numerator, c->_ratio.denominator, out);
 	return;
+      case T_REGEX:
+	putchars(sc, "#\"", 2, out);
+	putstr(sc, c->_regex.pattern, out);
+	putchars(sc, "\"", 1, out);
+	return;
       }
       break;
     }
@@ -6249,6 +6255,18 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
       }
     }
 
+  case T_REGEX:
+    if (args) {
+      nanoclj_val_t x = mk_regex(sc, first(sc, args));
+      if (is_nil(x)) {
+	nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Invalid regular expression")));
+	return mk_nil();
+      } else {
+	return x;
+      }
+    }
+    break;
+    
   case T_RUNTIME_EXCEPTION:
   case T_INDEX_EXCEPTION:
   case T_NUM_FMT_EXCEPTION:
@@ -9067,18 +9085,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       return r;
     }
     
-  case OP_RE_PATTERN:
-    if (!unpack_args_1_not_nil(sc, &arg0)) {
-      return false;
-    } else {
-      x = mk_regex(sc, arg0);
-      if (is_nil(x)) {
-	Error_0(sc, "Invalid regular expression");
-      } else {
-	s_return(sc, x);
-      }
-    }
-
   case OP_RE_FIND:
   case OP_RE_FIND_INDEX:
     if (!unpack_args_2_not_nil(sc, &arg0, &arg1)) {
@@ -9086,7 +9092,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     } else if (is_cell(arg0)) {
       nanoclj_cell_t * c = decode_pointer(arg0);
       if (_type(c) == T_REGEX) {
-	struct pcre2_real_code_8 * re = _re_unchecked(c);
+	struct pcre2_real_code_8 * re = c->_regex.impl;
 	strview_t sv = to_strview(arg1);
 	pcre2_match_data * md = pcre2_match_data_create_from_pattern(re, NULL);
 	int rc = pcre2_match(re, (PCRE2_SPTR8)sv.ptr, sv.size, 0, 0, md, NULL);

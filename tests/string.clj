@@ -21,3 +21,6 @@
 (t/is (= (str/split s #"\s+" 2) ["Ångström" "second third  "]))
 (t/is (= (str/split s #"\s+" 3) ["Ångström" "second" "third  "]))
 (t/is (= (str/split s #"\s+" 4) ["Ångström" "second" "third" ""]))
+
+(t/is (= (str/replace-first s #"\bthird\b" "fourth") "Ångström second fourth  "))
+(t/is (= (str/replace s #"\pL+" "xxx") "xxx xxx xxx  "))

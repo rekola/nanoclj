@@ -104,7 +104,10 @@ extern "C" {
 	uint32_t frame_offset, frame_count;
 	uint8_t channel_offset, channel_count;
       } _audio;
-      struct pcre2_real_code_8 * _re;
+      struct {
+	struct pcre2_real_code_8 * impl;
+	char * pattern;
+      } _regex;
       struct {
 	nanoclj_port_rep_t * rep;
 	int nesting;
