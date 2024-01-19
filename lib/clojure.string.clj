@@ -61,3 +61,14 @@
               (cond (nil? s) nil
                     (.startsWith s value) idx
                     :else (recur (next s) (inc idx)))))
+
+(defn split
+  "Splits string to tokens using a regex"
+  ([s re] (split s re 0))
+  ([s re limit] (loop [acc [] s s]
+                  (if (and (> limit 0) (= (count acc) (dec limit)))
+                    (conj acc s)
+                    (let [indices (re-find-index re s)]
+                      (if indices
+                        (recur (conj acc (subs s 0 (indices 0))) (subs s (indices 1)))
+                        (if (and (= limit 0) (empty? s)) acc (conj acc s))))))))

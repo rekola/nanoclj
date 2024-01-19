@@ -9080,6 +9080,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
 
   case OP_RE_FIND:
+  case OP_RE_FIND_INDEX:
     if (!unpack_args_2_not_nil(sc, &arg0, &arg1)) {
       return false;
     } else if (is_cell(arg0)) {
@@ -9092,14 +9093,21 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  s_return(sc, mk_nil());
 	} else {
 	  PCRE2_SIZE * ovec = pcre2_get_ovector_pointer(md);
-	  strview_t rsv = (strview_t){ sv.ptr + ovec[0], ovec[1] - ovec[0] };
-	  s_return(sc, mk_string_from_sv(sc, rsv));
+	  if (sc->op == OP_RE_FIND_INDEX) {
+	    nanoclj_cell_t * vec = mk_vector(sc, 2);
+	    set_indexed_value(vec, 0, mk_int(ovec[0]));
+	    set_indexed_value(vec, 1, mk_int(ovec[1]));
+	    s_return(sc, mk_pointer(vec));
+	  } else {
+	    strview_t rsv = (strview_t){ sv.ptr + ovec[0], ovec[1] - ovec[0] };
+	    s_return(sc, mk_string_from_sv(sc, rsv));
+	  }
 	}
       }
     }
     nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Invalid argument types")));
     return false;
-
+    
   case OP_ADD_WATCH:
     if (!unpack_args_3(sc, &arg0, &arg1, &arg2)) {
       return false;

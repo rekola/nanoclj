@@ -13,3 +13,11 @@
 (t/is (= (str/triml "   xxx   ") "xxx   "))
 (t/is (= (str/trimr "   xxx   ") "   xxx"))
 (t/is (= (str/trim "   xxx   ") "xxx"))
+
+(def s "first second third  ")
+(t/is (= (str/split s #"\s+") ["first" "second" "third"]))
+(t/is (= (str/split s #"\s+" -1) ["first" "second" "third" ""]))
+(t/is (= (str/split s #"\s+" 1) ["first second third  "]))
+(t/is (= (str/split s #"\s+" 2) ["first" "second third  "]))
+(t/is (= (str/split s #"\s+" 3) ["first" "second" "third  "]))
+(t/is (= (str/split s #"\s+" 4) ["first" "second" "third" ""]))

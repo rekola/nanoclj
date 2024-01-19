@@ -167,25 +167,21 @@ Windows support is in progress.
   - unchecked-byte, unchecked-short, unchecked-char, unchecked-int, unchecked-long, unchecked-float, unchecked-double
   - vary-meta, alter-meta!, reset-meta!
   - aset-char, aset-long, amap, areduce, to-array-2d, make-array, long-array, bytes?
-  - remove-ns, create-ns, ns-imports, ns-interns, ns-refers, ns-publics, ns-aliases, ns-name, all-ns, ns-unalias, ns-unmap, import, ns
+  - remove-ns, create-ns, ns-imports, ns-interns, ns-refers, ns-publics, ns-aliases, ns-name, all-ns, ns-unalias, ns-unmap, import, ns, use
+- clojure.string
+  - replace, replace-first
 - clojure.java.io
   - resource
   - make-parents
-- clojure.math
-- clojure.core.async
-  - thread, thread-call
-- clojure.core.reducers
-- clojure.main
-  - load-script
-- clojure.string
-  - split
-  - replace, replace-first
 - clojure.repl
   - dir
 - clojure.test
   - deftest, set-test, with-test
-- clojure.pprint
-  - print-table
+- clojure.math
+- clojure.core.async (thread, thread-call etc.)
+- clojure.core.reducers
+- clojure.main (load-script etc.)
+- clojure.pprint (print-table etc.)
 - clojure.data
 - clojure.walk
 - clojure.zip
