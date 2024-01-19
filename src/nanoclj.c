@@ -9084,22 +9084,26 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     if (!unpack_args_2_not_nil(sc, &arg0, &arg1)) {
       return false;
     } else if (is_cell(arg0)) {
-      nanoclj_cell_t * re = decode_pointer(arg0);
-      if (_type(re) == T_REGEX) {
+      nanoclj_cell_t * c = decode_pointer(arg0);
+      if (_type(c) == T_REGEX) {
+	struct pcre2_real_code_8 * re = _re_unchecked(c);
 	strview_t sv = to_strview(arg1);
-	pcre2_match_data * md = pcre2_match_data_create(128, NULL);
-	int rc = pcre2_match(_re_unchecked(re), (PCRE2_SPTR8)sv.ptr, sv.size, 0, 0, md, NULL);
+	pcre2_match_data * md = pcre2_match_data_create_from_pattern(re, NULL);
+	int rc = pcre2_match(re, (PCRE2_SPTR8)sv.ptr, sv.size, 0, 0, md, NULL);
 	if (rc <= 0) {
+	  pcre2_match_data_free(md);
 	  s_return(sc, mk_nil());
 	} else {
 	  PCRE2_SIZE * ovec = pcre2_get_ovector_pointer(md);
 	  if (sc->op == OP_RE_FIND_INDEX) {
 	    nanoclj_cell_t * vec = mk_vector(sc, 2);
-	    set_indexed_value(vec, 0, mk_int(ovec[0]));
-	    set_indexed_value(vec, 1, mk_int(ovec[1]));
+	    set_indexed_value(vec, 0, mk_int(utf8_num_codepoints(sv.ptr, ovec[0])));
+	    set_indexed_value(vec, 1, mk_int(utf8_num_codepoints(sv.ptr, ovec[1])));
+	    pcre2_match_data_free(md);
 	    s_return(sc, mk_pointer(vec));
 	  } else {
 	    strview_t rsv = (strview_t){ sv.ptr + ovec[0], ovec[1] - ovec[0] };
+	    pcre2_match_data_free(md);
 	    s_return(sc, mk_string_from_sv(sc, rsv));
 	  }
 	}

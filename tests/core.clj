@@ -169,6 +169,7 @@
 (t/is (= (re-find #"^\d+$" "123") "123"))
 (t/is (= (re-find #"^\d+$" "abc123") nil))
 (t/is (= (re-find #"\w{2}" "abc") "ab"))
+(t/is (= (re-find #"^\pL{3}$" "äää") "äää"))
 
                                         ; Formatting
 
