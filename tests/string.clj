@@ -8,7 +8,8 @@
 (t/is (= (str/lower-case "ÄÄÄ") "äää"))
 (t/is (= (str/capitalize "michael") "Michael"))
 
-(t/is (= (str/index-of "Hélen" "len") 2))
+(t/is (= (str/index-of "Hélen Hélen" "len") 2))
+(t/is (= (str/last-index-of "Hélen Hélen" "len") 8))
 
 (t/is (= (str/triml "   xxx   ") "xxx   "))
 (t/is (= (str/trimr "   xxx   ") "   xxx"))

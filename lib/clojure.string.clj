@@ -57,10 +57,19 @@
 
 (defn index-of
   "Returns the index of substring value in s, or nil if not found"
-  [s value] (loop [s (seq s) idx 0]
-              (cond (nil? s) nil
-                    (.startsWith s value) idx
-                    :else (recur (next s) (inc idx)))))
+  ([s value] (index-of s value 0))
+  ([s value from-index] (loop [idx from-index]
+                          (cond (>= idx (- (count s) (count value))) nil
+                                (= (subs s idx (+ idx (count value))) value) idx
+                                :else (recur (inc idx))))))
+
+(defn last-index-of
+  "Returns the last index of value in s"
+  ([s value] (last-index-of s value 0))
+  ([s value from-index] (loop [idx (- (count s) (count value))]
+                          (cond (or (< idx 0) (< idx from-index)) nil
+                                (= (subs s idx (+ idx (count value))) value) idx
+                                :else (recur (dec idx))))))
 
 (defn split
   "Splits string to tokens using a regex"
