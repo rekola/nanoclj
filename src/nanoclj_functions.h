@@ -1131,7 +1131,7 @@ static inline char *complete_parens(const char * input) {
       } else {
 	return NULL;
       }
-    } else if (input[i] == '\\' && i + 1 < n && input[i + 1] == '"') {
+    } else if (input[i] == '\\' && i + 1 < n && (input[i + 1] == '"' || input[i + 1] == '\\')) {
       i++;
     }
   }

@@ -64,6 +64,8 @@
 (def biginteger clojure.lang.BigInt)
 (def re-pattern java.util.regex.Pattern)
 
+(defn regex? [x] (instance? java.util.regex.Pattern x))
+  
 (defn inst-ms
   "Returns millisecond time of java.util.Date"
   [x] (long x))
@@ -457,6 +459,7 @@
                              :nil [ 0.86 0.55 0.76 ]
                              :char [ 0.8 0.58 0.58 ]
                              :string [ 0.8 0.58 0.58 ]
+                             :regex [ 0.8 0.58 0.58 ]
                              :symbol [ 0.94 0.87 0.69 ]
                              :keyword [ 0.94 0.87 0.69 ]
                              :var [ 0.94 0.87 0.69 ]
@@ -524,6 +527,7 @@
                      (char? x) (print-fn :char x)
                      (number? x) (print-fn :scalar x)
                      (string? x) (print-fn :string x)
+                     (regex? x) (print-fn :regex x)
                      (keyword? x) (print-fn :keyword x)
                      (symbol? x) (print-fn :symbol x)
                      (var? x) (print-fn :var x)

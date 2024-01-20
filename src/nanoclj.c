@@ -385,40 +385,6 @@ static inline void free_symbol(symbol_t * s) {
   free(s);
 }
 
-static inline nanoclj_val_t mk_regex(nanoclj_t * sc, strview_t pattern) {
-  int errornumber;
-  PCRE2_SIZE erroroffset;
-  struct pcre2_real_code_8 * re = pcre2_compile((PCRE2_SPTR8)pattern.ptr,
-						pattern.size,
-						PCRE2_UTF | PCRE2_NEVER_BACKSLASH_C,
-						&errornumber,
-						&erroroffset,
-						NULL);
-  if (re) {
-    char * pattern_str = malloc(pattern.size);
-    memcpy(pattern_str, pattern.ptr, pattern.size);
-
-    char * full_name = malloc(2 * pattern.size + 2);
-    size_t full_name_size = 2;
-    full_name[0] = '#';
-    full_name[1] = '"';
-    for (size_t i = 0; i < pattern.size; i++) {
-      if (pattern_str[i] == '"') full_name[full_name_size++] = '\\';
-      full_name[full_name_size++] = pattern_str[i];
-    }
-    full_name[full_name_size++] = '"';
-
-    regex_t * r = malloc(sizeof(regex_t));
-    r->pattern = (strview_t){ pattern_str, pattern.size };
-    r->full_name = (strview_t){ full_name, full_name_size };
-    r->hash = get_interned_hash(T_REGEX, (strview_t){0}, pattern);
-    r->impl = re;
-
-    return mk_regex_pointer(r);
-  }
-  return mk_nil();
-}
-
 static inline void free_regex(regex_t * re) {
   free((char *)re->pattern.ptr);
   free((char *)re->full_name.ptr);
@@ -4147,6 +4113,42 @@ static inline nanoclj_cell_t * mk_hashmap(nanoclj_t * sc) {
   return get_vector_object(sc, T_HASHMAP, 0);
 }
 
+static inline nanoclj_val_t mk_regex(nanoclj_t * sc, strview_t pattern) {
+  int errornumber;
+  PCRE2_SIZE erroroffset;
+  struct pcre2_real_code_8 * re = pcre2_compile((PCRE2_SPTR8)pattern.ptr,
+						pattern.size,
+						PCRE2_UTF | PCRE2_NEVER_BACKSLASH_C,
+						&errornumber,
+						&erroroffset,
+						NULL);
+  if (!re) {
+    nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Invalid regex")));
+    return mk_nil();
+  }
+  
+  char * pattern_str = malloc(pattern.size);
+  memcpy(pattern_str, pattern.ptr, pattern.size);
+  
+  char * full_name = malloc(2 * pattern.size + 2);
+  size_t full_name_size = 2;
+  full_name[0] = '#';
+  full_name[1] = '"';
+  for (size_t i = 0; i < pattern.size; i++) {
+    if (pattern_str[i] == '"') full_name[full_name_size++] = '\\';
+    full_name[full_name_size++] = pattern_str[i];
+  }
+  full_name[full_name_size++] = '"';
+  
+  regex_t * r = malloc(sizeof(regex_t));
+  r->pattern = (strview_t){ pattern_str, pattern.size };
+  r->full_name = (strview_t){ full_name, full_name_size };
+  r->hash = get_interned_hash(T_REGEX, (strview_t){0}, pattern);
+  r->impl = re;
+  
+  return mk_regex_pointer(r);
+}
+
 /* get new symbol */
 static inline nanoclj_val_t def_symbol_from_sv(nanoclj_t * sc, uint16_t t, strview_t ns, strview_t name) {
   /* first check oblist */
@@ -4955,7 +4957,7 @@ static inline const char * escape_char(int32_t c, char * buffer, bool in_string)
 }
 
 /* read string expression "xxx...xxx" */
-static inline nanoclj_val_t readstrexp(nanoclj_t * sc, nanoclj_cell_t * inport, bool regex_mode) {
+static inline strview_t readstrexp(nanoclj_t * sc, nanoclj_cell_t * inport, bool regex_mode) {
   nanoclj_tensor_t * rdbuff = sc->rdbuff;
   tensor_mutate_clear(rdbuff);
 
@@ -4966,7 +4968,7 @@ static inline nanoclj_val_t readstrexp(nanoclj_t * sc, nanoclj_cell_t * inport, 
   do {
     int32_t c = inchar(sc, inport);
     if (c == EOF || sc->pending_exception) {
-      return mk_nil();
+      return (strview_t){0};
     }
     int radix = 16;
     switch (state) {
@@ -5020,10 +5022,10 @@ static inline nanoclj_val_t readstrexp(nanoclj_t * sc, nanoclj_cell_t * inport, 
 	  break;
 	default:
 	  nanoclj_throw(sc, mk_runtime_exception(sc, mk_string_fmt(sc, "Unsupported escape character: \\%s", escape_char(c, sc->strbuff, false))));
-	  return mk_nil();
+	  return (strview_t){0};
 	}
       } else {
-	if (c != '"' && c != '\\') {
+	if (c != '"') {
 	  tensor_mutate_append_codepoint(rdbuff, '\\');
 	}
 	tensor_mutate_append_codepoint(rdbuff, c);
@@ -5043,7 +5045,7 @@ static inline nanoclj_val_t readstrexp(nanoclj_t * sc, nanoclj_cell_t * inport, 
 	int d = digit(c, radix);
 	if (d == -1) {
 	  nanoclj_throw(sc, mk_runtime_exception(sc, mk_string_fmt(sc, "Invalid digit: %s", escape_char(c, sc->strbuff, false))));
-	  return mk_nil();
+	  return (strview_t){0};
 	} else {
 	  c1 = (c1 * radix) + d;
 	}
@@ -5058,7 +5060,7 @@ static inline nanoclj_val_t readstrexp(nanoclj_t * sc, nanoclj_cell_t * inport, 
     }
   } while (!fin);
   
-  return mk_pointer(get_string_object(sc, T_STRING, (char *)rdbuff->data, rdbuff->ne[0], 0));
+  return (strview_t){ rdbuff->data, rdbuff->ne[0] };
 }
 
 /* skip white space characters, returns the first non-whitespace character */
@@ -8580,19 +8582,20 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	    }
 	  }
 	case TOK_DQUOTE:
-	  x = readstrexp(sc, inport, false);
-	  if (is_nil(x)) return false;
-	  s_return(sc, x);
+	  {
+	    strview_t sv = readstrexp(sc, inport, false);
+	    if (!sv.ptr) return false;
+	    s_return(sc, mk_string_from_sv(sc, sv));
+	  }
 	
 	case TOK_REGEX:
-	  x = readstrexp(sc, inport, true);
-	  if (!is_nil(x)) {
-	    x = def_regex_from_sv(sc, to_strview(x));
-	    if (!is_nil(x)) {
-	      s_return(sc, x);
-	    }
+	  {
+	    strview_t sv = readstrexp(sc, inport, true);
+	    if (!sv.ptr) return false;
+	    x = def_regex_from_sv(sc, sv);
+	    if (is_nil(x)) return false;
+	    s_return(sc, x);
 	  }
-	  Error_0(sc, "Invalid regex");
 	
 	case TOK_CHAR_CONST:{
 	  const char * p = readstr_upto(sc, DELIMITERS, inport, true);
@@ -8611,7 +8614,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  if (skipspace(sc, inport) != '"') {
 	    Error_0(sc, "Invalid literal");
 	  }
-	  nanoclj_val_t value = readstrexp(sc, inport, false);
+	  nanoclj_val_t value = mk_string_from_sv(sc, readstrexp(sc, inport, false));
 	  strview_t tag_sv = to_strview(tag);
 	
 	  if (tag_sv.size == 4 && memcmp(tag_sv.ptr, "inst", 4) == 0) {

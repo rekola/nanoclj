@@ -13,6 +13,8 @@ missing. The project has two main goals:
 1. Provide data visualization capabilities for the REPL in a terminal or GUI.
 2. Provide an embedded Clojure interpreter for C++ applications as an alternative for Lua and other scripting languages.
 
+An additional long term goal is to bring AI assistance right in to the REPL.
+
 ## Features
 
 - Terminal graphics (*Kitty* or *Sixel* protocols) with HiDPI support
@@ -76,7 +78,7 @@ As well as printing images in block mode like the plot function does, they can a
 - License is BSD 3-Clause License instead of EPL
 - Symbols are interned but are temporarily boxed when metadata is added
 - Primitives such as doubles and small integers are passed by value, and are in effect, interned
-- Strings are not interned: `(identical? "abc" "abc") ;=> false`
+- Regular expressions are interned, but strings are not: `(identical? "abc" "abc") ;=> false`
 - `rationalize` returns exact result for doubles: `(rationalize 0.1) ;=> 3602879701896397/36028797018963968`
 - No chunked or buffered lazy sequences
 - Data structures are only partially persistent, and while vectors, maps and sets allow fast reading and insertion, deletion and modification is slow.
