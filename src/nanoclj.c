@@ -4123,10 +4123,11 @@ static inline nanoclj_val_t mk_regex(nanoclj_t * sc, strview_t pattern) {
 						&erroroffset,
 						NULL);
   if (!re) {
-    nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Invalid regex")));
-    return mk_nil();
+    PCRE2_UCHAR buffer[256];
+    pcre2_get_error_message(errornumber, buffer, sizeof(buffer));
+    return nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, (char *)buffer)));
   }
-  
+
   char * pattern_str = malloc(pattern.size);
   memcpy(pattern_str, pattern.ptr, pattern.size);
   
@@ -9151,10 +9152,17 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  set_indexed_value(vec, 1, mk_int(utf8_num_codepoints(sv.ptr, ovec[1])));
 	  pcre2_match_data_free(md);
 	  s_return(sc, mk_pointer(vec));
-	} else {
+	} else if (rc == 1) {
 	  strview_t rsv = (strview_t){ sv.ptr + ovec[0], ovec[1] - ovec[0] };
 	  pcre2_match_data_free(md);
 	  s_return(sc, mk_string_from_sv(sc, rsv));
+	} else {
+	  nanoclj_cell_t * r = mk_vector(sc, rc);
+	  for (int i = 0; i < rc; i++) {
+	    strview_t rsv = (strview_t){ sv.ptr + ovec[2 * i], ovec[2 * i + 1] - ovec[2 * i] };
+	    set_indexed_value(r, i, mk_string_from_sv(sc, rsv));
+	  }
+	  s_return(sc, mk_pointer(r));
 	}
       }
     }
@@ -10356,11 +10364,6 @@ int main(int argc, const char **argv) {
     test_mode = true;
   }
   
-  if (!test_mode && sc.term_graphics == nanoclj_sixel && isatty(fileno(stderr))) {
-    /* If Sixels are used and stderr is a tty, mute it */
-    if (freopen("/dev/null", "w", stderr) == NULL) { }
-  }
-  
   nanoclj_set_input_port_file(&sc, stdin);
   nanoclj_set_output_port_file(&sc, stdout);
   nanoclj_set_error_port_file(&sc, stderr);
@@ -10386,22 +10389,29 @@ int main(int argc, const char **argv) {
 	num_errors++;
 	rv |= 1;
       }
-    } else if (argc >= 2) {
-      if (nanoclj_load_named_file(&sc, mk_string(&sc, argv[1]))) {
-	/* Call -main if it exists */
-	nanoclj_val_t main_sym = def_symbol(&sc, "-main");
-	nanoclj_val_t main = resolve_value(&sc, sc.envir, main_sym);
-	if (!is_nil(main)) {
-	  nanoclj_call(&sc, main, mk_emptylist());
-	}
-      }
     } else {
+      if (sc.term_graphics == nanoclj_sixel && isatty(fileno(stderr))) {
+	/* If Sixels are used and stderr is a tty, mute it */
+	if (freopen("/dev/null", "w", stderr) == NULL) { }
+      }
+
+      if (argc >= 2) {
+	if (nanoclj_load_named_file(&sc, mk_string(&sc, argv[1]))) {
+	  /* Call -main if it exists */
+	  nanoclj_val_t main_sym = def_symbol(&sc, "-main");
+	  nanoclj_val_t main = resolve_value(&sc, sc.envir, main_sym);
+	  if (!is_nil(main)) {
+	    nanoclj_call(&sc, main, mk_emptylist());
+	  }
+	}
+      } else {
 #if 0
-      sc.user_ns = def_namespace(&sc, "user", __FILE__);
-      sc.current_ns = sc.envir = sc.user_ns;
+	sc.user_ns = def_namespace(&sc, "user", __FILE__);
+	sc.current_ns = sc.envir = sc.user_ns;
 #endif
-      const char * expr = "(clojure.repl/repl)";
-      nanoclj_eval_string(&sc, expr, strlen(expr));
+	const char * expr = "(clojure.repl/repl)";
+	nanoclj_eval_string(&sc, expr, strlen(expr));
+      }
     }
   }
   
