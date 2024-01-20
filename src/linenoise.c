@@ -476,13 +476,13 @@ void linenoiseSetFreeHintsCallback(linenoiseFreeHintsCallback *fn) {
  * in order to add completion options given the input string when the
  * user typed <tab>. See the example.c source code for a very easy to
  * understand example. */
-void linenoiseAddCompletion(linenoiseCompletions *lc, const char *str) {
-    size_t len = strlen(str);
+void linenoiseAddCompletion(linenoiseCompletions *lc, const char *str, size_t len) {
     char *copy, **cvec;
 
     copy = malloc(len+1);
     if (copy == NULL) return;
-    memcpy(copy,str,len+1);
+    memcpy(copy,str,len);
+    copy[len] = 0;
     cvec = realloc(lc->cvec,sizeof(char*)*(lc->len+1));
     if (cvec == NULL) {
         free(copy);

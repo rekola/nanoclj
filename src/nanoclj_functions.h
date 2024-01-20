@@ -1105,10 +1105,19 @@ static inline nanoclj_val_t clojure_data_csv_read_csv(nanoclj_t * sc, nanoclj_ce
 static nanoclj_t * linenoise_sc = NULL;
 
 static inline void completion(const char *input, linenoiseCompletions *lc) {
-  nanoclj_val_t hook;
-  if (find_slot_in_env(linenoise_sc, linenoise_sc->root_ns, linenoise_sc->AUTOCOMPLETE_HOOK, false, &hook)) {
-    if (!is_nil(hook)) {
-      nanoclj_val_t line = mk_string(linenoise_sc, input);
+  nanoclj_val_t ns = resolve_value(linenoise_sc, linenoise_sc->envir, def_symbol(linenoise_sc, "clojure.repl"));
+  if (is_cell(ns)) {
+    nanoclj_cell_t * var = get_var_in_ns(linenoise_sc, decode_pointer(ns), linenoise_sc->AUTOCOMPLETE_HOOK, false);
+    if (var) {
+      nanoclj_val_t f = get_indexed_value(var, 1);
+      nanoclj_val_t args = mk_pointer(cons(linenoise_sc, mk_string(linenoise_sc, input), NULL));
+      nanoclj_val_t r0 = nanoclj_call(linenoise_sc, f, args);
+      if (is_cell(r0)) {
+	for (nanoclj_cell_t * r = decode_pointer(r0); r; r = next(linenoise_sc, r)) {
+	  strview_t sv = to_strview(first(linenoise_sc, r));
+	  linenoiseAddCompletion(lc, sv.ptr, sv.size);
+	}
+      }
     }
   }
 }

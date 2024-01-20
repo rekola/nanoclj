@@ -1,6 +1,26 @@
 (in-ns 'clojure.repl)
 (require 'clojure.string 'clojure.java.io)
 
+(defn ^:private autocomplete-syntax
+  [prefix s] (loop [acc []
+                    n [ "if" "let" "fn" "quote" "def" "do" "cond" "lazy-seq" "and" "or" "macro" "try" "loop" "dotimes" "thread" ]
+                    ] (cond (empty? n) acc
+                            (clojure.string/starts-with? (first n) s) (recur (conj acc (str prefix (first n))) (rest n))
+                            :else (recur acc (rest n)))))
+
+(defn ^:private autocomplete-string [prefix s] [])
+
+(defn *autocomplete-hook*
+  [s] (let [in-string (re-find #"^((?:[^\"]*\"[^\"]*\")*\")([^\"]*)$" s)
+            in-expr (re-find #"^(.*[\s\(])?(\S*)$" s)
+            completions (cond in-string (autocomplete-str (in-str 1) (in-str 2))
+                              in-expr (autocomplete-syntax (in-expr 1) (in-expr 2))
+                              :error [])
+            ]
+        (cond (empty? completions) [ s ]
+              (= (count completions) 1) [ (str (first completions) \space ) ]
+              :else completions)))
+
 (defn source
   "Returns the source for a macro or function"
   [x] (if (or (closure? x) (macro? x)) (cons 'fn (car x)) nil))
