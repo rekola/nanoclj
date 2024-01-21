@@ -4453,11 +4453,14 @@ static inline nanoclj_val_t mk_numeric_primitive(nanoclj_t * sc, const char *q) 
       nanoclj_tensor_t * num = mk_tensor_bigint_from_string(first_digit, div - first_digit, 10);
       if (num) {
 	nanoclj_tensor_t * den = mk_tensor_bigint_from_string(div + 1, strlen(div + 1), 10);
-	if (den) {
+	if (!den) {
+	  tensor_free(num);
+	} else if (tensor_is_empty(den)) {
+	  nanoclj_throw(sc, mk_arithmetic_exception(sc, "Divide by zero"));
+	  return mk_nil();
+	} else {
 	  normalize_ratio_mutate(num, den);
 	  return mk_pointer(mk_ratio_from_tensor(sc, sign, num, den));
-	} else {
-	  tensor_free(num);
 	}
       }
     }
@@ -8552,7 +8555,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	    return false;
 	  } else if (is_numeric_token(s)) {
 	    x = mk_numeric_primitive(sc, s);
-	    if (is_nil(x)) {
+	    if (sc->pending_exception) {
+	      return false;
+	    } else if (is_nil(x)) {
 	      nanoclj_throw(sc, mk_number_format_exception(sc, mk_string_fmt(sc, "Invalid number format [%s]", s)));
 	      return false;
 	    } else {
