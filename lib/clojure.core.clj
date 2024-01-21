@@ -7,7 +7,6 @@
 (defn map-entry? [x] (instance? clojure.lang.MapEntry x))
 (defn set? [x] (instance? clojure.lang.APersistentSet x))
 (defn map? [x] (instance? clojure.lang.APersistentMap x))
-(defn list-map? [x] (instance? nanoclj.core.ListMap x))
 (defn image? [x] (instance? nanoclj.core.Image x))
 (defn gradient? [x] (instance? nanoclj.core.Gradient x))
 (defn inst? [x] (instance? java.util.Date x))
@@ -119,6 +118,9 @@
 (defn denominator
   "Returns the denominator of a Ratio"
   [n] (if (ratio? n) (n 1) 1))
+
+(def key first)
+(def val second)
 
 ; Miscellaneous
 
@@ -318,6 +320,10 @@
                                   )))]
                  (f (clojure.lang.PersistentTreeMap) keyvals))))
 
+(defn list-map
+  "Creates a list-map from the arguments"
+  [& keyvals] (apply* nanoclj.core.ListMap keyvals))
+
 (defn keys
   "Returns the values in the map"
   [coll] (map (fn [e] (key e)) coll))
@@ -394,10 +400,6 @@
              (if (empty? coll)
                m
                (recur (rest coll) (update m (f (first coll)) (fn [v] (conj (or v []) (first coll))))))))
-
-(defn list-map
-  "Creates a list-map from the arguments"
-  [& keyvals] (apply* nanoclj.core.ListMap keyvals))
 
 (defn zipmap
   "Returns a map with the keys and vals"
@@ -502,16 +504,6 @@
                                               (pr-inline print-fn (first x))
                                               (run! (fn [x] (-print \space) (pr-inline print-fn x)) (rest x))
                                               (-print \})))
-                     (list-map? x) (do (-print \{)
-                                       (pr-inline print-fn (key x))
-                                       (-print \space)
-                                       (pr-inline print-fn (val x))
-                                       (run! (fn [x]
-                                               (-print ", ")
-                                               (pr-inline print-fn (key x))
-                                               (-print \space)
-                                               (pr-inline print-fn (val x))) (rest x))
-                                       (-print \}))
                      (map? x) (cond (empty? x) (-print "{}")
                                     (and *print-length* (<= *print-length* 0)) (-print "{...}")
                                     :else (do (-print \{)

@@ -30,8 +30,9 @@
   [s] (count s))
 
 (defn startsWith
-  ([s substr] (loop [s s substr substr]
-                (cond (empty? substr) true
-                      (empty? s) false
-                      (= (first s) (first substr)) (recur (rest s) (rest substr))
-                      :else false))))
+  ([s substr] (let [n1 (count s)
+                    n2 (count substr)
+                    ]
+                (if (< n1 n2)
+                  false
+                  (= (subs s 0 n2) substr)))))

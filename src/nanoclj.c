@@ -563,25 +563,6 @@ static inline bool is_sequential_type(uint_fast16_t t) {
   return false;
 }
 
-static inline bool is_coll_type(uint_fast16_t t) {
-  switch (t) {
-  case T_EMPTYLIST:
-  case T_LIST:
-  case T_VECTOR:
-  case T_MAPENTRY:
-  case T_ARRAYMAP:
-  case T_HASHMAP:
-  case T_SORTED_HASHMAP:
-  case T_VARMAP:
-  case T_HASHSET:
-  case T_SORTED_HASHSET:
-  case T_LAZYSEQ:
-  case T_QUEUE:
-    return true;
-  }
-  return false;
-}
-
 static inline bool is_string_type(uint_fast16_t t) {
   return t == T_STRING || t == T_FILE || t == T_URL;
 }
@@ -2704,7 +2685,7 @@ static inline bool is_zero(nanoclj_val_t p) {
 static inline nanoclj_cell_t * rest(nanoclj_t * sc, nanoclj_cell_t * coll) {
   if (coll) {
     int typ = _type(coll);
-        
+    
     switch (typ) {
     case T_LAZYSEQ:
       coll = deref(sc, coll);
@@ -2901,6 +2882,7 @@ static inline size_t count(nanoclj_t * sc, nanoclj_cell_t * coll) {
 
   switch (_type(coll)) {
   case T_LIST:
+  case T_LISTMAP:
   case T_LAZYSEQ:
   case T_NAMESPACE:
   case T_CLASS:
@@ -3158,6 +3140,19 @@ static uint32_t hasheq(nanoclj_val_t v, void * d) {
 	}
 	break;
 
+      case T_LISTMAP:
+	{
+	  int n = 0;
+	  for (nanoclj_cell_t * p = c; p; p = next(sc, p), n++) {
+	    uint32_t h2 = 1;
+	    h2 = 31 * h2 + hasheq(p->_cons.car, sc);
+	    h2 = 31 * h2 + hasheq(p->_cons.value, sc);
+	    h += murmur3_hash_coll(h2, 2);
+	  }
+	  h = murmur3_hash_coll(h, n);
+	}
+	break;
+	
       case T_HASHSET:
       case T_SORTED_HASHSET:
 	{
@@ -7868,7 +7863,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
     Error_0(sc, "No protocol method IStack.-peek defined for type");
 
-  case OP_KEY:
   case OP_FIRST:                 /* first */
     if (!unpack_args_1(sc, &arg0)) {
       return false;
@@ -7881,8 +7875,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       {
 	nanoclj_cell_t * c = decode_pointer(arg0);
 	uint_fast16_t t = _type(c);
-	if (sc->op == OP_FIRST && t == T_LISTMAP) {
-	  s_return(sc, arg0);
+	if (t == T_LISTMAP) {
+	  s_return(sc, mk_mapentry(sc, c->_cons.car, c->_cons.value));
 	} else if (_is_sequence(c) || is_seqable_type(_type(c))) {
 	  s_return(sc, first(sc, c));
 	}
@@ -7890,7 +7884,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
     Error_0(sc, "Value is not ISeqable");
 
-  case OP_VAL:
   case OP_SECOND:
     if (!unpack_args_1(sc, &arg0)) {
       return false;
@@ -7903,9 +7896,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       {
 	nanoclj_cell_t * c = decode_pointer(arg0);
 	uint_fast16_t t = _type(c);
-	if (sc->op == OP_VAL && t == T_LISTMAP) {
-	  s_return(sc, c->_cons.value);
-	} else if (_is_sequence(c) || is_seqable_type(_type(c))) {
+	if (_is_sequence(c) || is_seqable_type(_type(c))) {
 	  s_return(sc, second(sc, c));
 	}
       }
@@ -10132,7 +10123,7 @@ bool nanoclj_init(nanoclj_t * sc) {
   mk_class(sc, "nanoclj.core.RecurClosure", T_RECUR_CLOSURE, Closure);
   mk_class(sc, "nanoclj.core.ForeignFunction", T_FOREIGN_FUNCTION, AFn);
   mk_class(sc, "nanoclj.core.ForeignObject", T_FOREIGN_OBJECT, AFn);
-  mk_class(sc, "nanoclj.core.ListMap", T_LISTMAP, AFn);
+  mk_class(sc, "nanoclj.core.ListMap", T_LISTMAP, APersistentMap);
   mk_class(sc, "nanoclj.core.Codepoint", T_CODEPOINT, sc->Object);
   sc->Image = mk_class(sc, "nanoclj.core.Image", T_IMAGE, sc->Object);
   mk_class(sc, "nanoclj.core.Gradient", T_GRADIENT, sc->Object);
