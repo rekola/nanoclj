@@ -5318,6 +5318,7 @@ typedef enum {
 /* Uses internal buffer unless string pointer is already available */
 static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, print_scheme_t ps, nanoclj_cell_t * out) {
   strview_t sv = { 0, 0 };
+  strview_t obj_sv = { 0, 0 };
   nanoclj_val_t name = mk_nil();
   
   switch (prim_type(l)) {
@@ -5463,46 +5464,23 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, print_scheme
 	}
       }
 	break;
-      case T_NAMESPACE:{
-	nanoclj_val_t name_v;
-	if (get_elem(sc, _cons_metadata(c), sc->NAME, &name_v)) {
-	  sv = to_strview(name_v);
+      case T_NAMESPACE:
+	{
+	  nanoclj_val_t name_v;
+	  if (get_elem(sc, _cons_metadata(c), sc->NAME, &name_v)) {
+	    obj_sv = to_strview(name_v);
+	  }
 	}
-	if (ps != print_scheme_str) {
-	  sv = (strview_t){
-	    sc->strbuff,
-	    snprintf(sc->strbuff, STRBUFFSIZE, "#<Namespace %.*s>", sv.size, sv.ptr)
-	  };
-	}
-      }
 	break;
       case T_FILE:
-	sv = _to_strview(c);
-	if (ps != print_scheme_str) {
-	  sv = (strview_t){
-	    sc->strbuff,
-	    snprintf(sc->strbuff, STRBUFFSIZE, "#<File %.*s>", sv.size, sv.ptr)
-	  };
-	}
+	obj_sv = _to_strview(c);
 	break;
       case T_URL:
-	sv = _to_strview(c);
-	if (ps != print_scheme_str) {
-	  sv = (strview_t){
-	    sc->strbuff,
-	    snprintf(sc->strbuff, STRBUFFSIZE, "#<URL %.*s>", sv.size, sv.ptr)
-	  };
-	}
+	obj_sv = _to_strview(c);
 	break;
       case T_IMAGE:
 	if (print_imageview(sc, _to_imageview(c), out)) {
 	  return;
-	} else {
-	  nanoclj_tensor_t * img = c->_image.tensor;
-	  sv = (strview_t){
-	    sc->strbuff,
-	    snprintf(sc->strbuff, STRBUFFSIZE, "#<Image %ld %ld %ld>", img->ne[0], img->ne[1], img->ne[2])
-	  };
 	}
 	break;
       case T_BIGINT:
@@ -5523,15 +5501,20 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, print_scheme
   if (!sv.ptr) {
     if (isa(sc, sc->Throwable, l)) {
       sv = to_strview(car_unchecked(l));
+    } else if (ps == print_scheme_str && obj_sv.ptr) {
+      sv = obj_sv;
     } else {
       nanoclj_val_t name_v;
       if (get_elem(sc, _cons_metadata(get_type_object(sc, l)), sc->NAME, &name_v)) {
 	sv = to_strview(name_v);
 	sv = (strview_t){
 	  sc->strbuff,
-	  is_cell(l)
-	  ? snprintf(sc->strbuff, STRBUFFSIZE, "#object[%.*s %p]", sv.size, sv.ptr, decode_pointer(l))
-	  : snprintf(sc->strbuff, STRBUFFSIZE, "#primitive[%.*s]", sv.size, sv.ptr)
+	  !is_cell(l)
+	  ? snprintf(sc->strbuff, STRBUFFSIZE, "#primitive[%.*s]", sv.size, sv.ptr)
+	  : obj_sv.ptr
+	  ? snprintf(sc->strbuff, STRBUFFSIZE, (ps == print_scheme_pr ? "#object[%.*s %p \"%.*s\"]" : "#object[%.*s %p %.*s]"),
+		     sv.size, sv.ptr, decode_pointer(l), obj_sv.size, obj_sv.ptr)
+	  : snprintf(sc->strbuff, STRBUFFSIZE, "#object[%.*s %p]", sv.size, sv.ptr, decode_pointer(l))
 	};
       } else {
 	sv = (strview_t){ "#object", 7 };
