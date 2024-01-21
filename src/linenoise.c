@@ -1039,7 +1039,8 @@ int linenoiseEditStart(struct linenoiseState *l, int stdin_fd, int stdout_fd, ch
     l->cols = getColumns(stdin_fd, stdout_fd);
     l->oldrows = 0;
     l->history_index = 0;
-
+    l->exit_now = 0;
+    
     const char * lang = getenv("LANG");
     l->utf8 = lang && strstr(lang, "UTF-8");
     
@@ -1319,9 +1320,9 @@ static char *linenoiseBlockingEdit(int stdin_fd, int stdout_fd, char *buf, size_
 
     linenoiseEditStart(&l,stdin_fd,stdout_fd,buf,buflen,prompt,prompt_size);
     char *res;
-    while((res = linenoiseEditFeed(&l)) == linenoiseEditMore);
+    while(!l.exit_now && (res = linenoiseEditFeed(&l)) == linenoiseEditMore);
     linenoiseEditStop(&l);
-    return res;
+    return l.exit_now ? NULL : res;
 }
 
 /* This special mode is used by linenoise in order to print scan codes
@@ -1436,6 +1437,10 @@ char *linenoise(const char *prompt, size_t prompt_size) {
 void linenoiseFree(void *ptr) {
     if (ptr == linenoiseEditMore) return; // Protect from API misuse.
     free(ptr);
+}
+
+void linenoiseTerminate() {
+  activeState->exit_now = 1;
 }
 
 /* ================================ History ================================= */

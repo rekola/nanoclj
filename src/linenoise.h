@@ -66,6 +66,7 @@ struct linenoiseState {
     size_t cols;        /* Number of columns in terminal. */
     size_t oldrows;     /* Rows used by last refrehsed line (multiline mode) */
     int history_index;  /* The history index we are currently editing. */
+    int exit_now;
     int utf8;		/* Terminal uses utf8 */
 };
 
@@ -87,6 +88,7 @@ void linenoiseShow(struct linenoiseState *l);
 /* Blocking API. */
 char *linenoise(const char *prompt, size_t prompt_size);
 void linenoiseFree(void *ptr);
+void linenoiseTerminate();
 
 /* Completion API. */
 typedef void(linenoiseCompletionCallback)(const char *, linenoiseCompletions *);

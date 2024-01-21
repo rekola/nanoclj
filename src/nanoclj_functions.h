@@ -1112,7 +1112,9 @@ static inline void completion(const char *input, linenoiseCompletions *lc) {
       nanoclj_val_t f = get_indexed_value(var, 1);
       nanoclj_val_t args = mk_pointer(cons(linenoise_sc, mk_string(linenoise_sc, input), NULL));
       nanoclj_val_t r0 = nanoclj_call(linenoise_sc, f, args);
-      if (is_cell(r0)) {
+      if (linenoise_sc->pending_exception) {
+	linenoiseTerminate();
+      } else if (is_cell(r0)) {
 	for (nanoclj_cell_t * r = decode_pointer(r0); r; r = next(linenoise_sc, r)) {
 	  strview_t sv = to_strview(first(linenoise_sc, r));
 	  linenoiseAddCompletion(lc, sv.ptr, sv.size);
@@ -1170,10 +1172,16 @@ static inline void on_mouse_motion(int x, int y) {
   double f = linenoise_sc->window_scale_factor;
   nanoclj_val_t p = mk_vector_2d(linenoise_sc, x / f, y / f);
   intern(linenoise_sc, linenoise_sc->root_ns, linenoise_sc->MOUSE_POS, p);
+  if (linenoise_sc->pending_exception) {
+    linenoiseTerminate();
+  }
 }
 
 static inline void on_window_size() {
   update_window_info(linenoise_sc, decode_pointer(get_out_port(linenoise_sc)));
+  if (linenoise_sc->pending_exception) {
+    linenoiseTerminate();
+  }
 }
 
 static inline void init_linenoise(nanoclj_t * sc) {
