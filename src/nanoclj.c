@@ -199,16 +199,17 @@ enum nanoclj_types {
   T_ILLEGAL_STATE_EXCEPTION = 58,
   T_FILE_NOT_FOUND_EXCEPTION = 59,
   T_INDEX_EXCEPTION = 60,
-  T_TENSOR = 61,
-  T_GRAPH = 62,
-  T_GRAPH_NODE = 63,
-  T_GRAPH_EDGE = 64,
-  T_GRADIENT = 65,
-  T_MESH = 66,
-  T_SHAPE = 67,
-  T_TABLE = 68,
-  T_SECURERANDOM = 69,
-  T_LAST_SYSTEM_TYPE = 70
+  T_PATTERN_SYNTAX_EXCEPTION = 61,
+  T_TENSOR = 62,
+  T_GRAPH = 63,
+  T_GRAPH_NODE = 64,
+  T_GRAPH_EDGE = 65,
+  T_GRADIENT = 66,
+  T_MESH = 67,
+  T_SHAPE = 68,
+  T_TABLE = 69,
+  T_SECURERANDOM = 70,
+  T_LAST_SYSTEM_TYPE = 71
 };
 
 typedef struct {
@@ -2100,6 +2101,10 @@ static inline nanoclj_cell_t * mk_arity_exception(nanoclj_t * sc, int n_args, na
 
 static inline nanoclj_cell_t * mk_illegal_arg_exception(nanoclj_t * sc, nanoclj_val_t msg) {
   return get_cell(sc, T_ILLEGAL_ARG_EXCEPTION, 0, msg, NULL, NULL);
+}
+
+static inline nanoclj_cell_t * mk_pattern_syntax_exception(nanoclj_t * sc, nanoclj_val_t msg) {
+  return get_cell(sc, T_PATTERN_SYNTAX_EXCEPTION, 0, msg, NULL, NULL);
 }
 
 static inline nanoclj_cell_t * mk_number_format_exception(nanoclj_t * sc, nanoclj_val_t msg) {
@@ -4120,7 +4125,7 @@ static inline nanoclj_val_t mk_regex(nanoclj_t * sc, strview_t pattern) {
   if (!re) {
     PCRE2_UCHAR buffer[256];
     pcre2_get_error_message(errornumber, buffer, sizeof(buffer));
-    return nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, (char *)buffer)));
+    return nanoclj_throw(sc, mk_pattern_syntax_exception(sc, mk_string(sc, (char *)buffer)));
   }
 
   char * pattern_str = malloc(pattern.size);
@@ -10059,7 +10064,8 @@ bool nanoclj_init(nanoclj_t * sc) {
   nanoclj_cell_t * Exception = mk_class(sc, "java.lang.Exception", gentypeid(sc), sc->Throwable);
   nanoclj_cell_t * RuntimeException = mk_class(sc, "java.lang.RuntimeException", T_RUNTIME_EXCEPTION, Exception);
   nanoclj_cell_t * IllegalArgumentException = mk_class(sc, "java.lang.IllegalArgumentException", T_ILLEGAL_ARG_EXCEPTION, RuntimeException);
-  nanoclj_cell_t * NumberFormatException = mk_class(sc, "java.lang.NumberFormatException", T_NUM_FMT_EXCEPTION, IllegalArgumentException);
+  mk_class(sc, "java.lang.NumberFormatException", T_NUM_FMT_EXCEPTION, IllegalArgumentException);
+  mk_class(sc, "java.util.regex.PatternSyntaxException", T_PATTERN_SYNTAX_EXCEPTION, IllegalArgumentException);
   nanoclj_cell_t * OutOfMemoryError = mk_class(sc, "java.lang.OutOfMemoryError", gentypeid(sc), sc->Throwable);
   nanoclj_cell_t * NullPointerException = mk_class(sc, "java.lang.NullPointerException", gentypeid(sc), RuntimeException);
   nanoclj_cell_t * ClassCastException = mk_class(sc, "java.lang.ClassCastException", T_CLASS_CAST_EXCEPTION, RuntimeException);
