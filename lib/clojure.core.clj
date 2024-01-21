@@ -462,7 +462,7 @@
                              :char [ 0.8 0.58 0.58 ]
                              :string [ 0.8 0.58 0.58 ]
                              :regex [ 0.8 0.58 0.58 ]
-                             :symbol [ 0.94 0.87 0.69 ]
+                             :symbol { :color [ 0.94 0.87 0.69 ] :face '( :italic ) }
                              :keyword [ 0.94 0.87 0.69 ]
                              :var [ 0.94 0.87 0.69 ]
                              :class [ 0.55 0.82 0.83 ]
@@ -578,11 +578,14 @@
   [& more] (apply print more) (newline))
 
 (defn ^:private pr-with-class
-  [class v] (let [color (get print-styles class)]
-              (if color
+  [class v] (let [attr (get print-styles class)]
+              (if attr
                 (do
                   (save)
-                  (set-color color)
+                  (if (vector? attr)
+                    (set-color attr)
+                    (do (set-color (attr :color))
+                        (apply set-font-face (attr :face))))
                   (-pr v)
                   (restore))
                 (-pr v))))

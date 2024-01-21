@@ -127,6 +127,14 @@ static inline void canvas_set_font_size(void * canvas, double size) {
   cairo_set_font_size((cairo_t *)canvas, size);
 }
 
+static inline void canvas_set_font_face(void * canvas, strview_t family, bool is_italic, bool is_bold) {
+  char * fam = alloc_c_str(family);
+  cairo_select_font_face((cairo_t *)canvas, fam,
+			 is_italic ? CAIRO_FONT_SLANT_ITALIC : CAIRO_FONT_SLANT_NORMAL,
+			 is_bold ? CAIRO_FONT_WEIGHT_BOLD : CAIRO_FONT_WEIGHT_NORMAL);
+  free(fam);
+}
+
 static inline void canvas_set_line_width(void * canvas, double w) {
   cairo_set_line_width((cairo_t *)canvas, w);
 }

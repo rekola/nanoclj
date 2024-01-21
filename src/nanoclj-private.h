@@ -236,6 +236,8 @@ extern "C" {
     nanoclj_val_t GRAY;		  /* :gray */
     nanoclj_val_t RGB;		  /* :rgb */
     nanoclj_val_t RGBA;		  /* :rgba */
+    nanoclj_val_t ITALIC;         /* :italic */
+    nanoclj_val_t BOLD;           /* :bold */
     nanoclj_val_t PDF;	          /* :pdf */
     nanoclj_val_t POSITION;	  /* :position */
     nanoclj_val_t EDGES;	  /* :edges */

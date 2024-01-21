@@ -4865,6 +4865,22 @@ static inline void set_bg_color(nanoclj_t * sc, nanoclj_color_t color, nanoclj_v
   }
 }
 
+static inline void set_font_face(nanoclj_t * sc, strview_t family, bool is_italic, bool is_bold, nanoclj_val_t out) {
+  nanoclj_port_rep_t * pr = rep_unchecked(out);
+  switch (port_type_unchecked(out)) {
+  case port_file:
+#ifndef WIN32
+    set_term_font_face(pr->stdio.file, is_italic, is_bold);
+#endif
+    break;
+  case port_canvas:
+#ifdef NANOCLJ_HAS_CANVAS
+    canvas_set_font_face(pr->canvas.impl, family, is_italic, is_bold);
+#endif
+    break;
+  }
+}
+
 static inline void set_linear_gradient(nanoclj_t * sc, nanoclj_tensor_t * tensor, nanoclj_cell_t * p0, nanoclj_cell_t * p1, nanoclj_val_t out) {
   float f = sc->window_scale_factor;
   nanoclj_port_rep_t * pr = rep_unchecked(out);
@@ -9343,6 +9359,25 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
     s_return(sc, mk_nil());
 
+  case OP_SET_FONT_FACE:
+    if (!unpack_args_0_plus(sc, &arg_next)) {
+      return false;
+    } else {
+      x = get_out_port(sc);
+      if (is_writer(x)) {
+	nanoclj_val_t family = mk_nil();
+	bool is_italic = false, is_bold = false;
+	for ( ; arg_next; arg_next = next(sc, arg_next)) {
+	  nanoclj_val_t attr = first(sc, arg_next);
+	  if (attr.as_long == sc->ITALIC.as_long) is_italic = true;
+	  else if (attr.as_long == sc->BOLD.as_long) is_bold = true;
+	  else if (is_nil(family)) family = attr;
+	}
+	set_font_face(sc, to_strview(arg0), is_italic, is_bold, x);
+      }
+    }
+    s_return(sc, mk_nil());
+    
   case OP_SET_FONT_SIZE:
     if (!unpack_args_1(sc, &arg0)) {
       return false;
@@ -10023,6 +10058,8 @@ bool nanoclj_init(nanoclj_t * sc) {
   sc->GRAY = def_keyword(sc, "gray");
   sc->RGB = def_keyword(sc, "rgb");
   sc->RGBA = def_keyword(sc, "rgba");
+  sc->ITALIC = def_keyword(sc, "italic");
+  sc->BOLD = def_keyword(sc, "bold");
   sc->PDF = def_keyword(sc, "pdf");
   sc->POSITION = def_keyword(sc, "position");
   sc->EDGES = def_keyword(sc, "edges");

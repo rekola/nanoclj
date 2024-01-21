@@ -150,6 +150,7 @@ _OP_DEF("vector-of", "Returns a homogenous vector of given type", OP_VECTOR_OF)
 /* Canvas ops */
 _OP_DEF("set-color", 0, OP_SET_COLOR)
 _OP_DEF("set-bg-color", 0, OP_SET_BG_COLOR)
+_OP_DEF("set-font-face", 0, OP_SET_FONT_FACE)
 _OP_DEF("set-font-size", 0, OP_SET_FONT_SIZE)
 _OP_DEF("set-line-width", 0, OP_SET_LINE_WIDTH)
 _OP_DEF("move-to", 0, OP_MOVETO)

@@ -206,6 +206,18 @@ static inline void set_term_bg_color(FILE * fh, nanoclj_color_t color, nanoclj_c
 #endif
 }
 
+static inline void set_term_font_face(FILE * fh, bool is_italic, bool is_bold) {
+#ifndef WIN32
+  if (isatty(fileno(fh))) {
+    if (is_italic) {
+      fprintf(fh, "\033[3m");
+    } else if (is_bold) {
+      fprintf(fh, "\033[1m");
+    }
+  }
+#endif
+}
+
 static inline void set_display_mode(FILE * fh, nanoclj_display_mode_t mode) {
   if (isatty(fileno(fh))) {
     switch (mode) {
