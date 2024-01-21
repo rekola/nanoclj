@@ -555,20 +555,56 @@ void refreshShowHints(struct abuf *ab, struct linenoiseState *l, int plen) {
     }
 }
 
+static int findError(const char * buf, int len) {
+    /* find single backslashes */
+    int prev_error = -1;
+    for (int i = 0; i < len; i++) {
+        if (buf[i] == '\\') {
+	    if (i + 1 == len || isspace(buf[i + 1])) {
+	        prev_error = i;
+	    }
+	    i++;
+	}
+    }
+    if (prev_error != -1) return prev_error;
+    /* find unmatched groupings */
+    char nesting[1024];
+    int ni = 0;
+    for (int i = 0; i < len; i++) {
+        char c = buf[i];
+	if (c == '\\') {
+	    i++;
+	} else if (c == ')' || c == ']' || c == '}') {
+	    if (ni && nesting[ni-1] == c) ni--;
+	    else return i;
+	} else if (c == '"' && ni && nesting[ni-1] == '"') {
+	    ni--;
+	} else if (ni < 1024) {
+	    switch (c) {
+	    case '"': nesting[ni++] = '"'; break;
+	    case '(': nesting[ni++] = ')'; break;
+	    case '[': nesting[ni++] = ']'; break;
+	    case '{': nesting[ni++] = '}'; break;
+	    }
+	}
+    }
+    return -1;
+}
+
 static int findHighlight(const char * buf, int len, int start_pos, char ic, int dir) {
     char nesting[1024];
     int ni = 0;
     char fc;
     bool is_in_string = false;
     for (int i = 0; i <= start_pos; i++) {
-      if (buf[i] == '"') is_in_string = !is_in_string;
+        if (buf[i] == '"') is_in_string = !is_in_string;
     }
     if (ic == '"') {
 	if (is_in_string && dir == -1) return -1;
 	else if (!is_in_string && dir == 1) return -1;
 	fc = '"';
     } else if (is_in_string) {
-      return -1;
+        return -1;
     } else if (dir == 1) {
         switch (ic) {
 	case '(': fc = ')'; break;
@@ -588,15 +624,16 @@ static int findHighlight(const char * buf, int len, int start_pos, char ic, int 
         if (!ni && buf[i] == fc) return i;
         else if (ni && nesting[ni-1] == buf[i]) ni--;
 	else if (ni < 1024) {
-	    if (buf[i] == '"') nesting[ni++] = '"';
-	    else if (dir == 1) {
+	    if (dir == 1) {
 	        switch (buf[i]) {
+		case '"': nesting[ni++] = '"'; break;
 		case '(': nesting[ni++] = ')'; break;
 		case '[': nesting[ni++] = ']'; break;
 		case '{': nesting[ni++] = '}'; break;
 		}
 	    } else {
 	        switch (buf[i]) {
+		case '"': nesting[ni++] = '"'; break;
 		case ')': nesting[ni++] = '('; break;
 		case ']': nesting[ni++] = '['; break;
 		case '}': nesting[ni++] = '{'; break;
@@ -638,8 +675,9 @@ static void refreshSingleLine(struct linenoiseState *l, int flags) {
     abAppend(&ab,seq,strlen(seq));
 
     if (flags & REFRESH_WRITE) {
-        int highlight_pos = -1;
+        int highlight_pos = -1, error_pos = -1;
 	if (!pasting) {
+	    error_pos = findError(buf, len);
 	    if (pos < len) highlight_pos = findHighlight(buf, len, pos, buf[pos], 1);
 	    if (highlight_pos == -1 && pos > 1) highlight_pos = findHighlight(buf, len, pos - 1, buf[pos - 1], -1);
 	}
@@ -648,9 +686,15 @@ static void refreshSingleLine(struct linenoiseState *l, int flags) {
         abAppend(&ab,l->prompt,l->plen);
         if (maskmode == 1) {
             while (len--) abAppend(&ab,"*",1);
-        } else if (highlight_pos != -1) {
+        } else if (error_pos != -1) {
+	    abAppend(&ab,buf,error_pos);
+	    abAppend(&ab,"\033[4;91m",7);
+	    abAppend(&ab,buf+error_pos,1);
+	    abAppend(&ab,"\033[0m",4);
+	    abAppend(&ab,buf+error_pos+1,len-error_pos-1);
+	} else if (highlight_pos != -1) {
 	    abAppend(&ab,buf,highlight_pos);
-	    abAppend(&ab,"\033[97;100m", 9);
+	    abAppend(&ab,"\033[97;100m",9);
 	    abAppend(&ab,buf+highlight_pos,1);
 	    abAppend(&ab,"\033[0m",4);
 	    abAppend(&ab,buf+highlight_pos+1,len-highlight_pos-1);
