@@ -462,8 +462,8 @@
                              :char [ 0.8 0.58 0.58 ]
                              :string [ 0.8 0.58 0.58 ]
                              :regex [ 0.8 0.58 0.58 ]
-                             :symbol { :color [ 0.94 0.87 0.69 ] :face '( :italic ) }
-                             :keyword [ 0.94 0.87 0.69 ]
+                             :symbol { :color [ 0.94 0.87 0.69 ] :face '( :italic :bold ) }
+                             :keyword { :color [ 0.94 0.87 0.69 ] :face '( :bold ) }
                              :var [ 0.94 0.87 0.69 ]
                              :class [ 0.55 0.82 0.83 ]
                              })

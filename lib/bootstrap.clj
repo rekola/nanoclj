@@ -122,7 +122,7 @@
     ([f a b args] (apply* f (list* a b args)))
     ([f a b c args] (apply* f (list* a b c args)))
     ([f a b c d & args] (apply* f (cons a (cons b (cons c (cons d (spread args)))))))))
-             
+
 ;; The following quasiquote macro is due to Eric S. Tiedemann.
 ;;   Copyright 1988 by Eric S. Tiedemann; all rights reserved.
 ;;
