@@ -1128,22 +1128,28 @@ static inline char *complete_parens(const char * input) {
   char nest[1024];
   int si = 0;
   for (int i = 0, n = strlen(input); i < n; i++) {
-    if (input[i] == '(') {
-      nest[si++] = ')';
-    } else if (input[i] == '[') {
-      nest[si++] = ']';
-    } else if (input[i] == '{') {
-      nest[si++] = '}';
-    } else if (input[i] == '"' && (si == 0 || nest[si - 1] != '"')) {
-      nest[si++] = '"';
-    } else if (input[i] == ')' || input[i] == ']' || input[i] == '}' || input[i] == '"') {
-      if (si > 0 && nest[si - 1] == input[i]) {
+    if (input[i] == '\\') {
+      i++;
+    } else if (input[i] == '"') {
+      if (si != 0 && nest[si - 1] == '"') {
 	si--;
       } else {
-	return NULL;
+	nest[si++] = '"';
       }
-    } else if (input[i] == '\\' && i + 1 < n && (input[i + 1] == '"' || input[i + 1] == '\\')) {
-      i++;
+    } else if (si == 0 || nest[si - 1] != '"') {
+      if (input[i] == '(') {
+	nest[si++] = ')';
+      } else if (input[i] == '[') {
+	nest[si++] = ']';
+      } else if (input[i] == '{') {
+	nest[si++] = '}';
+      } else if (input[i] == ')' || input[i] == ']' || input[i] == '}') {
+	if (si > 0 && nest[si - 1] == input[i]) {
+	  si--;
+	} else {
+	  return NULL;
+	}
+      }
     }
   }
   if (si == 0) {

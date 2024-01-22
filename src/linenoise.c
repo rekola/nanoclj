@@ -574,56 +574,75 @@ static int findError(const char * buf, int len) {
         char c = buf[i];
 	if (c == '\\') {
 	    i++;
-	} else if (c == ')' || c == ']' || c == '}') {
-	    if (ni && nesting[ni-1] == c) ni--;
-	    else return i;
-	} else if (c == '"' && ni && nesting[ni-1] == '"') {
-	    ni--;
-	} else if (ni < 1024) {
-	    switch (c) {
-	    case '"': nesting[ni++] = '"'; break;
-	    case '(': nesting[ni++] = ')'; break;
-	    case '[': nesting[ni++] = ']'; break;
-	    case '{': nesting[ni++] = '}'; break;
+	} else if (c == '"') {
+	    if (!ni || nesting[ni-1] != '"') {
+	        nesting[ni++] = '"';
+	    } else {
+	        ni--;
+	    }
+	} else if (!ni || nesting[ni-1] != '"') {
+	    if (c == ')' || c == ']' || c == '}') {
+	        if (ni && nesting[ni-1] == c) ni--;
+		else return i;
+	    } else if (ni < 1024) {
+	        switch (c) {
+		case '(': nesting[ni++] = ')'; break;
+		case '[': nesting[ni++] = ']'; break;
+		case '{': nesting[ni++] = '}'; break;
+		}
 	    }
 	}
     }
     return -1;
 }
 
-static int findHighlight(const char * buf, int len, int start_pos, char ic, int dir) {
+static int findHighlight(const char * buf0, int len, int start_pos, int dir) {
+    char * buf = malloc(len);
+    memcpy(buf, buf0, len);
+    
     char nesting[1024];
     int ni = 0;
-    char fc;
-    bool is_in_string = false;
-    for (int i = 0; i <= start_pos; i++) {
-        if (buf[i] == '"') is_in_string = !is_in_string;
+    bool in_string = false, start_pos_in_string = false;
+    for (int i = 0; i <= len; i++) {
+        if (buf[i] == '\\') {
+	    buf[++i] = '_';
+	} else if (buf[i] == '"') {
+	    in_string = !in_string;
+	} else if (in_string) {
+	    buf[i] = '_';
+	}
+	if (i == start_pos) start_pos_in_string = in_string;
     }
-    if (ic == '"') {
-	if (is_in_string && dir == -1) return -1;
-	else if (!is_in_string && dir == 1) return -1;
-	fc = '"';
-    } else if (is_in_string) {
-        return -1;
+
+    char ic = buf[start_pos], fc = 0;
+    if (ic == '"' && ((start_pos_in_string && dir == 1) || (!start_pos_in_string && dir == -1))) {
+        fc = '"';
     } else if (dir == 1) {
         switch (ic) {
 	case '(': fc = ')'; break;
 	case '[': fc = ']'; break;
 	case '{': fc = '}'; break;
-	default: return -1;
 	}
     } else {
         switch (ic) {
 	case ')': fc = '('; break;
 	case ']': fc = '['; break;
 	case '}': fc = '{'; break;
-	default: return -1;
 	}
     }
-    for (int i = start_pos + dir; i >= 0 && i < len; i += dir) {
-        if (!ni && buf[i] == fc) return i;
-        else if (ni && nesting[ni-1] == buf[i]) ni--;
-	else if (ni < 1024) {
+
+    if (!fc) {
+        free(buf);
+	return -1;
+    }
+    
+    for (int i = start_pos + dir; i >= 0 && i <= len; i += dir) {
+        if (!ni && buf[i] == fc) {
+	    free(buf);
+	    return i;
+	} else if (ni && nesting[ni-1] == buf[i]) {
+	    ni--;
+	} else if (ni < 1024) {
 	    if (dir == 1) {
 	        switch (buf[i]) {
 		case '"': nesting[ni++] = '"'; break;
@@ -641,6 +660,7 @@ static int findHighlight(const char * buf, int len, int start_pos, char ic, int 
 	    }
 	}
     }
+    free(buf);
     return -1;
 }
 
@@ -678,8 +698,8 @@ static void refreshSingleLine(struct linenoiseState *l, int flags) {
         int highlight_pos = -1, error_pos = -1;
 	if (!pasting) {
 	    error_pos = findError(buf, len);
-	    if (pos < len) highlight_pos = findHighlight(buf, len, pos, buf[pos], 1);
-	    if (highlight_pos == -1 && pos > 1) highlight_pos = findHighlight(buf, len, pos - 1, buf[pos - 1], -1);
+	    if (pos < len) highlight_pos = findHighlight(buf, len, pos, 1);
+	    if (highlight_pos == -1 && pos > 1) highlight_pos = findHighlight(buf, len, pos - 1, -1);
 	}
 
         /* Write the prompt and the current buffer content */
