@@ -95,3 +95,22 @@
                           (if indices
                             (str (subs s 0 (indices 0)) replacement (replace (subs s (indices 1)) match replacement))
                             s)))
+
+(defn split-lines
+  "Split input to lines"
+  [s] (split s #"\r?\n"))
+
+(defn escape
+  "Escapes characters"
+  [s cmap] (loop [ acc "" s (seq s) ]
+             (if s
+               (let [f (first s)
+                     rep (get cmap f) ]
+                 (if rep
+                   (recur (str acc rep) (next s))
+                   (recur (conj acc f) (next s))))
+               acc)))
+
+(defn re-quote-replacement
+  "Makes replacement a literal strings that doesn't capture any references in replace"
+  [replacement] (escape replacement { \\ "\\\\" \$ "\\$" }))
