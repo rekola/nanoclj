@@ -58,7 +58,7 @@ Interpreter::Interpreter() {
     const char * path = getcwd(buf, 1024);
     if (path) {
       chdir("assets/nanoclj");
-      nanoclj_load_named_file(sc, "init.clj");
+      nanoclj_load_named_file(sc, sc->vptr->mk_string(sc, "init.clj"));
       chdir(path);
     }
 
@@ -95,13 +95,12 @@ Interpreter::eval(const std::string & expression) {
 void
 Interpreter::eval_print(const std::string & expression) {
   nanoclj_val_t v = nanoclj_eval_string(sc_, expression.c_str(), expression.size());
-  nanoclj_val_t q = sc_->vptr->cons(sc_, sc_->QUOTE, sc_->vptr->cons(sc_, v, sc_->EMPTY));
-  nanoclj_val_t c =
+  nanoclj_cell_t * q = sc_->vptr->cons(sc_, sc_->QUOTE, sc_->vptr->cons(sc_, v, NULL));
+  nanoclj_cell_t * c =
     sc_->vptr->cons(sc_,
 		    sc_->vptr->def_symbol(sc_, "prn"),
-		    sc_->vptr->cons(sc_,
-				    q, sc_->EMPTY));
-  nanoclj_eval(sc_, c);
+		    sc_->vptr->cons(sc_, mk_pointer(q), NULL));
+  nanoclj_eval(sc_, mk_pointer(c));
 }
 
 #if 0

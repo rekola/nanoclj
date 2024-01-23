@@ -380,15 +380,17 @@ static inline nanoclj_val_t mk_symbol(nanoclj_t * sc, uint16_t t, strview_t ns, 
 }
 
 static inline void free_symbol(symbol_t * s) {
-  free((char *)s->ns.ptr);
-  free((char *)s->name.ptr);
-  free((char *)s->full_name.ptr);
+  /* Cast away constness */
+  free((void *)s->ns.ptr);
+  free((void *)s->name.ptr);
+  free((void *)s->full_name.ptr);
   free(s);
 }
 
 static inline void free_regex(regex_t * re) {
-  free((char *)re->pattern.ptr);
-  free((char *)re->full_name.ptr);
+  /* Cast away constness */
+  free((void *)re->pattern.ptr);
+  free((void *)re->full_name.ptr);
   free(re);
 }
 
@@ -4940,7 +4942,7 @@ static inline const char * escape_char(int32_t c, char * buffer, bool in_string)
     case '\t':	return "\\t";
     case '\r':	return "\\r";
     case '\b':	return "\\b";
-    case '\\':	return "\\";
+    case '\\':	return "\\\\";
     }
   } else {
     switch (c) {
@@ -5041,7 +5043,7 @@ static inline strview_t readstrexp(nanoclj_t * sc, nanoclj_cell_t * inport, bool
 	  state = st_ok;
 	  break;
 	default:
-	  nanoclj_throw(sc, mk_runtime_exception(sc, mk_string_fmt(sc, "Unsupported escape character: \\%s", escape_char(c, sc->strbuff, false))));
+	  nanoclj_throw(sc, mk_runtime_exception(sc, mk_string_fmt(sc, "Unsupported escape character: %s", escape_char(c, sc->strbuff, false))));
 	  return (strview_t){0};
 	}
       } else {
@@ -5346,6 +5348,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, print_scheme
   case T_SYMBOL:
   case T_KEYWORD:
   case T_REGEX:
+  case T_ALIAS:
     sv = to_strview(l);
     break;
   case T_NIL:
@@ -9725,16 +9728,6 @@ static inline void update_window_info(nanoclj_t * sc, nanoclj_cell_t * out) {
 
 /* initialization of nanoclj_t */
 #if USE_INTERFACE
-static inline nanoclj_val_t cons_checked(nanoclj_t * sc, nanoclj_val_t head, nanoclj_val_t tail) {
-  if (is_cell(tail)) {
-    return mk_pointer(cons(sc, head, decode_pointer(tail)));
-  } else if (is_emptylist(tail) || is_nil(tail)) {
-    return mk_pointer(cons(sc, head, NULL));
-  } else {
-    return mk_nil();
-  }
-}
-
 static nanoclj_val_t checked_car(nanoclj_val_t p) {
   if (is_cell(p) && !is_gc_atom(p)) {
     return car(p);
@@ -9781,7 +9774,7 @@ nanoclj_val_t nanoclj_mk_vector(nanoclj_t * sc, size_t size) {
 
 static struct nanoclj_interface vtbl = {
   intern,
-  cons_checked,
+  cons,
   mk_long,
   mk_double,
   def_symbol,

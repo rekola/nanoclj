@@ -1,6 +1,10 @@
 #ifndef _NANOCLJ_PRIM_H_
 #define _NANOCLJ_PRIM_H_
 
+#include "nanoclj_types.h"
+
+#include <math.h>
+
 /* Masks for NaN packing */
 #define MASK_SIGN		UINT64_C(0x8000)
 #define MASK_EXPONENT		UINT64_C(0x7ff0)
@@ -66,8 +70,8 @@ static inline nanoclj_val_t mk_codepoint(int c) {
   return (nanoclj_val_t)(SIGNATURE_CODEPOINT | (uint32_t)c);
 }
 
-static inline nanoclj_val_t mk_proc(enum nanoclj_opcode op) {
-  return (nanoclj_val_t)(SIGNATURE_PROC | (uint32_t)op);
+static inline nanoclj_val_t mk_proc(uint32_t op) {
+  return (nanoclj_val_t)(SIGNATURE_PROC | op);
 }
 
 static inline nanoclj_val_t mk_emptylist() {

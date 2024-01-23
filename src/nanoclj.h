@@ -11,8 +11,6 @@ extern "C" {
 
 #include "nanoclj_types.h"
 
-typedef struct nanoclj_cell_t nanoclj_cell_t;
-
 /*
  * Default values for #define'd symbols
  */
@@ -91,7 +89,7 @@ typedef struct nanoclj_cell_t nanoclj_cell_t;
 #if USE_INTERFACE
   struct nanoclj_interface {
     void (*intern) (nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t symbol, nanoclj_val_t value);
-    nanoclj_val_t (*cons) (nanoclj_t * sc, nanoclj_val_t head, nanoclj_val_t tail);
+    nanoclj_cell_t * (*cons) (nanoclj_t * sc, nanoclj_val_t head, nanoclj_cell_t * tail);
     nanoclj_val_t (*mk_integer) (nanoclj_t * sc, long long num);
     nanoclj_val_t (*mk_double) (double num);
     nanoclj_val_t (*mk_symbol) (nanoclj_t * sc, const char *name);

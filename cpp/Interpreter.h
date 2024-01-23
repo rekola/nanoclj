@@ -2,6 +2,7 @@
 #define _NANOCLJ_INTERPRETER_H_
 
 #include "nanoclj.h"
+#include "nanoclj_prim.h"
 #include "nanoclj-private.h"
 
 #include <vector>
@@ -62,7 +63,7 @@ namespace nanoclj {
     }
     
     void define(std::string symbol, UserFn function) {
-      sc_->vptr->intern(sc_, sc_->global_env,
+      sc_->vptr->intern(sc_, sc_->root_ns,
 			sc_->vptr->mk_symbol(sc_, symbol.c_str()), 
 			sc_->vptr->mk_foreign_func(sc_, function, 0, -1, NULL)
 			);

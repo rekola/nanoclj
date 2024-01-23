@@ -2,6 +2,7 @@
 #define _NANOCLJ_TYPES_H_
 
 struct nanoclj_cell_t;
+typedef struct nanoclj_cell_t nanoclj_cell_t;
 
 #define NANOCLJ_MAX_DIMS 3
 
