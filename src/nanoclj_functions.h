@@ -1100,8 +1100,6 @@ static inline nanoclj_val_t clojure_data_csv_read_csv(nanoclj_t * sc, nanoclj_ce
 }
 
 #if NANOCLJ_USE_LINENOISE
-#define MAX_COMPLETION_SYMBOLS 65535
-
 static nanoclj_t * linenoise_sc = NULL;
 
 static inline void completion(const char *input, linenoiseCompletions *lc) {
@@ -1164,8 +1162,8 @@ static inline char *complete_parens(const char * input) {
 
   return h;
 }
- 
-static inline char *hints(const char *input, int *color, int *bold) {
+
+static char *hints_callback(const char *input, int *color, int *bold) {
   char * h = complete_parens(input);
   if (!h) return NULL;
   
@@ -1174,7 +1172,49 @@ static inline char *hints(const char *input, int *color, int *bold) {
   return h;
 }
 
-static inline void on_mouse_motion(int x, int y) {
+static bool * errorcheck_callback(const char * buf, size_t len) {
+  bool * errorvec = malloc(len * sizeof(bool));
+  
+  memset(errorvec, 0, len * sizeof(bool));
+  /* find single backslashes */
+  for (int i = 0; i < len; i++) {
+    if (buf[i] == '\\') {
+      if (i + 1 == len || isspace(buf[i + 1])) {
+	errorvec[i] = true;
+      }
+      i++;
+    }
+  }
+  /* find unmatched groupings */
+  char nesting[1024];
+  int ni = 0;
+  for (int i = 0; i < len; i++) {
+    char c = buf[i];
+    if (c == '\\') {
+      i++;
+    } else if (c == '"') {
+      if (!ni || nesting[ni-1] != '"') {
+	nesting[ni++] = '"';
+      } else {
+	ni--;
+      }
+    } else if (!ni || nesting[ni-1] != '"') {
+      if (c == ')' || c == ']' || c == '}') {
+	if (ni && nesting[ni-1] == c) ni--;
+	else errorvec[i] = true;
+      } else if (ni < 1024) {
+	switch (c) {
+	case '(': nesting[ni++] = ')'; break;
+	case '[': nesting[ni++] = ']'; break;
+	case '{': nesting[ni++] = '}'; break;
+	}
+      }
+    }
+  }
+  return errorvec;
+}
+
+static inline void mouse_motion_callback(int x, int y) {
   double f = linenoise_sc->window_scale_factor;
   nanoclj_val_t p = mk_vector_2d(linenoise_sc, x / f, y / f);
   intern(linenoise_sc, linenoise_sc->root_ns, linenoise_sc->MOUSE_POS, p);
@@ -1183,7 +1223,7 @@ static inline void on_mouse_motion(int x, int y) {
   }
 }
 
-static inline void on_window_size() {
+static inline void windowsize_callback() {
   update_window_info(linenoise_sc, decode_pointer(get_out_port(linenoise_sc)));
   if (linenoise_sc->pending_exception) {
     linenoiseTerminate();
@@ -1196,12 +1236,13 @@ static inline void init_linenoise(nanoclj_t * sc) {
   linenoiseSetClearOutput(1);
   linenoiseSetupSigWinchHandler();
   linenoiseSetCompletionCallback(completion);
-  linenoiseSetHintsCallback(hints);
-  linenoiseSetFreeHintsCallback(free);
+  linenoiseSetHintsCallback(hints_callback);
+  linenoiseSetFreeCallback(free);
 #if 0
-  linenoiseSetMouseMotionCallback(on_mouse_motion);
+  linenoiseSetMouseMotionCallback(mouse_motion_callback);
 #endif
-  linenoiseSetWindowSizeCallback(on_window_size);
+  linenoiseSetErrorCheckCallback(errorcheck_callback);
+  linenoiseSetWindowSizeCallback(windowsize_callback);
   linenoiseHistorySetMaxLen(10000);
 }
 

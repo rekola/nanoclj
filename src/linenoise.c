@@ -126,9 +126,10 @@
 static char *unsupported_term[] = {"dumb", "cons25", "emacs", NULL};
 static linenoiseCompletionCallback *completionCallback = NULL;
 static linenoiseMouseMotionCallback *mouseMotionCallback = NULL;
+static linenoiseErrorCheckCallback *errorCheckCallback = NULL;
 static linenoiseWindowSizeCallback *windowSizeCallback = NULL;
 static linenoiseHintsCallback *hintsCallback = NULL;
-static linenoiseFreeHintsCallback *freeHintsCallback = NULL;
+static linenoiseFreeCallback *freeCallback = NULL;
 static char *linenoiseNoTTY(void);
 static void refreshLineWithCompletion(struct linenoiseState *ls, linenoiseCompletions *lc, int flags);
 static void refreshLineWithFlags(struct linenoiseState *l, int flags);
@@ -468,8 +469,8 @@ void linenoiseSetHintsCallback(linenoiseHintsCallback *fn) {
 
 /* Register a function to free the hints returned by the hints callback
  * registered with linenoiseSetHintsCallback(). */
-void linenoiseSetFreeHintsCallback(linenoiseFreeHintsCallback *fn) {
-    freeHintsCallback = fn;
+void linenoiseSetFreeCallback(linenoiseFreeCallback *fn) {
+    freeCallback = fn;
 }
 
 /* This function is used by the callback function registered by the user
@@ -494,6 +495,10 @@ void linenoiseAddCompletion(linenoiseCompletions *lc, const char *str, size_t le
 
 void linenoiseSetMouseMotionCallback(linenoiseMouseMotionCallback *fn) {
     mouseMotionCallback = fn;
+}
+
+void linenoiseSetErrorCheckCallback(linenoiseErrorCheckCallback *fn) {
+    errorCheckCallback = fn;
 }
 
 void linenoiseSetWindowSizeCallback(linenoiseWindowSizeCallback *fn) {
@@ -550,50 +555,9 @@ void refreshShowHints(struct abuf *ab, struct linenoiseState *l, int plen) {
             if (color != -1 || bold != 0)
                 abAppend(ab,"\033[0m",4);
             /* Call the function to free the hint returned. */
-            if (freeHintsCallback) freeHintsCallback(hint);
+            if (freeCallback) freeCallback(hint);
         }
     }
-}
-
-static int findError(const char * buf, int len) {
-    /* find single backslashes */
-    int prev_error = -1;
-    for (int i = 0; i < len; i++) {
-        if (buf[i] == '\\') {
-	    if (i + 1 == len || isspace(buf[i + 1])) {
-	        prev_error = i;
-	    }
-	    i++;
-	}
-    }
-    if (prev_error != -1) return prev_error;
-    /* find unmatched groupings */
-    char nesting[1024];
-    int ni = 0;
-    for (int i = 0; i < len; i++) {
-        char c = buf[i];
-	if (c == '\\') {
-	    i++;
-	} else if (c == '"') {
-	    if (!ni || nesting[ni-1] != '"') {
-	        nesting[ni++] = '"';
-	    } else {
-	        ni--;
-	    }
-	} else if (!ni || nesting[ni-1] != '"') {
-	    if (c == ')' || c == ']' || c == '}') {
-	        if (ni && nesting[ni-1] == c) ni--;
-		else return i;
-	    } else if (ni < 1024) {
-	        switch (c) {
-		case '(': nesting[ni++] = ')'; break;
-		case '[': nesting[ni++] = ']'; break;
-		case '{': nesting[ni++] = '}'; break;
-		}
-	    }
-	}
-    }
-    return -1;
 }
 
 static int findHighlight(const char * buf0, int len, int start_pos, int dir) {
@@ -603,7 +567,7 @@ static int findHighlight(const char * buf0, int len, int start_pos, int dir) {
     char nesting[1024];
     int ni = 0;
     bool in_string = false, start_pos_in_string = false;
-    for (int i = 0; i <= len; i++) {
+    for (int i = 0; i < len; i++) {
         if (buf[i] == '\\') {
 	    buf[++i] = '_';
 	} else if (buf[i] == '"') {
@@ -697,7 +661,16 @@ static void refreshSingleLine(struct linenoiseState *l, int flags) {
     if (flags & REFRESH_WRITE) {
         int highlight_pos = -1, error_pos = -1;
 	if (!pasting) {
-	    error_pos = findError(buf, len);
+	    bool * errorvec = errorCheckCallback(buf, len);
+	    if (errorvec) {
+	        for (int i = 0; i < len; i++) {
+		  if (errorvec[i]) {
+		      error_pos = i;
+		      break;
+		  }
+		}
+		if (freeCallback) freeCallback(errorvec);
+	    }
 	    if (pos < len) highlight_pos = findHighlight(buf, len, pos, 1);
 	    if (highlight_pos == -1 && pos > 1) highlight_pos = findHighlight(buf, len, pos - 1, -1);
 	}

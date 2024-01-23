@@ -44,7 +44,7 @@ extern "C" {
 #endif
   
 #include <stddef.h> /* For size_t. */
-
+#include <stdbool.h>
 extern char *linenoiseEditMore;
 
 /* The linenoiseState structure represents the state during line editing.
@@ -93,15 +93,19 @@ void linenoiseTerminate();
 /* Completion API. */
 typedef void(linenoiseCompletionCallback)(const char *, linenoiseCompletions *);
 typedef char*(linenoiseHintsCallback)(const char *, int *color, int *bold);
-typedef void(linenoiseFreeHintsCallback)(void *);
+typedef void(linenoiseFreeCallback)(void *);
 void linenoiseSetCompletionCallback(linenoiseCompletionCallback *);
 void linenoiseSetHintsCallback(linenoiseHintsCallback *);
-void linenoiseSetFreeHintsCallback(linenoiseFreeHintsCallback *);
+void linenoiseSetFreeCallback(linenoiseFreeCallback *);
 void linenoiseAddCompletion(linenoiseCompletions *, const char *, size_t);
 
 /* Mouse API. */
 typedef void(linenoiseMouseMotionCallback)(int, int);
 void linenoiseSetMouseMotionCallback(linenoiseMouseMotionCallback *);
+
+/* Error Checking API */
+typedef bool *(linenoiseErrorCheckCallback)(const char *, size_t size);
+void linenoiseSetErrorCheckCallback(linenoiseErrorCheckCallback *);
 
 /* Window Size */
 typedef void(linenoiseWindowSizeCallback)(void);
