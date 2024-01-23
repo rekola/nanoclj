@@ -34,7 +34,7 @@
                  (conj acc b))))))
 
 (defn graph-plot
-  "Plots a map"
+  "Plots a graph"
   ([& graphs]
    (let [width (*window-size* 0)
          height (int (/ width 3))
@@ -95,6 +95,7 @@
          ))))
 
 (defn- parse-args
+  "Parses plot arguments. Arguments can contain data vectors and keyword value pairs such as :title \"Plot title\""
   [args] (loop [a args r { :data [] }] (if a (if (keyword? (first a))
                                                (recur (nnext a) (assoc r (first a) (second a)))
                                                (recur (next a) (assoc r :data (conj (r :data) (first a)))))
@@ -104,36 +105,52 @@
   "Plots a series. Matlab style."
   ([& args]
    (let [args (parse-args (seq args))
+                                        ; Set plot variables
          width (*window-size* 0)
          height (int (/ width 3.0))
-         theme (theme-colors *theme*)
-         text-color (theme :text)
-         box-color (theme :box)
-         grid-color (theme :grid)
          title (get args :title)
-         plots (map #( conj (vec %1) %2 ) (partition 2 (args :data)) plot-colors)
          margin-top (if title 30 15)
          margin-bottom 25
          margin-left 50
          margin-right 15
          content-width (- width margin-left margin-right)
          content-height (- height margin-top margin-bottom)
+
+                                        ; Set colors for the system theme
+         theme (theme-colors *theme*)
+         text-color (theme :text)
+         box-color (theme :box)
+         grid-color (theme :grid)
+
+                                        ; Add colors to each plot
+         plots (map #( conj (vec %1) %2 )
+                    (partition 2 (args :data)) plot-colors)
+
+                                        ; Get the combined range of all the plots
          min-x (apply min (map #( apply min (first %1) ) plots))
          min-y (apply min (map #( apply min (second %1) ) plots))
          max-x (apply max (map #( apply max (first %1) ) plots))
          max-y (apply max (map #( apply max (second %1) ) plots))
          range-x (- (double max-x) (double min-x))
          range-y (- max-y min-y)
-         fit-x (fn [x] (+ (* (/ (- (double x) (double min-x)) range-x) content-width) margin-left))
-         fit-y (fn [y] (+ (* (/ (- max-y y) range-y) content-height) margin-top))
+
+                                        ; Create tick and grid line step values
          x-tick-step (/ (Math/pow 10 (Math/round (Math/log10 range-x))) 20)
          y-tick-step (/ (Math/pow 10 (Math/round (Math/log10 (* range-y 2)))) 20)
          x-grid-step (/ x-tick-step 2.0)
          y-grid-step (/ y-tick-step 2.0)
+
+                                        ; Define functions for converting input to pixels
+         fit-x (fn [x] (+ (* (/ (- (double x) (double min-x)) range-x) content-width) margin-left))
+         fit-y (fn [y] (+ (* (/ (- max-y y) range-y) content-height) margin-top))
+
+                                        ; Define functions for printing input values
          format-x (case (class min-x)
                     java.util.Date (fn [x] (str (java.util.Date x)))
                     (fn [x] (format "%.2f" x)))
          format-y (fn [y] (format "%.2f" y))
+
+                                        ; Define functions for drawing the grid and the ticks
          draw-x-grid (fn [x] (when (<= x max-x)
                                (let [fx (fit-x x)]
                                  (move-to fx margin-top)
@@ -170,20 +187,26 @@
                                   (move-to (- margin-left (e 0) 5) (+ fy (/ (e 1) 2.0)))
                                   (print label)
                                   (recur (+ y y-tick-step)))))
+
+                                        ; Define functions for drawing the plot lines
          draw-line (fn [x y] (if (or (empty? x) (empty? y))
                                nil
                                (do
                                  (line-to (fit-x (first x)) (fit-y (first y)))
                                  (recur (rest x) (rest y)))))
+
+                                        ; Create the canvas
          cx (clojure.java.io/writer width height (theme :bg))
+
          draw (fn []
                 (set-font-size 10)
-                                        ; Draw grid
+                                        ; Draw the grid
                 (set-color grid-color)
                 (set-line-width :hair)
                 (draw-x-grid (* (int (/ (double min-x) x-grid-step)) x-grid-step))
                 (draw-y-grid (* (int (/ min-y y-grid-step)) y-grid-step))
-                                        ; Draw box
+
+                                        ; Draw the box
                 (set-color box-color)
                 (set-line-width 1)
                 (move-to margin-left margin-top)
@@ -192,7 +215,8 @@
                 (line-to margin-left (- height margin-bottom))
                 (close-path)
                 (stroke)
-                                        ; Draw ticks
+
+                                        ; Draw the ticks
                 (draw-x-ticks (* (int (/ (double min-x) x-tick-step)) x-tick-step))
                 (draw-y-ticks (* (int (/ (* 1.1 min-y) y-tick-step)) y-tick-step))
 
@@ -205,6 +229,7 @@
                           (draw-line (rest x) (rest y))
                           (stroke))) plots)
 
+                                        ; Draw the title
                 (when title
                   (let [title-size (get-text-extents title)]
                     (set-font-size 15)
@@ -213,21 +238,23 @@
                     (print title)))
                 )
          ]
+                                        ; Bind the canvas to *out* and draw
      (with-out cx
        (draw)
-         
+
+                                        ; Add watch for re-rendering the plot if window size changes (not used)
        (add-watch (var *window-size*) 0
                   (fn [key ref old-ws ws]
                     (with-out cx
                       (resize)
                       (flush)
                       )))
-       
+
+                                        ; Add watch for mouse over (not used yet)
        (add-watch (var *mouse-pos*) 0
                   (fn [key ref old-pos pos]
                     nil
                     ))
-       
        ))))
 
 (defn scatter
