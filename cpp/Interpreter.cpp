@@ -93,14 +93,28 @@ Interpreter::eval(const std::string & expression) {
 }
 
 void
-Interpreter::eval_print(const std::string & expression) {
-  nanoclj_val_t v = nanoclj_eval_string(sc_, expression.c_str(), expression.size());
+Interpreter::print_value(nanoclj_val_t v) {
   nanoclj_cell_t * q = sc_->vptr->cons(sc_, sc_->QUOTE, sc_->vptr->cons(sc_, v, NULL));
   nanoclj_cell_t * c =
     sc_->vptr->cons(sc_,
 		    sc_->vptr->def_symbol(sc_, "prn"),
 		    sc_->vptr->cons(sc_, mk_pointer(q), NULL));
   nanoclj_eval(sc_, mk_pointer(c));
+  if (sc_->pending_exception) {
+    sc_->pending_exception = NULL;
+  }
+}
+
+void
+Interpreter::eval_print(const std::string & expression) {
+  nanoclj_val_t v = nanoclj_eval_string(sc_, expression.c_str(), expression.size());
+  if (sc_->pending_exception) {
+    nanoclj_val_t e = mk_pointer(sc_->pending_exception);
+    sc_->pending_exception = NULL;
+    print_value(e);
+  } else {
+    print_value(v);
+  }
 }
 
 #if 0

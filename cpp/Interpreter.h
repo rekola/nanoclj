@@ -72,6 +72,8 @@ namespace nanoclj {
     const std::vector<std::string> & getSymbols() const { return symbols_; }
     
   private:
+    void print_value(nanoclj_val_t v);
+
     nanoclj_t * sc_;
     std::vector<std::string> symbols_;
     std::string out_buffer, error_buffer;
