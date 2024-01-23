@@ -146,6 +146,7 @@ _OP_DEF("require", 0, OP_REQUIRE)
 _OP_DEF("find-ns", "Returns the namespace with the symbol x or nil", OP_FIND_NS)
 _OP_DEF("find-keyword", 0, OP_FIND_KEYWORD)
 _OP_DEF("vector-of", "Returns a homogenous vector of given type", OP_VECTOR_OF)
+_OP_DEF("syntax?", "Returns true if argument is a syntax symbol", OP_SYNTAXP)
 
 /* Canvas ops */
 _OP_DEF("set-color", 0, OP_SET_COLOR)

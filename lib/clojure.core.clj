@@ -464,6 +464,7 @@
                              :regex [ 0.8 0.58 0.58 ]
                              :symbol { :color [ 0.94 0.87 0.69 ] :face '( :italic :bold ) }
                              :keyword { :color [ 0.94 0.87 0.69 ] :face '( :bold ) }
+                             :syntax [ 0.97 0.95 0.87 ]
                              :var [ 0.94 0.87 0.69 ]
                              :class [ 0.55 0.82 0.83 ]
                              })
@@ -521,6 +522,7 @@
                      (string? x) (print-fn :string x)
                      (regex? x) (print-fn :regex x)
                      (keyword? x) (print-fn :keyword x)
+                     (syntax? x) (print-fn :syntax x)
                      (symbol? x) (print-fn :symbol x)
                      (var? x) (print-fn :var x)
                      (class? x) (print-fn :class x)

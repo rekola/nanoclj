@@ -5583,6 +5583,9 @@ static inline nanoclj_val_t mk_format(nanoclj_t * sc, strview_t fmt0, nanoclj_ce
     }
     
     switch (type(arg)) {
+    case T_BYTE:
+    case T_SHORT:
+    case T_INTEGER:
     case T_LONG:
     case T_DATE:
     case T_PROC:
@@ -9317,6 +9320,12 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       }
       s_return(sc, mk_pointer(mk_collection_with_tensor_type(sc, T_VECTOR, t, arg_next)));
     }
+
+  case OP_SYNTAXP:
+    if (!unpack_args_1(sc, &arg0)) {
+      return false;
+    }
+    s_retbool(syntaxnum(arg0) != 0);
 
   case OP_SET_COLOR:
     if (!unpack_args_1_plus(sc, &arg0, &arg_next)) {
