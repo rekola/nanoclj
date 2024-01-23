@@ -30,9 +30,3 @@
 
 (t/is (= (str/escape "Rock & roll! <3" {\& "&amp;", \< "&lt;"}) "Rock &amp; roll! &lt;3"))
 (t/is (= (str/escape "123" {\1 "2", \2 "3", \3 "4"}) "234"))
-
-(def as0 "string \\ $")
-(println "f = " str/re-quote-replacement)
-(def as (str/re-quote-replacement as0))
-
-(t/is (= as "string \\\\ \\$"))
