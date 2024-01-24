@@ -474,7 +474,6 @@ static inline void _set_cdr(nanoclj_cell_t * c, nanoclj_cell_t * v) {
 #define rep_unchecked(p)	  _rep_unchecked(decode_pointer(p))
 #define port_type_unchecked(p)	  _port_type_unchecked(decode_pointer(p))
 #define port_flags_unchecked(p)	  _port_flags_unchecked(decode_pointer(p))
-#define nesting_unchecked(p)      _nesting_unchecked(decode_pointer(p))
 
 static inline bool is_string(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
@@ -6557,42 +6556,35 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
 
   case OP_T0LVL:               /* top level */
+    /* Skip spaces to see if the current file is completely done */
+    z = decode_pointer(tensor_peek(sc->load_stack));
+    backchar(skipspace(sc, z), z);
+
     /* If we reached the end of file, this loop is done. */
-    if (port_flags_unchecked(tensor_peek(sc->load_stack)) & PORT_SAW_EOF) {
+    if (_port_flags_unchecked(z) & PORT_SAW_EOF) {
       if (sc->user_ns && sc->current_ns != sc->user_ns) {
 	sc->envir = sc->current_ns = sc->user_ns;
       } else if (sc->current_ns != sc->root_ns) {
 	sc->envir = sc->current_ns = sc->root_ns;
       }
 
-      if (nesting_unchecked(tensor_peek(sc->load_stack)) != 0) {
+      if (_nesting_unchecked(z) != 0) {
 	Error_0(sc, "Unmatched parentheses");
       }
-      
+
       file_pop(sc);
+      s_return(sc, sc->value);
+    } else {
+      /* Set up another iteration of REPL */
+      sc->save_inport = get_in_port(sc);
+      intern(sc, sc->root_ns, sc->IN_SYM, mk_pointer(z));
       
-      if (tensor_is_empty(sc->load_stack)) {
-#if 0
-        sc->args = NULL;
-        s_goto(sc, OP_QUIT);
-#else
-	return false;
-#endif
-      } else {
-	s_return(sc, sc->value);
-      }
-      /* NOTREACHED */
+      s_save(sc, OP_T0LVL, NULL, mk_emptylist());
+      s_save(sc, OP_T1LVL, NULL, mk_emptylist());
+      
+      sc->args = NULL;
+      s_goto(sc, OP_READ);
     }
-
-    /* Set up another iteration of REPL */
-    sc->save_inport = get_in_port(sc);
-    intern(sc, sc->root_ns, sc->IN_SYM, tensor_peek(sc->load_stack));
-      
-    s_save(sc, OP_T0LVL, NULL, mk_emptylist());
-    s_save(sc, OP_T1LVL, NULL, mk_emptylist());
-
-    sc->args = NULL;
-    s_goto(sc, OP_READ);
 
   case OP_T1LVL:               /* top level */
     sc->code = sc->value;
@@ -10301,8 +10293,8 @@ bool nanoclj_load_named_file(nanoclj_t * sc, nanoclj_val_t filename) {
 }
 
 nanoclj_val_t nanoclj_eval_string(nanoclj_t * sc, const char *cmd, size_t len) {
-  dump_stack_reset(sc);
-  
+  save_from_C_call(sc);
+
   nanoclj_val_t p = port_from_string(sc, T_READER, (strview_t){ cmd, len });
   
   sc->envir = sc->current_ns;
