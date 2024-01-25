@@ -2,3 +2,5 @@
 (load-file "tests/string.clj")
 (load-file "tests/shell.clj")
 (load-file "tests/set.clj")
+(load-file "tests/xml.clj")
+(load-file "tests/csv.clj")

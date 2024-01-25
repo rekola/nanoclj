@@ -99,6 +99,7 @@ install(FILES lib/init.clj
 	      lib/clojure.set.clj
 	      lib/clojure.instant.clj
 	      lib/clojure.test.clj
+	      lib/clojure.lang.PersistentVector.clj
 	      lib/java.lang.Object.clj
 	      lib/java.lang.Class.clj
 	      lib/java.lang.Float.clj
@@ -130,6 +131,7 @@ configure_file(lib/clojure.string.clj clojure.string.clj @ONLY)
 configure_file(lib/clojure.set.clj clojure.set.clj @ONLY)
 configure_file(lib/clojure.instant.clj clojure.instant.clj @ONLY)
 configure_file(lib/clojure.test.clj clojure.test.clj @ONLY)
+configure_file(lib/clojure.lang.PersistentVector.clj clojure.lang.PersistentVector.clj @ONLY)
 configure_file(lib/java.lang.Object.clj java.lang.Object.clj @ONLY)
 configure_file(lib/java.lang.Class.clj java.lang.Class.clj @ONLY)
 configure_file(lib/java.lang.Float.clj java.lang.Float.clj @ONLY)
@@ -155,3 +157,5 @@ configure_file(tests/core.clj tests/core.clj @ONLY)
 configure_file(tests/string.clj tests/string.clj @ONLY)
 configure_file(tests/set.clj tests/set.clj @ONLY)
 configure_file(tests/shell.clj tests/shell.clj @ONLY)
+configure_file(tests/xml.clj tests/xml.clj @ONLY)
+configure_file(tests/csv.clj tests/csv.clj @ONLY)

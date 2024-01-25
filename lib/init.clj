@@ -17,5 +17,6 @@
 (load-file "java.lang.String.clj")
 (load-file "java.util.Date.clj")
 (load-file "java.util.UUID.clj")
+(load-file "clojure.lang.PersistentVector.clj")
 (load-file "nanoclj.core.Codepoint.clj")
 (load-file "nanoclj.core.Tensor.clj")

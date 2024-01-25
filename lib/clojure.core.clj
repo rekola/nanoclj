@@ -687,19 +687,18 @@
 
 ; Collections
 
-(def nth
+(defn nth
   "Returns the nth element of coll"
-  (fn
-    ([coll index]
-     (cond (vector? coll) (coll index)
-     	   (string? coll) (coll index)
-     	   (or (< index 0) (empty? coll)) (throw (new IndexOutOfBoundsException "Index out of bounds"))
-           (if (zero? index) (first coll) (recur (next coll) (dec index)))))
-    ([coll index not-found]
-     (cond (vector? coll) (coll index not-found)
-     	   (string? coll) (coll index not-found)
-     	   (or (< index 0) (empty? coll)) not-found
-     	   :else (if (zero? index) (first coll) (recur (next coll) (dec index) not-found))))))
+  ([coll index] (cond (vector? coll) (coll index)
+     	              (string? coll) (coll index)
+     	              (or (< index 0) (empty? coll)) (throw (new IndexOutOfBoundsException "Index out of bounds"))
+                      (zero? index) (first coll)
+                      :else (recur (next coll) (dec index))))
+  ([coll index not-found] (cond (vector? coll) (coll index not-found)
+     	                        (string? coll) (coll index not-found)
+     	                        (or (< index 0) (empty? coll)) not-found
+     	                        (zero? index) (first coll)
+                                :else (recur (next coll) (dec index) not-found))))
 
 (defn third [coll] (first (next (next coll))))
 
