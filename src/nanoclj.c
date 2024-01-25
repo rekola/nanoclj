@@ -1345,7 +1345,9 @@ static inline strview_t _to_strview(const nanoclj_cell_t * c) {
   case T_URL:
     return (strview_t){ get_const_ptr(c), get_size(c) };
   case T_TENSOR:
-    if (c->_collection.tensor->type == nanoclj_i8) {
+    if (_is_small(c)) {
+
+    } else if (c->_collection.tensor->type == nanoclj_i8) {
       return (strview_t){ get_const_ptr(c), get_size(c) };
     }
     break;
@@ -1362,6 +1364,8 @@ static inline strview_t _to_strview(const nanoclj_cell_t * c) {
 
 static inline strview_t to_strview(nanoclj_val_t x) {
   switch (prim_type(x)) {
+  case T_NIL:
+    return (strview_t){ "nil", 3 };
   case T_EMPTYLIST:
     return (strview_t){ "()", 2 };
   case T_BOOLEAN:
@@ -4866,7 +4870,7 @@ static inline void set_bg_color(nanoclj_t * sc, nanoclj_color_t color, nanoclj_v
   }
 }
 
-static inline void set_font_face(nanoclj_t * sc, strview_t family, bool is_italic, bool is_bold, nanoclj_val_t out) {
+static inline void set_font_face(nanoclj_t * sc, nanoclj_val_t family, bool is_italic, bool is_bold, nanoclj_val_t out) {
   nanoclj_port_rep_t * pr = rep_unchecked(out);
   switch (port_type_unchecked(out)) {
   case port_file:
@@ -4876,7 +4880,7 @@ static inline void set_font_face(nanoclj_t * sc, strview_t family, bool is_itali
     break;
   case port_canvas:
 #ifdef NANOCLJ_HAS_CANVAS
-    canvas_set_font_face(pr->canvas.impl, family, is_italic, is_bold);
+    canvas_set_font_face(pr->canvas.impl, to_strview(family), is_italic, is_bold);
 #endif
     break;
   }
@@ -5354,7 +5358,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, print_scheme
     if (ps == print_scheme_str) {
       sv = (strview_t){ "", 0 };
     } else {
-      sv = (strview_t){ "nil", 3 };
+      sv = to_strview(l);
     }
     break;
   case T_CELL:
@@ -6879,6 +6883,22 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       case T_DATE:
       case T_BIGINT:
 	break;
+
+      case T_VECTOR:
+      case T_MAPENTRY:
+      	if (!unpack_args_1(sc, &arg0)) {
+	  return false;
+	} else if (!is_number(arg0)) {
+	  nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Key must be integer")));
+	  return false;
+	} else {
+	  long long idx = to_int(arg0);
+	  if (idx < 0 || idx >= get_size(code_cell)) {
+	    nanoclj_throw(sc, mk_index_exception(sc, "Index out of bounds"));
+	    return false;
+	  }
+	  s_return(sc, get_indexed_value(code_cell, idx));
+	}
 	
       default:
       	if (!unpack_args_1_plus(sc, &arg0, &arg_next)) {
@@ -6888,10 +6908,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	} else if (arg_next) {
 	  s_return(sc, first(sc, arg_next));
 	} else {
-	  strview_t sv = to_strview(arg0);
-	  nanoclj_val_t msg = mk_string_fmt(sc, "No item %.*s in collection", sv.size, sv.ptr);
-	  nanoclj_throw(sc, mk_runtime_exception(sc, msg));
-	  return false;
+	  s_return(sc, mk_nil());
 	}
       }
       break;
@@ -9360,7 +9377,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  else if (attr.as_long == sc->BOLD.as_long) is_bold = true;
 	  else if (is_nil(family)) family = attr;
 	}
-	set_font_face(sc, to_strview(arg0), is_italic, is_bold, x);
+	set_font_face(sc, family, is_italic, is_bold, x);
       }
     }
     s_return(sc, mk_nil());
