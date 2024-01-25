@@ -361,19 +361,9 @@ static void freeCompletions(linenoiseCompletions *lc) {
 }
 
 /* Called by completeLine() and linenoiseShow() to render the current
- * edited line with the proposed completion. If the current completion table
- * is already available, it is passed as second argument, otherwise the
- * function will use the callback to obtain it.
- *
+ * edited line with the proposed completion.
  * Flags are the same as refreshLine*(), that is REFRESH_* macros. */
 static void refreshLineWithCompletion(struct linenoiseState *ls, linenoiseCompletions *lc, int flags) {
-    /* Obtain the table of completions if the caller didn't provide one. */
-    linenoiseCompletions ctable = { 0, NULL };
-    if (lc == NULL) {
-        completionCallback(ls->buf,&ctable);
-        lc = &ctable;
-    }
-
     /* Show the edited line with completion if possible, or just refresh. */
     if (ls->completion_idx < lc->len) {
         struct linenoiseState saved = *ls;
@@ -386,9 +376,6 @@ static void refreshLineWithCompletion(struct linenoiseState *ls, linenoiseComple
     } else {
         refreshLineWithFlags(ls,flags);
     }
-
-    /* Free the completions table if needed. */
-    if (lc != &ctable) freeCompletions(&ctable);
 }
 
 /* This is an helper function for linenoiseEdit*() and is called when the
@@ -406,12 +393,18 @@ static void refreshLineWithCompletion(struct linenoiseState *ls, linenoiseComple
  * possible completions, and the caller should read for the next characters
  * from stdin. */
 static int completeLine(struct linenoiseState *ls, int keypressed) {
-    linenoiseCompletions lc = { 0, NULL };
     int nwritten;
     char c = keypressed;
 
-    completionCallback(ls->buf,&lc);
-    if (lc.len == 0) {
+    linenoiseCompletions * lc = &(ls->completions);
+
+    if (!ls->in_completion) {
+        freeCompletions(lc);
+        *lc = (linenoiseCompletions){0};
+	completionCallback(ls->buf,lc);
+    }
+    
+    if (lc->len == 0) {
         linenoiseBeep();
         ls->in_completion = 0;
 	c = 0;
@@ -422,22 +415,16 @@ static int completeLine(struct linenoiseState *ls, int keypressed) {
                     ls->in_completion = 1;
                     ls->completion_idx = 0;
                 } else {
-                    ls->completion_idx = (ls->completion_idx+1) % (lc.len+1);
-                    if (ls->completion_idx == lc.len) linenoiseBeep();
+                    ls->completion_idx = (ls->completion_idx+1) % (lc->len+1);
+                    if (ls->completion_idx == lc->len) linenoiseBeep();
                 }
-                c = 0;
-                break;
-            case 27: /* escape */
-                /* Re-show original buffer */
-                if (ls->completion_idx < lc.len) refreshLine(ls);
-                ls->in_completion = 0;
                 c = 0;
                 break;
             default:
                 /* Update buffer and return */
-                if (ls->completion_idx < lc.len) {
+                if (ls->completion_idx < lc->len) {
                     nwritten = snprintf(ls->buf,ls->buflen,"%s",
-                        lc.cvec[ls->completion_idx]);
+                        lc->cvec[ls->completion_idx]);
                     ls->len = ls->pos = nwritten;
                 }
                 ls->in_completion = 0;
@@ -445,14 +432,13 @@ static int completeLine(struct linenoiseState *ls, int keypressed) {
         }
 
         /* Show completion or original buffer */
-        if (ls->in_completion && ls->completion_idx < lc.len) {
-            refreshLineWithCompletion(ls,&lc,REFRESH_ALL);
+        if (ls->in_completion && ls->completion_idx < lc->len) {
+            refreshLineWithCompletion(ls,lc,REFRESH_ALL);
         } else {
             refreshLine(ls);
         }
     }
 
-    freeCompletions(&lc);
     return c; /* Return last read character */
 }
 
@@ -852,7 +838,7 @@ void linenoiseHide(struct linenoiseState *l) {
 /* Show the current line, when using the multiplexing API. */
 void linenoiseShow(struct linenoiseState *l) {
     if (l->in_completion) {
-        refreshLineWithCompletion(l,NULL,REFRESH_WRITE);
+        refreshLineWithCompletion(l,&(l->completions),REFRESH_WRITE);
     } else {
         refreshLineWithFlags(l,REFRESH_WRITE);
     }
@@ -1065,6 +1051,8 @@ int linenoiseEditStart(struct linenoiseState *l, int stdin_fd, int stdout_fd, ch
     /* Populate the linenoise state that we pass to functions implementing
      * specific editing functionalities. */
     l->in_completion = 0;
+    l->completions = (linenoiseCompletions){0};
+
     l->ifd = stdin_fd != -1 ? stdin_fd : STDIN_FILENO;
     l->ofd = stdout_fd != -1 ? stdout_fd : STDOUT_FILENO;
     l->buf = buf;
@@ -1154,7 +1142,7 @@ char *linenoiseEditFeed(struct linenoiseState *l) {
  
     /* Only autocomplete when the callback is set. It returns < 0 when
      * there was an error reading from fd. Otherwise it will return the
-     * character that should be handled next. */
+      * character that should be handled next. */
     if ((l->in_completion || c == 9) && completionCallback != NULL) {
         c = completeLine(l,c);
         /* Return on errors */
@@ -1330,6 +1318,8 @@ char *linenoiseEditFeed(struct linenoiseState *l) {
  * returns something different than NULL. At this point the user input
  * is in the buffer, and we can restore the terminal in normal mode. */
 void linenoiseEditStop(struct linenoiseState *l) {
+    freeCompletions(&(l->completions));
+
     activeState = NULL;
 
     if (!isatty(l->ifd)) return;

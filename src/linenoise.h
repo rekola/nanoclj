@@ -47,6 +47,11 @@ extern "C" {
 #include <stdbool.h>
 extern char *linenoiseEditMore;
 
+typedef struct linenoiseCompletions {
+  size_t len;
+  char **cvec;
+} linenoiseCompletions;
+
 /* The linenoiseState structure represents the state during line editing.
  * We pass this state to functions implementing specific editing
  * functionalities. */
@@ -54,6 +59,8 @@ struct linenoiseState {
     int in_completion;  /* The user pressed TAB and we are now in completion
                          * mode, so input is handled by completeLine(). */
     size_t completion_idx; /* Index of next completion to propose. */
+    linenoiseCompletions completions;
+
     int ifd;            /* Terminal stdin file descriptor. */
     int ofd;            /* Terminal stdout file descriptor. */
     char *buf;          /* Edited line buffer. */
@@ -69,11 +76,6 @@ struct linenoiseState {
     int exit_now;
     int utf8;		/* Terminal uses utf8 */
 };
-
-typedef struct linenoiseCompletions {
-  size_t len;
-  char **cvec;
-} linenoiseCompletions;
 
 void linenoiseSetupSigWinchHandler();
 void linenoiseRefreshSize();
