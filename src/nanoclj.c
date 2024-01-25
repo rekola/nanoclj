@@ -2177,7 +2177,7 @@ static inline int32_t inchar_utf8(nanoclj_cell_t * p) {
     break;
   }
   if (_port_flags_unchecked(p) & PORT_SAW_EOF) {
-    return EOF;
+    return 0; /* utf8 was malformed */
   } else {
     return codepoint;
   }
