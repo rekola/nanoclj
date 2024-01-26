@@ -75,6 +75,7 @@ struct linenoiseState {
     int history_index;  /* The history index we are currently editing. */
     int exit_now;
     int utf8;		/* Terminal uses utf8 */
+    int undercurl;      /* Terminal supports colored undercurls */
 };
 
 void linenoiseSetupSigWinchHandler();
@@ -124,8 +125,7 @@ void linenoiseClearScreen(void);
 void linenoiseSetMultiLine(int ml);
 void linenoiseSetClearOutput(int c);
 void linenoisePrintKeyCodes(void);
-void linenoiseMaskModeEnable(void);
-void linenoiseMaskModeDisable(void);
+void linenoiseSetMaskMode(int m);
 void linenoisePrintNow(const char* text);
 
 #ifdef __cplusplus

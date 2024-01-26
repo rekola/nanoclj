@@ -203,13 +203,8 @@ FILE *lndebug_fp = NULL;
  * the user is typing, the terminal will just display a corresponding
  * number of asterisks, like "****". This is useful for passwords and other
  * secrets that should not be displayed. */
-void linenoiseMaskModeEnable(void) {
-    maskmode = 1;
-}
-
-/* Disable mask mode. */
-void linenoiseMaskModeDisable(void) {
-    maskmode = 0;
+void linenoiseSetMaskMode(int m) {
+    maskmode = m;
 }
 
 /* Set if to use or not the multi line mode. */
@@ -645,18 +640,10 @@ static void refreshSingleLine(struct linenoiseState *l, int flags) {
     abAppend(&ab,seq,strlen(seq));
 
     if (flags & REFRESH_WRITE) {
-        int highlight_pos = -1, error_pos = -1;
+        bool * errorvec = NULL;
+        int highlight_pos = -1;
 	if (!pasting) {
-	    bool * errorvec = errorCheckCallback(buf, len);
-	    if (errorvec) {
-	        for (int i = 0; i < len; i++) {
-		  if (errorvec[i]) {
-		      error_pos = i;
-		      break;
-		  }
-		}
-		if (freeCallback) freeCallback(errorvec);
-	    }
+	    errorvec = errorCheckCallback(buf, len);
 	    if (pos < len) highlight_pos = findHighlight(buf, len, pos, 1);
 	    if (highlight_pos == -1 && pos > 1) highlight_pos = findHighlight(buf, len, pos - 1, -1);
 	}
@@ -665,23 +652,39 @@ static void refreshSingleLine(struct linenoiseState *l, int flags) {
         abAppend(&ab,l->prompt,l->plen);
         if (maskmode == 1) {
             while (len--) abAppend(&ab,"*",1);
-        } else if (error_pos != -1) {
-	    abAppend(&ab,buf,error_pos);
-	    abAppend(&ab,"\033[4;91m",7);
-	    abAppend(&ab,buf+error_pos,1);
-	    abAppend(&ab,"\033[0m",4);
-	    abAppend(&ab,buf+error_pos+1,len-error_pos-1);
-	} else if (highlight_pos != -1) {
-	    abAppend(&ab,buf,highlight_pos);
-	    abAppend(&ab,"\033[97;100m",9);
-	    abAppend(&ab,buf+highlight_pos,1);
-	    abAppend(&ab,"\033[0m",4);
-	    abAppend(&ab,buf+highlight_pos+1,len-highlight_pos-1);
-	} else {
-            abAppend(&ab,buf,len);
+        } else {
+	    for (int i = 0; i < len; ) {
+	        bool error = errorvec && errorvec[i];
+		bool highlight = highlight_pos == i;
+	        int end = i + 1;
+		if (!highlight) {
+		    if (errorvec) {
+		        for ( ; end < len && errorvec[end] == error && highlight_pos != end; end++) { }
+		    } else if (highlight_pos > i) {
+		        end = highlight_pos;
+		    } else {
+		        end = len;
+		    }
+		}
+		if (error) {
+		    if (l->undercurl) {
+		        abAppend(&ab,"\033[4:3m\033[58:5:196m",17);
+		    } else {
+		        abAppend(&ab,"\033[4;91m",7);
+		    }
+		} else if (highlight) {
+		    abAppend(&ab,"\033[97;100m",9);
+		}
+		abAppend(&ab,buf+i,end-i);
+		if (error || highlight) {
+		    abAppend(&ab,"\033[0m",4);
+		}
+		i = end;
+	    }
         }
         /* Show hits if any. */
         refreshShowHints(&ab,l,plen);
+	if (freeCallback) freeCallback(errorvec);
     }
 
     /* Erase to right */
@@ -1023,6 +1026,26 @@ void linenoiseEditDeletePrevWord(struct linenoiseState *l) {
     refreshLine(l);
 }
 
+/* Detects support for undercurls */
+static int linenoiseDetectUndecurlSupport() {
+    const char * TERM = getenv("TERM");
+    if (TERM && (strcmp(TERM, "xterm-kitty") == 0 ||
+		 strcmp(TERM, "alacritty") == 0)) {
+        return 1;
+    } else {
+        const char * TERM_PROGRAM = getenv("TERM_PROGRAM");
+	if (TERM_PROGRAM && (strcmp(TERM_PROGRAM, "WezTerm") == 0 ||
+			     strcmp(TERM_PROGRAM, "BlackBox") == 0)) {
+	    return 1;
+	} else if (getenv("KONSOLE_VERSION")) {
+	    return 1;
+	} else if (getenv("GNOME_TERMINAL_SCREEN")) {
+	    return 1;
+	}
+    }
+    return 0;
+}
+
 /* This function is part of the multiplexed API of Linenoise, that is used
  * in order to implement the blocking variant of the API but can also be
  * called by the user directly in an event driven program. It will:
@@ -1065,6 +1088,7 @@ int linenoiseEditStart(struct linenoiseState *l, int stdin_fd, int stdout_fd, ch
     l->oldrows = 0;
     l->history_index = 0;
     l->exit_now = 0;
+    l->undercurl = linenoiseDetectUndecurlSupport();
     
     const char * lang = getenv("LANG");
     l->utf8 = lang && strstr(lang, "UTF-8");

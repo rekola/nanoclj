@@ -48,13 +48,13 @@ enabled. The following terminals have been tested:
 
 | Terminal | Graphics | Mouse | Notes |
 | - | - | - | - |
-| foot | OK | OK | Wayland only |
+| foot | OK | OK | Wayland only, no undercurls |
 | kitty | OK | ? | True color images, but window resizing has bugs (as of 0.26.5) |
 | wezterm | OK | OK | Buggy (as of 20230712) |
-| mlterm | OK | ? | linenoise output flickers when updated |
+| mlterm | OK | ? | linenoise output flickers when updated, no undercurls |
 | Konsole | OK | ? | True color images, but on HiDPI system images are upscaled |
 | contour | Inline image layout doesn't work | ? | |
-| xterm | No true color	| OK | Sixel support must be enabled in `.Xresources` |
+| xterm | No true color	| OK | No undercurls, Sixel support must be enabled in `.Xresources` |
 | Black Box | Inline image layout doesn't work | ? | On HiDPI system the images are upscaled, and the terminal and the flatpak system use too much CPU time when idling. |
 | Alacritty | None | ? | |
 | GNOME Terminal | None | ? | Sixel support is not enabled by default |
