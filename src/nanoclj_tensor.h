@@ -438,20 +438,22 @@ static inline nanoclj_tensor_t * tensor_append_codepoint(nanoclj_tensor_t * tens
   return tensor;
 }
 
-static inline imageview_t tensor_to_imageview(const nanoclj_tensor_t * tensor) {
-  nanoclj_internal_format_t f;
+static inline nanoclj_internal_format_t tensor_image_get_internal_format(const nanoclj_tensor_t * tensor) {
   if (tensor->ne[0] == 4) {
-    f = nanoclj_rgba8;
+    return nanoclj_rgba8;
   } else if (tensor->ne[0] == 3) {
     if (tensor->nb[1] == 4) {
-      f = nanoclj_bgr8_32;
+      return nanoclj_bgr8_32;
     } else {
-      f = nanoclj_rgb8;
+      return nanoclj_rgb8;
     }
   } else {
-    f = nanoclj_r8;
+    return nanoclj_r8;
   }
+}
 
+static inline imageview_t tensor_to_imageview(const nanoclj_tensor_t * tensor) {
+  nanoclj_internal_format_t f = tensor_image_get_internal_format(tensor);
   return (imageview_t){ (const uint8_t*)tensor->data, tensor->ne[1], tensor->ne[2], tensor->nb[2], f };
 }
 

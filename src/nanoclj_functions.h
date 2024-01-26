@@ -456,11 +456,22 @@ static inline nanoclj_val_t Image_resize(nanoclj_t * sc, nanoclj_cell_t * args) 
   int target_w = to_int(target_w0), target_h = to_int(target_h0);
   int channels = get_format_channels(iv.format);
 
-  nanoclj_cell_t * target_image = mk_image(sc, target_w, target_h, iv.format, NULL);
+  uint32_t stride = iv.stride;
+  uint8_t * tmp = NULL;
+  nanoclj_internal_format_t f = iv.format;
+  if (iv.format == nanoclj_bgr8_32) {
+    f = nanoclj_rgb8;
+    tmp = convert_imageview(iv, f);
+    stride = 3 * iv.width;
+  }
+
+  nanoclj_cell_t * target_image = mk_image(sc, target_w, target_h, f, NULL);
   nanoclj_tensor_t * img = target_image->_image.tensor;
   uint8_t * target_ptr = img->data;
-  
-  stbir_resize_uint8_generic(iv.ptr, iv.width, iv.height, iv.stride, target_ptr, target_w, target_h, 0, channels, 0, STBIR_FLAG_ALPHA_PREMULTIPLIED, STBIR_EDGE_CLAMP, STBIR_FILTER_DEFAULT, STBIR_COLORSPACE_LINEAR, NULL);
+
+  stbir_resize_uint8_generic(tmp ? tmp : iv.ptr, iv.width, iv.height, stride, target_ptr, target_w, target_h, 0, channels, 0, STBIR_FLAG_ALPHA_PREMULTIPLIED, STBIR_EDGE_CLAMP, STBIR_FILTER_DEFAULT, STBIR_COLORSPACE_LINEAR, NULL);
+
+  free(tmp);
 
   return mk_pointer(target_image);
 }

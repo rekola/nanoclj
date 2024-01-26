@@ -3476,6 +3476,8 @@ static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t
       if (result) *result = mk_int(image->ne[1]);
     } else if (key.as_long == sc->HEIGHT.as_long) {
       if (result) *result = mk_int(image->ne[2]);
+    } else if (key.as_long == sc->TYPE.as_long) {
+      if (result) *result = mk_int(tensor_image_get_internal_format(image));
     } else {
       return false;
     }
