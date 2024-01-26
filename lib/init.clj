@@ -20,3 +20,4 @@
 (load-file "clojure.lang.PersistentVector.clj")
 (load-file "nanoclj.core.Codepoint.clj")
 (load-file "nanoclj.core.Tensor.clj")
+(load-file "nanoclj.core.Image.clj")

@@ -114,6 +114,7 @@ install(FILES lib/init.clj
 	      lib/java.util.UUID.clj
 	      lib/nanoclj.core.Codepoint.clj
 	      lib/nanoclj.core.Tensor.clj
+	      lib/nanoclj.core.Image.clj
 	      lib/nanoclj.plot.clj
 	      lib/nanoclj.graph.clj
 	      lib/nanoclj.image.clj
@@ -146,6 +147,7 @@ configure_file(lib/java.util.Date.clj java.util.Date.clj @ONLY)
 configure_file(lib/java.util.UUID.clj java.util.UUID.clj @ONLY)
 configure_file(lib/nanoclj.core.Codepoint.clj nanoclj.core.Codepoint.clj @ONLY)
 configure_file(lib/nanoclj.core.Tensor.clj nanoclj.core.Tensor.clj @ONLY)
+configure_file(lib/nanoclj.core.Image.clj nanoclj.core.Image.clj @ONLY)
 configure_file(lib/nanoclj.plot.clj nanoclj.plot.clj @ONLY)
 configure_file(lib/nanoclj.graph.clj nanoclj.graph.clj @ONLY)
 configure_file(lib/nanoclj.image.clj nanoclj.image.clj @ONLY)
