@@ -562,10 +562,10 @@
                        s (/ ww w )
                        ]
                    (pr-meta print-fn x \newline)
-                   (if (> w wh)
+                   (if (> w ww)
                      (do
                        (mode :block)
-                       (-pr (Image/resize x ww (* s h))))
+                       (-pr (.resize x ww (* s h))))
                      (-pr x)
                      ))
       (do (pr-meta print-fn x \space)
