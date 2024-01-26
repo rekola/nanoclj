@@ -12,7 +12,7 @@ static inline void mark(nanoclj_cell_t * p) {
   nanoclj_cell_t * t = NULL;
   nanoclj_cell_t * q;
   nanoclj_val_t q0;
-
+  
 E2:_setmark(p);
   switch (_type(p)) {
   case T_FOREIGN_FUNCTION:{
@@ -66,9 +66,15 @@ E2:_setmark(p);
 	nanoclj_val_t * data = (nanoclj_val_t *)tensor->data;
 	size_t offset = _offset_unchecked(p);
 	for (size_t i = 0; i < num; i++) {
-	  /* Vector cells will be treated like ordinary cells */
-	  nanoclj_val_t v = data[offset + i];
-	  if (is_cell(v)) mark(decode_pointer(v));
+	  if (tensor->n_dims == 1) {
+	    nanoclj_val_t v = data[offset + i];
+	    if (is_cell(v)) mark(decode_pointer(v));
+	  } else {
+	    for (int64_t j = 0; j < tensor->ne[0]; j++) {
+	      nanoclj_val_t v = tensor_get_2d(tensor, j, i);
+	      if (is_cell(v)) mark(decode_pointer(v));
+	    }
+	  }
 	}
       }
 

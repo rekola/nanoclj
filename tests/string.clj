@@ -30,3 +30,5 @@
 
 (t/is (= (str/escape "Rock & roll! <3" {\& "&amp;", \< "&lt;"}) "Rock &amp; roll! &lt;3"))
 (t/is (= (str/escape "123" {\1 "2", \2 "3", \3 "4"}) "234"))
+
+(t/is (= (str/re-quote-replacement "$1 \\ test") "\\$1 \\\\ test")) 

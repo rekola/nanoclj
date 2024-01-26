@@ -3304,10 +3304,10 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
     }
     case T_LIST:
     case T_CLOSURE:
-    case T_LAZYSEQ:
     case T_MACRO:
-      if (equals(sc, _car_unchecked(a), _car_unchecked(b))) {
-	return equals(sc, mk_pointer(_cdr_unchecked(a)), mk_pointer(_cdr_unchecked(b)));
+    case T_LAZYSEQ:
+      if (equals(sc, first(sc, a), first(sc, b))) {
+	return equals(sc, mk_pointer(next(sc, a)), mk_pointer(next(sc, b)));
       }
       break;
     case T_CLASS:
