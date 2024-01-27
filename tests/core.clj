@@ -117,6 +117,13 @@
 (t/is (= (rseq [ 1 2 3 4 ]) '( 4 3 2 1 )))
 (t/is (= (rseq [ :a :b ]) '( :b :a )))
 
+(t/is (= (nth [ 1 2 3 4 ] 0) 1))
+(t/is (= (nth [ 1 2 3 4 ] 1000 :not-found) :not-found))
+(t/is (= (nth '( 1 2 3 4 ) 3) 4) 4)
+(t/is (= (nth '( 1 2 3 4 ) 1000 :not-found) :not-found))
+(t/is (= (nth "こんにちは" 4) \は))
+(t/is (= (nth "こんにちは" 5 :not-found) :not-found))
+
                                         ; Printing and str
 
 (t/is (= (str \a \b \c) "abc"))

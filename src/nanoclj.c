@@ -3402,7 +3402,10 @@ static size_t find_index(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t ke
   case T_VAR:
     {
       size_t size = get_size(coll);
-      if (convert_to_long(key, &index) && index >= 0 && index < size) {
+      if (!convert_to_long(key, &index)) {
+	nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Key must be integer")));
+	return false;
+      } else if (index >= 0 && index < size) {
 	return index;
       }
     }
@@ -3410,7 +3413,10 @@ static size_t find_index(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t ke
   case T_STRING:
   case T_FILE:
   case T_URL:
-    if (convert_to_long(key, &index)) {
+    if (!convert_to_long(key, &index)) {
+      nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Key must be integer")));
+      return false;
+    } else {
       size_t size = get_size(coll);
       const char * start = get_ptr(coll), * p = start, * end = start + size;
       for (; index > 0 && p < end; index--) {
@@ -6886,26 +6892,29 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       case T_BIGINT:
 	break;
 
+      case T_STRING:
       case T_VECTOR:
       case T_MAPENTRY:
-      	if (!unpack_args_1(sc, &arg0)) {
-	  return false;
-	} else if (!is_number(arg0)) {
-	  nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Key must be integer")));
+      	if (!unpack_args_1_plus(sc, &arg0, &arg_next)) {
 	  return false;
 	} else {
-	  long long idx = to_int(arg0);
-	  if (idx < 0 || idx >= get_size(code_cell)) {
+	  size_t index = find_index(sc, code_cell, arg0);
+	  if (sc->pending_exception) {
+	    return false;
+	  } else if (index != NPOS) {
+	    s_return(sc, get_indexed_value(code_cell, index));
+	  } else if (arg_next) {
+	    s_return(sc, first(sc, arg_next));
+	  } else {
 	    nanoclj_throw(sc, mk_index_exception(sc, "Index out of bounds"));
 	    return false;
 	  }
-	  s_return(sc, get_indexed_value(code_cell, idx));
 	}
-	
+
       default:
       	if (!unpack_args_1_plus(sc, &arg0, &arg_next)) {
 	  return false;
-	} else if (get_elem(sc, decode_pointer(sc->code), arg0, &x)) {
+	} else if (get_elem(sc, code_cell, arg0, &x)) {
 	  s_return(sc, x);
 	} else if (arg_next) {
 	  s_return(sc, first(sc, arg_next));
