@@ -71,6 +71,10 @@
                                 (= (subs s idx (+ idx (count value))) value) idx
                                 :else (recur (dec idx))))))
 
+(defn- trim-empties
+  "Trims empty tokens from split result"
+  [v] (if (and (not (empty? v)) (empty? (last v))) (recur (pop v)) v))
+
 (defn split
   "Splits string to tokens using a regex"
   ([s re] (split s re 0))
@@ -80,7 +84,9 @@
                     (let [indices (re-find-index re s)]
                       (if indices
                         (recur (conj acc (subs s 0 (indices 0))) (subs s (indices 1)))
-                        (if (and (= limit 0) (empty? s)) acc (conj acc s))))))))
+                        (if (and (= limit 0) (empty? s))
+                          (trim-empties acc)
+                          (conj acc s))))))))
 
 (defn replace-first
   "Replaces the first occurence of match with replacement"

@@ -23,10 +23,13 @@
 (t/is (= (str/split s #"\s+" 3) ["Ångström" "second" "third  "]))
 (t/is (= (str/split s #"\s+" 4) ["Ångström" "second" "third" ""]))
 
+(t/is (= (str/split s #"\s") ["Ångström" "second" "third"]))
+
 (t/is (= (str/replace-first s #"\bthird\b" "fourth") "Ångström second fourth  "))
 (t/is (= (str/replace s #"\pL+" "xxx") "xxx xxx xxx  "))
 
 (t/is (= (str/split-lines "test \n string") ["test " " string"]))
+(t/is (= (str/split-lines "test\n\n\n") ["test"]))
 
 (t/is (= (str/escape "Rock & roll! <3" {\& "&amp;", \< "&lt;"}) "Rock &amp; roll! &lt;3"))
 (t/is (= (str/escape "123" {\1 "2", \2 "3", \3 "4"}) "234"))
