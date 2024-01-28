@@ -87,6 +87,7 @@ As well as printing images in block mode like the plot function does, they can a
 - No type hints
 - Unbound Vars cannot be created
 - Dividing Long/MIN_VALUE by -1 doesn't fail
+- java.net.URL doesn't resolve the hostname for calculating hashcode
 
 ## Dependencies
 

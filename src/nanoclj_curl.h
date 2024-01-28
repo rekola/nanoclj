@@ -4,6 +4,7 @@
 #define NANOCLJ_HAS_HTTP 1
 
 #include <curl/curl.h>
+#include <ctype.h>
 
 static inline void free_uri(nanoclj_uri_t * uri) {
   curl_free(uri->scheme);
@@ -26,18 +27,33 @@ static inline nanoclj_uri_t parse_uri(strview_t input) {
     return uri;
   }
   
-  curl_url_get(h, CURLUPART_SCHEME, &(uri.scheme), 0);
-  curl_url_get(h, CURLUPART_HOST, &(uri.host), 0);
-  curl_url_get(h, CURLUPART_PATH, &(uri.path), 0);
+  if (curl_url_get(h, CURLUPART_SCHEME, &(uri.scheme), 0) != 0) {
+    uri.scheme = NULL;
+  }
+  if (curl_url_get(h, CURLUPART_HOST, &(uri.host), 0) == 0) {
+    for (size_t i = 0; uri.host[i]; i++) {
+      uri.host[i] = tolower(uri.host[i]);
+    }
+  } else {
+    uri.host = NULL;
+  }
+  if (curl_url_get(h, CURLUPART_PATH, &(uri.path), 0) != 0) {
+    uri.path = NULL;
+  }
 
   char * port;
   if (!curl_url_get(h, CURLUPART_PORT, &port, 0)) {
     uri.port = atoi(port);
     curl_free(port);
+  } else if (strcmp(uri.scheme, "http") == 0) {
+    uri.port = 80;
+  } else if (strcmp(uri.scheme, "https") == 0) {
+    uri.port = 443;
+  } else if (strcmp(uri.scheme, "ftp") == 0) {
+    uri.port = 21;
   } else {
     uri.port = -1;
   }
-  
   curl_url_cleanup(h);
   return uri;
 }
