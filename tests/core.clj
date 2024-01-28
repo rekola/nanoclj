@@ -203,6 +203,7 @@
 (t/is (= (hash #{ 1 }) 1038464948))
 (t/is (= (hash { "A" 1 "B" 2 }) -457774292))
 (t/is (= (hash (clojure.java.io/file "/")) 1234366))
+(t/is (= (hash (clojure.java.io/as-url "file:///abc")) 4639566))
 (t/is (= (hash 'ab/cd) 815946391))
 (t/is (= (hash 'ääää) 233782491))
 ; (t/is (= (hash :fish/dish) 1445185017))

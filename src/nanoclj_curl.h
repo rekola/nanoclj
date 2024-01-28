@@ -5,6 +5,43 @@
 
 #include <curl/curl.h>
 
+static inline void free_uri(nanoclj_uri_t * uri) {
+  curl_free(uri->scheme);
+  curl_free(uri->host);
+  curl_free(uri->path);
+}
+
+static inline nanoclj_uri_t parse_uri(strview_t input) {
+  CURLUcode uc;
+  nanoclj_uri_t uri = (nanoclj_uri_t){0};
+  CURL * h = curl_url(); /* get a handle to work with */
+  if (!h) return uri;
+
+  char * tmp = alloc_c_str(input);
+
+  uc = curl_url_set(h, CURLUPART_URL, tmp, 0);
+  free(tmp);
+  if (uc) {
+    curl_url_cleanup(h);
+    return uri;
+  }
+  
+  curl_url_get(h, CURLUPART_SCHEME, &(uri.scheme), 0);
+  curl_url_get(h, CURLUPART_HOST, &(uri.host), 0);
+  curl_url_get(h, CURLUPART_PATH, &(uri.path), 0);
+
+  char * port;
+  if (!curl_url_get(h, CURLUPART_PORT, &port, 0)) {
+    uri.port = atoi(port);
+    curl_free(port);
+  } else {
+    uri.port = -1;
+  }
+  
+  curl_url_cleanup(h);
+  return uri;
+}
+
 static size_t curl_write_data_func(void * buffer, size_t size, size_t nmemb, void * userp) {
   size_t s = size * nmemb;
   http_load_t * context = (http_load_t *)userp;

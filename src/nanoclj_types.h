@@ -61,6 +61,14 @@ typedef struct {
 } tensorview_t;
 
 typedef struct {
+  bool is_valid;
+  char * scheme;
+  char * host;
+  char * path;
+  int port;
+} nanoclj_uri_t;
+
+typedef struct {
   uint8_t red, green, blue, alpha;
 } nanoclj_color_t;
 

@@ -3000,6 +3000,13 @@ static inline nanoclj_val_t fifth(nanoclj_t * sc, nanoclj_cell_t * a) {
   return mk_nil();
 }
 
+/* =================== HTTP ======================== */
+#ifdef WIN32
+#include "nanoclj_winhttp.h"
+#else
+#include "nanoclj_curl.h"
+#endif
+
 static inline uint32_t hashcmp(nanoclj_val_t v, void * d) {
   nanoclj_t * sc = d;
   switch (prim_type(v)) {
@@ -3092,10 +3099,20 @@ static uint32_t hasheq(nanoclj_val_t v, void * d) {
 	break;
 
       case T_STRING:
-      case T_URL:
 	h = murmur3_hash_int(get_string_hashcode(_to_strview(c)));
 	break;
 
+      case T_URL:
+	{
+	  nanoclj_uri_t uri = parse_uri(_to_strview(c));
+	  h = get_string_hashcode((strview_t){ uri.scheme, strlen(uri.scheme) })
+	    + (uri.host ? get_string_hashcode((strview_t){ uri.host, strlen(uri.host) }) : 0)
+ 	    + get_string_hashcode((strview_t){ uri.path, strlen(uri.path) })
+	    + uri.port;
+	  free_uri(&uri);
+	}
+	break;
+	
       case T_UUID:
 	{
 	  uint64_t hilo = c->_small_tensor.longs[0] ^ c->_small_tensor.longs[1];
@@ -3593,14 +3610,6 @@ static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t
   }
   return false;
 }
-
-/* =================== HTTP ======================== */
-#ifdef WIN32
-#include "nanoclj_winhttp.h"
-#else
-#include "nanoclj_curl.h"
-#endif
-
 
 /* compares a and b
    a and b must be compatible, and they must not be lists or sequences */
