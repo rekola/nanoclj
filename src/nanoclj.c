@@ -10433,29 +10433,22 @@ int main(int argc, const char **argv) {
 	num_errors++;
 	rv |= 1;
       }
-    } else {
-      if (sc.term_graphics == nanoclj_sixel && isatty(fileno(stderr))) {
-	/* If Sixels are used and stderr is a tty, mute it */
-	if (freopen("/dev/null", "w", stderr) == NULL) { }
-      }
-
-      if (argc >= 2) {
-	if (nanoclj_load_named_file(&sc, mk_string(&sc, argv[1]))) {
-	  /* Call -main if it exists */
-	  nanoclj_val_t main_sym = def_symbol(&sc, "-main");
-	  nanoclj_val_t main = resolve_value(&sc, sc.envir, main_sym);
-	  if (!is_nil(main)) {
-	    nanoclj_call(&sc, main, mk_emptylist());
-	  }
+    } else if (argc >= 2) {
+      if (nanoclj_load_named_file(&sc, mk_string(&sc, argv[1]))) {
+	/* Call -main if it exists */
+	nanoclj_val_t main_sym = def_symbol(&sc, "-main");
+	nanoclj_val_t main = resolve_value(&sc, sc.envir, main_sym);
+	if (!is_nil(main)) {
+	  nanoclj_call(&sc, main, mk_emptylist());
 	}
-      } else {
-#if 0
-	sc.user_ns = def_namespace(&sc, "user", __FILE__);
-	sc.current_ns = sc.envir = sc.user_ns;
-#endif
-	const char * expr = "(clojure.repl/repl)";
-	nanoclj_eval_string(&sc, expr, strlen(expr));
       }
+    } else {
+#if 0
+      sc.user_ns = def_namespace(&sc, "user", __FILE__);
+      sc.current_ns = sc.envir = sc.user_ns;
+#endif
+      const char * expr = "(clojure.repl/repl)";
+      nanoclj_eval_string(&sc, expr, strlen(expr));
     }
   }
   
