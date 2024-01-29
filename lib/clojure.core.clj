@@ -1,3 +1,6 @@
+(in-ns 'clojure.core)
+(require 'clojure.java.io 'clojure.repl)
+
 ; Utilities for types.
 
 (defn vector? [x] (instance? clojure.lang.PersistentVector x))

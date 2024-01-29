@@ -1,5 +1,5 @@
 (in-ns 'clojure.repl)
-(require 'clojure.string 'clojure.java.io)
+(require 'clojure.string 'clojure.java.io 'linenoise)
 
 (defn ^:private autocomplete-strings
   [prefix s strings] (loop [acc [] ss strings]

@@ -180,7 +180,7 @@ extern "C" {
     nanoclj_tensor_t * oblist;         /* pointer to symbol table */
     nanoclj_tensor_t * namespaces;
     nanoclj_cell_t * current_ns;         /* pointer to global environment */
-    nanoclj_cell_t * root_ns;		/* pointer to the initial root env */
+    nanoclj_cell_t * core_ns;		/* pointer to the core ns */
     nanoclj_cell_t * user_ns;
     nanoclj_tensor_t * types;
 

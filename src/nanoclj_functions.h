@@ -1228,7 +1228,7 @@ static bool * errorcheck_callback(const char * buf, size_t len) {
 static inline void mouse_motion_callback(int x, int y) {
   double f = linenoise_sc->window_scale_factor;
   nanoclj_val_t p = mk_vector_2d(linenoise_sc, x / f, y / f);
-  intern(linenoise_sc, linenoise_sc->root_ns, linenoise_sc->MOUSE_POS, p);
+  intern(linenoise_sc, linenoise_sc->core_ns, linenoise_sc->MOUSE_POS, p);
   if (linenoise_sc->pending_exception) {
     linenoiseTerminate();
   }

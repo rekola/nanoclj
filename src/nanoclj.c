@@ -4242,16 +4242,19 @@ static inline nanoclj_val_t intern_foreign_func(nanoclj_t * sc, nanoclj_cell_t *
 
 static inline nanoclj_cell_t * mk_class_with_meta(nanoclj_t * sc, nanoclj_val_t sym, int type_id, nanoclj_cell_t * parent_type, nanoclj_cell_t * md) {
   nanoclj_cell_t * s = get_vector_object(sc, T_VARMAP, 0);
-  nanoclj_cell_t * t = get_cell(sc, type_id, T_TYPE, mk_pointer(s), parent_type, md);
+  nanoclj_cell_t * t0 = get_cell(sc, type_id, T_TYPE, mk_pointer(s), parent_type, md);
+  nanoclj_val_t t = mk_pointer(t0);
   
   while (sc->types->ne[0] <= (size_t)type_id) {
     tensor_mutate_push(sc->types, mk_nil());
   }
-  tensor_mutate_set(sc->types, type_id, mk_pointer(t));
-  intern_with_meta(sc, sc->root_ns, sym, mk_pointer(t), md);
-  intern_with_meta(sc, sc->root_ns, def_alias_from_val(sc, sym), mk_pointer(t), md);
-  
-  return t;
+  tensor_mutate_set(sc->types, type_id, t);
+  intern_with_meta(sc, sc->core_ns, sym, t, md);
+  intern_with_meta(sc, sc->core_ns, def_alias_from_val(sc, sym), t, md);
+
+  sc->namespaces = tensor_hash_mutate_set(sc->namespaces, hasheq(sym, sc), sc->namespaces->ne[1], sym, t, mk_nil(), false, sc, hasheq);
+
+  return t0;
 }
 
 static inline nanoclj_cell_t * mk_class_with_fn(nanoclj_t * sc, const char * name, int type_id, nanoclj_cell_t * parent_type, const char * fn) {
@@ -4263,8 +4266,8 @@ static inline nanoclj_cell_t * mk_class_with_fn(nanoclj_t * sc, const char * nam
 
   char * p = strrchr(name, '.');
   if (p && p[1]) {
-    intern_with_meta(sc, sc->root_ns, def_symbol(sc, p + 1), mk_pointer(t), md);
-    intern_with_meta(sc, sc->root_ns, def_alias(sc, p + 1), mk_pointer(t), md);
+    intern_with_meta(sc, sc->core_ns, def_symbol(sc, p + 1), mk_pointer(t), md);
+    intern_with_meta(sc, sc->core_ns, def_alias(sc, p + 1), mk_pointer(t), md);
   }
   return t;
 }
@@ -4327,13 +4330,8 @@ static inline nanoclj_cell_t * find_ns(nanoclj_t * sc, nanoclj_val_t name) {
 
 static inline nanoclj_cell_t * def_namespace_with_sym(nanoclj_t *sc, nanoclj_val_t sym, nanoclj_cell_t * md) {
   nanoclj_cell_t * s = get_vector_object(sc, T_VARMAP, 0);
-  nanoclj_cell_t * ns0 = get_cell(sc, T_NAMESPACE, 0, mk_pointer(s), sc->root_ns, md);
+  nanoclj_cell_t * ns0 = get_cell(sc, T_NAMESPACE, 0, mk_pointer(s), sc->core_ns, md);
   nanoclj_val_t ns = mk_pointer(ns0);
-
-  if (sc->root_ns) {
-    intern_with_meta(sc, sc->root_ns, sym, ns, md);
-    intern_with_meta(sc, sc->root_ns, def_alias_from_val(sc, sym), ns, md);
-  }
 
   sc->namespaces = tensor_hash_mutate_set(sc->namespaces, hasheq(sym, sc), sc->namespaces->ne[1], sym, ns, mk_nil(), false, sc, hasheq);
 
@@ -4653,7 +4651,7 @@ static inline nanoclj_val_t port_rep_from_file(nanoclj_t * sc, uint16_t type, FI
   pr->stdio.bg = sc->bg_color;
   pr->stdio.backchars[0] = pr->stdio.backchars[1] = -1;
 
-  nanoclj_cell_t * var = get_var_in_ns(sc, sc->root_ns, sc->FLUSH_ON_NEWLINE, true);
+  nanoclj_cell_t * var = get_var_in_ns(sc, sc->core_ns, sc->FLUSH_ON_NEWLINE, true);
   if (var && is_true(get_indexed_value(var, 1))) {
     setlinebuf(f);
   }
@@ -5761,7 +5759,7 @@ static inline bool resolve(nanoclj_t * sc, nanoclj_cell_t * env0, nanoclj_val_t 
   nanoclj_val_t sym;
   bool all_namespaces = true;
   if (s->ns.size) {
-    nanoclj_cell_t * var = get_var_in_ns(sc, sc->root_ns, s->ns_alias, true);
+    nanoclj_cell_t * var = get_var_in_ns(sc, sc->core_ns, s->ns_alias, true);
     if (var) {
       env = decode_pointer(get_indexed_value(var, 1));
       sym = s->name_sym;
@@ -5788,11 +5786,11 @@ static inline nanoclj_val_t resolve_value(nanoclj_t * sc, nanoclj_cell_t * env, 
 }
 
 static nanoclj_val_t get_out_port(nanoclj_t * sc) {
-  return resolve_value(sc, sc->envir, sc->OUT_SYM);
+  return resolve_value(sc, sc->core_ns, sc->OUT_SYM);
 }
 
 static nanoclj_val_t get_in_port(nanoclj_t * sc) {
-  return resolve_value(sc, sc->envir, sc->IN_SYM);
+  return resolve_value(sc, sc->core_ns, sc->IN_SYM);
 }
 
 static inline void dump_stack_reset(nanoclj_t * sc) {
@@ -6607,8 +6605,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     if (_port_flags_unchecked(z) & PORT_SAW_EOF) {
       if (sc->user_ns && sc->current_ns != sc->user_ns) {
 	sc->envir = sc->current_ns = sc->user_ns;
-      } else if (sc->current_ns != sc->root_ns) {
-	sc->envir = sc->current_ns = sc->root_ns;
+      } else if (sc->current_ns != sc->core_ns) {
+	sc->envir = sc->current_ns = sc->core_ns;
       }
 
       if (_nesting_unchecked(z) != 0) {
@@ -6620,7 +6618,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     } else {
       /* Set up another iteration of REPL */
       sc->save_inport = get_in_port(sc);
-      intern(sc, sc->root_ns, sc->IN_SYM, mk_pointer(z));
+      intern(sc, sc->core_ns, sc->IN_SYM, mk_pointer(z));
       
       s_save(sc, OP_T0LVL, NULL, mk_emptylist());
       s_save(sc, OP_T1LVL, NULL, mk_emptylist());
@@ -6631,7 +6629,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 
   case OP_T1LVL:               /* top level */
     sc->code = sc->value;
-    intern(sc, sc->root_ns, sc->IN_SYM, sc->save_inport);
+    intern(sc, sc->core_ns, sc->IN_SYM, sc->save_inport);
     s_goto(sc, OP_EVAL);
 
   case OP_READ:                /* read */
@@ -6921,6 +6919,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       case T_LONG:
       case T_DATE:
       case T_BIGINT:
+      case T_NAMESPACE:
 	break;
 
       case T_STRING:
@@ -9174,11 +9173,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     if (!unpack_args_1(sc, &arg0)) {
       return false;
     } else {
-      nanoclj_cell_t * var = get_var_in_ns(sc, sc->root_ns, arg0, true);
-      nanoclj_cell_t * ns;
-      if (var) {
-	ns = decode_pointer(get_indexed_value(var, 1));
-      } else {
+      nanoclj_cell_t * ns = find_ns(sc, arg0);
+      if (!ns) {
 	nanoclj_cell_t * meta = update_meta_from_reader(sc, mk_hashmap(sc), tensor_peek(sc->load_stack));
 	meta = assoc(sc, meta, sc->NAME, arg0);
 	ns = def_namespace_with_sym(sc, arg0, meta);
@@ -9780,9 +9776,9 @@ static inline void update_window_info(nanoclj_t * sc, nanoclj_cell_t * out) {
     pr->stdio.bg = sc->bg_color;
   }
   
-  intern(sc, sc->root_ns, sc->WINDOW_SIZE, size);
-  intern(sc, sc->root_ns, sc->CELL_SIZE, cell_size);
-  intern(sc, sc->root_ns, sc->WINDOW_SCALE_F, mk_double(sc->window_scale_factor));
+  intern(sc, sc->core_ns, sc->WINDOW_SIZE, size);
+  intern(sc, sc->core_ns, sc->CELL_SIZE, cell_size);
+  intern(sc, sc->core_ns, sc->WINDOW_SCALE_F, mk_double(sc->window_scale_factor));
 }
 
 /* initialization of nanoclj_t */
@@ -9999,7 +9995,7 @@ bool nanoclj_init(nanoclj_t * sc) {
   sc->context->cell_seg = NULL;
 
   sc->save_inport = mk_nil();
-  sc->current_ns = sc->root_ns = sc->user_ns = sc->envir = NULL;
+  sc->current_ns = sc->core_ns = sc->user_ns = sc->envir = NULL;
 
   sc->pending_exception = NULL;
 
@@ -10118,13 +10114,13 @@ bool nanoclj_init(nanoclj_t * sc) {
   sc->EMPTYSET = get_vector_object(sc, T_HASHSET, 0);
 
   /* Init root namespace clojure.core */
-  sc->root_ns = NULL;
-  sc->root_ns = sc->current_ns = sc->envir = def_namespace(sc, "clojure.core", __FILE__);
+  sc->core_ns = NULL;
+  sc->core_ns = sc->current_ns = sc->envir = def_namespace(sc, "clojure.core", __FILE__);
 
   size_t n = sizeof(dispatch_table) / sizeof(dispatch_table[0]);
   for (size_t i = 0; i < n; i++) {
     if (dispatch_table[i].name != 0) {
-      assign_proc(sc, sc->root_ns, (enum nanoclj_opcode)i, &(dispatch_table[i]));
+      assign_proc(sc, sc->core_ns, (enum nanoclj_opcode)i, &(dispatch_table[i]));
     }
   }
 
@@ -10225,7 +10221,7 @@ bool nanoclj_init(nanoclj_t * sc) {
   nanoclj_val_t EMPTY = def_symbol(sc, "EMPTY");
   intern(sc, PersistentQueue, EMPTY, mk_pointer(mk_collection(sc, T_QUEUE, NULL)));
   
-  intern(sc, sc->root_ns, sc->MOUSE_POS, mk_nil());
+  intern(sc, sc->core_ns, sc->MOUSE_POS, mk_nil());
 
   register_functions(sc);
 
@@ -10241,9 +10237,9 @@ bool nanoclj_init(nanoclj_t * sc) {
   sc->context->properties = mk_properties(sc);
   
   if (sc->bg_color.red < 128 && sc->bg_color.green < 128 && sc->bg_color.blue < 128) {
-    intern(sc, sc->root_ns, sc->THEME, def_keyword(sc, "dark"));
+    intern(sc, sc->core_ns, sc->THEME, def_keyword(sc, "dark"));
   } else {
-    intern(sc, sc->root_ns, sc->THEME, def_keyword(sc, "bright"));
+    intern(sc, sc->core_ns, sc->THEME, def_keyword(sc, "bright"));
   }
 
   sc->tests_passed = 0;
@@ -10253,12 +10249,12 @@ bool nanoclj_init(nanoclj_t * sc) {
 }
 
 void nanoclj_set_input_port_file(nanoclj_t * sc, FILE * fin) {
-  intern(sc, sc->root_ns, sc->IN_SYM, port_rep_from_file(sc, T_READER, fin, NULL));
+  intern(sc, sc->core_ns, sc->IN_SYM, port_rep_from_file(sc, T_READER, fin, NULL));
 }
 
 void nanoclj_set_output_port_file(nanoclj_t * sc, FILE * fout) {
   nanoclj_val_t p = port_rep_from_file(sc, T_WRITER, fout, NULL);
-  intern(sc, sc->root_ns, sc->OUT_SYM, p);
+  intern(sc, sc->core_ns, sc->OUT_SYM, p);
   update_window_info(sc, decode_pointer(p));
 }
 
@@ -10269,17 +10265,17 @@ void nanoclj_set_output_port_callback(nanoclj_t * sc,
 				      void (*image) (imageview_t, void *)
 				      ) {
   nanoclj_val_t p = mk_writer_from_callback(sc, text, color, restore, image);
-  intern(sc, sc->root_ns, sc->OUT_SYM, p);
-  intern(sc, sc->root_ns, sc->WINDOW_SIZE, mk_nil());
+  intern(sc, sc->core_ns, sc->OUT_SYM, p);
+  intern(sc, sc->core_ns, sc->WINDOW_SIZE, mk_nil());
 }
 
 void nanoclj_set_error_port_callback(nanoclj_t * sc, void (*text) (const char *, size_t, void *)) {
   nanoclj_val_t p = mk_writer_from_callback(sc, text, NULL, NULL, NULL);
-  intern(sc, sc->root_ns, sc->ERR, p);
+  intern(sc, sc->core_ns, sc->ERR, p);
 }
 
 void nanoclj_set_error_port_file(nanoclj_t * sc, FILE * fout) {
-  intern(sc, sc->root_ns, sc->ERR, port_rep_from_file(sc, T_WRITER, fout, NULL));
+  intern(sc, sc->core_ns, sc->ERR, port_rep_from_file(sc, T_WRITER, fout, NULL));
 }
 
 void nanoclj_set_external_data(nanoclj_t * sc, void *p) {
@@ -10287,7 +10283,7 @@ void nanoclj_set_external_data(nanoclj_t * sc, void *p) {
 }
 
 void nanoclj_deinit(nanoclj_t * sc) {
-  sc->root_ns = sc->user_ns = sc->current_ns = NULL;
+  sc->core_ns = sc->user_ns = sc->current_ns = NULL;
   dump_stack_free(sc);
   sc->envir = NULL;
   sc->code = mk_nil();
@@ -10472,13 +10468,10 @@ int main(int argc, const char **argv) {
 	  nanoclj_call(&sc, main, mk_emptylist());
 	}
       }
-    } else {
-#if 0
-      sc.user_ns = def_namespace(&sc, "user", __FILE__);
-      sc.current_ns = sc.envir = sc.user_ns;
-#endif
-      const char * expr = "(clojure.repl/repl)";
-      nanoclj_eval_string(&sc, expr, strlen(expr));
+    } else if (!nanoclj_load_named_file(&sc, mk_string(&sc, "user.clj"))) {
+      default_exception_handler(&sc);
+      num_errors++;
+      rv |= 1;
     }
   }
   
