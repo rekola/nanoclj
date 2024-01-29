@@ -4,3 +4,4 @@
 (load-file "tests/set.clj")
 (load-file "tests/xml.clj")
 (load-file "tests/csv.clj")
+(load-file "tests/numeric-tower.clj")

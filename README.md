@@ -167,6 +167,8 @@ Windows support is in progress.
   - fnil
   - trampoline
   - shuffle, random-sample
+  - refer-clojure
+  - replace
   - unchecked-byte, unchecked-short, unchecked-char, unchecked-int, unchecked-long, unchecked-float, unchecked-double
   - vary-meta, alter-meta!, reset-meta!
   - aset-char, aset-long, amap, areduce, to-array-2d, make-array, long-array, bytes?
