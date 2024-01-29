@@ -1,4 +1,4 @@
-(in-ns 'java.lang.Byte)
+(ns java.lang.Byte)
 
 (def TYPE 2)
 (def MIN_VALUE -128)

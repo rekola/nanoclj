@@ -217,9 +217,6 @@
 (def-macro (set! symbol value) `(-set '~symbol ~value))
 (def-macro (. instance symbol & args) `(-dot ~instance '~symbol ~@args))
 
-(defn create-ns [sym] (eval (if (defined? sym) sym (intern *ns* sym (clojure.lang.Namespace *ns* (str sym))))))
-(def-macro (ns name) `((create-ns '~name)))
-
 (defn foldr [f x lst]
   (if (empty? lst)
     x
@@ -428,3 +425,5 @@
                 `(if ~(cadr form) ~(cadddr form) ~(caddr form))))
 
 (macro delay (fn [form] `(clojure.lang.Delay '~(cdr form))))
+
+(def-macro (ns name) `(in-ns '~name))

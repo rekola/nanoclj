@@ -1,4 +1,4 @@
-(in-ns 'nanoclj.graph)
+(ns nanoclj.graph)
 
 (defn load
   "Loads a graph file"

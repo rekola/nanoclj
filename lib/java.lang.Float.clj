@@ -1,4 +1,4 @@
-(in-ns 'java.lang.Float)
+(ns java.lang.Float)
 
 (def TYPE 5)
 (def BYTES 4)

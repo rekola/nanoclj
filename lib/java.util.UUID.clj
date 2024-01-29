@@ -1,4 +1,4 @@
-(in-ns 'java.util.UUID)
+(ns java.util.UUID)
 
 (defn randomUUID
   "Creates a random UUID"

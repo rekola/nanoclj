@@ -1,4 +1,4 @@
-(in-ns 'clojure.instant)
+(ns clojure.instant)
 
 (defn read-instant-date
   "Parses a date"

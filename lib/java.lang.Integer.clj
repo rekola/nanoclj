@@ -1,4 +1,4 @@
-(in-ns 'java.lang.Integer)
+(ns java.lang.Integer)
 
 (def TYPE 4)
 (def MAX_VALUE 2147483647)

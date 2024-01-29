@@ -1,4 +1,4 @@
-(in-ns 'nanoclj.core.Image)
+(ns nanoclj.core.Image)
 
 (def TYPE_CUSTOM 0)
 (def TYPE_BYTE_GRAY 1)

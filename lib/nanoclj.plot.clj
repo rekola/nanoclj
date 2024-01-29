@@ -1,4 +1,4 @@
-(in-ns 'nanoclj.plot)
+(ns nanoclj.plot)
 
 (def ^:private plot-colors '([0 0.4470 0.7410]
                              [0.8500 0.3250 0.0980]

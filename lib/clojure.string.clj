@@ -1,4 +1,4 @@
-(in-ns 'clojure.string)
+(ns clojure.string)
 
 (defn blank?
   "Returns true if the argument string is blank"

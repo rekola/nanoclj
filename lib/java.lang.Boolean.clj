@@ -1,3 +1,3 @@
-(in-ns 'java.lang.Boolean)
+(ns java.lang.Boolean)
 
 (def TYPE 1)

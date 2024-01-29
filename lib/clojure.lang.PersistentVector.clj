@@ -1,4 +1,4 @@
-(in-ns 'clojure.lang.PersistentVector)
+(ns clojure.lang.PersistentVector)
 
 (def EMPTY [])
 

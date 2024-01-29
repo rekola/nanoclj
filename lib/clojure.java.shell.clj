@@ -1,4 +1,4 @@
-(in-ns 'clojure.java.shell)
+(ns clojure.java.shell)
 
 (defn sh
   "Launch a process and capture output"

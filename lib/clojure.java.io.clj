@@ -1,4 +1,4 @@
-(in-ns 'clojure.java.io)
+(ns clojure.java.io)
 
 (def reader java.io.Reader)
 (def writer java.io.Writer)

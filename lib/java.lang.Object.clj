@@ -1,4 +1,4 @@
-(in-ns 'java.lang.Object)
+(ns java.lang.Object)
 
 (def TYPE 7)
 

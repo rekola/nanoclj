@@ -1,4 +1,4 @@
-(in-ns 'java.lang.Class)
+(ns java.lang.Class)
 
 (defn getName
   "Returns the class name"

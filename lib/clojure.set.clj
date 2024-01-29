@@ -1,4 +1,4 @@
-(in-ns 'clojure.set)
+(ns clojure.set)
 
 (defn union
   "Returns the union of the given sets"

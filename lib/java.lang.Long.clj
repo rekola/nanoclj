@@ -1,4 +1,4 @@
-(in-ns 'java.lang.Long)
+(ns java.lang.Long)
 
 (def MAX_VALUE 9223372036854775807)
 (def MIN_VALUE -9223372036854775808)

@@ -1,4 +1,4 @@
-(in-ns 'java.lang.Double)
+(ns java.lang.Double)
 
 (def TYPE 6)
 (def BYTES 8)

@@ -1,4 +1,4 @@
-(in-ns 'nanoclj.audio)
+(ns nanoclj.audio)
 
 (defn load
   "Loads an audio file"

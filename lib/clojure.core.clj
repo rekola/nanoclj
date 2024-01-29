@@ -1,4 +1,4 @@
-(in-ns 'clojure.core)
+(ns clojure.core)
 (require 'clojure.java.io 'clojure.repl)
 
 ; Utilities for types.

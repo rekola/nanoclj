@@ -1,4 +1,4 @@
-(in-ns 'nanoclj.art)
+(ns nanoclj.art)
 
 (def mk-gradient nanoclj.core.Gradient)
 (def mk-shape nanoclj.core.Shape)

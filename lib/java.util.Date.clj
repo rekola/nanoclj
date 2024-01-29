@@ -1,4 +1,4 @@
-(in-ns 'java.util.Date)
+(ns java.util.Date)
 
 (defn now
   "Returns the current time in milliseconds"
