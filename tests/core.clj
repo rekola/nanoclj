@@ -226,3 +226,10 @@
 (t/is (= (with-out-str (dotimes [n 4] (print "X"))) "XXXX"))
 (t/is (= (loop [a 4 b a] (if (zero? b) 1000 (recur a (dec b)))) 1000))
 (t/is (= (loop []) nil))
+
+                                        ; Arrays
+
+(t/is (= (seq (boolean-array '( false true false true))) '( false true false true )))
+(t/is (= (alength (float-array 1000000)) 1000000))
+(t/is (= (seq (to-array [ :a :b :c :d ])) '( :a :b :c :d )))
+(t/is (= (seq (into-array [ 1.0 2.0 3.0 4.0 ])) '( 1.0 2.0 3.0 4.0 )))
