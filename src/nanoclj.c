@@ -9293,10 +9293,19 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     if (!unpack_args_0_plus(sc, &arg_next)) {
       return false;
     } else {
+      bool reload = false;
+      for (nanoclj_cell_t * a = arg_next; a; a = next(sc, a)) {
+	nanoclj_val_t arg = first(sc, a);
+	if (arg.as_long == sc->RELOAD.as_long) {
+	  reload = true;
+	}
+      }
       for (; arg_next; arg_next = next(sc, arg_next)) {
 	nanoclj_val_t arg = first(sc, arg_next);
 	nanoclj_val_t ns_sym = mk_nil(), alias_sym = mk_nil();
-	if (is_symbol(arg)) {
+	if (is_keyword(arg)) {
+	  continue;
+	} else if (is_symbol(arg)) {
 	  ns_sym = alias_sym = arg;
 	} else if (is_vector(arg)) {
 	  nanoclj_cell_t * vec = decode_pointer(arg);
@@ -9309,7 +9318,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Invalid arguments")));
 	  return false;
 	}
-	nanoclj_cell_t * ns = find_ns(sc, ns_sym);
+	nanoclj_cell_t * ns = !reload ? find_ns(sc, ns_sym) : 0;
 	if (!ns) {
 	  strview_t sv = to_strview(ns_sym);
 	  if (nanoclj_load_named_file(sc, mk_string_fmt(sc, "%.*s.clj", sv.size, sv.ptr))) {
@@ -10104,6 +10113,7 @@ bool nanoclj_init(nanoclj_t * sc) {
   sc->BYTE = def_keyword(sc, "byte");
   sc->SHORT = def_keyword(sc, "short");
   sc->BOOLEAN = def_keyword(sc, "boolean");
+  sc->RELOAD = def_keyword(sc, "reload");
   
   sc->DOT = def_symbol(sc, ".");
   sc->CATCH = def_symbol(sc, "catch");

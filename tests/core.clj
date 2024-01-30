@@ -124,6 +124,13 @@
 (t/is (= (nth "こんにちは" 4) \は))
 (t/is (= (nth "こんにちは" 5 :not-found) :not-found))
 
+(t/is (= (vector-of :boolean true false true false) [ true false true false ]))
+(t/is (= (vector-of :byte 1.0 2.0 3.0) [ 1 2 3 ]))
+(t/is (= (vector-of :short 1.0 2.0 3.0) [ 1 2 3 ]))
+(t/is (= (vector-of :int 1.0 2.0 3.0) [ 1 2 3 ]))
+(t/is (= (vector-of :float 1.0 2.0 3.0) [ 1.0 2.0 3.0 ]))
+(t/is (= (vector-of :double 1.0 2.0 3.0) [ 1.0 2.0 3.0 ]))
+
                                         ; Printing and str
 
 (t/is (= (str \a \b \c) "abc"))

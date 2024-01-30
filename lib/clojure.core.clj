@@ -967,7 +967,7 @@
 (def aset-int aset)
 (def aset-short aset)
 
-; Namespaces
+; Namespaces and classes
 
 (defn ns-resolve
   [ns sym] (if (namespace sym)

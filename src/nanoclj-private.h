@@ -251,6 +251,7 @@ extern "C" {
     nanoclj_val_t BYTE;	          /* :byte */
     nanoclj_val_t SHORT;          /* :short */
     nanoclj_val_t BOOLEAN;        /* :boolean */
+    nanoclj_val_t RELOAD;         /* :reload */
     
     nanoclj_val_t DOT;		  /* . */
     nanoclj_val_t CATCH;
