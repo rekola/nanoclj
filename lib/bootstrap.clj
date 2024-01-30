@@ -1,3 +1,13 @@
+(require 'clojure.lang.Symbol :import)
+(require 'clojure.lang.PersistentVector :import)
+(require 'clojure.lang.Cons :import)
+(require 'nanoclj.core.Macro :import)
+(require 'nanoclj.core.Procedure :import)
+(require 'nanoclj.core.Closure :import)
+(require 'nanoclj.core.ForeignFunction :import)
+(require 'java.lang.Number :import)
+(require 'java.lang.String :import)
+
 (def force deref)
 (def var-get second)
 
@@ -16,9 +26,6 @@
 (def symbol clojure.lang.Symbol)
 (def vector clojure.lang.PersistentVector)
 (def cons clojure.lang.Cons)
-(def boolean java.lang.Boolean)
-(def map-entry clojure.lang.MapEntry)
-(def image nanoclj.core.Image)
 
 (def nil?
   "Returns true if the argument is nil"
@@ -90,10 +97,6 @@
 (def ifn?
   "Returns true if coll is invokeable"
   (fn [x] (instance? clojure.lang.AFn x)))
-
-(def defined?
-  "Returns true if the argument is defined in the current namespace"
-  (fn [sym] (boolean (resolve sym))))
 
 (def list
   "Creates a list from the given args"
@@ -407,10 +410,6 @@
   ([x y] (not (equals? x y)))
   ([x y & more] (not (apply equals? x y more))))
 
-(defn boolean?
-  "Returns true if argument is a boolean"
-  [x] (instance? java.lang.Boolean x))
-
 (defn closure?
   "Returns true if argument is a closure. Note, a macro object is also a closure."
   [x] (instance? nanoclj.core.Closure x))
@@ -427,3 +426,5 @@
 (macro delay (fn [form] `(clojure.lang.Delay '~(cdr form))))
 
 (def-macro (ns name) `(in-ns '~name))
+
+(def-macro (import name) `(require '~name :import))

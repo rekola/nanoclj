@@ -4249,9 +4249,7 @@ static inline nanoclj_cell_t * mk_class_with_meta(nanoclj_t * sc, nanoclj_val_t 
     tensor_mutate_push(sc->types, mk_nil());
   }
   tensor_mutate_set(sc->types, type_id, t);
-  intern_with_meta(sc, sc->core_ns, sym, t, md);
-  intern_with_meta(sc, sc->core_ns, def_alias_from_val(sc, sym), t, md);
-
+  
   sc->namespaces = tensor_hash_mutate_set(sc->namespaces, hasheq(sym, sc), sc->namespaces->ne[1], sym, t, mk_nil(), false, sc, hasheq);
 
   return t0;
@@ -4262,14 +4260,7 @@ static inline nanoclj_cell_t * mk_class_with_fn(nanoclj_t * sc, const char * nam
   nanoclj_cell_t * md = mk_hashmap(sc);
   md = assoc(sc, md, sc->NAME, sym);
   md = assoc(sc, md, sc->FILE_KW, mk_string(sc, fn));
-  nanoclj_cell_t * t = mk_class_with_meta(sc, sym, type_id, parent_type, md);
-
-  char * p = strrchr(name, '.');
-  if (p && p[1]) {
-    intern_with_meta(sc, sc->core_ns, def_symbol(sc, p + 1), mk_pointer(t), md);
-    intern_with_meta(sc, sc->core_ns, def_alias(sc, p + 1), mk_pointer(t), md);
-  }
-  return t;
+  return mk_class_with_meta(sc, sym, type_id, parent_type, md);
 }
 
 static inline nanoclj_cell_t * mk_class(nanoclj_t * sc, const char * name, int type_id, nanoclj_cell_t * parent_type) {
@@ -9293,16 +9284,19 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     if (!unpack_args_0_plus(sc, &arg_next)) {
       return false;
     } else {
-      bool reload = false;
+      bool reload = false, import = false;
       for (nanoclj_cell_t * a = arg_next; a; a = next(sc, a)) {
 	nanoclj_val_t arg = first(sc, a);
 	if (arg.as_long == sc->RELOAD.as_long) {
 	  reload = true;
+	} else if (arg.as_long == sc->IMPORT.as_long) {
+	  import = true;
 	}
       }
       for (; arg_next; arg_next = next(sc, arg_next)) {
 	nanoclj_val_t arg = first(sc, arg_next);
 	nanoclj_val_t ns_sym = mk_nil(), alias_sym = mk_nil();
+	bool is_aliased = false;
 	if (is_keyword(arg)) {
 	  continue;
 	} else if (is_symbol(arg)) {
@@ -9313,6 +9307,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	    ns_sym = get_indexed_value(vec, 0);
 	    alias_sym = get_indexed_value(vec, 2);
 	  }
+	  is_aliased = true;
 	}
 	if (is_nil(ns_sym) || is_nil(alias_sym)) {
 	  nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Invalid arguments")));
@@ -9332,6 +9327,22 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  }
 	}
 	intern_with_meta(sc, sc->current_ns, def_alias_from_val(sc, alias_sym), mk_pointer(ns), NULL);
+	if (import) {
+	  intern_with_meta(sc, sc->current_ns, alias_sym, mk_pointer(ns), NULL);
+
+	  if (!is_aliased) {
+	    strview_t sv = to_strview(ns_sym);
+	    char * p = memrchr(sv.ptr, '.', sv.size);
+	    if (p) {
+	      strview_t short_sv = strview_remove_prefix(sv, p + 1 - sv.ptr);
+	      if (short_sv.size) {
+		nanoclj_val_t short_sym = def_symbol_from_sv(sc, T_SYMBOL, mk_strview(0), short_sv);
+		intern_with_meta(sc, sc->current_ns, short_sym, mk_pointer(ns), NULL);
+		intern_with_meta(sc, sc->current_ns, def_alias_from_val(sc, short_sym), mk_pointer(ns), NULL);
+	      }
+	    }
+	  }
+	}
       }
       s_return(sc, mk_nil());
     }
@@ -10114,6 +10125,7 @@ bool nanoclj_init(nanoclj_t * sc) {
   sc->SHORT = def_keyword(sc, "short");
   sc->BOOLEAN = def_keyword(sc, "boolean");
   sc->RELOAD = def_keyword(sc, "reload");
+  sc->IMPORT = def_keyword(sc, "import");
   
   sc->DOT = def_symbol(sc, ".");
   sc->CATCH = def_symbol(sc, "catch");

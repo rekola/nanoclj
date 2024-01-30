@@ -91,6 +91,10 @@
   (mode :block)
   (print (draw-banner "nanoclj" (System/getProperty "nanoclj.version")))
   (newline)
+
+  (def *1)
+  (def *2)
+  (def *3)
   
   (let [hfn (clojure.java.io/file (System/getProperty "user.home") "/.nanoclj_history")
         f (fn [] (let [prompt (str (:name (meta *ns*)) "=> ")
@@ -107,8 +111,8 @@
                        (restore)
                        (try (let [r (load-string line)]
                               (prn r)
-                              (when (defined? '*2) (def *3 *2))
-                              (when (defined? '*1) (def *2 *1))
+                              (def *3 *2)
+                              (def *2 *1)
                               (def *1 r)
                               (recur))
                             (catch java.lang.Throwable e

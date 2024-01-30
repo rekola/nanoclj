@@ -65,6 +65,13 @@
 (def bigint clojure.lang.BigInt)
 (def biginteger clojure.lang.BigInt)
 (def re-pattern java.util.regex.Pattern)
+(def boolean java.lang.Boolean)
+(def map-entry clojure.lang.MapEntry)
+(def image nanoclj.core.Image)
+
+(defn boolean?
+  "Returns true if argument is a boolean"
+  [x] (instance? java.lang.Boolean x))
 
 (defn regex? [x] (instance? java.util.regex.Pattern x))
   
