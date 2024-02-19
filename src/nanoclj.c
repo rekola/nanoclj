@@ -972,7 +972,7 @@ static inline bool convert_to_long(nanoclj_val_t p, long long * l) {
     *l = decode_integer(p);
     return true;
   case T_DOUBLE:
-    if (p.as_double < LLONG_MIN || p.as_double > LLONG_MAX) return false;
+    if (p.as_double < LLONG_MIN || p.as_double >= 9223372036854775808.0) return false;
     *l = (long long)p.as_double;
     return true;
   case T_CELL:
@@ -1407,23 +1407,6 @@ static inline imageview_t to_imageview(nanoclj_val_t p) {
   }
 }
 
-static inline tensorview_t to_tensorview(nanoclj_val_t p) {
-  tensorview_t tv;
-#if 0
-  switch (prim_type(p)) {
-  case T_LONG:
-    tv.n_dims = 1;
-    tv.ne[0] = 1;
-    tv.nb[0] = tv.nb[1] = sizeof(long long);
-    tv.data = ?;
-    tv.type = nanoclj_i64;
-    return tv;
-  }
-  tv.n_dims = 0;
-#endif
-  return tv;
-}
-
 static inline nanoclj_color_t to_color(nanoclj_val_t p) {
   switch (type(p)) {
   case T_STRING:
@@ -1742,7 +1725,7 @@ static inline void graph_array_append_node(nanoclj_t * sc, nanoclj_graph_array_t
     g->nodes = realloc(g->nodes, g->reserved_nodes * sizeof(nanoclj_node_t));
   }
   nanoclj_node_t * n = &(g->nodes[g->num_nodes++]);
-  n->pos = n->ppos = (nanoclj_vec2f){ (float)rand() / RAND_MAX, (float)rand() / RAND_MAX };
+  n->pos = n->ppos = (nanoclj_vec2f){ (double)rand() / RAND_MAX, (double)rand() / RAND_MAX };
   n->data = d;
 }
 
@@ -3008,33 +2991,6 @@ static inline nanoclj_val_t fifth(nanoclj_t * sc, nanoclj_cell_t * a) {
 #include "nanoclj_curl.h"
 #endif
 
-static inline uint32_t hashcmp(nanoclj_val_t v, void * d) {
-  nanoclj_t * sc = d;
-  switch (prim_type(v)) {
-  case T_LONG:
-  case T_CODEPOINT:
-  case T_PROC:
-    return decode_integer(v);
-
-  case T_BOOLEAN:
-    return is_false(v) ? 0 : LONG_MAX;
-
-  case T_CELL:
-    {
-      nanoclj_cell_t * c = decode_pointer(v);
-      int32_t h = 0;
-      switch (_type(c)) {
-      case T_LONG:
-      case T_DATE:
-	h = _lvalue_unchecked(c) >> 32;
-	break;
-      }
-      return h;
-    }
-  }
-  return 0;
-}
-
 static uint32_t hasheq(nanoclj_val_t v, void * d) {
   nanoclj_t * sc = d;
   switch (prim_type(v)) {
@@ -3370,7 +3326,7 @@ static inline size_t find_hash_index(nanoclj_t * sc, nanoclj_cell_t * coll, nano
   } else {
     nanoclj_tensor_t * tensor = coll->_collection.tensor;
     size_t num_buckets = tensor_hash_get_bucket_count(tensor);
-    size_t location = tensor_hash_get_bucket(is_ordered ? hashcmp(key, sc) : hasheq(key, sc), num_buckets, is_ordered);
+    size_t location = tensor_hash_get_bucket(hasheq(key, sc), num_buckets, is_ordered);
     while ( 1 ) {
       if (tensor_hash_is_unassigned(tensor, location)) {
 	break;
@@ -3838,11 +3794,11 @@ static inline nanoclj_cell_t * vector_conjoin(nanoclj_t * sc, nanoclj_cell_t * v
       nanoclj_tensor_t * tensor = new_vec->_collection.tensor;
       for (size_t i = 0; i < old_size; i++) {
 	nanoclj_val_t v = get_indexed_value(vec, i);
-	uint32_t h = is_ordered ? hashcmp(v, sc) : hasheq(v, sc);
-	tensor = tensor_hash_mutate_set(tensor, h, i, v, mk_nil(), mk_nil(), is_ordered, sc, is_ordered ? hashcmp : hasheq);
+	uint32_t h = hasheq(v, sc);
+	tensor = tensor_hash_mutate_set(tensor, h, i, v, mk_nil(), mk_nil(), is_ordered, sc, hasheq);
       }
-      uint32_t h = is_ordered ? hashcmp(new_value, sc) : hasheq(new_value, sc);
-      new_vec->_collection.tensor = tensor_hash_mutate_set(tensor, h, old_size, new_value, mk_nil(), mk_nil(), is_ordered, sc, is_ordered ? hashcmp : hasheq);
+      uint32_t h = hasheq(new_value, sc);
+      new_vec->_collection.tensor = tensor_hash_mutate_set(tensor, h, old_size, new_value, mk_nil(), mk_nil(), is_ordered, sc, hasheq);
     } else {
       memcpy(get_ptr(new_vec), _smalldata_unchecked(vec), old_size * sizeof(nanoclj_val_t));
       set_indexed_value(new_vec, old_size, new_value);
@@ -3853,8 +3809,8 @@ static inline nanoclj_cell_t * vector_conjoin(nanoclj_t * sc, nanoclj_cell_t * v
     return new_vec;
   } else if (t == T_HASHSET || t == T_SORTED_HASHSET) {
     bool is_ordered = t == T_SORTED_HASHSET;
-    uint32_t h = is_ordered ? hashcmp(new_value, sc) : hasheq(new_value, sc);
-    nanoclj_tensor_t * tensor = tensor_hash_mutate_set(vec->_collection.tensor, h, old_size, new_value, mk_nil(), mk_nil(), is_ordered, sc, is_ordered ? hashcmp : hasheq);
+    uint32_t h = hasheq(new_value, sc);
+    nanoclj_tensor_t * tensor = tensor_hash_mutate_set(vec->_collection.tensor, h, old_size, new_value, mk_nil(), mk_nil(), is_ordered, sc, hasheq);
     return get_collection_object(sc, t, _offset_unchecked(vec), old_size + 1, tensor, vec->_collection.meta);
   } else {
     size_t old_offset = _offset_unchecked(vec);
@@ -3905,10 +3861,10 @@ static inline nanoclj_cell_t * assoc_with_meta(nanoclj_t * sc, nanoclj_cell_t * 
 	  tensor = tensor_push_vec(tensor, 0, &vec1[0]);
 	  coll->_collection.tensor = tensor_push_vec(tensor, 1, &vec2[0]);
 	} else {
-	  uint32_t h0 = is_ordered ? hashcmp(old_key, sc) : hasheq(old_key, sc);
-	  uint32_t h1 = is_ordered ? hashcmp(key, sc) : hasheq(key, sc);
-	  tensor = tensor_hash_mutate_set(tensor, h0, 0, old_key, old_val, old_meta, is_ordered, sc, is_ordered ? hashcmp : hasheq);
-	  coll->_collection.tensor = tensor_hash_mutate_set(tensor, h1, 1, key, value, meta, is_ordered, sc, is_ordered ? hashcmp : hasheq);
+	  uint32_t h0 = hasheq(old_key, sc);
+	  uint32_t h1 = hasheq(key, sc);
+	  tensor = tensor_hash_mutate_set(tensor, h0, 0, old_key, old_val, old_meta, is_ordered, sc, hasheq);
+	  coll->_collection.tensor = tensor_hash_mutate_set(tensor, h1, 1, key, value, meta, is_ordered, sc, hasheq);
 	}
       }
     } else if (t == T_ARRAYMAP) {
@@ -3932,8 +3888,8 @@ static inline nanoclj_cell_t * assoc_with_meta(nanoclj_t * sc, nanoclj_cell_t * 
       }
     } else {
       size_t old_size = get_size(coll);
-      uint32_t h = is_ordered ? hashcmp(key, sc) : hasheq(key, sc);
-      nanoclj_tensor_t * tensor = tensor_hash_mutate_set(coll->_collection.tensor, h, old_size, key, value, meta, is_ordered, sc, is_ordered ? hashcmp : hasheq);
+      uint32_t h = hasheq(key, sc);
+      nanoclj_tensor_t * tensor = tensor_hash_mutate_set(coll->_collection.tensor, h, old_size, key, value, meta, is_ordered, sc, hasheq);
       coll = get_collection_object(sc, t, _offset_unchecked(coll), old_size + 1, tensor, coll->_collection.meta);
     }
   } else {
@@ -4665,7 +4621,7 @@ static inline nanoclj_val_t port_from_stream(nanoclj_t * sc, uint16_t type, nano
   int ret;
   if (type == T_GZIP_INPUT_STREAM) {
     ret = inflateInit(strm);
-  } else if (type == T_GZIP_OUTPUT_STREAM) {
+  } else {
     ret = deflateInit(strm, 9);
   }
   if (ret != Z_OK) {
@@ -6808,7 +6764,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	    nanoclj_val_t ns = mk_nil(), name_v = mk_nil();
 	    get_elem(sc, _ff_metadata(code_cell), sc->NS, &ns);
 	    get_elem(sc, _ff_metadata(code_cell), sc->NAME, &name_v);
-	    nanoclj_val_t ns_name_v;
+	    nanoclj_val_t ns_name_v = mk_nil();
 	    if (is_cell(ns)) {
 	      get_elem(sc, get_metadata(decode_pointer(ns)), sc->NAME, &ns_name_v);
 	    }
@@ -6899,7 +6855,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  nanoclj_val_t ns = mk_nil(), name_v = mk_nil();
 	  get_elem(sc, _cons_metadata(code_cell), sc->NS, &ns);
 	  get_elem(sc, _cons_metadata(code_cell), sc->NAME, &name_v);
-	  nanoclj_val_t ns_name_v;
+	  nanoclj_val_t ns_name_v = mk_nil();
 	  if (is_cell(ns)) {
 	    get_elem(sc, get_metadata(decode_pointer(ns)), sc->NAME, &ns_name_v);
 	  }

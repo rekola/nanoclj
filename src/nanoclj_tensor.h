@@ -954,7 +954,7 @@ static inline nanoclj_tensor_t * tensor_hash_mutate_set(nanoclj_tensor_t * tenso
     for (int64_t offset = 0; offset < old_num_buckets; offset++) {
       int64_t i = old_sparse_indices[offset];
       if (i >= 0 && i < val_index) {
-	nanoclj_val_t old_key, old_val, old_meta;
+	nanoclj_val_t old_key, old_val, old_meta = mk_nil();
 	if (old_tensor->n_dims == 2) {
 	  old_key = tensor_get_2d(old_tensor, 0, offset);
 	  old_val = tensor_get_2d(old_tensor, 1, offset);

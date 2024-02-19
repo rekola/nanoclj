@@ -72,7 +72,7 @@ extern "C" {
   } nanoclj_port_rep_t;
 
 /* cell structure */
-  typedef struct nanoclj_cell_t {
+  struct nanoclj_cell_t {
     uint32_t hasheq;
     uint16_t type;
     uint16_t flags;
@@ -127,7 +127,7 @@ extern "C" {
 	};
       } _cons;
     };
-  } nanoclj_cell_t;
+  };
 
   /* this structure holds all the interpreter's registers */
   typedef struct dump_stack_frame_t {
