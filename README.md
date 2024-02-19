@@ -88,6 +88,7 @@ As well as printing images in block mode like the plot function does, they can a
 - Unbound Vars cannot be created
 - Dividing Long/MIN_VALUE by -1 doesn't fail
 - java.net.URL doesn't resolve the hostname for calculating hashcode
+- ##NaN is unique, which is not the case in Clojure: `(count #{ (Math/sqrt -1) ##NaN }) ;=> 2`
 
 ## Dependencies
 
