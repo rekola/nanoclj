@@ -1394,6 +1394,7 @@ static inline imageview_t _to_imageview(const nanoclj_cell_t * c) {
       if (pr->canvas.data) return tensor_to_imageview(pr->canvas.data);
     }
 #endif
+    break;
   }
   return (imageview_t){ 0 };
 }

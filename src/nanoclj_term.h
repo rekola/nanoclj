@@ -61,14 +61,16 @@ static inline bool write_sixel(int pf, const uint8_t * pal, const uint8_t * ptr,
 static inline bool print_image_sixel(imageview_t iv, nanoclj_color_t fg, nanoclj_color_t bg) {
   switch (iv.format) {
   case nanoclj_r8:
-    uint8_t pal[3 * 256];
-    for (size_t i = 0; i < 256; i++) {
-      nanoclj_color_t c = mix(bg, fg, i / 255.0f);
-      pal[3 * i + 0] = c.red;
-      pal[3 * i + 1] = c.green;
-      pal[3 * i + 2] = c.blue;
+    {
+      uint8_t pal[3 * 256];
+      for (size_t i = 0; i < 256; i++) {
+	nanoclj_color_t c = mix(bg, fg, i / 255.0f);
+	pal[3 * i + 0] = c.red;
+	pal[3 * i + 1] = c.green;
+	pal[3 * i + 2] = c.blue;
+      }
+      return write_sixel(SIXEL_PIXELFORMAT_PAL8, pal, iv.ptr, iv.width, iv.height);
     }
-    return write_sixel(SIXEL_PIXELFORMAT_PAL8, pal, iv.ptr, iv.width, iv.height);
   case nanoclj_ra8:
     return write_sixel(SIXEL_PIXELFORMAT_GA88, NULL, iv.ptr, iv.width, iv.height);
   case nanoclj_rgb8:

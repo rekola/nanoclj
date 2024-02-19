@@ -521,6 +521,7 @@ static inline nanoclj_val_t Image_save(nanoclj_t * sc, nanoclj_cell_t * args) {
       tmp = convert_imageview(iv, nanoclj_rgb8);
       break;
     default:
+      break;
     }
 
     int success = 0;
