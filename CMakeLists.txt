@@ -11,8 +11,8 @@ IF (MSVC)
 else()
   # The math optimizations are not necessary, but they do not cause harm. Since NaNs are needed -ffast-math or -ffinite-math-only cannot be used.
   add_compile_options(-std=gnu99 -Wall -O3 -march=native -funsafe-math-optimizations -fno-math-errno -fno-rounding-math -ffp-contract=fast -Wno-unused-value -Wno-unused-variable -Wno-unused-function -Werror=implicit-function-declaration -Wno-unused-but-set-variable -Werror=return-type -Werror=discarded-qualifiers)
-
-  if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+  
+  if("${CMAKE_C_COMPILER_ID}" STREQUAL "Clang")
   else()
     add_compile_options(-fno-signaling-nans -fcx-limited-range)
   endif()

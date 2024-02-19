@@ -105,7 +105,7 @@ As well as printing images in block mode like the plot function does, they can a
 
 ## Building
 
-C11 support is required for building nanoclj, and currently it has only been tested with gcc. At the moment, it's unlikely that nanoclj would work on a 32 bit system.
+C11 support is required for building nanoclj, and it has been tested with both gcc and clang. Both 32-bit and 64-bit systems are supported.
 
 ### Ubuntu
 
