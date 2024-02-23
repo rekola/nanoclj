@@ -11,6 +11,7 @@
 #define STRBUFFSIZE 256
 
 #include <zlib.h>
+#include <stdatomic.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -45,6 +46,7 @@ extern "C" {
     struct {
       FILE *file;
       char *filename;
+      atomic_int *rc;
       nanoclj_display_mode_t mode;
       nanoclj_color_t fg;
       nanoclj_color_t bg;
@@ -171,6 +173,7 @@ extern "C" {
     nanoclj_cell_t * NullPointerException;
     nanoclj_cell_t * Throwable;
     nanoclj_cell_t * IOException;
+    nanoclj_cell_t * UnknownHostException;
     nanoclj_cell_t * FileNotFoundException;
     nanoclj_cell_t * AccessDeniedException;
     nanoclj_cell_t * CharacterCodingException;

@@ -84,8 +84,14 @@ static NANOCLJ_THREAD_SIG http_load(void *ptr) {
     curl_easy_setopt(curl, CURLOPT_FORBID_REUSE, d->http_keepalive ? 0 : 1);
 
     CURLcode res = curl_easy_perform(curl);
-    if (res != CURLE_OK) {
-      fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+    if (d->rc) {
+      if (res != CURLE_OK) {
+	*(d->rc) = -res;
+      } else {
+	long http_code = 0;
+	curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+	*(d->rc) = http_code;
+       }
     }
     
     curl_easy_cleanup(curl);

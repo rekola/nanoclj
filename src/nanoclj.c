@@ -228,6 +228,7 @@ typedef struct {
 typedef struct {
   char * url;
   char * useragent;
+  atomic_int * rc;
   bool http_keepalive;
   int http_max_connections;
   int http_max_redirects;
@@ -1529,6 +1530,9 @@ static inline int port_close(nanoclj_t * sc, nanoclj_cell_t * p) {
     if (pr->stdio.filename) {
       free(pr->stdio.filename);
     }
+    if (pr->stdio.rc) {
+      free(pr->stdio.rc);
+    }
     FILE * fh = pr->stdio.file;
     if (fh && (fh != stdout && fh != stderr && fh != stdin)) {
       int fd = fileno(fh);
@@ -2197,6 +2201,30 @@ static inline void update_cursor(int32_t c, nanoclj_cell_t * p, int line_len) {
       }
     }
   }
+}
+
+static inline bool handle_port_exceptions(nanoclj_t * sc, nanoclj_cell_t * p) {
+  if (_port_type_unchecked(p) == port_file) {
+    nanoclj_port_rep_t * pr = _rep_unchecked(p);
+    if (pr->stdio.rc) {
+      int rc = *(pr->stdio.rc);
+      switch (rc) {
+      case -6:
+	nanoclj_throw(sc, mk_exception(sc, sc->UnknownHostException, "Unknown host"));
+	return true;
+      case 0:
+      case 200:
+	return false; /* no exception */
+      case 404:
+	nanoclj_throw(sc, mk_exception(sc, sc->FileNotFoundException, "File not found"));
+	return true;
+      default:
+	nanoclj_throw(sc, mk_exception(sc, sc->IOException, "HTTP failure"));
+	return true;
+      }
+    }
+  }
+  return false;
 }
 
 /* get new codepoint from input file */
@@ -4548,7 +4576,7 @@ static inline nanoclj_cell_t * get_port_object(nanoclj_t * sc, uint16_t type, na
 }
 
 #if NANOCLJ_HAS_HTTP
-static inline int http_open_thread(nanoclj_t * sc, strview_t sv) {
+static inline int http_open_thread(nanoclj_t * sc, strview_t sv, atomic_int * rc) {
   int pipefd[2];
   if (pipe(pipefd) == -1) {
     return 0;
@@ -4561,6 +4589,7 @@ static inline int http_open_thread(nanoclj_t * sc, strview_t sv) {
   d->http_max_connections = 0;
   d->http_max_redirects = 0;
   d->fd = pipefd[1];
+  d->rc = rc;
 
   nanoclj_cell_t * prop = sc->context->properties;
   
@@ -4584,7 +4613,7 @@ static inline int http_open_thread(nanoclj_t * sc, strview_t sv) {
 }
 #endif
 
-static inline nanoclj_val_t port_rep_from_file(nanoclj_t * sc, uint16_t type, FILE * f, char * filename) {
+static inline nanoclj_val_t port_rep_from_file(nanoclj_t * sc, uint16_t type, FILE * f, char * filename, atomic_int * rc) {
   nanoclj_cell_t * p = get_port_object(sc, type, port_file);
   if (!p) return mk_nil();
  
@@ -4598,6 +4627,7 @@ static inline nanoclj_val_t port_rep_from_file(nanoclj_t * sc, uint16_t type, FI
   pr->stdio.fg = sc->fg_color;
   pr->stdio.bg = sc->bg_color;
   pr->stdio.backchars[0] = pr->stdio.backchars[1] = -1;
+  pr->stdio.rc = rc;
 
   nanoclj_cell_t * var = get_var_in_ns(sc, sc->core_ns, sc->FLUSH_ON_NEWLINE, true);
   if (var && is_true(get_indexed_value(var, 1))) {
@@ -4642,11 +4672,14 @@ static inline nanoclj_val_t port_from_filename(nanoclj_t * sc, uint16_t type, st
 
   FILE * f = NULL;
   char * filename = alloc_c_str(sv);
+  atomic_int * rc = NULL;
   if (strcmp(filename, "-") == 0) {
     f = stdin;
   } else if (is_valid_url(sv)) {
 #if NANOCLJ_HAS_HTTP
-    int fd = http_open_thread(sc, sv);
+    rc = malloc(sizeof(atomic_int));
+    *rc = 0;
+    int fd = http_open_thread(sc, sv, rc);
     f = fdopen(fd, mode);
 #endif
   } else if (strncmp(filename, "file://", 7) == 0) {
@@ -4683,7 +4716,7 @@ static inline nanoclj_val_t port_from_filename(nanoclj_t * sc, uint16_t type, st
     free(filename);
     return mk_nil();
   }
-  return port_rep_from_file(sc, type, f, filename);
+  return port_rep_from_file(sc, type, f, filename, rc);
 }
 
 static inline nanoclj_val_t port_from_string(nanoclj_t * sc, uint16_t type, strview_t sv) {
@@ -4751,7 +4784,11 @@ static inline nanoclj_val_t slurp(nanoclj_t * sc, uint16_t t, nanoclj_cell_t * a
 	size += tensor_mutate_append_bytes(array, &b, 1);
       }
     }
-    r = mk_pointer(get_collection_object(sc, T_STRING, 0, size, array, NULL));
+    if (handle_port_exceptions(sc, rdr)) {
+      tensor_free(array);
+    } else {
+      r = mk_pointer(get_collection_object(sc, T_STRING, 0, size, array, NULL));
+    }
     port_close(sc, rdr);
   }
   return r;
@@ -6594,13 +6631,15 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
     Error_0(sc, "Not a reader");
 
-  case OP_READM:               /* .read */
+  case OP_READM:               /* -read */
     if (!unpack_args_1(sc, &arg0)) {
       return false;
     } else if (is_cell(arg0)) {
       nanoclj_cell_t * p = decode_pointer(arg0);
       if (is_readable(p)) {
-	s_return(sc, mk_codepoint(inchar(sc, p)));
+	int32_t c = inchar(sc, p);
+	handle_port_exceptions(sc, p);
+	s_return(sc, mk_codepoint(c));
       }
     }
     Error_0(sc, "Not a reader");
@@ -10142,6 +10181,7 @@ bool nanoclj_init(nanoclj_t * sc) {
   sc->SecureRandom = mk_class(sc, "java.security.SecureRandom", T_SECURERANDOM, sc->Object);
   mk_class(sc, "java.lang.ArithmeticException", T_ARITHMETIC_EXCEPTION, RuntimeException);
   mk_class(sc, "java.lang.IndexOutOfBoundsException", T_INDEX_EXCEPTION, RuntimeException);
+  sc->UnknownHostException = mk_class(sc, "java.net.UnknownHostException", gentypeid(sc), sc->IOException);
   sc->FileNotFoundException = mk_class(sc, "java.io.FileNotFoundException", gentypeid(sc), sc->IOException);
   sc->AccessDeniedException = mk_class(sc, "java.nio.file.AccessDeniedException", gentypeid(sc), sc->IOException);
   sc->CharacterCodingException = mk_class(sc, "java.nio.charset.CharacterCodingException", gentypeid(sc), sc->IOException);
@@ -10228,11 +10268,11 @@ bool nanoclj_init(nanoclj_t * sc) {
 }
 
 void nanoclj_set_input_port_file(nanoclj_t * sc, FILE * fin) {
-  intern(sc, sc->core_ns, sc->IN_SYM, port_rep_from_file(sc, T_READER, fin, NULL));
+  intern(sc, sc->core_ns, sc->IN_SYM, port_rep_from_file(sc, T_READER, fin, NULL, NULL));
 }
 
 void nanoclj_set_output_port_file(nanoclj_t * sc, FILE * fout) {
-  nanoclj_val_t p = port_rep_from_file(sc, T_WRITER, fout, NULL);
+  nanoclj_val_t p = port_rep_from_file(sc, T_WRITER, fout, NULL, NULL);
   intern(sc, sc->core_ns, sc->OUT_SYM, p);
   update_window_info(sc, decode_pointer(p));
 }
@@ -10254,7 +10294,7 @@ void nanoclj_set_error_port_callback(nanoclj_t * sc, void (*text) (const char *,
 }
 
 void nanoclj_set_error_port_file(nanoclj_t * sc, FILE * fout) {
-  intern(sc, sc->core_ns, sc->ERR, port_rep_from_file(sc, T_WRITER, fout, NULL));
+  intern(sc, sc->core_ns, sc->ERR, port_rep_from_file(sc, T_WRITER, fout, NULL, NULL));
 }
 
 void nanoclj_set_external_data(nanoclj_t * sc, void *p) {
