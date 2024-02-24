@@ -5912,7 +5912,7 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
       if (is_string(x)) {
 	strview_t sv = to_strview(x);
 	uint64_t c0, c1, c2, c3, c4;
-	if (sv_scanf(sv, "%8lx-%4lx-%4lx-%4lx-%12lx", &c0, &c1, &c2, &c3, &c4) == 5) {
+	if (sv_scanf(sv, "%8llx-%4llx-%4llx-%4llx-%12llx", &c0, &c1, &c2, &c3, &c4) == 5) {
 	  ms = c0;
 	  ms <<= 16;
 	  ms |= c1;
