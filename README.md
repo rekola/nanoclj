@@ -69,7 +69,7 @@ As well as printing images in block mode like the plot function does, they can a
 
 ## Differences to Clojure:
 
-- Characters are 32 bit, strings are UTF-8 (count is O(n)) and char-array creates a byte array
+- Characters are 32 bit, strings are UTF-8 (count is O(n)), UTF8 validity is checked and char-array creates a byte array
 - Strings are sequences, and they are compared and sorted as such.
 - List count has complexity of O(n)
 - Macros use the TinyScheme syntax
@@ -89,6 +89,7 @@ As well as printing images in block mode like the plot function does, they can a
 - Dividing Long/MIN_VALUE by -1 doesn't fail
 - java.net.URL doesn't resolve the hostname for calculating hashcode
 - ##NaN is unique, which is not the case in Clojure: `(count #{ (Math/sqrt -1) ##NaN }) ;=> 2`
+- No transient data structures: Hash sets and maps are constructed direcly without first creating a transient, so duplicate checking is different and `#{ ##NaN ##NaN }` succeeds.
 
 ## Dependencies
 
@@ -177,6 +178,7 @@ Windows support is in progress.
 - clojure.java.io
   - resource
   - make-parents
+  - delete-file
 - clojure.repl
   - dir
 - clojure.test
