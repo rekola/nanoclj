@@ -2209,12 +2209,16 @@ static inline bool handle_port_exceptions(nanoclj_t * sc, nanoclj_cell_t * p) {
     if (pr->stdio.rc) {
       int rc = *(pr->stdio.rc);
       switch (rc) {
-      case -6:
+      case -6: /* CURLE_COULDNT_RESOLVE_HOST */
 	nanoclj_throw(sc, mk_exception(sc, sc->UnknownHostException, "Unknown host"));
+	return true;
+      case -3: /* CURLE_URL_MALFORMAT */
+	nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Malformed URL")));
 	return true;
       case 0:
       case 200:
 	return false; /* no exception */
+      case -37: /* CURLE_FILE_COULDNT_READ_FILE */
       case 404:
 	nanoclj_throw(sc, mk_exception(sc, sc->FileNotFoundException, "File not found"));
 	return true;
@@ -5601,11 +5605,6 @@ static inline nanoclj_val_t mk_format(nanoclj_t * sc, strview_t fmt0, nanoclj_ce
   
   for (; args; args = next(sc, args), n_args++, m *= 4) {
     nanoclj_val_t arg = first(sc, args);
-    if (is_nil(arg)) {
-      nanoclj_throw(sc, sc->NullPointerException);
-      free(fmt);
-      return mk_nil();
-    }
     
     switch (type(arg)) {
     case T_BYTE:
@@ -5613,8 +5612,6 @@ static inline nanoclj_val_t mk_format(nanoclj_t * sc, strview_t fmt0, nanoclj_ce
     case T_INTEGER:
     case T_LONG:
     case T_DATE:
-    case T_PROC:
-    case T_BOOLEAN:
       switch (n_args) {
       case 0: arg0l = to_long(arg); break;
       case 1: arg1l = to_long(arg); break;
@@ -5639,11 +5636,17 @@ static inline nanoclj_val_t mk_format(nanoclj_t * sc, strview_t fmt0, nanoclj_ce
       plan += 3 * m;
       break;
     }
+    case T_NIL:
     case T_STRING:
     case T_FILE:
     case T_URL:
     case T_SYMBOL:
     case T_KEYWORD:
+    case T_ALIAS:
+    case T_BOOLEAN:
+    case T_EMPTYLIST:
+    case T_REGEX:
+    case T_PROC:
       switch (n_args) {
       case 0: arg0s = to_strview(arg); break;
       case 1: arg1s = to_strview(arg); break;
@@ -8793,7 +8796,12 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     if (is_cell(x)) {
       nanoclj_cell_t * inport = decode_pointer(x);
       if (is_readable(inport)) {
+	size_t old_size = get_size(sc->args);
 	sc->args = assoc(sc, sc->args, sc->code, sc->value);
+	if (old_size + 1 != get_size(sc->args)) {
+	  nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Duplicate key")));
+	  return false;
+	}
 	sc->tok = token(sc, inport);
 	if (sc->tok == TOK_EOF) {
 	  s_return(sc, mk_codepoint(EOF));
@@ -8813,7 +8821,13 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     if (is_cell(x)) {
       nanoclj_cell_t * inport = decode_pointer(x);
       if (is_readable(inport)) {
+	size_t old_size = get_size(sc->args);
 	sc->args = conjoin(sc, sc->args, sc->value);
+	if (old_size + 1 != get_size(sc->args)) {
+	  nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Duplicate key")));
+	  return false;
+	}
+	
 	sc->tok = token(sc, inport);
 	if (sc->tok == TOK_EOF) {
 	  s_return(sc, mk_codepoint(EOF));
