@@ -104,12 +104,7 @@ static nanoclj_val_t System_getenv(nanoclj_t * sc, nanoclj_cell_t * args) {
 
 static nanoclj_val_t System_getProperty(nanoclj_t * sc, nanoclj_cell_t * args) {
   if (args) {
-    nanoclj_val_t v;
-    if (get_elem(sc, sc->context->properties, first(sc, args), &v)) {
-      return v;
-    } else {
-      return mk_nil();
-    }
+    return find(sc, sc->context->properties, first(sc, args), mk_nil());
   } else {
     return mk_pointer(sc->context->properties);
   }

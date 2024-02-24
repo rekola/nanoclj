@@ -20,6 +20,7 @@
 #define SIGNATURE_CELL		SIGNATURE(MASK_SIGN | 0)
 #define SIGNATURE_EMPTYLIST	SIGNATURE(MASK_SIGN | 1)
 #define SIGNATURE_REGEX		SIGNATURE(MASK_SIGN | 2)
+#define SIGNATURE_NOTFOUND      SIGNATURE(MASK_SIGN | 3)
 #define SIGNATURE_NIL		SIGNATURE(MASK_SIGN | 7)
 #define SIGNATURE_NAN		SIGNATURE(0)
 #define SIGNATURE_BOOLEAN	SIGNATURE(1)
@@ -31,11 +32,12 @@
 #define SIGNATURE_ALIAS		SIGNATURE(7)
 
 /* Predefined primitive values */
-#define kNIL	UINT64_C(0xffffffffffffffff)
-#define kEMPTY	UINT64_C(0xfff9000000000000)
-#define kNAN	UINT64_C(0x7ff8000000000000)
-#define kFALSE	UINT64_C(0x7ff9000000000000)
-#define kTRUE	UINT64_C(0x7ff9000000000001)
+#define kNIL	  UINT64_C(0xffffffffffffffff)
+#define kNOTFOUND UINT64_C(0xfffb000000000000)
+#define kEMPTY	  UINT64_C(0xfff9000000000000)
+#define kNAN	  UINT64_C(0x7ff8000000000000)
+#define kFALSE	  UINT64_C(0x7ff9000000000000)
+#define kTRUE	  UINT64_C(0x7ff9000000000001)
 
 static inline bool is_nil(nanoclj_val_t v) {
   return v.as_long == kNIL;
@@ -113,6 +115,10 @@ static inline nanoclj_val_t mk_regex_pointer(void * ptr) {
   return (nanoclj_val_t)(SIGNATURE_REGEX | (uint64_t)ptr);
 }
 
+static inline nanoclj_val_t mk_notfound() {
+  return (nanoclj_val_t)(SIGNATURE_NOTFOUND);
+}
+
 static inline nanoclj_val_t mk_list(const nanoclj_cell_t * ptr) {
   return ptr ? mk_pointer(ptr) : mk_emptylist();
 }
@@ -148,6 +154,10 @@ static inline bool is_boolean(nanoclj_val_t v) {
 
 static inline bool is_regex(nanoclj_val_t v) {
   return (v.as_long & MASK_SIGNATURE) == SIGNATURE_REGEX;
+}
+
+static inline bool is_notfound(nanoclj_val_t v) {
+  return v.as_long == kNOTFOUND;
 }
 
 #endif

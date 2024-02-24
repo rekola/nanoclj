@@ -1366,7 +1366,7 @@ static inline strview_t _to_strview(const nanoclj_cell_t * c) {
 static inline strview_t to_strview(nanoclj_val_t x) {
   switch (prim_type(x)) {
   case T_NIL:
-    return (strview_t){ "nil", 3 };
+    return (strview_t){ "", 0 };
   case T_EMPTYLIST:
     return (strview_t){ "()", 2 };
   case T_BOOLEAN:
@@ -3473,38 +3473,36 @@ static inline size_t find_node_index(nanoclj_t * sc, nanoclj_graph_array_t * g, 
   return NPOS;
 }
 
-static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t key, nanoclj_val_t * result) {
+static inline nanoclj_val_t find(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t key, nanoclj_val_t not_found) {
   if (!coll) {
-    return false;
+    return not_found;
   }
   uint16_t t = _type(coll);
   long long index;
   switch (t) {
-  case T_IMAGE:{
-    nanoclj_tensor_t * image = coll->_image.tensor;
-    if (key.as_long == sc->CHANNELS.as_long) {
-      if (result) *result = mk_int(image->ne[0]);
-    } else if (key.as_long == sc->WIDTH.as_long) {
-      if (result) *result = mk_int(image->ne[1]);
-    } else if (key.as_long == sc->HEIGHT.as_long) {
-      if (result) *result = mk_int(image->ne[2]);
-    } else if (key.as_long == sc->TYPE.as_long) {
-      if (result) *result = mk_int(tensor_image_get_internal_format(image));
-    } else {
-      return false;
+  case T_IMAGE:
+    {
+      nanoclj_tensor_t * image = coll->_image.tensor;
+      if (key.as_long == sc->CHANNELS.as_long) {
+	return mk_int(image->ne[0]);
+      } else if (key.as_long == sc->WIDTH.as_long) {
+	return mk_int(image->ne[1]);
+      } else if (key.as_long == sc->HEIGHT.as_long) {
+	return mk_int(image->ne[2]);
+      } else if (key.as_long == sc->TYPE.as_long) {
+	return mk_int(tensor_image_get_internal_format(image));
+      }
+      break;
     }
-    return true;
-  }
 
-  case T_AUDIO:{
-    nanoclj_tensor_t * audio = coll->_audio.tensor;
-    if (key.as_long == sc->CHANNELS.as_long) {
-      if (result) *result = mk_int(audio->ne[0]);
-    } else {
-      return false;
+  case T_AUDIO:
+    {
+      nanoclj_tensor_t * audio = coll->_audio.tensor;
+      if (key.as_long == sc->CHANNELS.as_long) {
+	return mk_int(audio->ne[0]);
+      }
+      break;
     }
-    return true;
-  }
 
   case T_WRITER:
   case T_READER:
@@ -3513,53 +3511,39 @@ static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t
   case T_GZIP_INPUT_STREAM:
   case T_GZIP_OUTPUT_STREAM:
     if (key.as_long == sc->LINE.as_long) {
-      if (result) {
-	int l = _line_unchecked(coll);
-	*result = l != -1 ? mk_int(l) : mk_nil();
-      }
+      int l = _line_unchecked(coll);
+      return l != -1 ? mk_int(l) : mk_nil();
     } else if (key.as_long == sc->COLUMN.as_long) {
-      if (result) {
-	int c = _column_unchecked(coll);
-	*result = c != -1 ? mk_int(c) : mk_nil();
-      }
+      int c = _column_unchecked(coll);
+      return c != -1 ? mk_int(c) : mk_nil();
     } else if (key.as_long == sc->GRAPHICS.as_long) {
-      if (result) *result = mk_boolean(sc->term_graphics != nanoclj_no_gfx);
-    } else {
-      return false;
+      return mk_boolean(sc->term_graphics != nanoclj_no_gfx);
     }
-    return true;
+    break;
 
   case T_RATIO:
     if (convert_to_long(key, &index) && (index == 0 || index == 1)) {
-      if (result) {
-	if (index == 0) *result = mk_pointer(mk_bigint_from_tensor(sc, _sign(coll), coll->_ratio.numerator));
-	else *result = mk_pointer(mk_bigint_from_tensor(sc, 1, coll->_ratio.denominator));
-      }
-      return true;
+      if (index == 0) return mk_pointer(mk_bigint_from_tensor(sc, _sign(coll), coll->_ratio.numerator));
+      else return mk_pointer(mk_bigint_from_tensor(sc, 1, coll->_ratio.denominator));
     }
+    break;
 
   case T_UUID:
     if (convert_to_long(key, &index) && (index == 0 || index == 1)) {
-      if (result) {
-	*result = mk_long(sc, coll->_small_tensor.longs[index]);
-      }
-      return true;
+      return mk_long(sc, coll->_small_tensor.longs[index]);
     }
+    break;
 
   case T_GRAPH:
     if (key.as_long == sc->EDGES.as_long) {
       if (_num_edges_unchecked(coll)) {
-	if (result) {
-	  coll = mk_graph(sc, T_GRAPH_EDGE, _edge_offset_unchecked(coll), _num_edges_unchecked(coll), _graph_unchecked(coll));
-	  _set_seq(coll);
-	  *result = mk_pointer(coll);
-	}
-	return true;
+	coll = mk_graph(sc, T_GRAPH_EDGE, _edge_offset_unchecked(coll), _num_edges_unchecked(coll), _graph_unchecked(coll));
+	_set_seq(coll);
+	return mk_pointer(coll);
       }
     } else if (convert_to_long(key, &index)) {
       if (index >= 0 && index < _num_nodes_unchecked(coll)) {
-	if (result) *result = mk_pointer(mk_graph(sc, T_GRAPH_NODE, _node_offset_unchecked(coll) + index, 1, _graph_unchecked(coll)));
-	return true;
+	return mk_pointer(mk_graph(sc, T_GRAPH_NODE, _node_offset_unchecked(coll) + index, 1, _graph_unchecked(coll)));
       }
     }
     break;
@@ -3568,36 +3552,31 @@ static inline bool get_elem(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t
     {
       nanoclj_node_t * n = &(_graph_unchecked(coll)->nodes[_node_offset_unchecked(coll)]);
       if (key.as_long == sc->POSITION.as_long) {
-	if (result) *result = mk_vector_2d(sc, n->pos.x, n->pos.y);
+	return mk_vector_2d(sc, n->pos.x, n->pos.y);
       } else if (key.as_long == sc->DATA.as_long) {
-	if (result) *result = n->data;
-      } else {
-	return false;
+	return n->data;
       }
     }
-    return true;
+    break;
 
   case T_GRAPH_EDGE:
     {
       nanoclj_edge_t * e = &(_graph_unchecked(coll)->edges[_edge_offset_unchecked(coll)]);
       if (key.as_long == sc->SOURCE.as_long) {
-	if (result) *result = mk_long(sc, e->source);
+	return mk_long(sc, e->source);
       } else if (key.as_long == sc->TARGET.as_long) {
-	if (result) *result = mk_long(sc, e->target);
-      } else {
-	return false;
+	return mk_long(sc, e->target);
       }
     }
-    return true;
+    break;
 
   default:
     index = find_index(sc, coll, key);
     if (index != NPOS) {
-      if (result) *result = get_indexed_value(coll, index);
-      return true;
+      return get_indexed_value(coll, index);
     }
   }
-  return false;
+  return not_found;
 }
 
 /* compares a and b
@@ -3942,7 +3921,7 @@ static inline nanoclj_cell_t * conjoin(nanoclj_t * sc, nanoclj_cell_t * coll, na
     /* Metadata is not copied to new object */
     return get_cell(sc, T_LIST, 0, new_value, coll, NULL);
   } else if (t == T_HASHSET || t == T_SORTED_HASHSET) {
-    if (!get_elem(sc, coll, new_value, NULL)) {
+    if (find_index(sc, coll, new_value) == NPOS) {
       return vector_conjoin(sc, coll, new_value);
     } else {
       return coll;
@@ -4107,8 +4086,8 @@ static inline bool set_var_in_ns(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_va
   if (meta) set_indexed_meta(y, idx, mk_pointer(meta));
   else meta = decode_pointer(get_indexed_meta(y, idx));
 
-  nanoclj_val_t watches0;
-  if (get_elem(sc, meta, sc->WATCHES, &watches0)) {
+  nanoclj_val_t watches0 = find(sc, meta, sc->WATCHES, mk_nil());
+  if (!is_nil(watches0)) {
     nanoclj_val_t var = mk_pointer(get_collection_object(sc, T_VAR, idx * 3, 3, y->_collection.tensor, NULL));
     nanoclj_cell_t * watches = seq(sc, decode_pointer(watches0));
     for (; watches; watches = next(sc, watches)) {
@@ -4268,10 +4247,7 @@ static inline nanoclj_val_t def_symbol_or_keyword(nanoclj_t * sc, const char *na
     strview_t ns_sv = mk_strview(0), name_sv;
     if (t == T_KEYWORD && name[0] == ':') { /* use the current namespace (::keyword) */
       name++;
-      nanoclj_val_t ns_name;
-      if (get_elem(sc, _cons_metadata(sc->current_ns), sc->NAME, &ns_name)) {
-	ns_sv = to_strview(ns_name);
-      }
+      ns_sv = to_strview(find(sc, _cons_metadata(sc->current_ns), sc->NAME, mk_nil()));
       name_sv = mk_strview(name);
     } else {
       const char * p = strchr(name, '/');
@@ -4598,18 +4574,10 @@ static inline int http_open_thread(nanoclj_t * sc, strview_t sv, atomic_int * rc
   nanoclj_cell_t * prop = sc->context->properties;
   
   nanoclj_val_t v;
-  if (get_elem(sc, prop, mk_string(sc, "http.agent"), &v)) {
-    d->useragent = alloc_c_str(to_strview(v));
-  }
-  if (get_elem(sc, prop, mk_string(sc, "http.keepalive"), &v)) {
-    d->http_keepalive = to_int(v);
-  }
-  if (get_elem(sc, prop, mk_string(sc, "http.maxConnections"), &v)) {
-    d->http_max_connections = to_int(v);
-  }
-  if (get_elem(sc, prop, mk_string(sc, "http.maxRedirects"), &v)) {
-    d->http_max_redirects = to_int(v);
-  }
+  d->useragent = alloc_c_str(to_strview(find(sc, prop, mk_string(sc, "http.agent"), mk_nil())));
+  d->http_keepalive = to_int(find(sc, prop, mk_string(sc, "http.keepalive"), mk_nil()));
+  d->http_max_connections = to_int(find(sc, prop, mk_string(sc, "http.maxConnections"), mk_nil()));
+  d->http_max_redirects = to_int(find(sc, prop, mk_string(sc, "http.maxRedirects"), mk_nil()));
 
   nanoclj_start_thread(http_load, d);
   
@@ -5384,7 +5352,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, print_scheme
     if (ps == print_scheme_str) {
       sv = (strview_t){ "", 0 };
     } else {
-      sv = to_strview(l);
+      sv = (strview_t){ "nil", 3 };
     }
     break;
   case T_CELL:
@@ -5397,16 +5365,13 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, print_scheme
 	nanoclj_val_t ns = mk_nil();
 	nanoclj_cell_t * md = get_metadata(c);
 	if (md) {
-	  get_elem(sc, md, sc->NS, &ns);
-	  nanoclj_val_t name2;
-	  if (get_elem(sc, md, sc->NAME, &name2)) {
-	    name = name2;
-	  }
+	  ns = find(sc, md, sc->NS, mk_nil());
+	  name = find(sc, md, sc->NAME, name);
 	}
 	if (!is_nil(name)) {
 	  nanoclj_val_t ns_name = mk_nil();
 	  if (!is_nil(ns)) {
-	    get_elem(sc, get_metadata(decode_pointer(ns)), sc->NAME, &ns_name);
+	    ns_name = find(sc, get_metadata(decode_pointer(ns)), sc->NAME, mk_nil());
 	  }
 	  sv = to_strview(name);
 	  if (!is_nil(ns_name)) {
@@ -5497,12 +5462,7 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, print_scheme
       }
 	break;
       case T_NAMESPACE:
-	{
-	  nanoclj_val_t name_v;
-	  if (get_elem(sc, _cons_metadata(c), sc->NAME, &name_v)) {
-	    obj_sv = to_strview(name_v);
-	  }
-	}
+	obj_sv = to_strview(find(sc, _cons_metadata(c), sc->NAME, mk_nil()));
 	break;
       case T_FILE:
 	obj_sv = _to_strview(c);
@@ -5533,11 +5493,11 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, print_scheme
   if (!sv.ptr) {
     if (isa(sc, sc->Throwable, l)) {
       sv = to_strview(car_unchecked(l));
-    } else if (ps == print_scheme_str && obj_sv.ptr) {
+    } else if (ps == print_scheme_str && obj_sv.size) {
       sv = obj_sv;
     } else {
-      nanoclj_val_t name_v;
-      if (get_elem(sc, _cons_metadata(get_type_object(sc, l)), sc->NAME, &name_v)) {
+      nanoclj_val_t name_v = find(sc, _cons_metadata(get_type_object(sc, l)), sc->NAME, mk_nil());
+      if (!is_nil(name_v)) {
 	sv = to_strview(name_v);
 	sv = (strview_t){
 	  sc->strbuff,
@@ -5637,6 +5597,12 @@ static inline nanoclj_val_t mk_format(nanoclj_t * sc, strview_t fmt0, nanoclj_ce
       break;
     }
     case T_NIL:
+      switch (n_args) {
+      case 0: arg0s = (strview_t){ "null", 4 }; break;
+      case 1: arg1s = (strview_t){ "null", 4 }; break;
+      }
+      plan += 3 * m;
+      break;      
     case T_STRING:
     case T_FILE:
     case T_URL:
@@ -6765,17 +6731,12 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       
     case T_KEYWORD:
     case T_SYMBOL:{
-      nanoclj_val_t coll = first(sc, sc->args), elem;
-      if (is_cell(coll) && get_elem(sc, decode_pointer(coll), sc->code, &elem)) {
-	s_return(sc, elem);
-      } else {
-	nanoclj_cell_t * r = next(sc, sc->args);
-	if (r) {
-	  s_return(sc, first(sc, r));
-	} else {
-	  s_return(sc, mk_nil());
-	}
+      nanoclj_val_t coll = first(sc, sc->args);
+      if (is_cell(coll)) {
+	nanoclj_val_t v = find(sc, decode_pointer(coll), sc->code, mk_notfound());
+	if (!is_notfound(v)) s_return(sc, v);
       }
+      s_return(sc, first(sc, next(sc, sc->args)));
     }
 
     case T_NIL:
@@ -6803,12 +6764,11 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	if (_min_arity_unchecked(code_cell) > 0 || _max_arity_unchecked(code_cell) != -1) {
 	  int64_t n = count(sc, sc->args);
 	  if (n < _min_arity_unchecked(code_cell) || n > _max_arity_unchecked(code_cell)) {
-	    nanoclj_val_t ns = mk_nil(), name_v = mk_nil();
-	    get_elem(sc, _ff_metadata(code_cell), sc->NS, &ns);
-	    get_elem(sc, _ff_metadata(code_cell), sc->NAME, &name_v);
+	    nanoclj_val_t ns = find(sc, _ff_metadata(code_cell), sc->NS, mk_nil());
+	    nanoclj_val_t name_v = find(sc, _ff_metadata(code_cell), sc->NAME, mk_nil());
 	    nanoclj_val_t ns_name_v = mk_nil();
 	    if (is_cell(ns)) {
-	      get_elem(sc, get_metadata(decode_pointer(ns)), sc->NAME, &ns_name_v);
+	      ns_name_v = find(sc, get_metadata(decode_pointer(ns)), sc->NAME, mk_nil());
 	    }
 	    nanoclj_throw(sc, mk_arity_exception(sc, n, ns_name_v, name_v));
 	    return false;
@@ -6894,12 +6854,11 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  sc->code = car_unchecked(sc->code);
 	  s_goto(sc, OP_EVAL);
 	} else {
-	  nanoclj_val_t ns = mk_nil(), name_v = mk_nil();
-	  get_elem(sc, _cons_metadata(code_cell), sc->NS, &ns);
-	  get_elem(sc, _cons_metadata(code_cell), sc->NAME, &name_v);
+	  nanoclj_val_t ns = find(sc, _cons_metadata(code_cell), sc->NS, mk_nil());
+	  nanoclj_val_t name_v = find(sc, _cons_metadata(code_cell), sc->NAME, mk_nil());
 	  nanoclj_val_t ns_name_v = mk_nil();
 	  if (is_cell(ns)) {
-	    get_elem(sc, get_metadata(decode_pointer(ns)), sc->NAME, &ns_name_v);
+	    ns_name_v = find(sc, get_metadata(decode_pointer(ns)), sc->NAME, mk_nil());
 	  }
 	  nanoclj_throw(sc, mk_arity_exception(sc, count(sc, sc->args), ns_name_v, name_v));
 	  return false;
@@ -6934,12 +6893,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       default:
       	if (!unpack_args_1_plus(sc, &arg0, &arg_next)) {
 	  return false;
-	} else if (get_elem(sc, code_cell, arg0, &x)) {
-	  s_return(sc, x);
-	} else if (arg_next) {
-	  s_return(sc, first(sc, arg_next));
 	} else {
-	  s_return(sc, mk_nil());
+	  nanoclj_val_t v = find(sc, code_cell, arg0, mk_notfound());
+	  s_return(sc, !is_notfound(v) ? v : first(sc, arg_next));
 	}
       }
       break;
@@ -7995,13 +7951,15 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_GET:             /* get */
     if (!unpack_args_2_plus(sc, &arg0, &arg1, &arg_next)) {
       return false;
-    } else if (is_cell(arg0) && get_elem(sc, decode_pointer(arg0), arg1, &x)) {
-      s_return(sc, x);
-    } else {
-      /* Not found => return the not-found value if provided */
-      s_return(sc, first(sc, arg_next));
+    } else if (is_cell(arg0)) {
+      nanoclj_val_t v = find(sc, decode_pointer(arg0), arg1, mk_notfound());
+      if (!is_notfound(v)) {
+	s_return(sc, v);
+      }
     }
-
+    /* Not found => return the not-found value if provided */
+    s_return(sc, first(sc, arg_next));
+    
   case OP_FIND:
     if (!unpack_args_2(sc, &arg0, &arg1)) {
       return false;
@@ -8024,7 +7982,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     if (!unpack_args_2(sc, &arg0, &arg1)) {
       return false;
     }
-    s_retbool(is_cell(arg0) && get_elem(sc, decode_pointer(arg0), arg1, NULL));
+    s_retbool(is_cell(arg0) && !is_notfound(find(sc, decode_pointer(arg0), arg1, mk_notfound())));
 
   case OP_AGET:
     if (!unpack_args_2_plus(sc, &arg0, &arg1, &arg_next)) {
@@ -8326,8 +8284,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     case T_CELL:
       if (op == OP_TYPE) {
 	nanoclj_cell_t * c = decode_pointer(arg0);
-	if (!_is_gc_atom(c) && get_elem(sc, _cons_metadata(c), sc->TYPE, &x)) {
-	  s_return(sc, x);
+	if (!_is_gc_atom(c)) {
+	  nanoclj_val_t t = find(sc, _cons_metadata(c), sc->TYPE, mk_nil());
+	  if (!is_nil(t)) s_return(sc, t);
 	}
       }
     }
@@ -10427,9 +10386,9 @@ nanoclj_val_t nanoclj_eval(nanoclj_t * sc, nanoclj_val_t obj) {
 
 static inline void default_exception_handler(nanoclj_t * sc) {
   if (sc->pending_exception) {
-    nanoclj_val_t name_v;
     strview_t sv0;
-    if (get_elem(sc, _cons_metadata(get_type_object(sc, mk_pointer(sc->pending_exception))), sc->NAME, &name_v)) {
+    nanoclj_val_t name_v = find(sc, _cons_metadata(get_type_object(sc, mk_pointer(sc->pending_exception))), sc->NAME, mk_notfound());
+    if (!is_notfound(name_v)) {
       sv0 = to_strview(name_v);
     } else {
       sv0 = (strview_t){ "Unknown exception", 17 };

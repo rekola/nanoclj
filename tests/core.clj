@@ -188,6 +188,7 @@
                                         ; Formatting
 
 (t/is (= (format "%.2f" 0.123) "0.12"))
+(t/is (= (format "%s" nil) "null"))
 
                                         ; Bit-operations
 
