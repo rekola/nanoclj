@@ -3043,6 +3043,7 @@ static uint32_t hasheq(nanoclj_val_t v, void * d) {
 
   case T_DOUBLE:
     if (v.as_double == 0.0) return 0;
+    else if (v.as_long == kNNAN) return 2146959360;
     else return (int)v.as_long ^ (int)(v.as_long >> 32);
 
   case T_SYMBOL:
@@ -10135,7 +10136,7 @@ bool nanoclj_init(nanoclj_t * sc) {
   mk_class(sc, "java.lang.Class", T_CLASS, AFn); /* non-standard parent */
   mk_class(sc, "java.lang.String", T_STRING, sc->Object);
   mk_class(sc, "java.lang.Boolean", T_BOOLEAN, sc->Object);
-  mk_class(sc, "java.lang.Double", T_DOUBLE, Number);
+  sc->Double = mk_class(sc, "java.lang.Double", T_DOUBLE, Number);
   mk_class(sc, "java.lang.Byte", T_BYTE, Number);
   mk_class(sc, "java.lang.Short", T_SHORT, Number);
   mk_class(sc, "java.lang.Integer", T_INTEGER, Number);

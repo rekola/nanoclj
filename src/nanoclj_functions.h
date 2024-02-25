@@ -259,6 +259,18 @@ static nanoclj_val_t Math_random(nanoclj_t * sc, nanoclj_cell_t * args) {
 #endif
 }
 
+/* Double */
+
+static nanoclj_val_t Double_doubleToLongBits(nanoclj_t * sc, nanoclj_cell_t * args) {
+  double d = to_double(first(sc, args));
+  return mk_long(sc, mk_double(isnan(d) ? NAN : d).as_long);
+}
+
+static nanoclj_val_t Double_doubleToRawLongBits(nanoclj_t * sc, nanoclj_cell_t * args) {
+  nanoclj_val_t v = mk_double(to_double(first(sc, args)));
+  return mk_long(sc, v.as_long);
+}
+
 /* SecureRandom */
 
 static nanoclj_val_t SecureRandom_nextBytes(nanoclj_t * sc, nanoclj_cell_t * args) {
@@ -1342,6 +1354,9 @@ static inline void register_functions(nanoclj_t * sc) {
   intern(sc, Math, def_symbol(sc, "E"), mk_double(M_E));
   intern(sc, Math, def_symbol(sc, "PI"), mk_double(M_PI));
 
+  intern_foreign_func(sc, sc->Double, "doubleToLongBits", Double_doubleToLongBits, 1, 1);
+  intern_foreign_func(sc, sc->Double, "doubleToRawLongBits", Double_doubleToRawLongBits, 1, 1);
+  
   intern_foreign_func(sc, sc->SecureRandom, "nextBytes", SecureRandom_nextBytes, 2, 2);
 
   intern_foreign_func(sc, numeric_tower, "expt", numeric_tower_expt, 2, 2);

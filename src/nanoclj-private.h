@@ -168,6 +168,7 @@ extern "C" {
     nanoclj_cell_t * Audio;
     nanoclj_cell_t * Image;
     nanoclj_cell_t * Graph;
+    nanoclj_cell_t * Double;
     nanoclj_cell_t * SecureRandom;
     nanoclj_cell_t * OutOfMemoryError;
     nanoclj_cell_t * NullPointerException;

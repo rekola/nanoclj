@@ -17,10 +17,11 @@
 /* Signatures for primitive types */
 #define SIGNATURE(x)		((MASK_EXPONENT | MASK_QUIET | (x)) << 48)
 
-#define SIGNATURE_CELL		SIGNATURE(MASK_SIGN | 0)
-#define SIGNATURE_EMPTYLIST	SIGNATURE(MASK_SIGN | 1)
-#define SIGNATURE_REGEX		SIGNATURE(MASK_SIGN | 2)
-#define SIGNATURE_NOTFOUND      SIGNATURE(MASK_SIGN | 3)
+#define SIGNATURE_NNAN		SIGNATURE(MASK_SIGN | 0)
+#define SIGNATURE_CELL		SIGNATURE(MASK_SIGN | 1)
+#define SIGNATURE_EMPTYLIST	SIGNATURE(MASK_SIGN | 2)
+#define SIGNATURE_REGEX		SIGNATURE(MASK_SIGN | 3)
+#define SIGNATURE_NOTFOUND      SIGNATURE(MASK_SIGN | 4)
 #define SIGNATURE_NIL		SIGNATURE(MASK_SIGN | 7)
 #define SIGNATURE_NAN		SIGNATURE(0)
 #define SIGNATURE_BOOLEAN	SIGNATURE(1)
@@ -32,12 +33,13 @@
 #define SIGNATURE_ALIAS		SIGNATURE(7)
 
 /* Predefined primitive values */
-#define kNIL	  UINT64_C(0xffffffffffffffff)
-#define kNOTFOUND UINT64_C(0xfffb000000000000)
-#define kEMPTY	  UINT64_C(0xfff9000000000000)
 #define kNAN	  UINT64_C(0x7ff8000000000000)
 #define kFALSE	  UINT64_C(0x7ff9000000000000)
 #define kTRUE	  UINT64_C(0x7ff9000000000001)
+#define kNNAN	  UINT64_C(0xfff8000000000000)
+#define kEMPTY	  UINT64_C(0xfffa000000000000)
+#define kNOTFOUND UINT64_C(0xfffc000000000000)
+#define kNIL	  UINT64_C(0xffffffffffffffff)
 
 static inline bool is_nil(nanoclj_val_t v) {
   return v.as_long == kNIL;
@@ -87,8 +89,7 @@ static inline nanoclj_val_t mk_boolean(bool b) {
 }
 
 static inline nanoclj_val_t mk_double(double n) {
-  /* Canonize all kinds of NaNs such as -NaN to ##NaN */
-  return (nanoclj_val_t)(isnan(n) ? NAN : n);
+  return (nanoclj_val_t)n;
 }
 
 static inline nanoclj_val_t mk_pointer(const nanoclj_cell_t * ptr) {
