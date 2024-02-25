@@ -6,6 +6,7 @@
 (import java.lang.Thread)
 (import java.lang.Math)
 (import java.lang.Throwable)
+(import java.security.SecureRandom)
 (import clojure.lang.Keyword)
 (import clojure.lang.BigInt)
 (import clojure.lang.MapEntry)

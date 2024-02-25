@@ -242,3 +242,8 @@
 (t/is (= (alength (float-array 1000000)) 1000000))
 (t/is (= (seq (to-array [ :a :b :c :d ])) '( :a :b :c :d )))
 (t/is (= (seq (into-array [ 1.0 2.0 3.0 4.0 ])) '( 1.0 2.0 3.0 4.0 )))
+
+                                        ; UUIDs
+
+(t/is (= (.version (random-uuid)) 4))
+(t/is (= (.variant (random-uuid)) 2))
