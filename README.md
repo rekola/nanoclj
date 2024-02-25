@@ -88,7 +88,7 @@ As well as printing images in block mode like the plot function does, they can a
 - Unbound Vars cannot be created
 - Dividing Long/MIN_VALUE by -1 doesn't fail
 - java.net.URL doesn't resolve the hostname for calculating hashcode
-- No transient data structures: Hash sets and maps are constructed direcly without first creating a transient, so duplicate checking is different and `#{ ##NaN ##NaN }` succeeds.
+- No transient data structures
 
 ## Dependencies
 
@@ -132,7 +132,7 @@ Windows support is in progress.
 ## Missing functionality
 
 - Interfaces, Records, StructMaps, Protocols and Multi-methods
-- Transient data structures and dynamic variables
+- Dynamic variables
 - Transducers
 - Refs, Agents, Atoms, Validators
 - Reader Conditionals
