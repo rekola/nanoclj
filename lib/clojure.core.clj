@@ -537,23 +537,23 @@
                      (var? x) (print-fn :var x)
                      (class? x) (print-fn :class x)
                      (closure? x) (pr-inline print-fn (cons 'fn (car x)))
-                     (image? x) (let [cs *cell-size*
-                                      f *window-scale-factor*
-                                      w (x :width)
-                                      h (x :height)
-                                      ww (* (cs 0) f)
-                                      wh (* (cs 1) f)
-                                      s (/ wh h )
-                                      ]
-                                  (if (> w wh)
-                                    (do
-                                      (mode :inline)
-                                      (-pr (Image/resize x (* s w) wh)))
-                                    (-pr x)
-                                    ))
-                     (gradient? x) (do
-                                     (mode :inline)
-                                     (-pr (nanoclj.art/plot-gradient x)))
+                     (and (image? x) (*out* :graphics)) (let [cs *cell-size*
+                                                              f *window-scale-factor*
+                                                              w (x :width)
+                                                              h (x :height)
+                                                              ww (* (cs 0) f)
+                                                              wh (* (cs 1) f)
+                                                              s (/ wh h )
+                                                              ]
+                                                          (if (> w wh)
+                                                            (do
+                                                              (mode :inline)
+                                                              (-pr (Image/resize x (* s w) wh)))
+                                                            (-pr x)
+                                                            ))
+                     (and (gradient? x) (*out* :graphics)) (do
+                                                             (mode :inline)
+                                                             (-pr (nanoclj.art/plot-gradient x)))
                      :else (print-fn nil x)))
 
 (defn ^:private pr-meta
