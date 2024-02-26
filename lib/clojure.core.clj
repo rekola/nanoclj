@@ -654,7 +654,7 @@
 (defn println-str [& xs] (with-out-str (apply println xs)))
 
 (defn read-string [s] (with-in-str s (read)))
-(defn load-string [s] (eval (read-string s)))
+(defn load-string [s] (load-reader (clojure.java.io/reader (char-array s))))
 
 (defn ^:private str-print
   [& more] (run! #( if (coll? %) (pr-block (fn [class v] (-pr v)) %) (-str %) ) more))

@@ -6557,6 +6557,14 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       s_goto(sc, OP_T0LVL);
     }
 
+  case OP_LOAD_READER:
+    if (!unpack_args_1(sc, &arg0)) {
+      return false;
+    } else {
+      tensor_mutate_push(sc->load_stack, arg0);
+      s_goto(sc, OP_T0LVL);
+    }
+
   case OP_T0LVL:               /* top level */
     /* Skip spaces to see if the current file is completely done */
     z = decode_pointer(tensor_peek(sc->load_stack));

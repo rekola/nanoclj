@@ -1,5 +1,6 @@
 _OP_DEF(0, 0, OP_NIL)
 _OP_DEF("load-file", 0, OP_LOAD_FILE)
+_OP_DEF("load-reader", 0, OP_LOAD_READER)
 _OP_DEF(0, 0, OP_T0LVL)
 _OP_DEF(0, 0, OP_T1LVL)
 _OP_DEF("read", 0, OP_READ)
