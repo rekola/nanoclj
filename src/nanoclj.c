@@ -4287,10 +4287,16 @@ static inline nanoclj_cell_t * find_ns(nanoclj_t * sc, nanoclj_val_t name) {
 
 static inline nanoclj_cell_t * def_namespace_with_sym(nanoclj_t *sc, nanoclj_val_t sym, nanoclj_cell_t * md) {
   nanoclj_cell_t * s = get_vector_object(sc, T_VARMAP, 0);
-  nanoclj_cell_t * ns0 = get_cell(sc, T_NAMESPACE, 0, mk_pointer(s), sc->core_ns, md);
+  nanoclj_cell_t * ns0 = get_cell(sc, T_NAMESPACE, 0, mk_pointer(s), sc->core_ns ? sc->core_ns : sc->root_ns, md);
   nanoclj_val_t ns = mk_pointer(ns0);
 
-  sc->namespaces = tensor_hash_mutate_set(sc->namespaces, hasheq(sym, sc), sc->namespaces->ne[1], sym, ns, mk_nil(), false, sc, hasheq);
+  if (!is_nil(sym)) {
+    if (sc->root_ns) {
+      intern_with_meta(sc, sc->root_ns, def_alias_from_val(sc, sym), mk_pointer(s), NULL);
+    }
+    
+    sc->namespaces = tensor_hash_mutate_set(sc->namespaces, hasheq(sym, sc), sc->namespaces->ne[1], sym, ns, mk_nil(), false, sc, hasheq);
+  }
 
   return ns0;
 }
@@ -5720,7 +5726,7 @@ static inline bool resolve(nanoclj_t * sc, nanoclj_cell_t * env0, nanoclj_val_t 
       sym = s->name_sym;
       all_namespaces = false;
     } else {
-      nanoclj_val_t msg = mk_string_fmt(sc, "%.*s is not defined", s->ns.size, s->ns.ptr);
+      nanoclj_val_t msg = mk_string_fmt(sc, "No such namespace: %.*s", s->ns.size, s->ns.ptr);
       nanoclj_throw(sc, mk_runtime_exception(sc, msg));
       return false;
     }
@@ -10106,7 +10112,8 @@ bool nanoclj_init(nanoclj_t * sc) {
   sc->EMPTYSET = get_vector_object(sc, T_HASHSET, 0);
 
   /* Init root namespace clojure.core */
-  sc->core_ns = NULL;
+  sc->root_ns = sc->core_ns = NULL;
+  sc->root_ns = def_namespace_with_sym(sc, mk_nil(), NULL);
   sc->core_ns = sc->current_ns = sc->envir = def_namespace(sc, "clojure.core", __FILE__);
 
   size_t n = sizeof(dispatch_table) / sizeof(dispatch_table[0]);
