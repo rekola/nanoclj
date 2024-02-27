@@ -6046,12 +6046,17 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
       return mk_codepoint(i);
     }
     
-  case T_CLASS:{
-    nanoclj_val_t name = first(sc, args);
-    nanoclj_val_t parent = second(sc, args);
-    nanoclj_cell_t * meta = update_meta_from_reader(sc, mk_hashmap(sc), tensor_peek(sc->load_stack));
-    return mk_pointer(mk_class_with_meta(sc, name, gentypeid(sc), decode_pointer(parent), meta));
-  }
+  case T_CLASS:
+    if (args) {
+      nanoclj_val_t name = first(sc, args);
+      args = next(sc, args);
+      if (args) {
+	nanoclj_val_t parent = first(sc, args);
+	nanoclj_cell_t * meta = update_meta_from_reader(sc, mk_hashmap(sc), tensor_peek(sc->load_stack));
+	return mk_pointer(mk_class_with_meta(sc, name, gentypeid(sc), decode_pointer(parent), meta));
+      }
+    }
+    break;
 
   case T_LIST:
     x = first(sc, args);
