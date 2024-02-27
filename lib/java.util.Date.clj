@@ -6,4 +6,4 @@
 
 (defn getTime
   "Returns the time in milliseconds"
-  [t] (long t))
+  [t] (clojure.core/long t))

@@ -19,7 +19,7 @@
 
 (defn toUpperCase
   "Returns upper case version of the string"
-  [s] (maps -toupper s))
+  [s] (clojure.core/maps -toupper s))
 
 (defn isEmpty
   "Returns true if the string is empty"
@@ -35,4 +35,4 @@
                     ]
                 (if (< n1 n2)
                   false
-                  (= (subs s 0 n2) substr)))))
+                  (= (clojure.core/subs s 0 n2) substr)))))

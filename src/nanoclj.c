@@ -4045,7 +4045,6 @@ static inline nanoclj_val_t inc_slot_in_env(nanoclj_t * sc, nanoclj_cell_t * env
 static inline nanoclj_cell_t * get_var_in_ns(nanoclj_t * sc, nanoclj_cell_t * env, nanoclj_val_t hdl, bool all) {
   for (nanoclj_cell_t * x = env; x; x = _cdr_unchecked(x)) {
     nanoclj_val_t y0 = _car_unchecked(x);
-    if (!is_cell(y0)) continue;
     nanoclj_cell_t * y = decode_pointer(y0);
     if (_type(y) == T_VARMAP) {
       size_t idx = find_varmap_index(y, hdl);
@@ -4288,6 +4287,26 @@ static inline nanoclj_cell_t * find_ns(nanoclj_t * sc, nanoclj_val_t name) {
     location = (location + 1) % num_buckets;
   }
   return NULL;
+}
+
+static inline bool refer(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_cell_t * source_ns) {
+  nanoclj_cell_t * y = decode_pointer(_car_unchecked(source_ns));
+  if (_type(y) == T_VARMAP && !_is_small(y)) {
+    nanoclj_tensor_t * tensor = y->_collection.tensor;
+    size_t num_buckets = tensor_hash_get_bucket_count(tensor);
+    for (size_t i = 0; i < num_buckets; i++) {
+      if (!tensor_hash_is_unassigned(tensor, i)) {
+	nanoclj_val_t key = tensor_get_2d(tensor, 0, i);
+	nanoclj_val_t value = tensor_get_2d(tensor, 1, i);
+	nanoclj_val_t meta = tensor_get_2d(tensor, 2, i);
+	
+	intern_with_meta(sc, ns, key, value, decode_pointer(meta));
+      }
+    }
+    return true;
+  } else {
+    return false;
+  }
 }
 
 static inline nanoclj_cell_t * def_namespace_with_sym(nanoclj_t *sc, nanoclj_val_t sym, nanoclj_cell_t * md) {
@@ -9166,6 +9185,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	meta = assoc(sc, meta, sc->NAME, arg0);
 	ns = def_namespace_with_sym(sc, arg0, meta);
       }
+      if (ns != sc->core_ns) refer(sc, ns, sc->core_ns);
       bool r = _s_return(sc, mk_pointer(ns));
       sc->envir = sc->current_ns = ns;
       return r;
@@ -9318,7 +9338,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	    return false; // abort, if loading a file threw anything else but FileNotFoundException
 	  }
 	  if (!ns) {
-	    nanoclj_throw(sc, mk_runtime_exception(sc, mk_string_fmt(sc, "No such namespace: %.*s", sv.size, sv.ptr)));
+	    nanoclj_throw(sc, mk_runtime_exception(sc, mk_string_fmt(sc, "Could not locate %.*s.clj", sv.size, sv.ptr)));
 	    return false;
 	  }
 	}
@@ -9340,6 +9360,15 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  }
 	}
       }
+      s_return(sc, mk_nil());
+    }
+
+  case OP_REFER:
+    if (!unpack_args_1_not_nil(sc, &arg0)) {
+      return false;
+    } else {
+      nanoclj_cell_t * ns = find_ns(sc, arg0);
+      if (ns) refer(sc, sc->current_ns, ns);
       s_return(sc, mk_nil());
     }
 
@@ -10011,7 +10040,7 @@ bool nanoclj_init(nanoclj_t * sc) {
   sc->context->cell_seg = NULL;
 
   sc->save_inport = mk_nil();
-  sc->current_ns = sc->core_ns = sc->user_ns = sc->envir = NULL;
+  sc->current_ns = sc->core_ns = sc->root_ns = sc->user_ns = sc->envir = NULL;
 
   sc->pending_exception = NULL;
 
@@ -10145,7 +10174,7 @@ bool nanoclj_init(nanoclj_t * sc) {
 
   /* Java types */
 
-  sc->Object = mk_class(sc, "java.lang.Object", gentypeid(sc), sc->current_ns);
+  sc->Object = mk_class(sc, "java.lang.Object", gentypeid(sc), sc->root_ns);
   nanoclj_cell_t * Number = mk_class(sc, "java.lang.Number", gentypeid(sc), sc->Object);
   sc->Throwable = mk_class(sc, "java.lang.Throwable", gentypeid(sc), sc->Object);
   nanoclj_cell_t * Exception = mk_class(sc, "java.lang.Exception", gentypeid(sc), sc->Throwable);
@@ -10303,7 +10332,7 @@ void nanoclj_set_external_data(nanoclj_t * sc, void *p) {
 }
 
 void nanoclj_deinit(nanoclj_t * sc) {
-  sc->core_ns = sc->user_ns = sc->current_ns = NULL;
+  sc->root_ns = sc->core_ns = sc->user_ns = sc->current_ns = NULL;
   dump_stack_free(sc);
   sc->envir = NULL;
   sc->code = mk_nil();

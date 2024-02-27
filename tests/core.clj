@@ -1,5 +1,6 @@
-(require '[ clojure.test :as t ])
-
+(require '[ clojure.test :as t ]
+         'clojure.java.io
+         'clojure.string)
 (import clojure.lang.Symbol)
 
                                         ; Primitives

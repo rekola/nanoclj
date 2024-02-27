@@ -1,5 +1,4 @@
 (in-ns 'clojure.core)
-(require 'clojure.java.io 'clojure.repl)
 
 ; Utilities for types.
 
@@ -449,7 +448,7 @@
 (defn slurp
   "Reads a file. Arguments are passed to Reader so same kind of input is supported
   (e.g. URL or filename)"
-  [f & opts] (let [rdr (apply clojure.java.io/reader f opts)
+  [f & opts] (let [rdr (apply java.io.Reader f opts)
                    fun (fn [s] (let [c (-read rdr)] (if (= c ##Eof) s (recur (conj s c)))))
                    r (fun "")]
                (-close rdr)
@@ -472,7 +471,7 @@
 (defn spit
   "Writes content to a file. Arguments are passed to Writer so same kind of input is supported"
   [f content & options] (let [prev-out *out*
-                              w (apply clojure.java.io/writer f options)
+                              w (apply java.io.Writer f options)
                               ]
                           (set! *out* w)
                           (print (str content))
@@ -650,7 +649,7 @@
 
 (def-macro (with-out-pdf filename width height & body)
   `(let ((prev-out *out*)
-         (w (clojure.java.io/writer ~width ~height :pdf ~filename)))
+         (w (java.io.Writer ~width ~height :pdf ~filename)))
      (set! *out* w)
      ~@body
      (set! *out* prev-out)
@@ -659,7 +658,7 @@
 
 (def-macro (with-out-str body)
    `(let [ prev-out *out*
-           w (clojure.java.io/writer)
+           w (java.io.Writer)
          ] (set! *out* w)
 	   ~body
            (set! *out* prev-out)
@@ -667,7 +666,7 @@
 
 (def-macro (with-in-str s & body)
   `(let ((prev-in *in*)
-         (rdr (clojure.java.io/reader (char-array ~s)))
+         (rdr (java.io.Reader (char-array ~s)))
          )
      (set! *in* rdr)
      (let ((r ~@body))
@@ -681,7 +680,7 @@
 (defn println-str [& xs] (with-out-str (apply println xs)))
 
 (defn read-string [s] (with-in-str s (read)))
-(defn load-string [s] (load-reader (clojure.java.io/reader (char-array s))))
+(defn load-string [s] (load-reader (java.io.Reader (char-array s))))
 
 (defn ^:private str-print
   [& more] (run! #( if (coll? %) (pr-block (fn [class v] (-pr v)) %) (-str %) ) more))
