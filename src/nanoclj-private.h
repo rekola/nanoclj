@@ -258,6 +258,7 @@ extern "C" {
     nanoclj_val_t BOOLEAN;        /* :boolean */
     nanoclj_val_t RELOAD;         /* :reload */
     nanoclj_val_t IMPORT;	  /* :import */
+    nanoclj_val_t PRIVATE;	  /* :private */
     
     nanoclj_val_t DOT;		  /* . */
     nanoclj_val_t CATCH;

@@ -4298,9 +4298,15 @@ static inline bool refer(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_cell_t * s
       if (!tensor_hash_is_unassigned(tensor, i)) {
 	nanoclj_val_t key = tensor_get_2d(tensor, 0, i);
 	nanoclj_val_t value = tensor_get_2d(tensor, 1, i);
-	nanoclj_val_t meta = tensor_get_2d(tensor, 2, i);
-	
-	intern_with_meta(sc, ns, key, value, decode_pointer(meta));
+	nanoclj_cell_t * meta = decode_pointer(tensor_get_2d(tensor, 2, i));
+
+	if (meta) {
+	  nanoclj_val_t priv = find(sc, meta, sc->PRIVATE, mk_boolean(false));
+	  if (is_true(priv)) {
+	    continue;
+	  }
+	}
+	intern_with_meta(sc, ns, key, value, meta);
       }
     }
     return true;
@@ -10151,6 +10157,7 @@ bool nanoclj_init(nanoclj_t * sc) {
   sc->BOOLEAN = def_keyword(sc, "boolean");
   sc->RELOAD = def_keyword(sc, "reload");
   sc->IMPORT = def_keyword(sc, "import");
+  sc->PRIVATE = def_keyword(sc, "private");
   
   sc->DOT = def_symbol(sc, ".");
   sc->CATCH = def_symbol(sc, "catch");
