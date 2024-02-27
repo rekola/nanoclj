@@ -1,4 +1,7 @@
 (require '[ clojure.test :as t ])
+
+(import clojure.lang.Symbol)
+
                                         ; Primitives
 (t/is (integer? 1))
 (t/is (number? 1.23))

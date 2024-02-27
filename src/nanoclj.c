@@ -4221,6 +4221,11 @@ static inline nanoclj_cell_t * mk_class_with_meta(nanoclj_t * sc, nanoclj_val_t 
   
   sc->namespaces = tensor_hash_mutate_set(sc->namespaces, hasheq(sym, sc), sc->namespaces->ne[1], sym, t, mk_nil(), false, sc, hasheq);
 
+  if (sc->root_ns) {
+    intern_with_meta(sc, sc->root_ns, def_alias_from_val(sc, sym), t, NULL);
+    intern_with_meta(sc, sc->root_ns, sym, t, NULL);
+  }
+
   return t0;
 }
 
@@ -4292,7 +4297,7 @@ static inline nanoclj_cell_t * def_namespace_with_sym(nanoclj_t *sc, nanoclj_val
 
   if (!is_nil(sym)) {
     if (sc->root_ns) {
-      intern_with_meta(sc, sc->root_ns, def_alias_from_val(sc, sym), mk_pointer(s), NULL);
+      intern_with_meta(sc, sc->root_ns, def_alias_from_val(sc, sym), mk_pointer(ns0), NULL);
     }
     
     sc->namespaces = tensor_hash_mutate_set(sc->namespaces, hasheq(sym, sc), sc->namespaces->ne[1], sym, ns, mk_nil(), false, sc, hasheq);
@@ -8316,7 +8321,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     } else if (!is_symbol(arg1)) {
       Error_0(sc, "Unknown dot form");
     } else {
-      nanoclj_cell_t * typ = is_type(arg0) ? decode_pointer(arg0) : get_type_object(sc, arg0);
+      nanoclj_cell_t * typ = get_type_object(sc, arg0);
       while (typ) {
 	nanoclj_val_t v;
 	if (resolve(sc, typ, arg1, &v)) {
