@@ -18,8 +18,8 @@
 (import clojure.lang.PersistentQueue)
 (import clojure.lang.Delay)
 (import java.util.regex.Pattern)
-(import nanoclj.core.Gradient)
-(import nanoclj.core.EmptyList)
+(import nanoclj.lang.Gradient)
+(import nanoclj.lang.EmptyList)
 
 ; Most of the classes have already been defined, so :reload flag is needed to trigger the load
 (require 'java.lang.Object :reload :import)
@@ -35,9 +35,9 @@
 (require 'java.util.Date :reload :import)
 (require 'java.util.UUID :reload :import)
 (require 'clojure.lang.PersistentVector :reload :import)
-(require 'nanoclj.core.Codepoint :reload :import)
-(require 'nanoclj.core.Tensor :reload :import)
-(require 'nanoclj.core.Image :reload :import)
+(require 'nanoclj.lang.Codepoint :reload :import)
+(require 'nanoclj.lang.Tensor :reload :import)
+(require 'nanoclj.lang.Image :reload :import)
 
 (load-file "clojure.core.clj")
 (load-file "clojure.repl.clj")

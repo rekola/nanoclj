@@ -1,4 +1,4 @@
-(ns nanoclj.core.Codepoint)
+(ns nanoclj.lang.Codepoint)
 
 (def UNASSIGNED 0)
 (def UPPERCASE_LETTER 1)

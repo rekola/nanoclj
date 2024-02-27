@@ -10208,25 +10208,25 @@ bool nanoclj_init(nanoclj_t * sc) {
   mk_class(sc, "clojure.lang.ArityException", T_ARITY_EXCEPTION, Exception);
   
   /* nanoclj types */
-  mk_class(sc, "nanoclj.core.EmptyList", T_EMPTYLIST, sc->Object);
-  nanoclj_cell_t * Closure = mk_class(sc, "nanoclj.core.Closure", T_CLOSURE, AFn);
-  mk_class(sc, "nanoclj.core.Procedure", T_PROC, AFn);
-  mk_class(sc, "nanoclj.core.Macro", T_MACRO, Closure);
-  mk_class(sc, "nanoclj.core.RecurClosure", T_RECUR_CLOSURE, Closure);
-  mk_class(sc, "nanoclj.core.ForeignFunction", T_FOREIGN_FUNCTION, AFn);
-  mk_class(sc, "nanoclj.core.ForeignObject", T_FOREIGN_OBJECT, AFn);
-  mk_class(sc, "nanoclj.core.ListMap", T_LISTMAP, APersistentMap);
-  mk_class(sc, "nanoclj.core.Codepoint", T_CODEPOINT, sc->Object);
-  sc->Image = mk_class(sc, "nanoclj.core.Image", T_IMAGE, sc->Object);
-  mk_class(sc, "nanoclj.core.Gradient", T_GRADIENT, sc->Object);
-  mk_class(sc, "nanoclj.core.Mesh", T_MESH, sc->Object);
-  mk_class(sc, "nanoclj.core.Shape", T_SHAPE, sc->Object);
-  sc->Audio = mk_class(sc, "nanoclj.core.Audio", T_AUDIO, sc->Object);
-  mk_class(sc, "nanoclj.core.Tensor", T_TENSOR, sc->Object);
-  sc->Graph = mk_class(sc, "nanoclj.core.Graph", T_GRAPH, sc->Object);
-  mk_class(sc, "nanoclj.core.GraphNode", T_GRAPH_NODE, sc->Object);
-  mk_class(sc, "nanoclj.core.GraphEdge", T_GRAPH_EDGE, sc->Object);
-  mk_class(sc, "nanoclj.core.VarMap", T_VARMAP, APersistentMap);
+  mk_class(sc, "nanoclj.lang.EmptyList", T_EMPTYLIST, sc->Object);
+  nanoclj_cell_t * Closure = mk_class(sc, "nanoclj.lang.Closure", T_CLOSURE, AFn);
+  mk_class(sc, "nanoclj.lang.Procedure", T_PROC, AFn);
+  mk_class(sc, "nanoclj.lang.Macro", T_MACRO, Closure);
+  mk_class(sc, "nanoclj.lang.RecurClosure", T_RECUR_CLOSURE, Closure);
+  mk_class(sc, "nanoclj.lang.ForeignFunction", T_FOREIGN_FUNCTION, AFn);
+  mk_class(sc, "nanoclj.lang.ForeignObject", T_FOREIGN_OBJECT, AFn);
+  mk_class(sc, "nanoclj.lang.ListMap", T_LISTMAP, APersistentMap);
+  mk_class(sc, "nanoclj.lang.Codepoint", T_CODEPOINT, sc->Object);
+  sc->Image = mk_class(sc, "nanoclj.lang.Image", T_IMAGE, sc->Object);
+  mk_class(sc, "nanoclj.lang.Gradient", T_GRADIENT, sc->Object);
+  mk_class(sc, "nanoclj.lang.Mesh", T_MESH, sc->Object);
+  mk_class(sc, "nanoclj.lang.Shape", T_SHAPE, sc->Object);
+  sc->Audio = mk_class(sc, "nanoclj.lang.Audio", T_AUDIO, sc->Object);
+  mk_class(sc, "nanoclj.lang.Tensor", T_TENSOR, sc->Object);
+  sc->Graph = mk_class(sc, "nanoclj.lang.Graph", T_GRAPH, sc->Object);
+  mk_class(sc, "nanoclj.lang.GraphNode", T_GRAPH_NODE, sc->Object);
+  mk_class(sc, "nanoclj.lang.GraphEdge", T_GRAPH_EDGE, sc->Object);
+  mk_class(sc, "nanoclj.lang.VarMap", T_VARMAP, APersistentMap);
 
   sc->OutOfMemoryError = mk_exception(sc, OutOfMemoryError, "Out of memory");
   sc->NullPointerException = mk_exception(sc, NullPointerException, "Null pointer exception");

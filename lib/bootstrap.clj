@@ -36,14 +36,6 @@
     ([x a b c] (or (equals? x a) (equals? x b) (equals? x c)))
     ([x a b c & args] (or (equals? x a) (equals? x b) (equals? x c) (apply* is-any-of? (cons x args))))))
 
-(def int?
-  "Returns true if the argument is fixed-precision integer"
-  (fn [x] (is-any-of? (type x) java.lang.Byte java.lang.Short java.lang.Integer java.lang.Long)))
-
-(def integer?
-  "Returns true if the argument is integer"
-  (fn [x] (is-any-of? (type x) java.lang.Byte java.lang.Short java.lang.Integer java.lang.Long clojure.lang.BigInt)))
-
 (def number?
   "Returns true if the argument is a number"
   (fn [x] (instance? java.lang.Number x)))
@@ -56,33 +48,13 @@
   "Returns true if argument is a symbol"
   (fn [x] (instance? clojure.lang.Symbol x)))
 
-(def var?
-  "Returns true if argument is a var"
-  (fn [x] (instance? clojure.lang.Var x)))
-
-(def char?
-  "Returns true if argument is a character (actually a utf8 codepoint)"
-  (fn [x] (instance? nanoclj.core.Codepoint x)))
-
-(def file?
-  "Returns true if argument is a File"
-  (fn [x] (instance? java.io.File x)))
-
 (def procedure?
   "Returns true if the argument is a function"
-  (fn [x] (is-any-of? (type x) nanoclj.core.Procedure nanoclj.core.Closure nanoclj.core.ForeignFunction)))
+  (fn [x] (is-any-of? (type x) nanoclj.lang.Procedure nanoclj.lang.Closure nanoclj.lang.ForeignFunction)))
 
 (def macro?
   "Returns true if the argument is a macro"
-  (fn [x] (instance? nanoclj.core.Macro x)))
-
-(def sorted?
-  "Returns true if coll is a sorted collection"
-  (fn [x] (or (instance? clojure.lang.PersistentTreeSet) (instance? cloure.lang.PersistentTreeMap))))
-
-(def class?
-  "Returns true if x is a Class"
-  (fn [x] (instance? java.lang.Class x)))
+  (fn [x] (instance? nanoclj.lang.Macro x)))
 
 (def ifn?
   "Returns true if coll is invokeable"
@@ -402,7 +374,7 @@
 
 (defn closure?
   "Returns true if argument is a closure. Note, a macro object is also a closure."
-  [x] (instance? nanoclj.core.Closure x))
+  [x] (instance? nanoclj.lang.Closure x))
 
 (macro when (fn [form]
               `(if ~(cadr form) (do ~@(cddr form)))))

@@ -117,9 +117,9 @@ install(FILES lib/init.clj
 	      lib/java.lang.String.clj
 	      lib/java.util.Date.clj
 	      lib/java.util.UUID.clj
-	      lib/nanoclj.core.Codepoint.clj
-	      lib/nanoclj.core.Tensor.clj
-	      lib/nanoclj.core.Image.clj
+	      lib/nanoclj.lang.Codepoint.clj
+	      lib/nanoclj.lang.Tensor.clj
+	      lib/nanoclj.lang.Image.clj
 	      lib/nanoclj.plot.clj
 	      lib/nanoclj.graph.clj
 	      lib/nanoclj.image.clj
@@ -151,9 +151,9 @@ configure_file(lib/java.lang.Long.clj java.lang.Long.clj @ONLY)
 configure_file(lib/java.lang.String.clj java.lang.String.clj @ONLY)
 configure_file(lib/java.util.Date.clj java.util.Date.clj @ONLY)
 configure_file(lib/java.util.UUID.clj java.util.UUID.clj @ONLY)
-configure_file(lib/nanoclj.core.Codepoint.clj nanoclj.core.Codepoint.clj @ONLY)
-configure_file(lib/nanoclj.core.Tensor.clj nanoclj.core.Tensor.clj @ONLY)
-configure_file(lib/nanoclj.core.Image.clj nanoclj.core.Image.clj @ONLY)
+configure_file(lib/nanoclj.lang.Codepoint.clj nanoclj.lang.Codepoint.clj @ONLY)
+configure_file(lib/nanoclj.lang.Tensor.clj nanoclj.lang.Tensor.clj @ONLY)
+configure_file(lib/nanoclj.lang.Image.clj nanoclj.lang.Image.clj @ONLY)
 configure_file(lib/nanoclj.plot.clj nanoclj.plot.clj @ONLY)
 configure_file(lib/nanoclj.graph.clj nanoclj.graph.clj @ONLY)
 configure_file(lib/nanoclj.image.clj nanoclj.image.clj @ONLY)

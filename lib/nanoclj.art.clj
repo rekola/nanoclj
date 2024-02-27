@@ -1,10 +1,10 @@
 (ns nanoclj.art)
 
-(import nanoclj.core.Gradient)
-(import nanoclj.core.Shape)
+(import nanoclj.lang.Gradient)
+(import nanoclj.lang.Shape)
 
-(def mk-gradient nanoclj.core.Gradient)
-(def mk-shape nanoclj.core.Shape)
+(def mk-gradient nanoclj.lang.Gradient)
+(def mk-shape nanoclj.lang.Shape)
 
 (def gradient
   "Predefined gradient database. Call with a keyword to get a specific gradient."

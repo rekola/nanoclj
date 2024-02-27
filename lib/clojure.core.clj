@@ -10,8 +10,8 @@
 (defn map-entry? [x] (instance? clojure.lang.MapEntry x))
 (defn set? [x] (instance? clojure.lang.APersistentSet x))
 (defn map? [x] (instance? clojure.lang.APersistentMap x))
-(defn image? [x] (instance? nanoclj.core.Image x))
-(defn gradient? [x] (instance? nanoclj.core.Gradient x))
+(defn image? [x] (instance? nanoclj.lang.Image x))
+(defn gradient? [x] (instance? nanoclj.lang.Gradient x))
 (defn inst? [x] (instance? java.util.Date x))
 (defn uuid? [x] (instance? java.util.UUID x))
 (defn coll? [x] (or (identical? x '())
@@ -55,7 +55,7 @@
   [x] (equals? (-bit-and (-get-cell-flags x) 2048) 2048))
 
 (def keyword clojure.lang.Keyword)
-(def char nanoclj.core.Codepoint)
+(def char nanoclj.lang.Codepoint)
 (def double java.lang.Double)
 (def float java.lang.Double)
 (def byte java.lang.Byte)
@@ -67,14 +67,43 @@
 (def re-pattern java.util.regex.Pattern)
 (def boolean java.lang.Boolean)
 (def map-entry clojure.lang.MapEntry)
-(def image nanoclj.core.Image)
+(def image nanoclj.lang.Image)
+(def tensor nanoclj.lang.Tensor)
 
 (defn boolean?
   "Returns true if argument is a boolean"
   [x] (instance? java.lang.Boolean x))
 
 (defn regex? [x] (instance? java.util.regex.Pattern x))
-  
+
+(defn char?
+  "Returns true if argument is a character (actually a utf8 codepoint)"
+  [x] (instance? nanoclj.lang.Codepoint x))
+
+(defn var?
+  "Returns true if argument is a var"
+  [x] (instance? clojure.lang.Var x))
+
+(defn file?
+  "Returns true if argument is a File"
+  [x] (instance? java.io.File x))
+
+(defn int?
+  "Returns true if the argument is fixed-precision integer"
+  [x] (is-any-of? (type x) java.lang.Byte java.lang.Short java.lang.Integer java.lang.Long))
+
+(defn integer?
+  "Returns true if the argument is integer"
+  [x] (is-any-of? (type x) java.lang.Byte java.lang.Short java.lang.Integer java.lang.Long clojure.lang.BigInt))
+
+(defn sorted?
+  "Returns true if coll is a sorted collection"
+  [x] (or (instance? clojure.lang.PersistentTreeSet) (instance? cloure.lang.PersistentTreeMap)))
+
+(defn class?
+  "Returns true if x is a Class"
+  [x] (instance? java.lang.Class x))
+
 (defn inst-ms
   "Returns millisecond time of java.util.Date"
   [x] (long x))
@@ -83,8 +112,6 @@
 (defn set [coll] (reduce -conj #() coll))
 
 (defn run! [proc coll] (if (empty? coll) nil (do (proc (first coll)) (run! proc (rest coll)))))
-
-(def image nanoclj.core.Image)
 
 ; Utilities for math.
 
@@ -332,7 +359,7 @@
 
 (defn list-map
   "Creates a list-map from the arguments"
-  [& keyvals] (apply* nanoclj.core.ListMap keyvals))
+  [& keyvals] (apply* nanoclj.lang.ListMap keyvals))
 
 (defn keys
   "Returns the values in the map"
@@ -895,8 +922,6 @@
 (defn rand-nth [coll] (nth coll (rand-int (count coll))))
 
 ; Arrays & tensors
-
-(def tensor nanoclj.core.Tensor)
 
 (defn boolean-array
   "Creates a boolean array of specified size"
