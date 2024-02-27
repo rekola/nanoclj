@@ -97,7 +97,7 @@
   (def *3)
   
   (let [hfn (clojure.java.io/file (System/getProperty "user.home") "/.nanoclj_history")
-        f (fn [] (let [prompt (str (:name (meta *ns*)) "=> ")
+        f (fn [] (let [prompt (str *ns* "=> ")
                        line (linenoise/read-line prompt)
                        prev-out *out*]
                    (if line
