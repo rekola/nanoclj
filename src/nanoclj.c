@@ -6564,6 +6564,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       nanoclj_throw(sc, mk_runtime_exception(sc, msg));
       return false;
     } else {
+      sc->value = mk_nil();
       s_goto(sc, OP_T0LVL);
     }
 
@@ -6572,6 +6573,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       return false;
     } else {
       tensor_mutate_push(sc->load_stack, arg0);
+      sc->value = mk_nil();
       s_goto(sc, OP_T0LVL);
     }
 
@@ -10356,7 +10358,8 @@ bool nanoclj_load_named_file(nanoclj_t * sc, nanoclj_val_t filename) {
     sc->envir = sc->current_ns;
     tensor_mutate_push(sc->load_stack, p);
     sc->args = NULL;
-  
+    sc->value = mk_nil();
+
     save_from_C_call(sc);
     Eval_Cycle(sc, OP_T0LVL);
   }
@@ -10372,6 +10375,7 @@ nanoclj_val_t nanoclj_eval_string(nanoclj_t * sc, const char *cmd, size_t len) {
   sc->envir = sc->current_ns;
   tensor_mutate_push(sc->load_stack, p);
   sc->args = NULL;
+  sc->value = mk_nil();
   
   Eval_Cycle(sc, OP_T0LVL);
 
