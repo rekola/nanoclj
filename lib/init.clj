@@ -40,4 +40,3 @@
 (require 'nanoclj.lang.Image :reload :import)
 
 (load-file "clojure.core.clj")
-(load-file "clojure.repl.clj")

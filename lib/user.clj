@@ -1,4 +1,4 @@
-(ns clojure.core)
-(require 'clojure.repl)
+(in-ns 'user)
+(require 'clojure.repl :reload)
 
 (clojure.repl/repl)
