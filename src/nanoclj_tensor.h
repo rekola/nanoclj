@@ -35,6 +35,13 @@ static inline nanoclj_val_t tensor_peek(const nanoclj_tensor_t * tensor) {
   }
 }
 
+/* Assumes tensor is 1-dimensional and replaces the last element */
+static inline void tensor_replace(nanoclj_tensor_t * tensor, nanoclj_val_t v) {
+  if (tensor->ne[0] > 0) {
+    ((nanoclj_val_t *)tensor->data)[tensor->ne[0] - 1] = v;
+  }
+}
+
 /* Assumes tensor is 1-dimensional and pops the last element */
 static inline void tensor_mutate_pop(nanoclj_tensor_t * tensor) {
   if (tensor->ne[0] > 0) tensor->ne[0]--;

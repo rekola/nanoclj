@@ -1026,3 +1026,10 @@
 (defn alias
   "Adds an alias in the current namespace to another namespace"
   [alias-sym ns-sym] (intern *ns* (Alias alias-sym) (the-ns ns-sym)))
+
+                                        ; Misc
+
+(def *1)
+(def *2)
+(def *3)
+(def *e)

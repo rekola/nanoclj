@@ -87,19 +87,16 @@
 (defn repl
   "Starts the REPL"
   []
-                                        ; (in-ns 'user)
+
   (mode :block)
   (print (draw-banner "nanoclj" (System/getProperty "nanoclj.version")))
   (newline)
-
-  (def *1)
-  (def *2)
-  (def *3)
   
   (let [hfn (clojure.java.io/file (System/getProperty "user.home") "/.nanoclj_history")
         f (fn [] (let [prompt (str *ns* "=> ")
                        line (linenoise/read-line prompt)
-                       prev-out *out*]
+                       prev-out *out*
+                       core-ns (find-ns 'clojure.core)]
                    (if line
                      (do
                        (linenoise/history-append line hfn)
@@ -111,9 +108,9 @@
                        (restore)
                        (try (let [r (load-string line)]
                               (prn r)
-                              (def *3 *2)
-                              (def *2 *1)
-                              (def *1 r)
+                              (intern core-ns '*3 *2)
+                              (intern core-ns '*2 *1)
+                              (intern core-ns '*1 r)
                               (recur))
                             (catch java.lang.Throwable e
                               (set! *out* prev-out)
