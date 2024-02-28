@@ -114,7 +114,7 @@
                               (recur))
                             (catch java.lang.Throwable e
                               (set! *out* prev-out)
-                              (def *e e)
+                              (intern core-ns '*e e)
                               (save)
                               (set-color [ 0.85 0.31 0.3 ])
                               (println e)
