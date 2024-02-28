@@ -6609,9 +6609,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 
     /* If we reached the end of file, this loop is done. */
     if (_port_flags_unchecked(z) & PORT_SAW_EOF) {
-      if (sc->user_ns && sc->current_ns != sc->user_ns) {
-	sc->envir = sc->current_ns = sc->user_ns;
-      } else if (sc->current_ns != sc->core_ns) {
+      if (sc->current_ns != sc->core_ns) {
 	sc->envir = sc->current_ns = sc->core_ns;
       }
 
@@ -10046,7 +10044,7 @@ bool nanoclj_init(nanoclj_t * sc) {
   sc->context->cell_seg = NULL;
 
   sc->save_inport = mk_nil();
-  sc->current_ns = sc->core_ns = sc->root_ns = sc->user_ns = sc->envir = NULL;
+  sc->current_ns = sc->core_ns = sc->root_ns = sc->envir = NULL;
 
   sc->pending_exception = NULL;
 
@@ -10168,7 +10166,6 @@ bool nanoclj_init(nanoclj_t * sc) {
   sc->EMPTYSET = get_vector_object(sc, T_HASHSET, 0);
 
   /* Init root namespace clojure.core */
-  sc->root_ns = sc->core_ns = NULL;
   sc->root_ns = def_namespace_with_sym(sc, mk_nil(), NULL);
   sc->core_ns = sc->current_ns = sc->envir = def_namespace(sc, "clojure.core", __FILE__);
 
@@ -10339,7 +10336,7 @@ void nanoclj_set_external_data(nanoclj_t * sc, void *p) {
 }
 
 void nanoclj_deinit(nanoclj_t * sc) {
-  sc->root_ns = sc->core_ns = sc->user_ns = sc->current_ns = NULL;
+  sc->root_ns = sc->core_ns = sc->current_ns = NULL;
   dump_stack_free(sc);
   sc->envir = NULL;
   sc->code = mk_nil();
