@@ -237,7 +237,7 @@ typedef struct {
 
 #define T_NEGATIVE     128	/* 000000001yyxxxxx */
 #define T_TYPE	       256	/* 000000010yyxxxxx */
-#define T_CONST        512      /* 000000100yyxxxxx */
+
 #define T_SEQUENCE    1024	/* 000001000yyxxxxx */
 #define T_REALIZED    2048	/* 000010000yyxxxxx */
 #define T_REVERSE     4096      /* 000100000yyxxxxx */
@@ -434,7 +434,6 @@ static inline void _set_cdr(nanoclj_cell_t * c, nanoclj_cell_t * v) {
 #define _set_seq(p)	  	  (p->flags |= T_SEQUENCE)
 #define _set_rseq(p)	  	  (p->flags |= T_SEQUENCE | T_REVERSE)
 #define _is_small(p)	          (p->flags & T_SMALL)
-#define _is_const(p)		  (p->flags & T_CONST)
 #define _set_gc_atom(p)           (p->flags |= T_GC_ATOM)
 #define _clr_gc_atom(p)           (p->flags &= CLR_GC_ATOM)
 
@@ -505,16 +504,6 @@ static inline bool is_tensor(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
   const nanoclj_cell_t * c = decode_pointer(p);
   return _type(c) == T_TENSOR;
-}
-static inline bool is_const(nanoclj_val_t p) {
-  switch (prim_type(p)) {
-  case T_SYMBOL:
-    return false;
-  case T_CELL:
-    return _is_const(decode_pointer(p));
-  default:
-    return true;
-  }
 }
 
 static inline bool is_seqable_type(uint_fast16_t t) {
