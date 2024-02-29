@@ -9417,7 +9417,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     if (!unpack_args_0_plus(sc, &arg_next)) {
       return false;
     } else {
-      nanoclj_cell_t * current_ns = decode_pointer(get_current_ns(sc));
+      nanoclj_cell_t * current_ns = get_ns_from_env(sc->envir);
       bool reload = false, import = false;
       for (nanoclj_cell_t * a = arg_next; a; a = next(sc, a)) {
 	nanoclj_val_t arg = first(sc, a);
