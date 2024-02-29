@@ -1,4 +1,6 @@
 (in-ns 'clojure.core)
+(import java.lang.RuntimeException)
+(import java.lang.IndexOutOfBoundsException)
 
 ; Utilities for types.
 
@@ -1001,11 +1003,11 @@
   "Returns the namespace that the symbol x refers, or x itself, if x is a namespae"
   [x] (if (isa? clojure.lang.Namespace x)
         x
-        (or (find-ns x) (throw (new RuntimeException "No namespace found")))))
+        (or (find-ns x) (throw (new RuntimeException (str "No namespace: " x " found"))))))
 
 (defn alias
   "Adds an alias in the current namespace to another namespace"
-  [alias-sym ns-sym] (intern *ns* (nanoclj.lang.Alias alias-sym) (the-ns ns-sym)))
+  [alias-sym ns-sym] (intern (the-ns 'clojure.core) (nanoclj.lang.Alias alias-sym) (the-ns ns-sym)))
 
 ; REPL
 
