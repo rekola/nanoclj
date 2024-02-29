@@ -145,6 +145,7 @@
 (t/is (= (str nil nil) ""))
 (t/is (= (str :ab) ":ab"))
 (t/is (= (str ["a"]) "[\"a\"]"))
+(t/is (= (str String) "class java.lang.String"))
 
 (t/is (= (print-str nil) (pr-str nil) "nil"))
 (t/is (= (print-str ["a"]) "[a]"))

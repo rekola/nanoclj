@@ -5366,7 +5366,6 @@ typedef enum {
 static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, print_scheme_t ps, nanoclj_cell_t * out) {
   strview_t sv = { 0, 0 };
   strview_t obj_sv = { 0, 0 };
-  nanoclj_val_t name = mk_nil();
   
   switch (prim_type(l)) {
   case T_LONG:
@@ -5407,34 +5406,44 @@ static inline void print_primitive(nanoclj_t * sc, nanoclj_val_t l, print_scheme
     {
       nanoclj_cell_t * c = decode_pointer(l);
       switch (_type(c)) {
-      case T_VAR:
-	name = first(sc, c);
       case T_CLASS:{
+	nanoclj_cell_t * md = get_metadata(c);
+	if (md) {
+	  nanoclj_val_t name = find(sc, md, sc->NAME, name);
+	  sv = to_strview(name);
+	  if (ps == print_scheme_str) {
+	    sv = (strview_t) {
+	      sc->strbuff,
+	      snprintf(sc->strbuff, STRBUFFSIZE, "class %.*s", sv.size, sv.ptr)
+	    };
+	  }
+	}
+      }
+	break;
+      case T_VAR:{
+	nanoclj_val_t name = first(sc, c);
 	nanoclj_val_t ns = mk_nil();
 	nanoclj_cell_t * md = get_metadata(c);
 	if (md) {
 	  ns = find(sc, md, sc->NS, mk_nil());
 	  name = find(sc, md, sc->NAME, name);
 	}
-	if (!is_nil(name)) {
-	  nanoclj_val_t ns_name = mk_nil();
-	  if (!is_nil(ns)) {
-	    ns_name = find(sc, get_metadata(decode_pointer(ns)), sc->NAME, mk_nil());
-	  }
-	  sv = to_strview(name);
-	  if (!is_nil(ns_name)) {
-	    strview_t ns = to_strview(ns_name);
-	    const char * fmt = _type(c) == T_VAR ? "#'%.*s/%.*s" : "%.*s/%.*s";
-	    sv = (strview_t) {
-	      sc->strbuff,
-	      snprintf(sc->strbuff, STRBUFFSIZE, fmt, ns.size, ns.ptr, sv.size, sv.ptr)
-	    };
-	  } else if (_type(c) == T_VAR) {
-	    sv = (strview_t) {
-	      sc->strbuff,
-	      snprintf(sc->strbuff, STRBUFFSIZE, "#'%.*s", sv.size, sv.ptr)
-	    };
-	  }
+	nanoclj_val_t ns_name = mk_nil();
+	if (!is_nil(ns)) {
+	  ns_name = find(sc, get_metadata(decode_pointer(ns)), sc->NAME, mk_nil());
+	}
+	sv = to_strview(name);
+	if (!is_nil(ns_name)) {
+	  strview_t ns = to_strview(ns_name);
+	  sv = (strview_t) {
+	    sc->strbuff,
+	    snprintf(sc->strbuff, STRBUFFSIZE, "#'%.*s/%.*s", ns.size, ns.ptr, sv.size, sv.ptr)
+	  };
+	} else {
+	  sv = (strview_t) {
+	    sc->strbuff,
+	    snprintf(sc->strbuff, STRBUFFSIZE, "#'%.*s", sv.size, sv.ptr)
+	  };
 	}
       }
 	break;
