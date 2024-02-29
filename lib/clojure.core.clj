@@ -448,19 +448,16 @@
 (defn slurp
   "Reads a file. Arguments are passed to Reader so same kind of input is supported
   (e.g. URL or filename)"
-  [f & opts] (let [rdr (apply java.io.Reader f opts)
-                   fun (fn [s] (let [c (-read rdr)] (if (= c ##Eof) s (recur (conj s c)))))
-                   r (fun "")]
-               (-close rdr)
-               r))
+  [f & opts] (with-open [rdr (apply java.io.Reader f opts)]
+               (loop [c (.read rdr) s ""] (if (= c ##Eof) s (recur (.read rdr) (conj s c))))))
 
 (defn read-line
   "Reads a line from *in* or a reader"
   ([] (read-line *in*))
-  ([rdr] (let [c0 (-read rdr)]
+  ([rdr] (let [c0 (.read rdr)]
            (if (= c0 ##Eof) nil
                (loop [c c0 acc ""]
-                 (if (or (= c ##Eof) (= c \newline)) acc (recur (-read rdr) (conj acc c))))))))
+                 (if (or (= c ##Eof) (= c \newline)) acc (recur (.read rdr) (conj acc c))))))))
 
 (defn line-seq
   "Returns a sequence of line from rdr"
@@ -470,23 +467,16 @@
 
 (defn spit
   "Writes content to a file. Arguments are passed to Writer so same kind of input is supported"
-  [f content & options] (let [prev-out *out*
-                              w (apply java.io.Writer f options)
-                              ]
-                          (set! *out* w)
-                          (print (str content))
-                          (-close w)
-                          (set! *out* prev-out)
-                          nil))
+  [f content & options] (with-open [w (apply java.io.Writer f options)]
+                          (binding [*out* w]
+                            (print (str content)))))
 
 (def printf (fn [& args] (-print (apply format args))))
 
 (defn newline [] (-print \newline))
 
-(defn warn [& more] (let [prev-out *out*]
-                      (set! *out* *err*)
+(defn warn [& more] (binding [*out* *err*]
 	              (apply println more)
-                      (set! *out* prev-out)
                       nil))
 
 (def *print-length* nil)
@@ -642,38 +632,27 @@
 (def-macro (with-out new-out & body)
   `(let ((prev-out *out*)
          (tmp ~new-out)
-         (core-ns (find-ns 'clojure.core)))     
+         (core-ns (find-ns 'clojure.core)))
      (intern core-ns '*out* tmp)
      ~@body
      (intern core-ns '*out* prev-out)
      tmp))
 
 (def-macro (with-out-pdf filename width height & body)
-  `(let ((prev-out *out*)
-         (w (java.io.Writer ~width ~height :pdf ~filename)))
-     (set! *out* w)
-     ~@body
-     (set! *out* prev-out)
-     (-close w)
-     nil))
+  `(let ((w (java.io.Writer ~width ~height :pdf ~filename)))
+     (with-open [w w]
+       (binding [*out* w]
+         ~@body))))
 
 (def-macro (with-out-str body)
-   `(let [ prev-out *out*
-           w (java.io.Writer)
-         ] (set! *out* w)
-	   ~body
-           (set! *out* prev-out)
-           (java.lang.String w)))
+  `(binding [ *out* (java.io.Writer) ]
+     ~body
+     (java.lang.String *out*)))
 
 (def-macro (with-in-str s & body)
-  `(let ((prev-in *in*)
-         (rdr (java.io.Reader (char-array ~s)))
-         )
-     (set! *in* rdr)
-     (let ((r ~@body))
-       (set! *in* prev-in)
-       r
-       )))
+  `(let ((rdr (java.io.Reader (char-array ~s))))
+     (binding [ *in* rdr ]
+       ~@body)))
 
 (defn pr-str [& xs] (with-out-str (apply pr xs)))
 (defn prn-str [& xs] (with-out-str (apply prn xs)))
@@ -1026,11 +1005,11 @@
 
 (defn alias
   "Adds an alias in the current namespace to another namespace"
-  [alias-sym ns-sym] (intern *ns* (Alias alias-sym) (the-ns ns-sym)))
+  [alias-sym ns-sym] (intern *ns* (nanoclj.lang.Alias alias-sym) (the-ns ns-sym)))
 
-                                        ; Misc
+; REPL
 
-(def *1)
-(def *2)
-(def *3)
-(def *e)
+(def ^:dynamic *1)
+(def ^:dynamic *2)
+(def ^:dynamic *3)
+(def ^:dynamic *e)

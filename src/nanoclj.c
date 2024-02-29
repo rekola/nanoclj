@@ -7119,6 +7119,94 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
     s_goto(sc, OP_EVAL);
 
+  case OP_WITH_REDEFS0:
+    {
+      x = car(sc->code);
+      if (!is_cell(x)) {
+	Error_0(sc, "Syntax error");
+      }
+      nanoclj_cell_t * input_vec = decode_pointer(x);
+      if (_type(input_vec) != T_VECTOR) {
+	Error_0(sc, "Syntax error");
+      }
+      nanoclj_cell_t * body = cdr(sc->code);
+      if (!body) s_return(sc, mk_nil());
+
+      size_t n = get_size(input_vec);
+      
+      if (n) {
+	nanoclj_cell_t * ns = get_ns_from_env(sc->envir);
+	nanoclj_cell_t * restore_vec = mk_vector(sc, n);
+
+	for (size_t i = 0; i < n; i += 2) {
+	  nanoclj_val_t sym = get_indexed_value(input_vec, i);
+	  nanoclj_cell_t * var = get_var_in_ns(sc, ns, sym, false);
+	  if (!var) {
+	    strview_t sv = to_strview(sym);
+	    nanoclj_val_t msg = mk_string_fmt(sc, "Use of undeclared Var %.*s", sv.size, sv.ptr);
+	    nanoclj_throw(sc, mk_runtime_exception(sc, msg));
+	  }
+
+	  set_indexed_value(restore_vec, i, sym);
+	  set_indexed_value(restore_vec, i + 1, get_indexed_value(var, 1));
+	}
+	
+	s_save(sc, OP_WITH_REDEFS2, restore_vec, mk_nil());
+	s_save(sc, OP_WITH_REDEFS1, NULL, sc->code);
+	
+	sc->code = get_indexed_value(input_vec, 1);
+	sc->args = NULL;
+	s_goto(sc, OP_EVAL);
+      } else {
+	if (_cdr_unchecked(body)) {
+	  s_save(sc, OP_DO, NULL, mk_pointer(_cdr_unchecked(body)));
+	}
+	sc->code = _car_unchecked(body);
+	s_goto(sc, OP_EVAL);
+      }
+    }
+
+  case OP_WITH_REDEFS1:
+    {
+      nanoclj_cell_t * vec = decode_pointer(car(sc->code));
+      nanoclj_cell_t * args = sc->args;
+      long long i = sc->args ? decode_integer(_car_unchecked(args)) : 0;
+      nanoclj_cell_t * ns = get_ns_from_env(sc->envir);
+      nanoclj_val_t sym = get_indexed_value(vec, i);
+      set_var_in_ns(sc, ns, sym, sc->value, NULL);
+      
+      if (i + 2 < get_size(vec)) {
+	if (args) _car_unchecked(args) = mk_int(i + 2);
+	else args = cons(sc, mk_int(i + 2), NULL);
+	s_save(sc, OP_WITH_REDEFS1, args, sc->code);
+	
+	sc->code = get_indexed_value(vec, i + 3);
+	sc->args = NULL;
+	s_goto(sc, OP_EVAL);
+      } else {
+	nanoclj_cell_t * code = cdr(sc->code);
+	if (_cdr_unchecked(code)) {
+	  s_save(sc, OP_DO, NULL, mk_pointer(_cdr_unchecked(code)));
+	}
+	sc->code = _car_unchecked(code);
+	s_goto(sc, OP_EVAL);
+      }
+    }
+
+  case OP_WITH_REDEFS2:
+    {
+      nanoclj_cell_t * restore_vec = sc->args;
+      size_t n = get_size(restore_vec);
+      nanoclj_cell_t * ns = get_ns_from_env(sc->envir);
+
+      for (size_t i = 0; i < n; i += 2) {
+	nanoclj_val_t sym = get_indexed_value(restore_vec, i);
+	nanoclj_val_t val = get_indexed_value(restore_vec, i + 1);
+	set_var_in_ns(sc, ns, sym, val, NULL);
+      }
+      s_return(sc, sc->value);
+    }
+    
   case OP_LOOP0:{                /* loop */
     x = car(sc->code);
     if (!is_cell(x)) {
@@ -7181,7 +7269,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       s_goto(sc, OP_EVAL);
     }
   }
-
     
   case OP_DOTIMES0:
     {
@@ -7240,6 +7327,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       s_goto(sc, OP_EVAL);
     }
 
+  case OP_WITH_OPEN:
   case OP_LET0:                /* let */
     x = car(sc->code);
     
@@ -7261,11 +7349,11 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 
   case OP_LET1_VEC:{
     nanoclj_cell_t * vec = decode_pointer(car(sc->code));
-    long long i = sc->args ? decode_integer(_car_unchecked(sc->args)) : 0;
+    nanoclj_cell_t * args = sc->args;
+    long long i = args ? decode_integer(_car_unchecked(args)) : 0;
     destructure_value(sc, get_indexed_value(vec, i), sc->value);
     
     if (i + 2 < get_size(vec)) {
-      nanoclj_cell_t * args = sc->args;
       if (args) _car_unchecked(args) = mk_int(i + 2);
       else args = cons(sc, mk_int(i + 2), NULL);
       s_save(sc, OP_LET1_VEC, args, sc->code);
@@ -10113,6 +10201,9 @@ bool nanoclj_init(nanoclj_t * sc) {
   assign_syntax(sc, "loop", OP_LOOP0);
   assign_syntax(sc, "dotimes", OP_DOTIMES0);
   assign_syntax(sc, "thread", OP_THREAD);
+  assign_syntax(sc, "with-open", OP_WITH_OPEN);
+  assign_syntax(sc, "with-redefs", OP_WITH_REDEFS0);
+  assign_syntax(sc, "binding", OP_WITH_REDEFS0);
 
   /* initialization of global nanoclj_val_ts to special symbols */
   sc->LAMBDA = def_symbol(sc, "fn");
@@ -10264,7 +10355,6 @@ bool nanoclj_init(nanoclj_t * sc) {
   mk_class(sc, "clojure.lang.PersistentTreeMap", T_SORTED_HASHMAP, APersistentMap);
   mk_class(sc, "clojure.lang.Symbol", T_SYMBOL, AFn);
   mk_class(sc, "clojure.lang.Keyword", T_KEYWORD, AFn); /* non-standard parent */
-  mk_class(sc, "clojure.lang.Alias", T_ALIAS, AFn);
   mk_class(sc, "clojure.lang.BigInt", T_BIGINT, Number);
   mk_class(sc, "clojure.lang.Ratio", T_RATIO, Number);
   mk_class(sc, "clojure.lang.Delay", T_DELAY, sc->Object);
@@ -10296,6 +10386,7 @@ bool nanoclj_init(nanoclj_t * sc) {
   mk_class(sc, "nanoclj.lang.GraphNode", T_GRAPH_NODE, sc->Object);
   mk_class(sc, "nanoclj.lang.GraphEdge", T_GRAPH_EDGE, sc->Object);
   mk_class(sc, "nanoclj.lang.VarMap", T_VARMAP, APersistentMap);
+  mk_class(sc, "nanoclj.lang.Alias", T_ALIAS, AFn);
 
   sc->OutOfMemoryError = mk_exception(sc, OutOfMemoryError, "Out of memory");
   sc->NullPointerException = mk_exception(sc, NullPointerException, "Null pointer exception");

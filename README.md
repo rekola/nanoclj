@@ -163,7 +163,6 @@ Windows support is in progress.
   - bound?
   - re-groups, re-matcher, re-seq, re-matches
   - assert-args
-  - with-open
   - pop!, conj!, persistent!
   - fnil
   - trampoline
