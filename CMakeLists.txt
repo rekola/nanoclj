@@ -115,6 +115,8 @@ install(FILES lib/init.clj
 	      lib/java.lang.Integer.clj
 	      lib/java.lang.Long.clj
 	      lib/java.lang.String.clj
+	      lib/java.io.Reader.clj
+	      lib/java.io.Writer.clj
 	      lib/java.util.Date.clj
 	      lib/java.util.UUID.clj
 	      lib/nanoclj.lang.Codepoint.clj
@@ -149,6 +151,8 @@ configure_file(lib/java.lang.Short.clj java.lang.Short.clj @ONLY)
 configure_file(lib/java.lang.Integer.clj java.lang.Integer.clj @ONLY)
 configure_file(lib/java.lang.Long.clj java.lang.Long.clj @ONLY)
 configure_file(lib/java.lang.String.clj java.lang.String.clj @ONLY)
+configure_file(lib/java.io.Reader.clj java.io.Reader.clj @ONLY)
+configure_file(lib/java.io.Writer.clj java.io.Writer.clj @ONLY)
 configure_file(lib/java.util.Date.clj java.util.Date.clj @ONLY)
 configure_file(lib/java.util.UUID.clj java.util.UUID.clj @ONLY)
 configure_file(lib/nanoclj.lang.Codepoint.clj nanoclj.lang.Codepoint.clj @ONLY)
