@@ -3992,11 +3992,16 @@ static inline bool find_slot_in_env(nanoclj_t * sc, nanoclj_cell_t * env, nanocl
     if (y && _type(y) == T_VARMAP) {
       size_t idx = find_varmap_index(y, hdl);
       if (idx != NPOS) {
+	nanoclj_val_t v;
 	if (_is_small(y)) {
-	  *r = y->_small_tensor.vals[1];
+	  v = y->_small_tensor.vals[1];
 	} else {
-	  *r = get_indexed_value(y, idx);
+	  v = get_indexed_value(y, idx);
 	}
+	if (type(v) == T_VAR) {
+	  v = get_indexed_value(decode_pointer(v), 1);
+	}
+	*r = v;
 	return true;
       }
     } else {
@@ -4233,6 +4238,16 @@ static inline nanoclj_val_t get_current_ns(nanoclj_t * sc) {
   return tensor_peek(sc->ns_stack);
 }
 
+static inline nanoclj_cell_t * get_ns_from_env(nanoclj_cell_t * env) {
+  for (nanoclj_cell_t * x = env; x; x = _cdr_unchecked(x)) {
+    if (_type(x) == T_NAMESPACE || _type(x) == T_CLASS) {
+      return x;
+    }
+  }
+  exit(1);
+  return NULL; // not reached
+}
+
 /* get new symbol or keyword. % is aliased to %1 */
 static inline nanoclj_val_t def_symbol_or_keyword(nanoclj_t * sc, const char *name) {
   if (name[0] == '%' && name[1] == 0) return def_symbol(sc, "%1");
@@ -4245,7 +4260,7 @@ static inline nanoclj_val_t def_symbol_or_keyword(nanoclj_t * sc, const char *na
     strview_t ns_sv = mk_strview(0), name_sv;
     if (t == T_KEYWORD && name[0] == ':') { /* use the current namespace (::keyword) */
       name++;
-      ns_sv = to_strview(find(sc, _cons_metadata(decode_pointer(get_current_ns(sc))), sc->NAME, mk_nil()));
+      ns_sv = to_strview(find(sc, _cons_metadata(get_ns_from_env(sc->envir)), sc->NAME, mk_nil()));
       name_sv = mk_strview(name);
     } else {
       const char * p = strchr(name, '/');
@@ -4299,7 +4314,8 @@ static inline bool refer(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_cell_t * s
 	    continue;
 	  }
 	}
-	intern_with_meta(sc, ns, key, value, meta);
+	nanoclj_cell_t * var = get_collection_object(sc, T_VAR, i * 3, 3, tensor, NULL);
+	intern_with_meta(sc, ns, key, mk_pointer(var), meta);
       }
     }
     return true;
@@ -7028,7 +7044,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
     meta = update_meta_from_reader(sc, meta, tensor_peek(sc->load_stack));
     meta = assoc(sc, meta, sc->NAME, x);
-    meta = assoc(sc, meta, sc->NS, get_current_ns(sc));
+    meta = assoc(sc, meta, sc->NS, mk_pointer(get_ns_from_env(sc->envir)));
 
     nanoclj_cell_t * code2 = next(sc, code);
     if (code2) {
@@ -7045,7 +7061,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_DEF1:                /* define */
     {
       meta = sc->args;
-      nanoclj_cell_t * ns = decode_pointer(get_current_ns(sc));
+      nanoclj_cell_t * ns = get_ns_from_env(sc->envir);
       if (!set_var_in_ns(sc, ns, sc->code, sc->value, meta)) {
 	new_var_in_ns(sc, ns, sc->code, sc->value, meta);
       }
@@ -7055,7 +7071,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_SET:
     if (!unpack_args_2(sc, &arg0, &arg1)) {
       return false;
-    } else if (set_var_in_ns(sc, decode_pointer(get_current_ns(sc)), arg0, arg1, NULL)) {
+    } else if (set_var_in_ns(sc, get_ns_from_env(sc->envir), arg0, arg1, NULL)) {
       s_return(sc, arg1);
     } else {
       strview_t sv = to_strview(arg0);
@@ -9617,6 +9633,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       s_return(sc, mk_vector_2d(sc, width / sc->window_scale_factor, height / sc->window_scale_factor));
     }
 #endif
+    s_return(sc, mk_nil());
 
   case OP_TEXT_PATH:
     if (!unpack_args_1(sc, &arg0)) {

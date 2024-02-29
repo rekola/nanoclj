@@ -641,10 +641,11 @@
 
 (def-macro (with-out new-out & body)
   `(let ((prev-out *out*)
-         (tmp ~new-out))
-     (set! *out* tmp)
+         (tmp ~new-out)
+         (core-ns (find-ns 'clojure.core)))     
+     (intern core-ns '*out* tmp)
      ~@body
-     (set! *out* prev-out)
+     (intern core-ns '*out* prev-out)
      tmp))
 
 (def-macro (with-out-pdf filename width height & body)
