@@ -457,7 +457,7 @@ static inline nanoclj_val_t Image_resize(nanoclj_t * sc, nanoclj_cell_t * args) 
   imageview_t iv = to_imageview(first(sc, args));
   nanoclj_val_t target_w0 = second(sc, args), target_h0 = third(sc, args);
   if (!iv.ptr || !is_number(target_w0) || !is_number(target_h0)) {
-    return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Invalid type")));
+    return nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Invalid type")));
   }
 
   int target_w = to_int(target_w0), target_h = to_int(target_h0);
@@ -486,7 +486,7 @@ static inline nanoclj_val_t Image_resize(nanoclj_t * sc, nanoclj_cell_t * args) 
 static inline nanoclj_val_t Image_transpose(nanoclj_t * sc, nanoclj_cell_t * args) {
   imageview_t iv = to_imageview(first(sc, args));
   if (!iv.ptr) {
-    return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Not an Image")));
+    return nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Not an Image")));
   }
   int w = iv.width, h = iv.height, stride = iv.stride;
   nanoclj_cell_t * new_image = mk_image(sc, h, w, iv.format, NULL);
@@ -508,9 +508,9 @@ static inline nanoclj_val_t Image_save(nanoclj_t * sc, nanoclj_cell_t * args) {
   imageview_t iv = to_imageview(first(sc, args));
   nanoclj_val_t filename0 = second(sc, args);
   if (!iv.ptr) {
-    return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Not an Image")));
+    return nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Not an Image")));
   } else if (!is_string(filename0)) {
-    return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Not a string")));
+    return nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Not a string")));
   }
   char * filename = alloc_c_str(to_strview(filename0));
   char * ext = strrchr(filename, '.');
@@ -590,10 +590,10 @@ nanoclj_val_t Image_horizontalGaussianBlur(nanoclj_t * sc, nanoclj_cell_t * args
   imageview_t iv = to_imageview(first(sc, args));
   nanoclj_val_t radius = second(sc, args);
   if (!iv.ptr) {
-    return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Not an Image")));
+    return nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Not an Image")));
   }
   if (!is_number(radius)) {
-    return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Not a number")));
+    return nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Not a number")));
   }
   int w = iv.width, h = iv.height, stride = iv.stride;
   size_t bpp = get_format_bpp(iv.format);
@@ -1074,7 +1074,7 @@ static inline nanoclj_val_t clojure_data_csv_read_csv(nanoclj_t * sc, nanoclj_ce
   }
   nanoclj_cell_t * rdr = decode_pointer(f);
   if (_type(rdr) != T_READER) {
-    return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Argument is not a reader")));
+    return nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Argument is not a reader")));
   }
 
   bool is_quoted = false;
@@ -1265,7 +1265,19 @@ static inline void init_linenoise(nanoclj_t * sc) {
   linenoiseHistorySetMaxLen(10000);
 }
 
+static inline bool is_stdin(nanoclj_val_t p) {
+  if (!is_cell(p)) return false;
+  else {
+    nanoclj_cell_t * c = decode_pointer(p);
+    return is_readable(c) && _port_type_unchecked(c) == port_file && _rep_unchecked(c)->stdio.file == stdin;
+  }
+}
+
 static inline nanoclj_val_t linenoise_readline(nanoclj_t * sc, nanoclj_cell_t * args) {
+  if (!is_stdin(resolve_value(sc, sc->core_ns, sc->IN_SYM))) {
+    return nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "*in* must be stdin")));
+  }
+  
   strview_t prompt = to_strview(first(sc, args));
   char * line = linenoise(prompt.ptr, prompt.size);
   if (line == NULL) return mk_nil();
