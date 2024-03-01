@@ -7,7 +7,7 @@
        (.nextBytes ng b)
        (aset b 6 (bit-or (bit-and (aget b 6) 0x0f) 0x40)) ; set to version 4
        (aset b 8 (bit-or (bit-and (aget b 8) 0x3f) 0x80)) ; set to IETF variant
-       (java.util.UUID b)))
+       ((clojure.core/find-ns 'java.util.UUID) b)))
 
 (defn getLeastSignificantBits
   [uuid] (uuid 0))

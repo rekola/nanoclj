@@ -1124,7 +1124,7 @@ static nanoclj_t * linenoise_sc = NULL;
 static inline void completion(const char *input, linenoiseCompletions *lc) {
   nanoclj_val_t ns = resolve_value(linenoise_sc, linenoise_sc->envir, def_symbol(linenoise_sc, "clojure.repl"));
   if (is_cell(ns)) {
-    nanoclj_cell_t * var = get_var_in_ns(linenoise_sc, decode_pointer(ns), linenoise_sc->AUTOCOMPLETE_HOOK, false);
+    nanoclj_cell_t * var = get_var_in_ns(linenoise_sc, decode_pointer(ns), linenoise_sc->AUTOCOMPLETE_HOOK);
     if (var) {
       nanoclj_val_t f = get_indexed_value(var, 1);
       nanoclj_val_t args = mk_pointer(cons(linenoise_sc, mk_string(linenoise_sc, input), NULL));

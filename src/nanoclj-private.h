@@ -183,7 +183,6 @@ extern "C" {
     nanoclj_cell_t sink;	      /* when mem. alloc. fails */
     nanoclj_tensor_t * oblist;         /* pointer to symbol table */
     nanoclj_tensor_t * namespaces;
-    nanoclj_cell_t * root_ns;	        /* pointer to the root ns */
     nanoclj_cell_t * core_ns;		/* pointer to the core ns */
     nanoclj_tensor_t * types;
 

@@ -4036,21 +4036,18 @@ static inline nanoclj_val_t inc_slot_in_env(nanoclj_t * sc, nanoclj_cell_t * env
   return mk_nil();
 }
 
-static inline nanoclj_cell_t * get_var_in_ns(nanoclj_t * sc, nanoclj_cell_t * env, nanoclj_val_t hdl, bool all) {
-  for (nanoclj_cell_t * x = env; x; x = _cdr_unchecked(x)) {
-    nanoclj_val_t y0 = _car_unchecked(x);
-    nanoclj_cell_t * y = decode_pointer(y0);
-    if (_type(y) == T_VARMAP) {
-      size_t idx = find_varmap_index(y, hdl);
-      if (idx != NPOS) {
-	if (_is_small(y)) {
-	  return mk_var(sc, y->_small_tensor.vals[0], y->_small_tensor.vals[1], y->_small_tensor.vals[2]);
-	} else {
-	  return get_collection_object(sc, T_VAR, idx * 3, 3, y->_collection.tensor, NULL);
-	}
+static inline nanoclj_cell_t * get_var_in_ns(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t hdl) {
+  nanoclj_val_t y0 = _car_unchecked(ns);
+  nanoclj_cell_t * y = decode_pointer(y0);
+  if (_type(y) == T_VARMAP) {
+    size_t idx = find_varmap_index(y, hdl);
+    if (idx != NPOS) {
+      if (_is_small(y)) {
+	return mk_var(sc, y->_small_tensor.vals[0], y->_small_tensor.vals[1], y->_small_tensor.vals[2]);
+      } else {
+	return get_collection_object(sc, T_VAR, idx * 3, 3, y->_collection.tensor, NULL);
       }
     }
-    if (!all) break;
   }
   return NULL;
 }
@@ -4186,7 +4183,7 @@ static inline void intern(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t sym
 }
 
 static inline void intern_with_nil(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t symbol, nanoclj_cell_t * meta) {
-  nanoclj_cell_t * var = get_var_in_ns(sc, ns, symbol, false);
+  nanoclj_cell_t * var = get_var_in_ns(sc, ns, symbol);
   if (!var) new_var_in_ns(sc, ns, symbol, mk_nil(), meta);
 }
 
@@ -4213,11 +4210,6 @@ static inline nanoclj_cell_t * mk_class_with_meta(nanoclj_t * sc, nanoclj_val_t 
   tensor_mutate_set(sc->types, type_id, t);
   
   sc->namespaces = tensor_hash_mutate_set(sc->namespaces, hasheq(sym, sc), sc->namespaces->ne[1], sym, t, mk_nil(), false, sc, hasheq);
-
-  if (sc->root_ns) {
-    intern_with_meta(sc, sc->root_ns, def_alias_from_val(sc, sym), t, NULL);
-    intern_with_meta(sc, sc->root_ns, sym, t, NULL);
-  }
 
   return t0;
 }
@@ -4322,16 +4314,10 @@ static inline bool refer(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_cell_t * s
 
 static inline nanoclj_cell_t * def_namespace_with_sym(nanoclj_t *sc, nanoclj_val_t sym, nanoclj_cell_t * md) {
   nanoclj_cell_t * s = get_vector_object(sc, T_VARMAP, 0);
-  nanoclj_cell_t * ns0 = get_cell(sc, T_NAMESPACE, 0, mk_pointer(s), sc->root_ns, md);
+  nanoclj_cell_t * ns0 = get_cell(sc, T_NAMESPACE, 0, mk_pointer(s), NULL, md);
   nanoclj_val_t ns = mk_pointer(ns0);
-
-  if (!is_nil(sym)) {
-    if (sc->root_ns) {
-      intern_with_meta(sc, sc->root_ns, def_alias_from_val(sc, sym), mk_pointer(ns0), NULL);
-    }
     
-    sc->namespaces = tensor_hash_mutate_set(sc->namespaces, hasheq(sym, sc), sc->namespaces->ne[1], sym, ns, mk_nil(), false, sc, hasheq);
-  }
+  sc->namespaces = tensor_hash_mutate_set(sc->namespaces, hasheq(sym, sc), sc->namespaces->ne[1], sym, ns, mk_nil(), false, sc, hasheq);
 
   return ns0;
 }
@@ -4643,7 +4629,7 @@ static inline nanoclj_val_t port_rep_from_file(nanoclj_t * sc, uint16_t type, FI
   pr->stdio.backchars[0] = pr->stdio.backchars[1] = -1;
   pr->stdio.rc = rc;
 
-  nanoclj_cell_t * var = get_var_in_ns(sc, sc->core_ns, sc->FLUSH_ON_NEWLINE, true);
+  nanoclj_cell_t * var = get_var_in_ns(sc, sc->core_ns, sc->FLUSH_ON_NEWLINE);
   if (var && is_true(get_indexed_value(var, 1))) {
     setlinebuf(f);
   }
@@ -5764,16 +5750,19 @@ static inline bool resolve(nanoclj_t * sc, nanoclj_cell_t * env0, nanoclj_val_t 
   nanoclj_val_t sym;
   bool all_namespaces = true;
   if (s->ns.size) {
-    nanoclj_cell_t * var = get_var_in_ns(sc, sc->core_ns, s->ns_alias, true);
+    nanoclj_cell_t * var = get_var_in_ns(sc, sc->core_ns, s->ns_alias);
     if (var) {
       env = decode_pointer(get_indexed_value(var, 1));
-      sym = s->name_sym;
-      all_namespaces = false;
     } else {
-      nanoclj_val_t msg = mk_string_fmt(sc, "No such namespace: %.*s", s->ns.size, s->ns.ptr);
-      nanoclj_throw(sc, mk_runtime_exception(sc, msg));
-      return false;
+      env = find_ns(sc, s->ns_sym);
+      if (!env) {
+	nanoclj_val_t msg = mk_string_fmt(sc, "No such namespace: %.*s", s->ns.size, s->ns.ptr);
+	nanoclj_throw(sc, mk_runtime_exception(sc, msg));
+	return false;
+      }
     }
+    sym = s->name_sym;
+    all_namespaces = false;
   } else {
     env = env0;
     sym = sym0;
@@ -7029,7 +7018,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       } else {
 	intern_with_nil(sc, ns, arg1, meta);
       }
-      s_return(sc, mk_pointer(get_var_in_ns(sc, ns, arg1, false)));
+      s_return(sc, mk_pointer(get_var_in_ns(sc, ns, arg1)));
     }
     nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Invalid arguments for tensor")));
     return false;
@@ -7071,7 +7060,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       if (!set_var_in_ns(sc, ns, sc->code, sc->value, meta)) {
 	new_var_in_ns(sc, ns, sc->code, sc->value, meta);
       }
-      s_return(sc, mk_pointer(get_var_in_ns(sc, ns, sc->code, false)));
+      s_return(sc, mk_pointer(get_var_in_ns(sc, ns, sc->code)));
     }
 
   case OP_SET:
@@ -7137,7 +7126,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 
 	for (size_t i = 0; i < n; i += 2) {
 	  nanoclj_val_t sym = get_indexed_value(input_vec, i);
-	  nanoclj_cell_t * var = get_var_in_ns(sc, ns, sym, false);
+	  nanoclj_cell_t * var = get_var_in_ns(sc, ns, sym);
 	  if (!var) {
 	    strview_t sv = to_strview(sym);
 	    nanoclj_val_t msg = mk_string_fmt(sc, "Use of undeclared Var %.*s", sv.size, sv.ptr);
@@ -10157,7 +10146,7 @@ bool nanoclj_init(nanoclj_t * sc) {
   sc->context->cell_seg = NULL;
 
   sc->save_inport = mk_nil();
-  sc->core_ns = sc->root_ns = sc->envir = NULL;
+  sc->core_ns = sc->envir = NULL;
 
   sc->pending_exception = NULL;
 
@@ -10282,9 +10271,7 @@ bool nanoclj_init(nanoclj_t * sc) {
   sc->EMPTYSET = get_vector_object(sc, T_HASHSET, 0);
 
   /* Init root namespace clojure.core */
-  sc->root_ns = def_namespace_with_sym(sc, mk_nil(), NULL);
   sc->core_ns = sc->envir = def_namespace(sc, "clojure.core", __FILE__);
-
   intern(sc, sc->core_ns, sc->NS_SYM, mk_pointer(sc->core_ns));
 
   size_t n = sizeof(dispatch_table) / sizeof(dispatch_table[0]);
@@ -10296,7 +10283,7 @@ bool nanoclj_init(nanoclj_t * sc) {
 
   /* Java types */
 
-  sc->Object = mk_class(sc, "java.lang.Object", gentypeid(sc), sc->root_ns);
+  sc->Object = mk_class(sc, "java.lang.Object", gentypeid(sc), NULL);
   nanoclj_cell_t * Number = mk_class(sc, "java.lang.Number", gentypeid(sc), sc->Object);
   sc->Throwable = mk_class(sc, "java.lang.Throwable", gentypeid(sc), sc->Object);
   nanoclj_cell_t * Exception = mk_class(sc, "java.lang.Exception", gentypeid(sc), sc->Throwable);
@@ -10454,7 +10441,7 @@ void nanoclj_set_external_data(nanoclj_t * sc, void *p) {
 }
 
 void nanoclj_deinit(nanoclj_t * sc) {
-  sc->root_ns = sc->core_ns = NULL;
+  sc->core_ns = NULL;
   dump_stack_free(sc);
   sc->envir = NULL;
   sc->code = mk_nil();

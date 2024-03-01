@@ -1,6 +1,6 @@
 (in-ns 'clojure.core)
-(import java.lang.RuntimeException)
-(import java.lang.IndexOutOfBoundsException)
+(import java.lang.RuntimeException
+        java.lang.IndexOutOfBoundsException)
 
 ; Utilities for types.
 
