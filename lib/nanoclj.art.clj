@@ -1,4 +1,5 @@
-(ns nanoclj.art)
+(ns nanoclj.art
+  "A namespace for visualization related assets")
 
 (import nanoclj.lang.Gradient)
 (import nanoclj.lang.Shape)

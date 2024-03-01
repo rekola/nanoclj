@@ -1,4 +1,6 @@
-(ns java.lang.Object)
+(ns java.lang.Object
+  "A base object for everything else"
+  (:gen-class))
 
 (def TYPE 7)
 

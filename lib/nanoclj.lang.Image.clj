@@ -1,4 +1,6 @@
-(ns nanoclj.lang.Image)
+(ns nanoclj.lang.Image
+  "A class that represents images"
+  (:gen-class))
 
 (def TYPE_CUSTOM 0)
 (def TYPE_BYTE_GRAY 1)

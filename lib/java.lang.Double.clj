@@ -1,4 +1,6 @@
-(ns java.lang.Double)
+(ns java.lang.Double
+  "A 64-bit floating point number"
+  (:gen-class))
 
 (def TYPE 6)
 (def BYTES 8)

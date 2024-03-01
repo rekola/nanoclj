@@ -1,4 +1,6 @@
-(ns java.io.Writer)
+(ns java.io.Writer
+  "A writer"
+  (:gen-class))
 
 (defn close
   "Closes the Writer"

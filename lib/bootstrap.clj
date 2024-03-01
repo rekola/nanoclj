@@ -382,10 +382,6 @@
   ([x y] (not (equals? x y)))
   ([x y & more] (not (apply equals? x y more))))
 
-(defn closure?
-  "Returns true if argument is a closure. Note, a macro object is also a closure."
-  [x] (instance? nanoclj.lang.Closure x))
-
 (macro when (fn [form]
               `(if ~(cadr form) (do ~@(cddr form)))))
 
@@ -396,7 +392,5 @@
                 `(if ~(cadr form) ~(cadddr form) ~(caddr form))))
 
 (macro delay (fn [form] `(clojure.lang.Delay '~(cdr form))))
-
-(def-macro (ns name) `(in-ns '~name))
 
 (def-macro (import name) `(require '~name :import))

@@ -1,6 +1,7 @@
 (in-ns 'clojure.core)
-(import java.lang.RuntimeException
-        java.lang.IndexOutOfBoundsException)
+(import java.lang.RuntimeException)
+(import java.lang.IndexOutOfBoundsException)
+(import clojure.lang.Namespace)
 
 ; Utilities for types.
 
@@ -54,6 +55,10 @@
 (defn realized?
   "Returns true if Delay or LazySeq has been realized"
   [x] (equals? (-bit-and (-get-cell-flags x) 2048) 2048))
+
+(defn closure?
+  "Returns true if argument is a closure. Note, a macro object is also a closure."
+  [x] (instance? nanoclj.lang.Closure x))
 
 (def keyword clojure.lang.Keyword)
 (def char nanoclj.lang.Codepoint)

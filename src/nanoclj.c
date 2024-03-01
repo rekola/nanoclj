@@ -6396,6 +6396,12 @@ static inline bool unpack_args_0_plus(nanoclj_t * sc, nanoclj_cell_t ** arg_next
   return true;
 }
 
+static inline void throw_invalid_arity_for_op(nanoclj_t * sc) {
+  nanoclj_val_t ns = mk_string(sc, "clojure.core");
+  const char * fn = dispatch_table[(int)sc->op].name;
+  nanoclj_throw(sc, mk_arity_exception(sc, count(sc, sc->args), ns, mk_string(sc, fn)));
+}
+
 static inline bool unpack_args_1(nanoclj_t * sc, nanoclj_val_t * arg0) {
   if (sc->args) {
     *arg0 = first(sc, sc->args);
@@ -6403,9 +6409,7 @@ static inline bool unpack_args_1(nanoclj_t * sc, nanoclj_val_t * arg0) {
       return true;
     }
   }
-  nanoclj_val_t ns = mk_string(sc, "clojure.core");
-  const char * fn = dispatch_table[(int)sc->op].name;
-  nanoclj_throw(sc, mk_arity_exception(sc, count(sc, sc->args), ns, mk_string(sc, fn)));
+  throw_invalid_arity_for_op(sc);
   return false;
 }
 
@@ -6424,9 +6428,7 @@ static inline bool unpack_args_1_plus(nanoclj_t * sc, nanoclj_val_t * arg0, nano
     *arg_next = next(sc, sc->args);
     return true;
   }
-  nanoclj_val_t ns = mk_string(sc, "clojure.core");
-  const char * fn = dispatch_table[(int)sc->op].name;
-  nanoclj_throw(sc, mk_arity_exception(sc, count(sc, sc->args), ns, mk_string(sc, fn)));
+  throw_invalid_arity_for_op(sc);
   return false;
 }
 
@@ -6441,9 +6443,7 @@ static inline bool unpack_args_2(nanoclj_t * sc, nanoclj_val_t * arg0, nanoclj_v
       }
     }
   }
-  nanoclj_val_t ns = mk_string(sc, "clojure.core");
-  const char * fn = dispatch_table[(int)sc->op].name;
-  nanoclj_throw(sc, mk_arity_exception(sc, count(sc, sc->args), ns, mk_string(sc, fn)));
+  throw_invalid_arity_for_op(sc);
   return false;
 }
 
@@ -6471,9 +6471,7 @@ static inline bool unpack_args_3(nanoclj_t * sc, nanoclj_val_t * arg0, nanoclj_v
       }
     }
   }
-  nanoclj_val_t ns = mk_string(sc, "clojure.core");
-  const char * fn = dispatch_table[(int)sc->op].name;
-  nanoclj_throw(sc, mk_arity_exception(sc, count(sc, sc->args), ns, mk_string(sc, fn)));
+  throw_invalid_arity_for_op(sc);
   return false;
 }
 
@@ -6501,9 +6499,7 @@ static inline bool unpack_args_5(nanoclj_t * sc, nanoclj_val_t * arg0, nanoclj_v
       }
     }
   }
-  nanoclj_val_t ns = mk_string(sc, "clojure.core");
-  const char * fn = dispatch_table[(int)sc->op].name;
-  nanoclj_throw(sc, mk_arity_exception(sc, count(sc, sc->args), ns, mk_string(sc, fn)));
+  throw_invalid_arity_for_op(sc);
   return false;
 }
 
@@ -6517,9 +6513,7 @@ static inline bool unpack_args_2_plus(nanoclj_t * sc, nanoclj_val_t * arg0, nano
       return true;
     }
   }
-  nanoclj_val_t ns = mk_string(sc, "clojure.core");
-  const char * fn = dispatch_table[(int)sc->op].name;
-  nanoclj_throw(sc, mk_arity_exception(sc, count(sc, sc->args), ns, mk_string(sc, fn)));
+  throw_invalid_arity_for_op(sc);
   return false;
 }
 
@@ -6613,6 +6607,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     if (!unpack_args_1(sc, &arg0)) {
       return false;
     } else {
+      sc->envir = get_current_ns(sc);
       tensor_mutate_push(sc->load_stack, arg0);
       sc->value = mk_nil();
       s_goto(sc, OP_T0LVL);
@@ -9286,6 +9281,47 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
     Error_0(sc, "Cannot set metadata");
 
+  case OP_NS:
+    {
+      nanoclj_cell_t * code = decode_pointer(sc->code);
+      if (!code) {
+	throw_invalid_arity_for_op(sc);
+	return false;
+      }
+      nanoclj_val_t ns_sym = first(sc, code);
+      nanoclj_val_t doc = mk_nil();      
+      bool gen_class = false;
+      for (; code; code = next(sc, code)) {
+	nanoclj_val_t v = first(sc, code);
+	if (is_string(v)) {
+	  doc = v;
+	} else if (is_list(v)) {
+	  nanoclj_cell_t * c = decode_pointer(v);
+	  nanoclj_val_t key = first(sc, c);
+	  if (key.as_long == sc->GEN_CLASS.as_long) {
+	    gen_class = true;
+	  }
+	}
+      }
+      nanoclj_cell_t * ns = find_ns(sc, ns_sym);
+      if (!ns) {
+	nanoclj_cell_t * meta = update_meta_from_reader(sc, mk_hashmap(sc), tensor_peek(sc->load_stack));
+	meta = assoc(sc, meta, sc->NAME, ns_sym);
+	if (!is_nil(doc)) meta = assoc(sc, meta, sc->DOC, doc);
+	ns = def_namespace_with_sym(sc, ns_sym, meta);
+      }
+      if (ns != sc->core_ns) refer(sc, ns, sc->core_ns);
+      if (gen_class) {
+	/* import the class name to the class itself */
+	intern(sc, ns, ns_sym, mk_pointer(ns));      	
+      }
+      nanoclj_val_t ns2 = mk_pointer(ns);
+      intern(sc, sc->core_ns, sc->NS_SYM, ns2);
+      bool r = _s_return(sc, ns2);
+      sc->envir = ns;
+      return r;      
+    }
+
   case OP_IN_NS:
     if (!unpack_args_1(sc, &arg0)) {
       return false;
@@ -10199,6 +10235,7 @@ bool nanoclj_init(nanoclj_t * sc) {
   assign_syntax(sc, "with-open", OP_WITH_OPEN);
   assign_syntax(sc, "with-redefs", OP_WITH_REDEFS0);
   assign_syntax(sc, "binding", OP_WITH_REDEFS0);
+  assign_syntax(sc, "ns", OP_NS);
 
   /* initialization of global nanoclj_val_ts to special symbols */
   sc->LAMBDA = def_symbol(sc, "fn");
@@ -10270,6 +10307,7 @@ bool nanoclj_init(nanoclj_t * sc) {
   sc->RELOAD = def_keyword(sc, "reload");
   sc->IMPORT = def_keyword(sc, "import");
   sc->PRIVATE = def_keyword(sc, "private");
+  sc->GEN_CLASS = def_keyword(sc, "gen-class");
   
   sc->DOT = def_symbol(sc, ".");
   sc->CATCH = def_symbol(sc, "catch");

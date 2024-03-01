@@ -1,3 +1,5 @@
-(ns nanoclj.lang.Tensor)
+(ns nanoclj.lang.Tensor
+  "A class that represents tensors"
+  (:gen-class))
 
-(def tensor *ns*)
+(def tensor nanoclj.lang.Tensor)

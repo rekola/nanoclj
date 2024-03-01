@@ -1,4 +1,6 @@
-(ns java.lang.Long)
+(ns java.lang.Long
+  "A 64-bit integer"
+  (:gen-class))
 
 (def MAX_VALUE 9223372036854775807)
 (def MIN_VALUE -9223372036854775808)

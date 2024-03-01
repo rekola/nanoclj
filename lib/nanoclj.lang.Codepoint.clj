@@ -1,4 +1,6 @@
-(ns nanoclj.lang.Codepoint)
+(ns nanoclj.lang.Codepoint
+  "An Unicode codepoint"
+  (:gen-class))
 
 (def UNASSIGNED 0)
 (def UPPERCASE_LETTER 1)

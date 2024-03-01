@@ -1,4 +1,6 @@
-(ns java.lang.String)
+(ns java.lang.String
+  "A class that represents a UTF8 string"
+  (:gen-class))
 
 (def UTF8PROC_COMPOSE 4)
 (def UTF8PROC_IGNORE 32)

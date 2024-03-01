@@ -1,4 +1,6 @@
-(ns java.lang.Byte)
+(ns java.lang.Byte
+  "A 8-bit integer"
+  (:gen-class))
 
 (def TYPE 2)
 (def MIN_VALUE -128)

@@ -1,4 +1,6 @@
-(ns clojure.lang.PersistentVector)
+(ns clojure.lang.PersistentVector
+  "A persistent vector"
+  (:gen-class))
 
 (def EMPTY [])
 

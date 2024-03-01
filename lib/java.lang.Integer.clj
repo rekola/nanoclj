@@ -1,4 +1,6 @@
-(ns java.lang.Integer)
+(ns java.lang.Integer
+  "A 32-bit integer"
+  (:gen-class))
 
 (def TYPE 4)
 (def MAX_VALUE 2147483647)

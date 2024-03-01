@@ -1,4 +1,4 @@
-(ns java.lang.Float)
+(ns java.lang.Float (:gen-class))
 
 (def TYPE 5)
 (def BYTES 4)

@@ -1,4 +1,6 @@
-(ns java.io.Reader)
+(ns java.io.Reader
+  "A reader"
+  (:gen-class))
 
 (defn close
   "Closes the Reader"
