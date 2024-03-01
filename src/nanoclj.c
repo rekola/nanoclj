@@ -4072,10 +4072,19 @@ static inline bool set_var_in_ns(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_va
   if (idx == NPOS) return false;
 
   nanoclj_val_t old_state = get_indexed_value(y, idx);
-  set_indexed_value(y, idx, state);
-  
-  if (meta) set_indexed_meta(y, idx, mk_pointer(meta));
-  else meta = decode_pointer(get_indexed_meta(y, idx));
+  if (type(old_state) == T_VAR) {
+    nanoclj_cell_t * var = decode_pointer(old_state);
+    old_state = get_indexed_value(var, 1);
+    set_indexed_value(var, 1, state);
+
+    if (meta) set_indexed_value(var, 2, mk_pointer(meta));
+    else meta = decode_pointer(get_indexed_value(var, 2));
+  } else {
+    set_indexed_value(y, idx, state);
+    
+    if (meta) set_indexed_meta(y, idx, mk_pointer(meta));
+    else meta = decode_pointer(get_indexed_meta(y, idx));
+  }
 
   nanoclj_val_t watches0 = find(sc, meta, sc->WATCHES, mk_nil());
   if (!is_nil(watches0)) {

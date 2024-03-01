@@ -108,13 +108,13 @@
                        (restore)
                        (try (let [r (load-string line)]
                               (prn r)
-                              (intern core-ns '*3 *2)
-                              (intern core-ns '*2 *1)
-                              (intern core-ns '*1 r)
+                              (set! *3 *2)
+                              (set! *2 *1)
+                              (set! *1 r)
                               (recur))
                             (catch java.lang.Throwable e
                               (set! *out* prev-out)
-                              (intern core-ns '*e e)
+                              (set! *e e)
                               (save)
                               (set-color [ 0.85 0.31 0.3 ])
                               (println e)
