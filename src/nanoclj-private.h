@@ -209,7 +209,7 @@ extern "C" {
     nanoclj_val_t IN_SYM;	  /* *in* */
     nanoclj_val_t OUT_SYM;	  /* *out* */
     nanoclj_val_t ERR;		  /* *err* */
-    nanoclj_val_t CURRENT_NS;	  /* *ns* */
+    nanoclj_val_t NS_SYM;	  /* *ns* */
     nanoclj_val_t CURRENT_FILE;   /* *file* */
     nanoclj_val_t ENV;	  	  /* *env* */
     nanoclj_val_t CELL_SIZE;      /* *cell-size* */
@@ -265,7 +265,6 @@ extern "C" {
     
     nanoclj_val_t save_inport;
     nanoclj_tensor_t * load_stack;
-    nanoclj_tensor_t * ns_stack;
     
     char strbuff[STRBUFFSIZE];
     nanoclj_tensor_t * rdbuff;
