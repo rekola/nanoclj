@@ -9328,7 +9328,11 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	nanoclj_cell_t * meta = update_meta_from_reader(sc, mk_hashmap(sc), tensor_peek(sc->load_stack));
 	meta = assoc(sc, meta, sc->NAME, ns_sym);
 	if (!is_nil(doc)) meta = assoc(sc, meta, sc->DOC, doc);
-	ns = def_namespace_with_sym(sc, ns_sym, meta);
+	if (gen_class) {
+	  ns = mk_class_with_meta(sc, ns_sym, gentypeid(sc), sc->Object, meta);
+	} else {
+	  ns = def_namespace_with_sym(sc, ns_sym, meta);
+	}
       }
       if (ns != sc->core_ns) refer(sc, ns, sc->core_ns);
       if (gen_class) {
