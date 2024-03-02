@@ -117,7 +117,7 @@
   [x] (long x))
 
 (defn vec [coll] (reduce -conj [] coll))
-(defn set [coll] (reduce -conj #() coll))
+(defn set [coll] (reduce -conj #{} coll))
 
 (defn run! [proc coll] (if (empty? coll) nil (do (proc (first coll)) (run! proc (rest coll)))))
 

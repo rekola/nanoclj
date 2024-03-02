@@ -169,6 +169,7 @@
 (t/is (= (conj #{ :a } :b ) #{ :a :b }))
 (t/is (= (conj { :a 1 } { :b 2 }) { :a 1 :b 2 }))
 (t/is (= (assoc [ :a :b :c :d ] 0 :A) [ :A :b :c :d ]))
+(t/is (= (set '[1 2 3 4]) #{ 1 2 3 4 }))
 
                                         ; Dates
 
