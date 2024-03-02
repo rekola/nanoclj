@@ -1,4 +1,5 @@
-(ns clojure.test)
+(ns clojure.test
+  "Test framework")
 
 (def-macro (is arg)
   `(let ((r ~arg))

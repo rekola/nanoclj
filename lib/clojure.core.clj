@@ -1,6 +1,8 @@
 (in-ns 'clojure.core)
 (import java.lang.RuntimeException)
 (import java.lang.IndexOutOfBoundsException)
+(import clojure.lang.PersistentHashSet)
+(import clojure.lang.PersistentHashMap)
 (import clojure.lang.Namespace)
 
 ; Utilities for types.

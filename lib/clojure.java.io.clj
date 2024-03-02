@@ -1,4 +1,5 @@
-(ns clojure.java.io)
+(ns clojure.java.io
+  "Java IO related operations")
 (import java.io.Reader)
 (import java.io.Writer)
 (import java.io.InputStream)

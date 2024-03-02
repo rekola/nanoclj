@@ -1,4 +1,5 @@
-(ns clojure.string)
+(ns clojure.string
+  "String operations")
 
 (defn blank?
   "Returns true if the argument string is blank"

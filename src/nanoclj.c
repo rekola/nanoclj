@@ -9352,7 +9352,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	meta = assoc(sc, meta, sc->NAME, arg0);
 	ns = def_namespace_with_sym(sc, arg0, meta);
       }
-      if (ns != sc->core_ns) refer(sc, ns, sc->core_ns);
       nanoclj_val_t ns2 = mk_pointer(ns);
       intern(sc, sc->core_ns, sc->NS_SYM, ns2);
       bool r = _s_return(sc, ns2);
@@ -9482,20 +9481,18 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       for (; arg_next; arg_next = next(sc, arg_next)) {
 	nanoclj_val_t arg = first(sc, arg_next);
 	nanoclj_val_t ns_sym = mk_nil(), alias_sym = mk_nil();
-	bool is_aliased = false;
 	if (is_keyword(arg)) {
 	  continue;
 	} else if (is_symbol(arg)) {
-	  ns_sym = alias_sym = arg;
+	  ns_sym = arg;
 	} else if (is_vector(arg)) {
 	  nanoclj_cell_t * vec = decode_pointer(arg);
 	  if (get_size(vec) == 3 && get_indexed_value(vec, 1).as_long == sc->AS.as_long) {
 	    ns_sym = get_indexed_value(vec, 0);
 	    alias_sym = get_indexed_value(vec, 2);
 	  }
-	  is_aliased = true;
 	}
-	if (is_nil(ns_sym) || is_nil(alias_sym)) {
+	if (is_nil(ns_sym)) {
 	  nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Invalid arguments")));
 	  return false;
 	}
@@ -9512,20 +9509,20 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	    return false;
 	  }
 	}
-	intern_with_meta(sc, current_ns, def_alias_from_val(sc, alias_sym), mk_pointer(ns), NULL);
+	if (!is_nil(alias_sym)) {
+	  intern_with_meta(sc, current_ns, def_alias_from_val(sc, alias_sym), mk_pointer(ns), NULL);
+	}
 	if (import) {
-	  intern_with_meta(sc, current_ns, alias_sym, mk_pointer(ns), NULL);
+	  intern_with_meta(sc, current_ns, ns_sym, mk_pointer(ns), NULL);
 
-	  if (!is_aliased) {
-	    strview_t sv = to_strview(ns_sym);
-	    char * p = memrchr(sv.ptr, '.', sv.size);
-	    if (p) {
-	      strview_t short_sv = strview_remove_prefix(sv, p + 1 - sv.ptr);
-	      if (short_sv.size) {
-		nanoclj_val_t short_sym = def_symbol_from_sv(sc, T_SYMBOL, mk_strview(0), short_sv);
-		intern_with_meta(sc, current_ns, short_sym, mk_pointer(ns), NULL);
-		intern_with_meta(sc, current_ns, def_alias_from_val(sc, short_sym), mk_pointer(ns), NULL);
-	      }
+	  strview_t sv = to_strview(ns_sym);
+	  char * p = memrchr(sv.ptr, '.', sv.size);
+	  if (p) {
+	    strview_t short_sv = strview_remove_prefix(sv, p + 1 - sv.ptr);
+	    if (short_sv.size) {
+	      nanoclj_val_t short_sym = def_symbol_from_sv(sc, T_SYMBOL, mk_strview(0), short_sv);
+	      intern_with_meta(sc, current_ns, short_sym, mk_pointer(ns), NULL);
+	      intern_with_meta(sc, current_ns, def_alias_from_val(sc, short_sym), mk_pointer(ns), NULL);
 	    }
 	  }
 	}

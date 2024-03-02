@@ -1,4 +1,5 @@
-(ns nanoclj.image)
+(ns nanoclj.image
+  "Image processing operations")
 
 (defn gaussian-blur
   "Applies gaussian blur to image"
