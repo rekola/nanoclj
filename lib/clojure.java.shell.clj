@@ -1,5 +1,6 @@
 (ns clojure.java.shell
   "Shell operations")
+(require 'clojure.java.io)
 
 (defn sh
   "Launch a process and capture output"
