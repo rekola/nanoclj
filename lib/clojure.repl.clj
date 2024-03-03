@@ -96,7 +96,6 @@
   (let [hfn (clojure.java.io/file (System/getProperty "user.home") "/.nanoclj_history")
         f (fn [] (let [prompt (str *ns* "=> ")
                        line (linenoise/read-line prompt)
-                       prev-out *out*
                        core-ns (find-ns 'clojure.core)]
                    (if line
                      (do
@@ -114,7 +113,6 @@
                               (set! *1 r)
                               (recur))
                             (catch java.lang.Throwable e
-                              (set! *out* prev-out)
                               (set! *e e)
                               (save)
                               (set-color [ 0.85 0.31 0.3 ])

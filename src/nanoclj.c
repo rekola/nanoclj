@@ -4629,9 +4629,9 @@ static inline int http_open_thread(nanoclj_t * sc, strview_t sv, atomic_int * rc
 }
 #endif
 
-static inline nanoclj_val_t port_rep_from_file(nanoclj_t * sc, uint16_t type, FILE * f, char * filename, atomic_int * rc) {
+static inline nanoclj_cell_t * port_rep_from_file(nanoclj_t * sc, uint16_t type, FILE * f, char * filename, atomic_int * rc) {
   nanoclj_cell_t * p = get_port_object(sc, type, port_file);
-  if (!p) return mk_nil();
+  if (!p) return NULL;
  
   _line_unchecked(p) = _column_unchecked(p) = 0;
 
@@ -4650,12 +4650,12 @@ static inline nanoclj_val_t port_rep_from_file(nanoclj_t * sc, uint16_t type, FI
     setlinebuf(f);
   }
 
-  return mk_pointer(p);
+  return p;
 }
 
-static inline nanoclj_val_t port_from_stream(nanoclj_t * sc, uint16_t type, nanoclj_cell_t * stream) {
+static inline nanoclj_cell_t * port_from_stream(nanoclj_t * sc, uint16_t type, nanoclj_cell_t * stream) {
   nanoclj_cell_t * p = get_port_object(sc, type, port_z);
-  if (!p) return mk_nil();
+  if (!p) return NULL;
   nanoclj_port_rep_t * pr = _rep_unchecked(p);
   z_stream * strm = &(pr->z.strm);
   /* allocate inflate state */
@@ -4671,19 +4671,19 @@ static inline nanoclj_val_t port_from_stream(nanoclj_t * sc, uint16_t type, nano
     ret = deflateInit(strm, 9);
   }
   if (ret != Z_OK) {
-    return mk_nil();
+    return NULL;
   }
-  return mk_pointer(p);
+  return p;
 }
 
-static inline nanoclj_val_t port_from_filename(nanoclj_t * sc, uint16_t type, strview_t sv) {
+static inline nanoclj_cell_t * port_from_filename(nanoclj_t * sc, uint16_t type, strview_t sv) {
   const char * mode;
   switch (type) {
   case T_WRITER: mode = "w"; break;
   case T_OUTPUT_STREAM: mode = "wb"; break;
   case T_READER: mode = "r"; break;
   case T_INPUT_STREAM: mode = "rb"; break;
-  default: return mk_nil();
+  default: return NULL;
   }
 
   FILE * f = NULL;
@@ -4730,17 +4730,17 @@ static inline nanoclj_val_t port_from_filename(nanoclj_t * sc, uint16_t type, st
       nanoclj_throw(sc, mk_exception(sc, sc->IOException, msg));
     }
     free(filename);
-    return mk_nil();
+    return NULL;
   }
   return port_rep_from_file(sc, type, f, filename, rc);
 }
 
-static inline nanoclj_val_t port_from_string(nanoclj_t * sc, uint16_t type, strview_t sv) {
+static inline nanoclj_cell_t * port_from_string(nanoclj_t * sc, uint16_t type, strview_t sv) {
   nanoclj_cell_t * p = get_port_object(sc, type, port_string);
-  if (!p) return mk_nil();
+  if (!p) return NULL;
   
   nanoclj_tensor_t * tensor = mk_tensor_1d(nanoclj_i8, sv.size);
-  if (!tensor) return mk_nil();
+  if (!tensor) return NULL;
   tensor->refcnt++;
   
   memcpy(tensor->data, sv.ptr, sv.size);
@@ -4749,7 +4749,7 @@ static inline nanoclj_val_t port_from_string(nanoclj_t * sc, uint16_t type, strv
   pr->string.data = tensor;
   pr->string.read_pos = 0;
   
-  return mk_pointer(p);
+  return p;
 }
 
 static inline nanoclj_cell_t * mk_reader(nanoclj_t * sc, uint16_t t, nanoclj_cell_t * args) {
@@ -4763,13 +4763,13 @@ static inline nanoclj_cell_t * mk_reader(nanoclj_t * sc, uint16_t t, nanoclj_cel
       case T_STRING:
       case T_FILE:
       case T_URL:
-	return decode_pointer(port_from_filename(sc, t, _to_strview(c)));
+	return port_from_filename(sc, t, _to_strview(c));
       case T_TENSOR:
-	return decode_pointer(port_from_string(sc, t, _to_strview(c)));
+	return port_from_string(sc, t, _to_strview(c));
       case T_READER:
       case T_INPUT_STREAM:
 	if (t == T_GZIP_INPUT_STREAM || t == T_GZIP_OUTPUT_STREAM) {
-	  return decode_pointer(port_from_stream(sc, t, c));
+	  return port_from_stream(sc, t, c);
 	} else {
 	  return c;
 	}
@@ -4808,23 +4808,6 @@ static inline nanoclj_val_t slurp(nanoclj_t * sc, uint16_t t, nanoclj_cell_t * a
     port_close(sc, rdr);
   }
   return r;
-}
-
-static inline bool file_push(nanoclj_t * sc, nanoclj_val_t f) {
-  nanoclj_val_t p = port_from_filename(sc, T_READER, to_strview(f));
-  if (!is_nil(p)) {
-    tensor_mutate_push(sc->load_stack, p);
-    return !sc->pending_exception;
-  } else {
-    return false;
-  }
-}
-
-static inline void file_pop(nanoclj_t * sc) {
-  if (!tensor_is_empty(sc->load_stack)) {
-    port_close(sc, decode_pointer(tensor_peek(sc->load_stack)));
-    tensor_mutate_pop(sc->load_stack);
-  }
 }
 
 static inline nanoclj_val_t mk_writer_from_callback(nanoclj_t * sc,
@@ -6168,7 +6151,7 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
   case T_OUTPUT_STREAM:
   case T_GZIP_OUTPUT_STREAM:
     if (!args) {
-      return port_from_string(sc, t, mk_strview(0));
+      return mk_pointer(port_from_string(sc, t, mk_strview(0)));
     } else {
       x = first(sc, args);
       if (is_nil(x)) {
@@ -6177,9 +6160,9 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
       } else if (type(x) == t) {
 	return x;
       } else if (is_string(x) || is_file(x)) {
-	return port_from_filename(sc, t, to_strview(x));
+	return mk_pointer(port_from_filename(sc, t, to_strview(x)));
       } else if (is_tensor(x)) {
-	return port_from_string(sc, t, to_strview(x));
+	return mk_pointer(port_from_string(sc, t, to_strview(x)));
       } else {
 	args = next(sc, args);
 	if (args && t == T_WRITER) {
@@ -6582,11 +6565,32 @@ static inline void eval_in_thread(nanoclj_t * sc, nanoclj_val_t code) {
   nanoclj_start_thread(thread_main, child);
 }
 
+static inline nanoclj_val_t load_from_port(nanoclj_t * sc, nanoclj_cell_t * p) {
+  int64_t n_ls = tensor_n_elem(sc->load_stack);
+  nanoclj_cell_t * ns = get_current_ns(sc);
+  
+  tensor_mutate_push(sc->load_stack, mk_pointer(p));
+  save_from_C_call(sc);
+  sc->envir = ns;
+  sc->args = NULL;
+  sc->value = mk_nil();
+  Eval_Cycle(sc, OP_T0LVL);
+
+  if (!tensor_is_empty(sc->load_stack)) {
+    port_close(sc, decode_pointer(tensor_peek(sc->load_stack)));
+    tensor_mutate_pop(sc->load_stack);
+  }
+
+  /* restore namespace */
+  intern(sc, sc->core_ns, sc->NS_SYM, mk_pointer(ns));
+  
+  return sc->value;
+}
+
 /* Executes and opcode, and returns true if execution should continue */
 static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   nanoclj_val_t x, y;
   nanoclj_cell_t * meta, * z;
-  int syn;
   nanoclj_cell_t * params;
   nanoclj_val_t arg0, arg1, arg2, arg3, arg4;
   nanoclj_cell_t * arg_next;
@@ -6600,24 +6604,30 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_LOAD_FILE:                /* load-file */
     if (!unpack_args_1(sc, &arg0)) {
       return false;
-    } else if (!file_push(sc, arg0)) {
-      strview_t sv = to_strview(arg0);
-      nanoclj_val_t msg = mk_string_fmt(sc, "Unable to open %.*s", sv.size, sv.ptr);
-      nanoclj_throw(sc, mk_runtime_exception(sc, msg));
-      return false;
     } else {
-      sc->value = mk_nil();
-      s_goto(sc, OP_T0LVL);
+      strview_t sv = to_strview(arg0);
+      nanoclj_cell_t * p = port_from_filename(sc, T_READER, sv);
+      if (!p) {
+	nanoclj_val_t msg = mk_string_fmt(sc, "Unable to open %.*s", sv.size, sv.ptr);
+	nanoclj_throw(sc, mk_runtime_exception(sc, msg));
+	return false;
+      }
+      nanoclj_val_t v = load_from_port(sc, p);
+      if (sc->pending_exception) {
+	return false;
+      }
+      s_return(sc, v);
     }
 
   case OP_LOAD_READER:
-    if (!unpack_args_1(sc, &arg0)) {
+    if (!unpack_args_1_not_nil(sc, &arg0)) {
       return false;
     } else {
-      sc->envir = get_current_ns(sc);
-      tensor_mutate_push(sc->load_stack, arg0);
-      sc->value = mk_nil();
-      s_goto(sc, OP_T0LVL);
+      nanoclj_val_t v = load_from_port(sc, decode_pointer(arg0));
+      if (sc->pending_exception) {
+	return false;
+      }
+      s_return(sc, v);
     }
 
   case OP_T0LVL:               /* top level */
@@ -6630,12 +6640,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       if (_nesting_unchecked(z) != 0) {
 	Error_0(sc, "Unmatched parentheses");
       }
-
-      file_pop(sc);
-
-      bool r = _s_return(sc, sc->value);
-      intern(sc, sc->core_ns, sc->NS_SYM, mk_pointer(get_ns_from_env(sc->envir)));
-      return r;
+      s_return(sc, sc->value);      
     } else {
       /* Set up another iteration of REPL */
       sc->save_inport = get_in_port(sc);
@@ -6714,6 +6719,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     case T_CELL:
       {
 	nanoclj_cell_t * code_cell = decode_pointer(sc->code);
+	int syn;
 	switch (_type(code_cell)) {
 	case T_LIST:
 	  if ((syn = syntaxnum(_car_unchecked(code_cell))) != 0) {       /* SYNTAX */
@@ -8651,8 +8657,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     x = get_in_port(sc);
     if (is_cell(x)) {
       nanoclj_cell_t * inport = decode_pointer(x);
-      char * s;
       if (is_readable(inport)) {
+	char * s;
 	switch (sc->tok) {
 	case TOK_EOF:
 	  s_return(sc, mk_codepoint(EOF));
@@ -10499,13 +10505,13 @@ bool nanoclj_init(nanoclj_t * sc) {
 }
 
 void nanoclj_set_input_port_file(nanoclj_t * sc, FILE * fin) {
-  intern(sc, sc->core_ns, sc->IN_SYM, port_rep_from_file(sc, T_READER, fin, NULL, NULL));
+  intern(sc, sc->core_ns, sc->IN_SYM, mk_pointer(port_rep_from_file(sc, T_READER, fin, NULL, NULL)));
 }
 
 void nanoclj_set_output_port_file(nanoclj_t * sc, FILE * fout) {
-  nanoclj_val_t p = port_rep_from_file(sc, T_WRITER, fout, NULL, NULL);
-  intern(sc, sc->core_ns, sc->OUT_SYM, p);
-  update_window_info(sc, decode_pointer(p));
+  nanoclj_cell_t * p = port_rep_from_file(sc, T_WRITER, fout, NULL, NULL);
+  intern(sc, sc->core_ns, sc->OUT_SYM, mk_pointer(p));
+  update_window_info(sc, p);
 }
 
 void nanoclj_set_output_port_callback(nanoclj_t * sc,
@@ -10525,7 +10531,7 @@ void nanoclj_set_error_port_callback(nanoclj_t * sc, void (*text) (const char *,
 }
 
 void nanoclj_set_error_port_file(nanoclj_t * sc, FILE * fout) {
-  intern(sc, sc->core_ns, sc->ERR, port_rep_from_file(sc, T_WRITER, fout, NULL, NULL));
+  intern(sc, sc->core_ns, sc->ERR, mk_pointer(port_rep_from_file(sc, T_WRITER, fout, NULL, NULL)));
 }
 
 void nanoclj_set_external_data(nanoclj_t * sc, void *p) {
@@ -10583,31 +10589,16 @@ void nanoclj_deinit_oblist(nanoclj_t * sc) {
 }
 
 bool nanoclj_load_named_file(nanoclj_t * sc, nanoclj_val_t filename) {
-  nanoclj_val_t p = port_from_filename(sc, T_READER, to_strview(filename));
+  nanoclj_cell_t * p = port_from_filename(sc, T_READER, to_strview(filename));
   if (!sc->pending_exception) {
-    tensor_mutate_push(sc->load_stack, p);
-    sc->args = NULL;
-    sc->value = mk_nil();
-
-    save_from_C_call(sc);
-    Eval_Cycle(sc, OP_T0LVL);
+    load_from_port(sc, p);
   }
 
   return sc->pending_exception == NULL;
 }
 
 nanoclj_val_t nanoclj_eval_string(nanoclj_t * sc, const char *cmd, size_t len) {
-  save_from_C_call(sc);
-
-  nanoclj_val_t p = port_from_string(sc, T_READER, (strview_t){ cmd, len });
-  
-  tensor_mutate_push(sc->load_stack, p);
-  sc->args = NULL;
-  sc->value = mk_nil();
-  
-  Eval_Cycle(sc, OP_T0LVL);
-
-  return sc->value;
+  return load_from_port(sc, port_from_string(sc, T_READER, (strview_t){ cmd, len }));
 }
 
 /* "func" and "args" are assumed to be already eval'ed. */
