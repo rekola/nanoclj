@@ -21,6 +21,7 @@
   "Returns true if argument is a NaN"
   (fn [d] (== d ##NaN)))
 
-
-
-
+(defn equals
+  "Returns true if this is equal to the other"
+  [this other] (and (clojure.core/isa? java.lang.Double other)
+                    (= (doubleToLongBits this) (doubleToLongBits other))))

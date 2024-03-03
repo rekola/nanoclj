@@ -6,5 +6,12 @@
 
 (defn toString
   "Creates a string representation"
-  [o] (str o))
+  [this] (str this))
 
+(defn equals
+  "Returns true if this is equal to the other"
+  [this other] (equals? this other))
+
+(defn clone
+  "Creates a clone of this, or copy if the object is immutable"
+  [this] this)

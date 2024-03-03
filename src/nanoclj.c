@@ -3222,10 +3222,17 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
     return decode_integer(a0) == decode_integer(b0);
   } else if (t_a != T_CELL && t_b != T_CELL) {
     return false;
+  } else if (t_a == T_LONG) {
+    t_b = expand_type(b0, t_b);
+    if (t_b == T_LONG) return false;
+  } else if (t_b == T_LONG) {
+    t_a = expand_type(a0, t_a);
+    if (t_a == T_LONG) return false;
+  } else {
+    t_a = expand_type(a0, t_a);
+    t_b = expand_type(b0, t_b);
   }
   /* Test cell types */
-  t_a = expand_type(a0, t_a);
-  t_b = expand_type(b0, t_b);
   if (t_a == T_EMPTYLIST) {
     return is_sequential_type(t_b) && is_empty(sc, decode_pointer(b0));
   } else if (t_b == T_EMPTYLIST) {

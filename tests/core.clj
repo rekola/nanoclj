@@ -26,6 +26,13 @@
 (t/is (instance? Double ##-Inf))
 (t/is (instance? Double ##NaN))
 
+(t/is (.equals 0.0 0.0))
+(t/is (not (.equals 0.0 -0.0)))
+
+                                        ; Boxed Longs
+
+(t/is (not (= 0 java.lang.Long/MAX_VALUE)))
+
                                         ; Arithmetics
 
 (t/is (= 6 (+ 1 2 3)))
