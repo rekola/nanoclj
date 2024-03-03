@@ -9,19 +9,43 @@
 (def POSITIVE_INFINITY ##Inf)
 (def SIZE 64)
 
-(def parseDouble
+(defn parseDouble
   "Parses a string to get a Double"
-  (fn [str] (double str)))
+  [str] (double str))
 
-(def isInfinite
+(defn isInfinite
   "Returns true if argument is infinite"
-  (fn [d] (or (== d ##Inf) (== d ##-Inf))))
+  [d] (or (== d ##Inf) (== d ##-Inf)))
 
-(def isNaN
+(defn isFinite
+  "Returns true if argument is finite"
+  [d] (and (not= d ##Inf) (not= d ##-Inf) (== d d)))
+
+(defn isNaN
   "Returns true if argument is a NaN"
-  (fn [d] (== d ##NaN)))
+  [d] (not= d d))
 
 (defn equals
   "Returns true if this is equal to the other"
   [this other] (and (clojure.core/isa? java.lang.Double other)
                     (= (doubleToLongBits this) (doubleToLongBits other))))
+
+(defn compare
+  "Compares two doubles"
+  [d1 d2] (compare d1 d2))
+
+(defn sum
+  "Returns the sum of d1 and d2"
+  [d1 d2] (+ d1 d2))
+
+(defn valueOf
+  "Returns the double value itself"
+  [v] (double v))
+
+(defn min
+  "Returns the smaller of d1 and d2"
+  [d1 d2] (if (< d1 d2) d1 d2))
+
+(defn max
+  "Returns the larger of d1 and d2"
+  [d1 d2] (if (> d1 d2) d1 d2))
