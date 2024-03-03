@@ -25,6 +25,7 @@
 (require 'java.lang.Object :reload :import)
 (require 'java.lang.Class :reload :import)
 (require 'java.lang.Integer :reload :import)
+(require 'java.lang.Number :reload :import)
 (require 'java.lang.Float :reload :import)
 (require 'java.lang.Double :reload :import)
 (require 'java.lang.Boolean :reload :import)

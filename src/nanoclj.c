@@ -9311,15 +9311,31 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       nanoclj_val_t ns_sym = first(sc, code);
       nanoclj_val_t doc = mk_nil();      
       bool gen_class = false;
+      nanoclj_cell_t * parent_class = sc->Object;
+
+      code = next(sc, code);
+      if (code) {
+	nanoclj_val_t arg = first(sc, code);
+	if (is_string(arg)) {
+	  doc = arg;
+	  code = next(sc, code);
+	}
+      }
       for (; code; code = next(sc, code)) {
-	nanoclj_val_t v = first(sc, code);
-	if (is_string(v)) {
-	  doc = v;
-	} else if (is_list(v)) {
-	  nanoclj_cell_t * c = decode_pointer(v);
+	nanoclj_val_t arg = first(sc, code);
+	if (is_list(arg)) {
+	  nanoclj_cell_t * c = decode_pointer(arg);
 	  nanoclj_val_t key = first(sc, c);
+	  c = next(sc, c);
 	  if (key.as_long == sc->GEN_CLASS.as_long) {
 	    gen_class = true;
+	    for (; c; c = next(sc, c)) {
+	      nanoclj_val_t key = first(sc, c);
+	      if (key.as_long == sc->EXTENDS.as_long) {
+		c = next(sc, c);
+		parent_class = find_ns(sc, first(sc, c));
+	      }
+	    }
 	  }
 	}
       }
@@ -9329,7 +9345,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	meta = assoc(sc, meta, sc->NAME, ns_sym);
 	if (!is_nil(doc)) meta = assoc(sc, meta, sc->DOC, doc);
 	if (gen_class) {
-	  ns = mk_class_with_meta(sc, ns_sym, gentypeid(sc), sc->Object, meta);
+	  ns = mk_class_with_meta(sc, ns_sym, gentypeid(sc), parent_class, meta);
 	} else {
 	  ns = def_namespace_with_sym(sc, ns_sym, meta);
 	}
@@ -10329,6 +10345,7 @@ bool nanoclj_init(nanoclj_t * sc) {
   sc->IMPORT = def_keyword(sc, "import");
   sc->PRIVATE = def_keyword(sc, "private");
   sc->GEN_CLASS = def_keyword(sc, "gen-class");
+  sc->EXTENDS = def_keyword(sc, "extends");
   
   sc->DOT = def_symbol(sc, ".");
   sc->CATCH = def_symbol(sc, "catch");

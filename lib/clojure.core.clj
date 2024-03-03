@@ -888,7 +888,7 @@
 
 (defn parents
   "Returns a set with the immmediate parents of the provided object"
-  [t] (conj #{} (rest t)))
+  [t] (and (next t) #{ (next t) }))
 
 (defn bounded-count
   "Returns the count if coll is counted? or counts the elements up to n"

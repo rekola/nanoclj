@@ -107,6 +107,7 @@ install(FILES lib/init.clj
 	      lib/user.clj
 	      lib/java.lang.Object.clj
 	      lib/java.lang.Class.clj
+	      lib/java.lang.Number.clj
 	      lib/java.lang.Float.clj
 	      lib/java.lang.Double.clj
 	      lib/java.lang.Boolean.clj
@@ -143,6 +144,7 @@ configure_file(lib/clojure.lang.PersistentVector.clj clojure.lang.PersistentVect
 configure_file(lib/user.clj user.clj @ONLY)
 configure_file(lib/java.lang.Object.clj java.lang.Object.clj @ONLY)
 configure_file(lib/java.lang.Class.clj java.lang.Class.clj @ONLY)
+configure_file(lib/java.lang.Number.clj java.lang.Number.clj @ONLY)
 configure_file(lib/java.lang.Float.clj java.lang.Float.clj @ONLY)
 configure_file(lib/java.lang.Double.clj java.lang.Double.clj @ONLY)
 configure_file(lib/java.lang.Boolean.clj java.lang.Boolean.clj @ONLY)
