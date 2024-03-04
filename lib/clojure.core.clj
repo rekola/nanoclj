@@ -241,15 +241,15 @@
 
 (defn interpose [sep coll] (if (empty? coll) '() (cons (first coll) (if (empty? (rest coll)) '() (cons sep (interpose sep (rest coll)))))))
 
-(def interleave (fn
-                  ([] '())
-                  ([c1] c1)
-                  ([c1 c2] (if (or (empty? c1) (empty? c2)) '()
-                               (cons (first c1) (cons (first c2)
-                                     (lazy-seq (interleave (rest c1) (rest c2)))))))
-                  (c1 c2 c3) (if (or (empty? c1) (empty? c2) (empty? c3)) '()
-                                 (cons (first c1) (cons (first c2) (cons (first c3)
-                                       (lazy-seq (interleave (rest c1) (rest c2) (rest c3)))))))))
+(defn interleave
+  ([] '())
+  ([c1] c1)
+  ([c1 c2] (if (or (empty? c1) (empty? c2)) '()
+               (cons (first c1) (cons (first c2)
+                                      (lazy-seq (interleave (rest c1) (rest c2)))))))
+  (c1 c2 c3) (if (or (empty? c1) (empty? c2) (empty? c3)) '()
+                 (cons (first c1) (cons (first c2) (cons (first c3)
+                                                         (lazy-seq (interleave (rest c1) (rest c2) (rest c3))))))))
 
 (defn take-while [pred coll] (cond (empty? coll) '()
                                    (pred (first coll)) (cons (first coll) (lazy-seq (take-while pred (rest coll))))
@@ -988,8 +988,8 @@
 
 (defn ns-resolve
   [ns sym] (if (namespace sym)
-             (find (car (find-ns (symbol (namespace sym)))) (symbol (name sym)))
-             (find (car ns) sym)))
+             ((car (find-ns (symbol (namespace sym)))) (symbol (name sym)))
+             ((car ns) sym)))
 
 (defn resolve
   [sym] (ns-resolve *ns* sym))

@@ -35,7 +35,6 @@ E2:_setmark(p);
   case T_SORTED_HASHMAP:
   case T_QUEUE:
   case T_MAPENTRY:
-  case T_VARMAP:
     if (_is_small(p)) {
       size_t s = _sodim0_unchecked(p) * _sodim1_unchecked(p);
       nanoclj_val_t * data = _smalldata_unchecked(p);
