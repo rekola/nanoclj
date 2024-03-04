@@ -7137,6 +7137,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	    strview_t sv = to_strview(sym);
 	    nanoclj_val_t msg = mk_string_fmt(sc, "Use of undeclared Var %.*s", sv.size, sv.ptr);
 	    nanoclj_throw(sc, mk_runtime_exception(sc, msg));
+	    return false;
 	  }
 
 	  set_indexed_value(restore_vec, i, sym);
