@@ -6636,18 +6636,19 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       /* Set up another iteration of REPL */
       sc->save_inport = get_in_port(sc);
       intern(sc, sc->core_ns, sc->IN_SYM, mk_pointer(z));
-      
-      s_save(sc, OP_T0LVL, NULL, mk_emptylist());
-      s_save(sc, OP_T1LVL, NULL, mk_emptylist());
-      
-      sc->args = NULL;
-      s_goto(sc, OP_READ);
-    }
 
-  case OP_T1LVL:               /* top level */
-    sc->code = sc->value;
-    intern(sc, sc->core_ns, sc->IN_SYM, sc->save_inport);
-    s_goto(sc, OP_EVAL);
+      s_save(sc, OP_T0LVL, NULL, mk_emptylist());
+
+      save_from_C_call(sc);
+      sc->args = NULL;
+      Eval_Cycle(sc, OP_READ);
+      intern(sc, sc->core_ns, sc->IN_SYM, sc->save_inport);
+      if (sc->pending_exception) {
+	return false;
+      }
+      sc->code = sc->value;
+      s_goto(sc, OP_EVAL);
+    }
 
   case OP_READ:                /* read */
     x = get_in_port(sc);
