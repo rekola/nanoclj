@@ -35,5 +35,17 @@
   [d1 d2] (+ d1 d2))
 
 (defn valueOf
-  "Returns the double value itself"
+  "Returns a double instance from the argument"
   [v] (double v))
+
+(defn compare
+  "Compares two doubles"
+  [d1 d2] (compare d1 d2))
+
+(defn min
+  "Returns the smaller of d1 and d2"
+  [d1 d2] (if (< d1 d2) d1 d2))
+
+(defn max
+  "Returns the larger of d1 and d2"
+  [d1 d2] (if (> d1 d2) d1 d2))
