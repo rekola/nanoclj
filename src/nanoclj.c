@@ -3987,7 +3987,7 @@ static inline void new_frame_in_env(nanoclj_t * sc, nanoclj_cell_t * old_env) {
   sc->envir = get_cell(sc, T_LIST, 0, mk_emptylist(), old_env, NULL);
 }
 
-static inline void new_var_in_ns(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t variable, nanoclj_val_t value, nanoclj_cell_t * meta) {
+static inline void def_var_in_ns(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t variable, nanoclj_val_t value, nanoclj_cell_t * meta) {
   nanoclj_cell_t * x = decode_pointer(_car_unchecked(ns));
   /* TODO: ensure that x is a var-map */
   _car_unchecked(ns) = mk_pointer(assoc_with_meta(sc, x, variable, value, mk_pointer(meta)));
@@ -4189,18 +4189,11 @@ static inline nanoclj_val_t def_symbol(nanoclj_t * sc, const char *name) {
 }
 
 static inline void intern_with_meta(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t symbol, nanoclj_val_t value, nanoclj_cell_t * meta) {
-  if (!set_var_in_ns(sc, ns, symbol, value, meta)) {
-    new_var_in_ns(sc, ns, symbol, value, meta);
-  }
+  def_var_in_ns(sc, ns, symbol, value, meta);
 }
 
 static inline void intern(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t symbol, nanoclj_val_t value) {
   intern_with_meta(sc, ns, symbol, value, NULL);
-}
-
-static inline void intern_with_nil(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t symbol, nanoclj_cell_t * meta) {
-  nanoclj_cell_t * var = get_var_in_ns(sc, ns, symbol);
-  if (!var) new_var_in_ns(sc, ns, symbol, mk_nil(), meta);
 }
 
 static inline nanoclj_val_t intern_foreign_func(nanoclj_t * sc, nanoclj_cell_t * ns, const char * name, foreign_func fptr, int min_arity, int max_arity) {
@@ -6370,13 +6363,17 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
   return mk_nil();
 }
 
+static inline void throw_invalid_arity_for_op(nanoclj_t * sc) {
+  nanoclj_val_t ns = mk_string(sc, "clojure.core");
+  const char * fn = dispatch_table[(int)sc->op].name;
+  nanoclj_throw(sc, mk_arity_exception(sc, count(sc, sc->args), ns, mk_string(sc, fn)));
+}
+
 static inline bool unpack_args_0(nanoclj_t * sc) {
   if (!sc->args) {
     return true;
   } else {
-    nanoclj_val_t ns = mk_string(sc, "clojure.core");
-    const char * fn = dispatch_table[(int)sc->op].name;
-    nanoclj_throw(sc, mk_arity_exception(sc, count(sc, sc->args), ns, mk_string(sc, fn)));
+    throw_invalid_arity_for_op(sc);;
     return false;
   }
 }
@@ -6384,12 +6381,6 @@ static inline bool unpack_args_0(nanoclj_t * sc) {
 static inline bool unpack_args_0_plus(nanoclj_t * sc, nanoclj_cell_t ** arg_next) {
   *arg_next = sc->args;
   return true;
-}
-
-static inline void throw_invalid_arity_for_op(nanoclj_t * sc) {
-  nanoclj_val_t ns = mk_string(sc, "clojure.core");
-  const char * fn = dispatch_table[(int)sc->op].name;
-  nanoclj_throw(sc, mk_arity_exception(sc, count(sc, sc->args), ns, mk_string(sc, fn)));
 }
 
 static inline bool unpack_args_1(nanoclj_t * sc, nanoclj_val_t * arg0) {
@@ -7022,19 +7013,15 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     s_return(sc, car(sc->code));
 
   case OP_INTERN:
-    if (!unpack_args_2_plus(sc, &arg0, &arg1, &arg_next)) {
+    if (!unpack_args_3(sc, &arg0, &arg1, &arg2)) {
       return false;
     } else if (is_namespace(arg0) && (is_symbol(arg1) || is_alias(arg1))) {
-      /* arg0: namespace, arg1: symbol */
+      /* arg0: namespace, arg1: symbol, arg2: value */
       nanoclj_cell_t * ns = decode_pointer(arg0);
       nanoclj_cell_t * meta = update_meta_from_reader(sc, mk_hashmap(sc), tensor_peek(sc->load_stack));
       meta = assoc(sc, meta, sc->NAME, arg1);
       meta = assoc(sc, meta, sc->NS, mk_pointer(ns));
-      if (arg_next) {
-	intern_with_meta(sc, ns, arg1, first(sc, arg_next), meta);
-      } else {
-	intern_with_nil(sc, ns, arg1, meta);
-      }
+      intern_with_meta(sc, ns, arg1, arg2, meta);
       s_return(sc, mk_pointer(get_var_in_ns(sc, ns, arg1)));
     }
     nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Invalid arguments for tensor")));
@@ -7042,6 +7029,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 
   case OP_DEF0:{                /* define */
     nanoclj_cell_t * code = decode_pointer(sc->code);
+    if (!code) {
+      Error_0(sc, "Syntax error");
+    }
     x = first(sc, code);
     code = next(sc, code);
     nanoclj_cell_t * meta = NULL;
@@ -7074,9 +7064,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     {
       meta = sc->args;
       nanoclj_cell_t * ns = get_ns_from_env(sc->envir);
-      if (!set_var_in_ns(sc, ns, sc->code, sc->value, meta)) {
-	new_var_in_ns(sc, ns, sc->code, sc->value, meta);
-      }
+      def_var_in_ns(sc, ns, sc->code, sc->value, meta);
       s_return(sc, mk_pointer(get_var_in_ns(sc, ns, sc->code)));
     }
 
@@ -7524,9 +7512,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     {
       cell_type(sc->value) = T_MACRO;
       nanoclj_cell_t * ns = get_current_ns(sc);
-      if (!set_var_in_ns(sc, ns, sc->code, sc->value, NULL)) {
-	new_var_in_ns(sc, ns, sc->code, sc->value, NULL);
-      }
+      def_var_in_ns(sc, ns, sc->code, sc->value, NULL);
       s_return(sc, sc->code);
     }
 
@@ -9996,7 +9982,7 @@ static inline void assign_proc(nanoclj_t * sc, nanoclj_cell_t * ns, enum nanoclj
   meta = assoc(sc, meta, sc->NAME, x);
   meta = assoc(sc, meta, sc->DOC, mk_string(sc, i->doc));
   meta = assoc(sc, meta, sc->FILE_KW, mk_string(sc, __FILE__));
-  new_var_in_ns(sc, ns, x, y, meta);
+  def_var_in_ns(sc, ns, x, y, meta);
 }
 
 static inline void update_window_info(nanoclj_t * sc, nanoclj_cell_t * out) {
