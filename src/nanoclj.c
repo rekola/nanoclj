@@ -103,8 +103,6 @@
 #define DELIMITERS  	"()[]{}\";\f\t\v\n\r, "
 #define NPOS		((size_t)-1)
 
-#define PORT_SAW_EOF	1
-
 #define NANOCLJ_VERSION "0.2.0"
 
 #include <string.h>
@@ -444,7 +442,6 @@ static inline void _set_cdr(nanoclj_cell_t * c, nanoclj_cell_t * v) {
 
 #define _rep_unchecked(p)	  ((p)->_port.rep)
 #define _port_type_unchecked(p)	  ((p)->_port.type)
-#define _port_flags_unchecked(p)  ((p)->_port.flags)
 #define _nesting_unchecked(p)     ((p)->_port.nesting)
 #define _line_unchecked(p)	  ((p)->_port.line)
 #define _column_unchecked(p)	  ((p)->_port.column)
@@ -473,7 +470,6 @@ static inline void _set_cdr(nanoclj_cell_t * c, nanoclj_cell_t * v) {
 
 #define rep_unchecked(p)	  _rep_unchecked(decode_pointer(p))
 #define port_type_unchecked(p)	  _port_type_unchecked(decode_pointer(p))
-#define port_flags_unchecked(p)	  _port_flags_unchecked(decode_pointer(p))
 
 static inline bool is_string(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
@@ -2137,13 +2133,13 @@ static inline int32_t inchar_utf8(nanoclj_cell_t * p) {
     return 0;
   case 2:
     b2 = inchar_raw(p);
-    if ((b2 & 0xc0) != 0x80) return 0;
+    if (b2 < 0 || (b2 & 0xc0) != 0x80) return 0;
     codepoint = ((codepoint << 6) & 0x7ff) + (b2 & 0x3f);
     break;
   case 3:
     b2 = inchar_raw(p);
     b3 = inchar_raw(p);
-    if ((b2 & 0xc0) != 0x80 || (b3 & 0xc0) != 0x80) return 0;
+    if (b2 < 0 || b3 < 0 || (b2 & 0xc0) != 0x80 || (b3 & 0xc0) != 0x80) return 0;
     codepoint = ((codepoint << 12) & 0xffff) + ((b2 << 6) & 0xfff);
     codepoint += b3 & 0x3f;
     break;
@@ -2151,17 +2147,13 @@ static inline int32_t inchar_utf8(nanoclj_cell_t * p) {
     b2 = inchar_raw(p);
     b3 = inchar_raw(p);
     b4 = inchar_raw(p);
-    if ((b2 & 0xc0) != 0x80 || (b3 & 0xc0) != 0x80 || (b4 & 0xc0) != 0x80) return 0;
+    if (b2 < 0 || b3 < 0 || b4 < 0 || (b2 & 0xc0) != 0x80 || (b3 & 0xc0) != 0x80 || (b4 & 0xc0) != 0x80) return 0;
     codepoint = ((codepoint << 18) & 0x1fffff) + ((b2 << 12) & 0x3ffff);
     codepoint += (b3 << 6) & 0xfff;
     codepoint += b4 & 0x3f;
     break;
   }
-  if (_port_flags_unchecked(p) & PORT_SAW_EOF) {
-    return 0; /* utf8 was malformed */
-  } else {
-    return codepoint;
-  }
+  return codepoint;
 }
 
 static inline void update_cursor(int32_t c, nanoclj_cell_t * p, int line_len) {
@@ -2222,9 +2214,6 @@ static inline bool handle_port_exceptions(nanoclj_t * sc, nanoclj_cell_t * p) {
 
 /* get new codepoint from input file */
 static inline int32_t inchar(nanoclj_t * sc, nanoclj_cell_t * p) {
-  if (_port_flags_unchecked(p) & PORT_SAW_EOF) {
-    return EOF;
-  }
   int32_t c;
   switch (_type(p)) {
   case T_READER: /* Text */
@@ -2236,39 +2225,38 @@ static inline int32_t inchar(nanoclj_t * sc, nanoclj_cell_t * p) {
   default:
     c = inchar_raw(p);
   }
-  if (c == EOF) {
-    /* Instead, set port_saw_EOF */
-    _port_flags_unchecked(p) |= PORT_SAW_EOF;
-  } else {
+  if (c != EOF) {
     update_cursor(c, p, 0);
   }
   return c;
 }
 
 /* back codepoint to input buffer */
-static inline void backchar(int32_t c, nanoclj_cell_t * p) {
-  if (c == EOF) return;
-  nanoclj_port_rep_t *pr = _rep_unchecked(p);
-  switch (_port_type_unchecked(p)) {
-  case port_file:
-    if (pr->stdio.backchars[0] == -1) {
-      pr->stdio.backchars[0] = c;
-    } else if (pr->stdio.backchars[1] == -1) {
-      pr->stdio.backchars[1] = c;
-    }
-    break;
-  case port_string:
-    {
-      utf8proc_uint8_t buff[4];
-      size_t l = utf8proc_encode_char(c, &buff[0]);
-      for (size_t i = 0; i < l; i++) {
-	if (pr->string.read_pos > 0) {
-	  --pr->string.read_pos;
+static inline int32_t backchar(int32_t c, nanoclj_cell_t * p) {
+  if (c != EOF) {
+    nanoclj_port_rep_t *pr = _rep_unchecked(p);
+    switch (_port_type_unchecked(p)) {
+    case port_file:
+      if (pr->stdio.backchars[0] == -1) {
+	pr->stdio.backchars[0] = c;
+      } else if (pr->stdio.backchars[1] == -1) {
+	pr->stdio.backchars[1] = c;
+      }
+      break;
+    case port_string:
+      {
+	utf8proc_uint8_t buff[4];
+	size_t l = utf8proc_encode_char(c, &buff[0]);
+	for (size_t i = 0; i < l; i++) {
+	  if (pr->string.read_pos > 0) {
+	    --pr->string.read_pos;
+	  }
 	}
       }
+      break;
     }
-    break;
   }
+  return c;
 }
 
 /* Medium level cell allocation */
@@ -4561,8 +4549,6 @@ static inline nanoclj_val_t mk_sharp_const(nanoclj_t * sc, char *name) {
     return mk_double(-INFINITY);
   } else if (strcmp(name, "NaN") == 0) {
     return mk_double(NAN);
-  } else if (strcmp(name, "Eof") == 0) {
-    return mk_codepoint(EOF);
   } else {
     return mk_nil();
   }
@@ -4577,7 +4563,6 @@ static inline nanoclj_cell_t * get_port_object(nanoclj_t * sc, uint16_t type, na
     if (pr) {
       _rep_unchecked(x) = pr;
       _port_type_unchecked(x) = port_type;
-      _port_flags_unchecked(x) = 0;
       _nesting_unchecked(x) = 0;
       _line_unchecked(x) = -1;
       _column_unchecked(x) = -1;
@@ -4963,7 +4948,6 @@ static inline const char * escape_char(int32_t c, char * buffer, bool in_string)
     }
   } else {
     switch (c) {
-    case -1:	return "##Eof";
     case ' ':	return "\\space";
     case '\n':	return "\\newline";
     case '\r':	return "\\return";
@@ -6622,17 +6606,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
 
   case OP_T0LVL:               /* top level */
-    /* Skip spaces to see if the current file is completely done */
     z = decode_pointer(tensor_peek(sc->load_stack));
-    backchar(skipspace(sc, z), z);
-
-    /* If we reached the end of file, this loop is done. */
-    if (_port_flags_unchecked(z) & PORT_SAW_EOF) {
-      if (_nesting_unchecked(z) != 0) {
-	Error_0(sc, "Unmatched parentheses");
-      }
-      s_return(sc, sc->value);      
-    } else {
+    /* Skip spaces to see if the current file is completely done */
+    if (backchar(skipspace(sc, z), z) != EOF) {
       /* Set up another iteration of REPL */
       sc->save_inport = get_in_port(sc);
       intern(sc, sc->core_ns, sc->IN_SYM, mk_pointer(z));
@@ -6648,6 +6624,10 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       }
       sc->code = sc->value;
       s_goto(sc, OP_EVAL);
+    } else if (_nesting_unchecked(z) != 0) {
+      Error_0(sc, "Unmatched parentheses");
+    } else {
+      s_return(sc, sc->value);      
     }
 
   case OP_READ:                /* read */

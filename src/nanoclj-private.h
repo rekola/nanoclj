@@ -107,7 +107,7 @@ extern "C" {
       struct {
 	nanoclj_port_rep_t * rep;
 	int nesting;
-	uint8_t type, flags;
+	uint8_t type;
 	int32_t line, column;
       } _port;
       struct {

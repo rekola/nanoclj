@@ -5,8 +5,7 @@
 (defn sh
   "Launch a process and capture output"
   [arg & args] (let [rdr (clojure.java.io/reader (str "|" (clojure.string/join \space (cons arg args))))
-                     f (fn [s] (let [c (-read rdr)] (if (= c ##Eof) s (recur (conj s c)))))
-                     out (f "")
+                     out (loop [ s "" c (.read rdr) ] (if (= (int c) -1) s (recur (conj s c) (.read rdr))))
                      rv (-close rdr)
                      ]
                  {:out out

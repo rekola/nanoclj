@@ -458,15 +458,12 @@
   "Reads a file. Arguments are passed to Reader so same kind of input is supported
   (e.g. URL or filename)"
   [f & opts] (with-open [rdr (apply java.io.Reader f opts)]
-               (loop [c (.read rdr) s ""] (if (= c ##Eof) s (recur (.read rdr) (conj s c))))))
+               (loop [c (.read rdr) s ""] (if (= c -1) s (recur (.read rdr) (conj s c))))))
 
 (defn read-line
   "Reads a line from *in* or a reader"
   ([] (read-line *in*))
-  ([rdr] (let [c0 (.read rdr)]
-           (if (= c0 ##Eof) nil
-               (loop [c c0 acc ""]
-                 (if (or (= c ##Eof) (= c \newline)) acc (recur (.read rdr) (conj acc c))))))))
+  ([rdr] (.readLine rdr)))
 
 (defn line-seq
   "Returns a sequence of line from rdr"
