@@ -238,6 +238,7 @@
                                         ; Special Functions
 
 (t/is (= ((juxt numerator denominator) 2/3) [ 2 3 ]))
+(t/is (= (interleave [ :a :b :c ] (range)) '( :a 0 :b 1 :c 2 )))
 
                                         ; Namespaces
 
