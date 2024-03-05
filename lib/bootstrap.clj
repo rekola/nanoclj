@@ -1,13 +1,3 @@
-(require 'clojure.lang.Symbol :import)
-(require 'clojure.lang.PersistentVector :import)
-(require 'clojure.lang.Cons :import)
-(require 'nanoclj.lang.Macro :import)
-(require 'nanoclj.lang.Procedure :import)
-(require 'nanoclj.lang.Closure :import)
-(require 'nanoclj.lang.ForeignFunction :import)
-(require 'java.lang.Number :import)
-(require 'java.lang.String :import)
-
 (def force deref)
 (def var-get second)
 

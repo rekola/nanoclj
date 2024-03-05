@@ -3937,7 +3937,7 @@ static inline void def_var_in_ns(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_va
   _car_unchecked(ns) = mk_pointer(assoc(sc, x, variable, mk_pointer(mk_var(sc, variable, value, mk_pointer(meta)))));
 }
 
-static inline bool find_slot_in_env(nanoclj_t * sc, nanoclj_cell_t * env, nanoclj_val_t hdl, bool all, nanoclj_val_t * r) {
+static inline bool find_slot_in_env(nanoclj_t * sc, nanoclj_cell_t * env, nanoclj_val_t hdl, nanoclj_val_t * r) {
   for (; env; env = _cdr_unchecked(env)) {
     nanoclj_cell_t * y = decode_pointer(_car_unchecked(env));
     if (y && _type(y) == T_HASHMAP) {
@@ -3954,7 +3954,6 @@ static inline bool find_slot_in_env(nanoclj_t * sc, nanoclj_cell_t * env, nanocl
 	}
       }
     }
-    if (!all) break;
   }
   return false;
 }
@@ -4134,6 +4133,16 @@ static inline nanoclj_cell_t * mk_class_with_meta(nanoclj_t * sc, nanoclj_val_t 
   
   sc->namespaces = tensor_hash_mutate_set(sc->namespaces, hasheq(sym, sc), sc->namespaces->ne[1], sym, t, false, sc, hasheq);
 
+  /* Create aliases for java.lang.* */
+  strview_t sv = to_strview(sym);
+  if (strview_ncmp(sv, 10, "java.lang.") == 0) {
+    strview_t short_sv = strview_remove_prefix(sv, 10);
+    if (short_sv.size) {
+      nanoclj_val_t short_sym = def_symbol_from_sv(sc, T_SYMBOL, mk_strview(0), short_sv);
+      sc->namespaces = tensor_hash_mutate_set(sc->namespaces, hasheq(short_sym, sc), sc->namespaces->ne[1], short_sym, t, false, sc, hasheq);
+    }
+  }
+  
   return t0;
 }
 
@@ -4209,6 +4218,7 @@ static inline nanoclj_cell_t * find_ns(nanoclj_t * sc, nanoclj_val_t name) {
 }
 
 static inline void refer(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_cell_t * source_ns) {
+  nanoclj_val_t nsv = mk_pointer(source_ns);
   nanoclj_cell_t * target_map = decode_pointer(_car_unchecked(ns));
   nanoclj_cell_t * source_map = decode_pointer(_car_unchecked(source_ns));
 
@@ -4216,7 +4226,8 @@ static inline void refer(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_cell_t * s
     nanoclj_val_t sym = source_map->_small_tensor.vals[0];
     nanoclj_val_t var = source_map->_small_tensor.vals[1];
     nanoclj_cell_t * meta = decode_pointer(get_indexed_value(decode_pointer(var), 2));
-    if (!meta || is_false(find(sc, meta, sc->PRIVATE, mk_boolean(false)))) {
+    if (!meta ||
+	(is_false(find(sc, meta, sc->PRIVATE, mk_boolean(false))) && equals(sc, find(sc, meta, sc->NS, mk_nil()), nsv))) {
       target_map = assoc(sc, target_map, sym, var);
     }
   } else {
@@ -4227,7 +4238,8 @@ static inline void refer(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_cell_t * s
 	nanoclj_val_t sym = tensor_get_2d(tensor, 0, i);
 	nanoclj_val_t var = tensor_get_2d(tensor, 1, i);
 	nanoclj_cell_t * meta = decode_pointer(get_indexed_value(decode_pointer(var), 2));
-	if (!meta || is_false(find(sc, meta, sc->PRIVATE, mk_boolean(false)))) {
+	if (!meta ||
+	    (is_false(find(sc, meta, sc->PRIVATE, mk_boolean(false))) && equals(sc, find(sc, meta, sc->NS, mk_nil()), nsv))) {
 	  target_map = assoc(sc, target_map, sym, var);
 	}
       }
@@ -5647,30 +5659,42 @@ static inline bool _Error_1(nanoclj_t * sc, const char *msg) {
 
 #define Error_0(sc,s)    return _Error_1(sc, s)
 
-static inline bool resolve(nanoclj_t * sc, nanoclj_cell_t * env0, nanoclj_val_t sym0, nanoclj_val_t * r) {
-  symbol_t * s = decode_symbol(sym0);
-  nanoclj_cell_t * env;
-  nanoclj_val_t sym;
-  bool all_namespaces = true;
+static inline bool resolve(nanoclj_t * sc, nanoclj_cell_t * env, nanoclj_val_t sym, nanoclj_val_t * r) {
+  symbol_t * s = decode_symbol(sym);
   if (s->ns.size) {
     nanoclj_cell_t * var = get_var_in_ns(sc, sc->core_ns, s->ns_alias);
+    nanoclj_cell_t * ns;
     if (var) {
-      env = decode_pointer(get_indexed_value(var, 1));
+      ns = decode_pointer(get_indexed_value(var, 1));
     } else {
-      env = find_ns(sc, s->ns_sym);
-      if (!env) {
+      ns = find_ns(sc, s->ns_sym);
+      if (!ns) {
 	nanoclj_val_t msg = mk_string_fmt(sc, "No such namespace: %.*s", s->ns.size, s->ns.ptr);
 	nanoclj_throw(sc, mk_runtime_exception(sc, msg));
 	return false;
       }
     }
-    sym = s->name_sym;
-    all_namespaces = false;
+    var = get_var_in_ns(sc, ns, s->name_sym);
+    if (var) {
+      *r = get_indexed_value(var, 1);
+      return true;
+    } else {
+      return false;
+    }
+  } else if (find_slot_in_env(sc, env, sym, r)) {
+    return true;
+  } else if (sym.as_long == sc->ENV.as_long) {
+    *r = mk_pointer(sc->envir);
+    return true;
   } else {
-    env = env0;
-    sym = sym0;
+    nanoclj_cell_t * ns = find_ns(sc, sym);
+    if (ns && _type(ns) == T_CLASS) {
+      *r = mk_pointer(ns);
+      return true;
+    } else {
+      return false;
+    }
   }
-  return find_slot_in_env(sc, env, sym, all_namespaces, r);
 }
 
 static inline nanoclj_val_t resolve_value(nanoclj_t * sc, nanoclj_cell_t * env, nanoclj_val_t sym) {
@@ -6466,10 +6490,21 @@ static inline void eval_in_thread(nanoclj_t * sc, nanoclj_val_t code) {
   nanoclj_start_thread(thread_main, child);
 }
 
+static inline void update_current_file(nanoclj_t * sc, nanoclj_cell_t * p) {
+  if (p && _port_type_unchecked(p) == port_file) {
+    nanoclj_port_rep_t * pr = _rep_unchecked(p);
+    intern(sc, sc->core_ns, sc->FILE_SYM, mk_string(sc, pr->stdio.filename));
+  } else {
+    intern(sc, sc->core_ns, sc->FILE_SYM, mk_string(sc, "NO_SOURCE_PATH"));
+  }
+}
+
 static inline nanoclj_val_t load_from_port(nanoclj_t * sc, nanoclj_cell_t * p) {
   int64_t n_ls = tensor_n_elem(sc->load_stack);
   nanoclj_cell_t * ns = get_current_ns(sc);
-  
+
+  update_current_file(sc, p);
+ 
   tensor_mutate_push(sc->load_stack, mk_pointer(p));
   save_from_C_call(sc);
   sc->envir = ns;
@@ -6481,6 +6516,7 @@ static inline nanoclj_val_t load_from_port(nanoclj_t * sc, nanoclj_cell_t * p) {
     port_close(sc, decode_pointer(tensor_peek(sc->load_stack)));
     tensor_mutate_pop(sc->load_stack);
   }
+  update_current_file(sc, decode_pointer(tensor_peek(sc->load_stack)));
 
   /* restore namespace */
   intern(sc, sc->core_ns, sc->NS_SYM, mk_pointer(ns));
@@ -6595,24 +6631,12 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     case T_SYMBOL:
       if (resolve(sc, sc->envir, sc->code, &x)) {
 	s_return(sc, x);
-      } else if (sc->pending_exception) {
-	return false;
-      } else if (sc->code.as_long == sc->CURRENT_FILE.as_long) { /* special symbols */ 
-	nanoclj_cell_t * p = decode_pointer(tensor_peek(sc->load_stack));
-	if (p && _port_type_unchecked(p) == port_file) {
-	  nanoclj_port_rep_t * pr = _rep_unchecked(p);
-	  s_return(sc, mk_string(sc, pr->stdio.filename));
-	} else {
-	  s_return(sc, mk_nil());
-	}
-      } else if (sc->code.as_long == sc->ENV.as_long) {
-	s_return(sc, mk_pointer(sc->envir));
-      } else {
+      } else if (!sc->pending_exception) {
 	symbol_t * s = decode_symbol(sc->code);
 	nanoclj_val_t msg = mk_string_fmt(sc, "Use of undeclared Var %.*s", s->full_name.size, s->full_name.ptr);
 	nanoclj_throw(sc, mk_runtime_exception(sc, msg));
-	return false;
       }
+      return false;
     case T_CELL:
       {
 	nanoclj_cell_t * code_cell = decode_pointer(sc->code);
@@ -6880,7 +6904,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
        set sc->value fall thru */
     {
       nanoclj_val_t v;
-      if (find_slot_in_env(sc, sc->envir, sc->COMPILE_HOOK, true, &v)) {
+      if (find_slot_in_env(sc, sc->envir, sc->COMPILE_HOOK, &v)) {
         s_save(sc, OP_LAMBDA1, sc->args, sc->code);
         sc->args = cons(sc, sc->code, NULL);
         sc->code = v;
@@ -9236,10 +9260,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	}
       }
       if (ns != sc->core_ns) refer(sc, ns, sc->core_ns);
-      if (gen_class) {
-	/* import the class name to the class itself */
-	intern(sc, ns, ns_sym, mk_pointer(ns));      	
-      }
       nanoclj_val_t ns2 = mk_pointer(ns);
       intern(sc, sc->core_ns, sc->NS_SYM, ns2);
       bool r = _s_return(sc, ns2);
@@ -9418,8 +9438,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  intern_with_meta(sc, current_ns, def_alias_from_val(sc, alias_sym), mk_pointer(ns), NULL);
 	}
 	if (import) {
-	  intern_with_meta(sc, current_ns, ns_sym, mk_pointer(ns), NULL);
-
 	  strview_t sv = to_strview(ns_sym);
 	  char * p = memrchr(sv.ptr, '.', sv.size);
 	  if (p) {
@@ -10189,7 +10207,7 @@ bool nanoclj_init(nanoclj_t * sc) {
   sc->OUT_SYM = def_symbol(sc, "*out*");
   sc->ERR = def_symbol(sc, "*err*");
   sc->NS_SYM = def_symbol(sc, "*ns*");
-  sc->CURRENT_FILE = def_symbol(sc, "*file*");
+  sc->FILE_SYM = def_symbol(sc, "*file*");
   sc->ENV = def_symbol(sc, "*env*");
   sc->CELL_SIZE = def_symbol(sc, "*cell-size*");
   sc->WINDOW_SIZE = def_symbol(sc, "*window-size*");
@@ -10325,7 +10343,7 @@ bool nanoclj_init(nanoclj_t * sc) {
   mk_class(sc, "clojure.lang.Namespace", T_NAMESPACE, AReference);
   mk_class(sc, "clojure.lang.Var", T_VAR, AReference);
   mk_class(sc, "clojure.lang.MapEntry", T_MAPENTRY, PersistentVector);
-  nanoclj_cell_t * PersistentQueue = mk_class(sc, "clojure.lang.PersistentQueue", T_QUEUE, Obj);
+  mk_class(sc, "clojure.lang.PersistentQueue", T_QUEUE, Obj);
   mk_class(sc, "clojure.lang.ArityException", T_ARITY_EXCEPTION, Exception);
   
   /* nanoclj types */
@@ -10351,9 +10369,6 @@ bool nanoclj_init(nanoclj_t * sc) {
 
   sc->OutOfMemoryError = mk_exception(sc, OutOfMemoryError, "Out of memory");
   sc->NullPointerException = mk_exception(sc, NullPointerException, "Null pointer exception");
-
-  nanoclj_val_t EMPTY = def_symbol(sc, "EMPTY");
-  intern(sc, PersistentQueue, EMPTY, mk_pointer(mk_collection(sc, T_QUEUE, NULL)));
 
   intern(sc, sc->core_ns, sc->MOUSE_POS, mk_nil());
 

@@ -1,9 +1,4 @@
 (in-ns 'clojure.core)
-(import java.lang.RuntimeException)
-(import java.lang.IndexOutOfBoundsException)
-(import clojure.lang.PersistentHashSet)
-(import clojure.lang.PersistentHashMap)
-(import clojure.lang.Namespace)
 
 ; Utilities for types.
 
@@ -385,7 +380,7 @@
       (if kvs
         (if (next kvs)
           (recur new-map (first kvs) (second kvs) (nnext kvs))
-          (throw (new RuntimeException "Value missing for key")))
+          (throw (new java.lang.RuntimeException "Value missing for key")))
         new-map))))
 
 (defn assoc-in
@@ -713,7 +708,7 @@
   "Returns the nth element of coll"
   ([coll index] (cond (vector? coll) (coll index)
      	              (string? coll) (coll index)
-     	              (or (< index 0) (empty? coll)) (throw (new IndexOutOfBoundsException "Index out of bounds"))
+     	              (or (< index 0) (empty? coll)) (throw (new java.lang.IndexOutOfBoundsException "Index out of bounds"))
                       (zero? index) (first coll)
                       :else (recur (next coll) (dec index))))
   ([coll index not-found] (cond (vector? coll) (coll index not-found)
@@ -726,13 +721,13 @@
 
 (defn nthrest
   "Returns the nth rest of coll"
-  [coll n] (cond (< n 0) (throw (new RuntimeException "Invalid argument"))
+  [coll n] (cond (< n 0) (throw (new java.lang.RuntimeException "Invalid argument"))
                  (= n 0) coll
                  :else (recur (rest coll) (dec n))))
 
 (defn nthnext
   "Returns the nth next of coll"
-  [coll n] (cond (< n 0) (throw (new RuntimeException "Invalid argument"))
+  [coll n] (cond (< n 0) (throw (new java.lang.RuntimeException "Invalid argument"))
                  (= n 0) (seq coll)
                  :else (recur (next coll) (dec n))))
 
@@ -826,17 +821,17 @@
           "true" true
           "false" false
           nil)
-        (throw (new RuntimeException "Not a string"))))
+        (throw (new java.lang.RuntimeException "Not a string"))))
 
 (defn parse-long
   "Parses a long"
   [s] (try (long s)
-           (catch NumberFormatException e nil)))
+           (catch java.lang.NumberFormatException e nil)))
 
 (defn parse-double
   "Parses a double"
   [s] (try (double s)
-           (catch NumberFormatException e nil)))
+           (catch java.lang.NumberFormatException e nil)))
 
 (defn parse-uuid
   "Parses an UUID"
@@ -877,11 +872,11 @@
 
 (defn cast
   "Returns x if it is an instance of class c, otherwise throws an exception"
-  [c x] (if (isa? c x) x (throw (new RuntimeException "Wrong class"))))
+  [c x] (if (isa? c x) x (throw (new java.lang.RuntimeException "Wrong class"))))
 
 (defn num
   "Returns x if it is a number, otherwise throws an exception"
-  [x] (if (isa? java.lang.Number x) x (throw (new RuntimeException "Not a number"))))
+  [x] (if (isa? java.lang.Number x) x (throw (new java.lang.RuntimeException "Not a number"))))
 
 (defn parents
   "Returns a set with the immmediate parents of the provided object"
@@ -997,7 +992,7 @@
 (def-macro (var symbol) `(or (and (namespace '~symbol)
                                   (ns-resolve (find-ns (symbol (namespace '~symbol))) (symbol (name '~symbol))))
                              (resolve '~symbol)
-                             (throw (new RuntimeException (str "Use of undeclared Var " '~symbol)))))
+                             (throw (new java.lang.RuntimeException (str "Use of undeclared Var " '~symbol)))))
 
 (defn ns-map
   "Returns the var-map of namespace ns"
@@ -1007,7 +1002,7 @@
   "Returns the namespace that the symbol x refers, or x itself, if x is a namespae"
   [x] (if (isa? clojure.lang.Namespace x)
         x
-        (or (find-ns x) (throw (new RuntimeException (str "No namespace: " x " found"))))))
+        (or (find-ns x) (throw (new java.lang.RuntimeException (str "No namespace: " x " found"))))))
 
 (defn alias
   "Adds an alias in the current namespace to another namespace"

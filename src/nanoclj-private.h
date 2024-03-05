@@ -209,7 +209,7 @@ extern "C" {
     nanoclj_val_t OUT_SYM;	  /* *out* */
     nanoclj_val_t ERR;		  /* *err* */
     nanoclj_val_t NS_SYM;	  /* *ns* */
-    nanoclj_val_t CURRENT_FILE;   /* *file* */
+    nanoclj_val_t FILE_SYM;       /* *file* */
     nanoclj_val_t ENV;	  	  /* *env* */
     nanoclj_val_t CELL_SIZE;      /* *cell-size* */
     nanoclj_val_t WINDOW_SIZE;    /* *window-size* */
