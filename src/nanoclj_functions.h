@@ -25,7 +25,7 @@
 #include <glob.h>
 #include <unistd.h>
 
-#if !HAVE_ARC4RANDOM
+#if !USE_ARC4RANDOM
 #include <sys/random.h>
 #endif
 
@@ -252,7 +252,7 @@ static nanoclj_val_t Math_round(nanoclj_t * sc, nanoclj_cell_t * args) {
 }
 
 static nanoclj_val_t Math_random(nanoclj_t * sc, nanoclj_cell_t * args) {
-#if HAVE_ARC4RANDOM
+#if USE_ARC4RANDOM
   return mk_double((double)arc4random() / UINT32_MAX);
 #else
   return mk_double((double)random() / INT_MAX);
@@ -285,10 +285,13 @@ static nanoclj_val_t SecureRandom_nextBytes(nanoclj_t * sc, nanoclj_cell_t * arg
   }
   uint8_t * ptr = get_ptr(c);
   size_t n = get_size(c);
-#if HAVE_ARC4RANDOM
+#if USE_ARC4RANDOM
   arc4random_buf(ptr, n);
 #else
-  getrandom(ptr, n, 0);
+  while ( 1 ) {
+    ssize_t r = getrandom(ptr, n, 0);
+    if (r == n) break;
+  }
 #endif
 
   return mk_nil();
