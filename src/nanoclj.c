@@ -3931,12 +3931,6 @@ static inline void new_frame_in_env(nanoclj_t * sc, nanoclj_cell_t * old_env) {
   sc->envir = get_cell(sc, T_LIST, 0, mk_emptylist(), old_env, NULL);
 }
 
-static inline void def_var_in_ns(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t variable, nanoclj_val_t value, nanoclj_cell_t * meta) {
-  nanoclj_cell_t * x = decode_pointer(_car_unchecked(ns));
-  /* TODO: ensure that x is a var-map */
-  _car_unchecked(ns) = mk_pointer(assoc(sc, x, variable, mk_pointer(mk_var(sc, variable, value, mk_pointer(meta)))));
-}
-
 static inline bool find_slot_in_env(nanoclj_t * sc, nanoclj_cell_t * env, nanoclj_val_t hdl, nanoclj_val_t * r) {
   for (; env; env = _cdr_unchecked(env)) {
     nanoclj_cell_t * y = decode_pointer(_car_unchecked(env));
@@ -4101,12 +4095,16 @@ static inline nanoclj_val_t def_symbol(nanoclj_t * sc, const char *name) {
   return def_symbol_from_sv(sc, T_SYMBOL, mk_strview(0), mk_strview(name));
 }
 
-static inline void intern_with_meta(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t symbol, nanoclj_val_t value, nanoclj_cell_t * meta) {
-  def_var_in_ns(sc, ns, symbol, value, meta);
+static inline void intern_with_meta(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t sym, nanoclj_val_t val, nanoclj_cell_t * meta) {
+  nanoclj_cell_t * x = decode_pointer(_car_unchecked(ns));
+  _car_unchecked(ns) = mk_pointer(assoc(sc, x, sym, mk_pointer(mk_var(sc, sym, val, mk_pointer(meta)))));
 }
 
-static inline void intern(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t symbol, nanoclj_val_t value) {
-  intern_with_meta(sc, ns, symbol, value, NULL);
+static inline void intern(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t sym, nanoclj_val_t value) {
+  nanoclj_cell_t * md = mk_hashmap(sc);
+  md = assoc(sc, md, sc->NS, mk_pointer(ns));
+  md = assoc(sc, md, sc->NAME, sym);
+  intern_with_meta(sc, ns, sym, value, md);
 }
 
 static inline nanoclj_val_t intern_foreign_func(nanoclj_t * sc, nanoclj_cell_t * ns, const char * name, foreign_func fptr, int min_arity, int max_arity) {
@@ -4226,8 +4224,9 @@ static inline void refer(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_cell_t * s
     nanoclj_val_t sym = source_map->_small_tensor.vals[0];
     nanoclj_val_t var = source_map->_small_tensor.vals[1];
     nanoclj_cell_t * meta = decode_pointer(get_indexed_value(decode_pointer(var), 2));
-    if (!meta ||
-	(is_false(find(sc, meta, sc->PRIVATE, mk_boolean(false))) && equals(sc, find(sc, meta, sc->NS, mk_nil()), nsv))) {
+    if (meta &&
+	is_false(find(sc, meta, sc->PRIVATE, mk_boolean(false))) &&
+	equals(sc, find(sc, meta, sc->NS, mk_nil()), nsv)) {
       target_map = assoc(sc, target_map, sym, var);
     }
   } else {
@@ -4238,8 +4237,9 @@ static inline void refer(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_cell_t * s
 	nanoclj_val_t sym = tensor_get_2d(tensor, 0, i);
 	nanoclj_val_t var = tensor_get_2d(tensor, 1, i);
 	nanoclj_cell_t * meta = decode_pointer(get_indexed_value(decode_pointer(var), 2));
-	if (!meta ||
-	    (is_false(find(sc, meta, sc->PRIVATE, mk_boolean(false))) && equals(sc, find(sc, meta, sc->NS, mk_nil()), nsv))) {
+	if (meta &&
+	    is_false(find(sc, meta, sc->PRIVATE, mk_boolean(false))) &&
+	    equals(sc, find(sc, meta, sc->NS, mk_nil()), nsv)) {
 	  target_map = assoc(sc, target_map, sym, var);
 	}
       }
@@ -6957,7 +6957,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Invalid arguments for tensor")));
     return false;
 
-  case OP_DEF0:{                /* define */
+  case OP_DEF0:{                /* def */
     nanoclj_cell_t * code = decode_pointer(sc->code);
     if (!code) {
       Error_0(sc, "Syntax error");
@@ -6990,12 +6990,12 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     s_goto(sc, OP_EVAL);
   }
     
-  case OP_DEF1:                /* define */
+  case OP_DEF1:                /* def */
     {
       strview_t sv = to_strview(sc->code);
       meta = sc->args;
       nanoclj_cell_t * ns = get_ns_from_env(sc->envir);
-      def_var_in_ns(sc, ns, sc->code, sc->value, meta);
+      intern_with_meta(sc, ns, sc->code, sc->value, meta);
       s_return(sc, mk_pointer(get_var_in_ns(sc, ns, sc->code)));
     }
 
@@ -7434,17 +7434,28 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       x = car(sc->code);
       sc->code = cadr(sc->code);
     }
-    if (!is_symbol(x)) {
-      Error_0(sc, "Variable is not a symbol");
+    nanoclj_cell_t * meta = NULL;
+    if (is_cell(x) && type(x) == T_SYMBOL) {
+      meta = get_metadata(decode_pointer(x));
+      x = car(x);
+    } else {
+      meta = mk_hashmap(sc);
     }
-    s_save(sc, OP_MACRO1, NULL, x);
+    if (!is_symbol(x) || decode_symbol(x)->ns.size) {
+      Error_0(sc, "Variable is not an uniqualified symbol");
+    }
+    meta = update_meta_from_reader(sc, meta, tensor_peek(sc->load_stack));
+    meta = assoc(sc, meta, sc->NAME, x);
+    meta = assoc(sc, meta, sc->NS, mk_pointer(get_ns_from_env(sc->envir)));
+
+    s_save(sc, OP_MACRO1, meta, x);
     s_goto(sc, OP_EVAL);
 
   case OP_MACRO1:              /* macro */
     {
       cell_type(sc->value) = T_MACRO;
       nanoclj_cell_t * ns = get_current_ns(sc);
-      def_var_in_ns(sc, ns, sc->code, sc->value, NULL);
+      intern_with_meta(sc, ns, sc->code, sc->value, sc->args);
       s_return(sc, sc->code);
     }
 
@@ -9893,7 +9904,7 @@ static inline void assign_proc(nanoclj_t * sc, nanoclj_cell_t * ns, enum nanoclj
   meta = assoc(sc, meta, sc->NAME, x);
   meta = assoc(sc, meta, sc->DOC, mk_string(sc, i->doc));
   meta = assoc(sc, meta, sc->FILE_KW, mk_string(sc, __FILE__));
-  def_var_in_ns(sc, ns, x, y, meta);
+  intern_with_meta(sc, ns, x, y, meta);
 }
 
 static inline void update_window_info(nanoclj_t * sc, nanoclj_cell_t * out) {

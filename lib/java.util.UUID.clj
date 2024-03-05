@@ -4,7 +4,7 @@
 
 (defn randomUUID
   "Creates a random UUID"
-  [] (let [ng (SecureRandom)
+  [] (let [ng (java.security.SecureRandom)
            b (clojure.core/byte-array 16)]
        (.nextBytes ng b)
        (aset b 6 (bit-or (bit-and (aget b 6) 0x0f) 0x40)) ; set to version 4
