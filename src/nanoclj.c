@@ -6566,15 +6566,17 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
     Error_0(sc, "Not a reader");
 
-  case OP_READM:               /* -read */
+  case OP_READ_CHAR:               /* -read */
     if (!unpack_args_1(sc, &arg0)) {
       return false;
     } else if (is_cell(arg0)) {
       nanoclj_cell_t * p = decode_pointer(arg0);
       if (is_readable(p)) {
 	int32_t c = inchar(sc, p);
-	handle_port_exceptions(sc, p);
-	s_return(sc, mk_codepoint(c));
+	if (handle_port_exceptions(sc, p)) {
+	  return false;
+	}
+	s_return(sc, mk_int(c));
       }
     }
     Error_0(sc, "Not a reader");

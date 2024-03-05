@@ -458,7 +458,7 @@
   "Reads a file. Arguments are passed to Reader so same kind of input is supported
   (e.g. URL or filename)"
   [f & opts] (with-open [rdr (apply java.io.Reader f opts)]
-               (loop [c (.read rdr) s ""] (if (= c -1) s (recur (.read rdr) (conj s c))))))
+               (loop [c (.read rdr) s ""] (if (= c -1) s (recur (.read rdr) (conj s (char c)))))))
 
 (defn read-line
   "Reads a line from *in* or a reader"

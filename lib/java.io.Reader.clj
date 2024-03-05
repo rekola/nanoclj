@@ -11,7 +11,10 @@
   [rdr] (-read rdr))
 
 (defn readLine
-  [this] (let [c0 (.read this)]
-           (if (= c0 -1) nil
-               (loop [c c0 acc ""]
-                 (if (or (= c -1) (= c \newline)) acc (recur (.read this) (conj acc c)))))))
+  [this] (let [c (.read this)]
+           (if (= c -1)
+             nil
+             (loop [c c acc ""]
+               (if (or (= c -1) (= c 10))
+                 acc
+                 (recur (.read this) (conj acc (clojure.core/char c))))))))
