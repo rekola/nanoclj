@@ -7431,9 +7431,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_MACRO0:              /* macro */
     {
       nanoclj_cell_t * code = decode_pointer(sc->code);
-      if (!code) {
-	Error_0(sc, "Syntax error");
-      }
       if (is_list(_car(code))) {
 	x = _caar(code);
 	code = cons(sc, sc->LAMBDA, cons(sc, mk_pointer(_cdar(code)), _cdr(code)));
@@ -7463,9 +7460,10 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 
   case OP_MACRO1:              /* macro */
     {
-      if (is_cell(sc->value)) {
-	cell_type(sc->value) = T_MACRO;
+      if (type(sc->value) != T_CLOSURE) {
+	Error_0(sc, "Syntax error");
       }
+      cell_type(sc->value) = T_MACRO;
       nanoclj_cell_t * ns = get_current_ns(sc);
       intern_with_meta(sc, ns, sc->code, sc->value, sc->args);
       s_return(sc, sc->code);
