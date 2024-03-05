@@ -3321,7 +3321,7 @@ static inline size_t find_hash_index(nanoclj_t * sc, nanoclj_cell_t * coll, nano
   return NPOS;
 }
 
-static inline size_t find_varmap_index(nanoclj_cell_t * coll, nanoclj_val_t key) {
+static inline nanoclj_cell_t * find_var_in_hash(nanoclj_cell_t * coll, nanoclj_val_t key) {
   if (!_is_small(coll)) {
     nanoclj_tensor_t * tensor = coll->_collection.tensor;
     size_t num_buckets = tensor_hash_get_bucket_count(tensor);
@@ -3332,7 +3332,7 @@ static inline size_t find_varmap_index(nanoclj_cell_t * coll, nanoclj_val_t key)
       } else {
 	nanoclj_val_t stored = tensor_hash_get(tensor, location, coll->_collection.size);
 	if (stored.as_long == key.as_long) {
-	  return location;
+	  return decode_pointer(tensor_get_2d(tensor, 1, location));
 	} else if (++location == num_buckets) {
 	  location = 0;
 	}
@@ -3340,9 +3340,9 @@ static inline size_t find_varmap_index(nanoclj_cell_t * coll, nanoclj_val_t key)
     }
   } else if (get_size(coll)) {
     nanoclj_val_t stored_key = coll->_small_tensor.vals[0];
-    if (stored_key.as_long == key.as_long) return 0;
+    if (stored_key.as_long == key.as_long) return decode_pointer(coll->_small_tensor.vals[1]);
   }
-  return NPOS;
+  return NULL;
 }
 
 static size_t find_index(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t key) {
@@ -3937,15 +3937,9 @@ static inline bool find_slot_in_env(nanoclj_t * sc, nanoclj_cell_t * env, nanocl
   for (; env; env = _cdr_unchecked(env)) {
     nanoclj_cell_t * y = decode_pointer(_car_unchecked(env));
     if (y && _type(y) == T_HASHMAP) {
-      size_t idx = find_varmap_index(y, hdl);
-      if (idx != NPOS) {
-	nanoclj_val_t v;
-	if (_is_small(y)) {
-	  v = y->_small_tensor.vals[1];
-	} else {
-	  v = get_indexed_value(y, idx);
-	}
-	*r = get_indexed_value(decode_pointer(v), 1);
+      nanoclj_cell_t * var = find_var_in_hash(y, hdl);
+      if (var) {
+	*r = get_indexed_value(var, 1);
 	return true;
       }
     } else {
@@ -3982,11 +3976,7 @@ static inline nanoclj_val_t inc_slot_in_env(nanoclj_t * sc, nanoclj_cell_t * env
 static inline nanoclj_cell_t * get_var_in_ns(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t hdl) {
   nanoclj_val_t y0 = _car_unchecked(ns);
   nanoclj_cell_t * y = decode_pointer(y0);
-  size_t idx = find_varmap_index(y, hdl);
-  if (idx != NPOS) {
-    return decode_pointer(get_indexed_value(y, idx));
-  }
-  return NULL;
+  return find_var_in_hash(y, hdl);
 }
 
 static inline void new_slot_spec_in_env(nanoclj_t * sc, nanoclj_cell_t * env, nanoclj_val_t variable, nanoclj_val_t value) {
@@ -4005,28 +3995,21 @@ static inline void new_slot_in_env(nanoclj_t * sc, nanoclj_val_t variable, nanoc
 
 static inline bool set_var_in_ns(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t hdl, nanoclj_val_t state, nanoclj_cell_t * meta) {
   nanoclj_cell_t * y = decode_pointer(_car_unchecked(ns));
-  size_t idx = find_varmap_index(y, hdl);
-  if (idx == NPOS) return false;
+  nanoclj_cell_t * var = find_var_in_hash(y, hdl);
+  if (!var) return false;
 
-  nanoclj_val_t old_state = get_indexed_value(y, idx);
-  if (type(old_state) == T_VAR) {
-    nanoclj_cell_t * var = decode_pointer(old_state);
-    old_state = get_indexed_value(var, 1);
-    set_indexed_value(var, 1, state);
+  nanoclj_val_t old_state = get_indexed_value(var, 1);
+  set_indexed_value(var, 1, state);
 
-    if (meta) set_indexed_value(var, 2, mk_pointer(meta));
-    else meta = decode_pointer(get_indexed_value(var, 2));
-  } else {
-    set_indexed_value(y, idx, state);
-  }
-
+  if (meta) set_indexed_value(var, 2, mk_pointer(meta));
+  else meta = decode_pointer(get_indexed_value(var, 2));
+  
   nanoclj_val_t watches0 = find(sc, meta, sc->WATCHES, mk_nil());
   if (!is_nil(watches0)) {
-    nanoclj_val_t var = mk_pointer(get_collection_object(sc, T_VAR, idx * 3, 3, y->_collection.tensor, NULL));
     nanoclj_cell_t * watches = seq(sc, decode_pointer(watches0));
     for (; watches; watches = next(sc, watches)) {
       nanoclj_val_t fn = first(sc, watches);
-      nanoclj_call(sc, fn, mk_pointer(cons(sc, mk_nil(), cons(sc, var, cons(sc, old_state, cons(sc, state, NULL))))));
+      nanoclj_call(sc, fn, mk_pointer(cons(sc, mk_nil(), cons(sc, mk_pointer(var), cons(sc, old_state, cons(sc, state, NULL))))));
     }
   }
 
