@@ -1270,6 +1270,7 @@ static inline bool is_true(nanoclj_val_t p) {
 #define _cadr(p)          _car(_cdr(p))
 #define _caddr(p)         _car(cdr(_cdr(p)))
 #define _caar(p)          car(_car(p))
+#define _cdar(p)          cdr(_car(p))
 
 #define caar(p)          car(car(p))
 #define caadr(p)         car(_car(cdr(p)))
@@ -6957,38 +6958,39 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Invalid arguments for tensor")));
     return false;
 
-  case OP_DEF0:{                /* def */
-    nanoclj_cell_t * code = decode_pointer(sc->code);
-    if (!code) {
-      Error_0(sc, "Syntax error");
+  case OP_DEF0:                /* def */
+    {
+      nanoclj_cell_t * code = decode_pointer(sc->code);
+      if (!code) {
+	Error_0(sc, "Syntax error");
+      }
+      x = first(sc, code);
+      code = next(sc, code);
+      nanoclj_cell_t * meta = NULL;
+      if (is_cell(x) && type(x) == T_SYMBOL) {
+	meta = get_metadata(decode_pointer(x));
+	x = car(x);
+      } else {
+	meta = mk_hashmap(sc);
+      }
+      if (!is_symbol(x) || decode_symbol(x)->ns.size) {
+	Error_0(sc, "Variable is not an unqualified symbol");
+      }
+      meta = update_meta_from_reader(sc, meta, tensor_peek(sc->load_stack));
+      meta = assoc(sc, meta, sc->NAME, x);
+      meta = assoc(sc, meta, sc->NS, mk_pointer(get_ns_from_env(sc->envir)));
+      
+      nanoclj_cell_t * code2 = next(sc, code);
+      if (code2) {
+	meta = assoc(sc, meta, sc->DOC, first(sc, code));
+	sc->code = first(sc, code2);
+      } else {
+	sc->code = first(sc, code);
+      }
+      
+      s_save(sc, OP_DEF1, meta, x);
+      s_goto(sc, OP_EVAL);
     }
-    x = first(sc, code);
-    code = next(sc, code);
-    nanoclj_cell_t * meta = NULL;
-    if (is_cell(x) && type(x) == T_SYMBOL) {
-      meta = get_metadata(decode_pointer(x));
-      x = car(x);
-    } else {
-      meta = mk_hashmap(sc);
-    }
-    if (!is_symbol(x) || decode_symbol(x)->ns.size) {
-      Error_0(sc, "Variable is not an unqualified symbol");
-    }
-    meta = update_meta_from_reader(sc, meta, tensor_peek(sc->load_stack));
-    meta = assoc(sc, meta, sc->NAME, x);
-    meta = assoc(sc, meta, sc->NS, mk_pointer(get_ns_from_env(sc->envir)));
-
-    nanoclj_cell_t * code2 = next(sc, code);
-    if (code2) {
-      meta = assoc(sc, meta, sc->DOC, first(sc, code));
-      sc->code = first(sc, code2);
-    } else {
-      sc->code = first(sc, code);
-    }
-    
-    s_save(sc, OP_DEF1, meta, x);
-    s_goto(sc, OP_EVAL);
-  }
     
   case OP_DEF1:                /* def */
     {
@@ -7427,33 +7429,43 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
 
   case OP_MACRO0:              /* macro */
-    if (is_list(car(sc->code))) {
-      x = caar(sc->code);
-      sc->code = mk_pointer(cons(sc, sc->LAMBDA, cons(sc, mk_pointer(cdar(sc->code)), cdr(sc->code))));
-    } else {
-      x = car(sc->code);
-      sc->code = cadr(sc->code);
-    }
-    nanoclj_cell_t * meta = NULL;
-    if (is_cell(x) && type(x) == T_SYMBOL) {
-      meta = get_metadata(decode_pointer(x));
-      x = car(x);
-    } else {
-      meta = mk_hashmap(sc);
-    }
-    if (!is_symbol(x) || decode_symbol(x)->ns.size) {
-      Error_0(sc, "Variable is not an uniqualified symbol");
-    }
-    meta = update_meta_from_reader(sc, meta, tensor_peek(sc->load_stack));
-    meta = assoc(sc, meta, sc->NAME, x);
-    meta = assoc(sc, meta, sc->NS, mk_pointer(get_ns_from_env(sc->envir)));
+    {
+      nanoclj_cell_t * code = decode_pointer(sc->code);
+      if (!code) {
+	Error_0(sc, "Syntax error");
+      }
+      if (is_list(_car(code))) {
+	x = _caar(code);
+	code = cons(sc, sc->LAMBDA, cons(sc, mk_pointer(_cdar(code)), _cdr(code)));
+      } else {
+	x = _car(code);
+	code = decode_pointer(_cadr(code));
+      }
+      nanoclj_cell_t * meta = NULL;
+      if (is_cell(x) && type(x) == T_SYMBOL) {
+	meta = get_metadata(decode_pointer(x));
+	x = car(x);
+      } else {
+	meta = mk_hashmap(sc);
+      }
+      if (!is_symbol(x) || decode_symbol(x)->ns.size) {
+	Error_0(sc, "Variable is not an uniqualified symbol");
+      }
+      meta = update_meta_from_reader(sc, meta, tensor_peek(sc->load_stack));
+      meta = assoc(sc, meta, sc->NAME, x);
+      meta = assoc(sc, meta, sc->NS, mk_pointer(get_ns_from_env(sc->envir)));
 
-    s_save(sc, OP_MACRO1, meta, x);
-    s_goto(sc, OP_EVAL);
+      sc->code = mk_pointer(code);
+
+      s_save(sc, OP_MACRO1, meta, x);
+      s_goto(sc, OP_EVAL);
+    }
 
   case OP_MACRO1:              /* macro */
     {
-      cell_type(sc->value) = T_MACRO;
+      if (is_cell(sc->value)) {
+	cell_type(sc->value) = T_MACRO;
+      }
       nanoclj_cell_t * ns = get_current_ns(sc);
       intern_with_meta(sc, ns, sc->code, sc->value, sc->args);
       s_return(sc, sc->code);
