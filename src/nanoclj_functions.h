@@ -1266,11 +1266,9 @@ static inline void init_linenoise(nanoclj_t * sc) {
 }
 
 static inline bool is_stdin(nanoclj_val_t p) {
-  if (!is_cell(p)) return false;
-  else {
-    nanoclj_cell_t * c = decode_pointer(p);
-    return is_readable(c) && _port_type_unchecked(c) == port_file && _rep_unchecked(c)->stdio.file == stdin;
-  }
+  if (!is_readable(p)) return false;
+  nanoclj_cell_t * c = decode_pointer(p);
+  return _port_type_unchecked(c) == port_file && _rep_unchecked(c)->stdio.file == stdin;
 }
 
 static inline nanoclj_val_t linenoise_readline(nanoclj_t * sc, nanoclj_cell_t * args) {
