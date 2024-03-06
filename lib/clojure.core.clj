@@ -232,7 +232,9 @@
                           (cons (first coll) (recur (next coll)))
                           '())))
 
-(defn reverse [coll] (reduce -conj '() coll))
+(defn reverse
+  "Returns the coll reversed"
+  [coll] (reduce -conj '() coll))
 
 (defn interpose [sep coll] (if (empty? coll) '() (cons (first coll) (if (empty? (rest coll)) '() (cons sep (interpose sep (rest coll)))))))
 

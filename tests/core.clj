@@ -1,8 +1,6 @@
 (require '[ clojure.test :as t ]
          'clojure.java.io
          'clojure.string)
-(import clojure.lang.Symbol)
-
                                         ; Primitives
 (t/is (integer? 1))
 (t/is (number? 1.23))
@@ -10,15 +8,15 @@
 (t/is (instance? Boolean true))
 (t/is (instance? Boolean false))
 (t/is (instance? Long 1))
-(t/is (instance? Codepoint \a))
-(t/is (instance? EmptyList '()))
+(t/is (instance? nanoclj.lang.Codepoint \a))
+(t/is (instance? nanoclj.lang.EmptyList '()))
 (t/is (instance? Double 0.1))
 (t/is (instance? Byte (byte 1)))
 (t/is (instance? Short (short 1)))
 (t/is (instance? Integer (int 1)))
 
-(t/is (instance? Keyword :abc))
-(t/is (instance? Symbol 'abc))
+(t/is (instance? clojure.lang.Keyword :abc))
+(t/is (instance? clojure.lang.Symbol 'abc))
 (t/is (= "bb" (name :aa/bb)))
 (t/is (= "aa" (namespace 'aa/bb)))
 
@@ -49,7 +47,7 @@
 (t/is (= (- 10 10/3) 20/3))
                                         ; Bigints
 
-(t/is (instance? BigInt 1N))
+(t/is (instance? clojure.lang.BigInt 1N))
 (t/is (= (* 1000000000N 1000000000N) 1000000000000000000N))
 (t/is (= (* 100000000000000000000 100000000000000000000)
        10000000000000000000000000000000000000000))
@@ -59,7 +57,7 @@
 
 (t/is (ratio? 1/2))
 (t/is (instance? Long 2/1))
-(t/is (instance? BigInt 10000000000000000000/2))
+(t/is (instance? clojure.lang.BigInt 10000000000000000000/2))
 
 (t/is (= 1/2 (/ 1 2)))
 (t/is (= (* 2/3 5/4) 5/6))
@@ -71,7 +69,7 @@
 
                                         ; Promotions
 
-(t/is (instance? BigInt (inc' java.lang.Long/MAX_VALUE)))
+(t/is (instance? clojure.lang.BigInt (inc' java.lang.Long/MAX_VALUE)))
 (t/is (= (dec' java.lang.Long/MIN_VALUE) -9223372036854775809N))
 (t/is (= (take 8 (str (apply *' (range 1 101)))) (seq (str 93326215))))
 

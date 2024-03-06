@@ -560,7 +560,7 @@ static inline nanoclj_val_t Image_save(nanoclj_t * sc, nanoclj_cell_t * args) {
   return (nanoclj_val_t)kTRUE;
 }
 
-static inline int * mk_kernel(nanoclj_t * sc, float radius, int * size) {
+static inline int * mk_kernel(float radius, int * size) {
   int r = (int)ceil(radius);
 
   if (r <= 0) {
@@ -601,7 +601,7 @@ nanoclj_val_t Image_horizontalGaussianBlur(nanoclj_t * sc, nanoclj_cell_t * args
   int w = iv.width, h = iv.height, stride = iv.stride;
   size_t bpp = get_format_bpp(iv.format);
   int kernel_size;
-  int * kernel = mk_kernel(sc, to_double(radius), &kernel_size);
+  int * kernel = mk_kernel(to_double(radius), &kernel_size);
 
   int total = 0;
   for (int i = 0; i < kernel_size; i++) total += kernel[i];
@@ -935,7 +935,7 @@ static inline nanoclj_val_t Graph_load(nanoclj_t * sc, nanoclj_cell_t * args) {
   }
   if (!graph_node) return mk_nil();
 
-  nanoclj_graph_array_t * g = mk_graph_array(sc);
+  nanoclj_graph_array_t * g = mk_graph_array();
   
   for (node = graph_node->children; node; node = node->next) {
     if (node->type == XML_ELEMENT_NODE && strcmp((const char *)node->name, "edge") == 0) {
@@ -954,7 +954,7 @@ static inline nanoclj_val_t Graph_load(nanoclj_t * sc, nanoclj_cell_t * args) {
 	size_t si = find_node_index(sc, g, source), ti = find_node_index(sc, g, target);
 	strview_t ssv = to_strview(source), tsv = to_strview(target);
 	if (si != NPOS && ti != NPOS) {
-	  graph_array_append_edge(sc, g, si, ti);
+	  graph_array_append_edge(g, si, ti);
 	}
       }
     } else if (node->type == XML_ELEMENT_NODE && strcmp((const char *)node->name, "node") == 0) {
@@ -988,7 +988,7 @@ static inline nanoclj_val_t Graph_load(nanoclj_t * sc, nanoclj_cell_t * args) {
 	}
       }
       if (!is_nil(id)) {
-	graph_array_append_node(sc, g, mk_mapentry(sc, id, mk_pointer(attributes)));
+	graph_array_append_node(g, mk_mapentry(sc, id, mk_pointer(attributes)));
       }
     }
   }
@@ -1127,7 +1127,7 @@ static nanoclj_t * linenoise_sc = NULL;
 static inline void completion(const char *input, linenoiseCompletions *lc) {
   nanoclj_val_t ns = resolve_value(linenoise_sc, linenoise_sc->envir, def_symbol(linenoise_sc, "clojure.repl"));
   if (is_cell(ns)) {
-    nanoclj_cell_t * var = get_var_in_ns(linenoise_sc, decode_pointer(ns), linenoise_sc->AUTOCOMPLETE_HOOK);
+    nanoclj_cell_t * var = get_var_in_ns(decode_pointer(ns), linenoise_sc->AUTOCOMPLETE_HOOK);
     if (var) {
       nanoclj_val_t f = get_indexed_value(var, 1);
       nanoclj_val_t args = mk_pointer(cons(linenoise_sc, mk_string(linenoise_sc, input), NULL));

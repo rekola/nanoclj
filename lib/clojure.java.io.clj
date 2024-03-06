@@ -1,11 +1,5 @@
 (ns clojure.java.io
   "Java IO related operations")
-(import java.io.Reader)
-(import java.io.Writer)
-(import java.io.InputStream)
-(import java.io.OutputStream)
-(import java.io.File)
-(import java.net.URL)
 
 (def reader java.io.Reader)
 (def writer java.io.Writer)

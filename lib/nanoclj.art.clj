@@ -1,9 +1,6 @@
 (ns nanoclj.art
   "A namespace for visualization related assets")
 
-(import nanoclj.lang.Gradient)
-(import nanoclj.lang.Shape)
-
 (def mk-gradient nanoclj.lang.Gradient)
 (def mk-shape nanoclj.lang.Shape)
 

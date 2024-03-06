@@ -45,9 +45,9 @@
 
 (def-macro (doc name)
   (println "-------------------------")
-  `(do
-     (println '~name)
-     (println (:doc (meta (var ~name))))))
+  `(let ((M (meta (var ~name))))
+     (println (str (:ns M)) \/ (:name M))
+     (println (:doc M))))
 
 (defn apropos
   "Returns a list of functions whose name contains str"
