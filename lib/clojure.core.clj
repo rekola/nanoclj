@@ -1010,6 +1010,11 @@
   "Adds an alias in the current namespace to another namespace"
   [alias-sym ns-sym] (intern (the-ns 'clojure.core) (nanoclj.lang.Alias alias-sym) (the-ns ns-sym)))
 
+(defn use
+  "Requires and refers a namespace"
+  [ns-sym] (do
+             (require ns-sym)
+             (refer ns-sym)))
 ; REPL
 
 (def ^:dynamic *1)

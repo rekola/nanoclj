@@ -1,3 +1,3 @@
 (ns user)
-(require 'clojure.repl)
-(clojure.repl/repl)
+(use 'clojure.repl)
+(repl)
