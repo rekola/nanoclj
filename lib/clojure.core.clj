@@ -1015,6 +1015,10 @@
   [ns-sym] (do
              (require ns-sym)
              (refer ns-sym)))
+
+(defn refer-clojure
+  [] (refer 'clojure.core))
+      
 ; REPL
 
 (def ^:dynamic *1)
