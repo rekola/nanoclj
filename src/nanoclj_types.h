@@ -19,7 +19,6 @@ typedef enum {
   nanoclj_f32,
   nanoclj_f64,
   nanoclj_val,
-  nanoclj_tensor
 } nanoclj_tensor_type_t;
 
 typedef enum {

@@ -3938,6 +3938,10 @@ static inline void new_frame_in_env(nanoclj_t * sc, nanoclj_cell_t * old_env) {
   sc->envir = get_cell(sc, T_LIST, 0, mk_emptylist(), old_env, NULL);
 }
 
+static inline void add_frame_to_env(nanoclj_t * sc, nanoclj_cell_t * frame) {
+  sc->envir = get_cell(sc, T_LIST, 0, mk_pointer(frame), sc->envir, NULL);  
+}
+
 static inline nanoclj_val_t inc_slot_in_frame(nanoclj_cell_t * f, nanoclj_val_t hdl) {
   nanoclj_cell_t * y = decode_pointer(_car_unchecked(f));
   for (; y; y = _cdr_unchecked(y)) {
@@ -3950,14 +3954,17 @@ static inline nanoclj_val_t inc_slot_in_frame(nanoclj_cell_t * f, nanoclj_val_t 
   return mk_nil();
 }
 
-static inline void new_slot_spec_in_env(nanoclj_t * sc, nanoclj_cell_t * env, nanoclj_val_t variable, nanoclj_val_t value) {
-  nanoclj_cell_t * x = decode_pointer(_car_unchecked(env));
-  /* TODO: ensure that x is a linked list with vars */
+static inline nanoclj_cell_t * new_slot_spec_in_frame(nanoclj_t * sc, nanoclj_cell_t * frame, nanoclj_val_t sym, nanoclj_val_t value) {
   nanoclj_cell_t * slot = get_cell_x(sc, T_LISTMAP, 0, NULL, NULL, NULL);
-  slot->_cons.car = variable;
+  slot->_cons.car = sym;
   slot->_cons.value = value;
-  slot->_cons.cdr = x;
-  _car_unchecked(env) = mk_pointer(slot);
+  slot->_cons.cdr = frame;
+  return slot;
+}
+
+static inline void new_slot_spec_in_env(nanoclj_t * sc, nanoclj_cell_t * env, nanoclj_val_t variable, nanoclj_val_t value) {
+  nanoclj_cell_t * frame = decode_pointer(_car_unchecked(env));
+  _car_unchecked(env) = mk_pointer(new_slot_spec_in_frame(sc, frame, variable, value));  
 }
 
 static inline void new_slot_in_env(nanoclj_t * sc, nanoclj_val_t variable, nanoclj_val_t value) {
@@ -7204,9 +7211,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       int n = to_int(sc->value);
       if (n <= 0) s_return(sc, mk_nil());
 
-      new_frame_in_env(sc, sc->envir);
-      new_slot_in_env(sc, sc->code, mk_int(0));
-
+      add_frame_to_env(sc, new_slot_spec_in_frame(sc, NULL, sc->code, mk_int(0)));
+      
       if (n > 1) {
 	s_save(sc, OP_DOTIMES2, decode_pointer(mk_mapentry(sc, sc->code, sc->value)), mk_pointer(sc->args));
       }
@@ -7320,11 +7326,12 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 
   case OP_LET2:                /* let */
     {
-      new_frame_in_env(sc, sc->envir);
+      nanoclj_cell_t * frame = NULL;
       nanoclj_cell_t * x = decode_pointer(car(sc->code));
       for (z = sc->args; z; x = _cdr(x), z = _cdr_unchecked(z)) {
-	new_slot_in_env(sc, _caar(x), _car_unchecked(z));
+	frame = new_slot_spec_in_frame(sc, frame, _caar(x), _car_unchecked(z));
       }
+      add_frame_to_env(sc, frame);
       nanoclj_cell_t * code = cdr(sc->code);
       if (_cdr_unchecked(code)) {
 	s_save(sc, OP_DO, NULL, mk_pointer(_cdr_unchecked(code)));
@@ -7475,9 +7482,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  if (is_cell(typ) && isa(sc, decode_pointer(typ), e)) {
 	    item = next(sc, item);
 	    nanoclj_val_t sym = first(sc, item);
-	    
-	    new_frame_in_env(sc, sc->envir);
-	    new_slot_in_env(sc, sym, e);
+
+	    nanoclj_cell_t * frame = new_slot_spec_in_frame(sc, NULL, sym, e);
+	    add_frame_to_env(sc, frame);
 	    
 	    sc->args = NULL;
 	    sc->code = mk_list(rest(sc, item));
