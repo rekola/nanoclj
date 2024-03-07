@@ -69,7 +69,7 @@ extern "C" {
   NANOCLJ_EXPORT nanoclj_val_t nanoclj_eval(nanoclj_t * sc, nanoclj_val_t obj);
   void nanoclj_set_external_data(nanoclj_t * sc, void *p);
   void nanoclj_set_object_invoke_callback(nanoclj_t * sc, nanoclj_val_t (*func) (nanoclj_t *, void *, nanoclj_cell_t *));
-  NANOCLJ_EXPORT void nanoclj_intern(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t symbol, nanoclj_val_t value);
+  NANOCLJ_EXPORT nanoclj_cell_t * nanoclj_intern(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t symbol, nanoclj_val_t value);
 
   typedef nanoclj_val_t(*foreign_func) (nanoclj_t *, nanoclj_cell_t*);
 
@@ -88,7 +88,7 @@ extern "C" {
 
 #if USE_INTERFACE
   struct nanoclj_interface {
-    void (*intern) (nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t symbol, nanoclj_val_t value);
+    nanoclj_cell_t * (*intern) (nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t symbol, nanoclj_val_t value);
     nanoclj_cell_t * (*cons) (nanoclj_t * sc, nanoclj_val_t head, nanoclj_cell_t * tail);
     nanoclj_val_t (*mk_integer) (nanoclj_t * sc, long long num);
     nanoclj_val_t (*mk_double) (double num);

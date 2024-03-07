@@ -53,6 +53,10 @@ static inline nanoclj_val_t mk_nil() {
   return (nanoclj_val_t)kNIL;
 }
 
+static inline nanoclj_val_t mk_notfound() {
+  return (nanoclj_val_t)kNOTFOUND;
+}
+
 static inline nanoclj_val_t mk_byte(int8_t n) {
   return (nanoclj_val_t)(SIGNATURE_INTEGER | (UINT64_C(0) << 32) | (uint32_t)(int32_t)n);
 }
@@ -116,10 +120,6 @@ static inline nanoclj_val_t mk_regex_pointer(void * ptr) {
   return (nanoclj_val_t)(SIGNATURE_REGEX | (uint64_t)ptr);
 }
 
-static inline nanoclj_val_t mk_notfound() {
-  return (nanoclj_val_t)(SIGNATURE_NOTFOUND);
-}
-
 static inline nanoclj_val_t mk_list(const nanoclj_cell_t * ptr) {
   return ptr ? mk_pointer(ptr) : mk_emptylist();
 }
@@ -159,6 +159,10 @@ static inline bool is_regex(nanoclj_val_t v) {
 
 static inline bool is_notfound(nanoclj_val_t v) {
   return v.as_long == kNOTFOUND;
+}
+
+static inline bool is_found(nanoclj_val_t v) {
+  return v.as_long != kNOTFOUND;
 }
 
 #endif

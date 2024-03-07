@@ -1125,9 +1125,9 @@ static inline nanoclj_val_t clojure_data_csv_read_csv(nanoclj_t * sc, nanoclj_ce
 static nanoclj_t * linenoise_sc = NULL;
 
 static inline void completion(const char *input, linenoiseCompletions *lc) {
-  nanoclj_val_t ns = resolve_value(linenoise_sc, linenoise_sc->envir, def_symbol(linenoise_sc, "clojure.repl"));
-  if (is_cell(ns)) {
-    nanoclj_cell_t * var = get_var_in_ns(decode_pointer(ns), linenoise_sc->AUTOCOMPLETE_HOOK);
+  nanoclj_cell_t * ns = find_ns(linenoise_sc, def_symbol(linenoise_sc, "clojure.repl"));
+  if (ns) {
+    nanoclj_cell_t * var = get_var_in_ns(ns, linenoise_sc->AUTOCOMPLETE_HOOK);
     if (var) {
       nanoclj_val_t f = get_indexed_value(var, 1);
       nanoclj_val_t args = mk_pointer(cons(linenoise_sc, mk_string(linenoise_sc, input), NULL));
@@ -1275,7 +1275,7 @@ static inline bool is_stdin(nanoclj_val_t p) {
 }
 
 static inline nanoclj_val_t linenoise_readline(nanoclj_t * sc, nanoclj_cell_t * args) {
-  if (!is_stdin(resolve_value(sc, sc->core_ns, sc->IN_SYM))) {
+  if (!is_stdin(get_in_port(sc))) {
     return nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "*in* must be stdin")));
   }
   

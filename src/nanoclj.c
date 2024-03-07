@@ -3938,27 +3938,6 @@ static inline void new_frame_in_env(nanoclj_t * sc, nanoclj_cell_t * old_env) {
   sc->envir = get_cell(sc, T_LIST, 0, mk_emptylist(), old_env, NULL);
 }
 
-static inline bool find_slot_in_env(nanoclj_cell_t * env, nanoclj_val_t hdl, nanoclj_val_t * r) {
-  for (; env; env = _cdr_unchecked(env)) {
-    nanoclj_cell_t * y = decode_pointer(_car_unchecked(env));
-    if (y && _type(y) == T_HASHMAP) {
-      nanoclj_cell_t * var = find_var_in_hash(y, hdl);
-      if (var) {
-	*r = get_indexed_value(var, 1);
-	return true;
-      }
-    } else {
-      for (; y; y = _cdr_unchecked(y)) {
-	if (y->_cons.car.as_long == hdl.as_long) {
-	  *r = y->_cons.value;
-	  return true;
-	}
-      }
-    }
-  }
-  return false;
-}
-
 static inline nanoclj_val_t inc_slot_in_frame(nanoclj_cell_t * f, nanoclj_val_t hdl) {
   nanoclj_cell_t * y = decode_pointer(_car_unchecked(f));
   for (; y; y = _cdr_unchecked(y)) {
@@ -5656,7 +5635,7 @@ static inline bool _Error_1(nanoclj_t * sc, const char *msg) {
 
 #define Error_0(sc,s)    return _Error_1(sc, s)
 
-static inline bool resolve(nanoclj_t * sc, nanoclj_cell_t * env, nanoclj_val_t sym, nanoclj_val_t * r) {
+static inline nanoclj_val_t resolve(nanoclj_t * sc, nanoclj_cell_t * env, nanoclj_val_t sym, nanoclj_val_t not_found) {
   symbol_t * s = decode_symbol(sym);
   if (s->ns.size) {
     nanoclj_cell_t * ns = find_ns(sc, s->ns_sym);
@@ -5668,51 +5647,61 @@ static inline bool resolve(nanoclj_t * sc, nanoclj_cell_t * env, nanoclj_val_t s
       } else {
 	nanoclj_val_t msg = mk_string_fmt(sc, "No such namespace: %.*s", s->ns.size, s->ns.ptr);
 	nanoclj_throw(sc, mk_runtime_exception(sc, msg));
-	return false;
+	return not_found;
       }
     }
     nanoclj_cell_t * var = get_var_in_ns(ns, s->name_sym);
     if (var) {
-      *r = get_indexed_value(var, 1);
-      return true;
-    } else {
-      return false;
+      return get_indexed_value(var, 1);
     }
-  } else if (find_slot_in_env(env, sym, r)) {
-    return true;
-  } else if (sym.as_long == sc->ENV.as_long) {
-    *r = mk_pointer(sc->envir);
-    return true;
   } else {
-    nanoclj_cell_t * ns = find_ns(sc, sym);
-    if (ns && _type(ns) == T_CLASS) {
-      *r = mk_pointer(ns);
-      return true;
+    /* try to find in env */
+    do {
+      nanoclj_cell_t * y = decode_pointer(_car_unchecked(env));
+      if (y) {
+	if (_type(y) == T_HASHMAP) {
+	  nanoclj_cell_t * var = find_var_in_hash(y, sym);
+	  if (var) {
+	    return get_indexed_value(var, 1);
+	  }
+	} else {
+	  do {
+	    if (y->_cons.car.as_long == sym.as_long) {
+	      return y->_cons.value;
+	    }
+	    y = _cdr_unchecked(y);
+	  } while (y);
+	}
+      }
+      env = _cdr_unchecked(env);
+    } while (env);
+    
+    /* not found in env */
+    if (sym.as_long == sc->ENV.as_long) {
+      return mk_pointer(sc->envir);
     } else {
-      return false;
+      nanoclj_cell_t * ns = find_ns(sc, sym);
+      if (ns && _type(ns) == T_CLASS) {
+	return mk_pointer(ns);
+      }
     }
   }
-}
-
-static inline nanoclj_val_t resolve_value(nanoclj_t * sc, nanoclj_cell_t * env, nanoclj_val_t sym) {
-  nanoclj_val_t v;
-  if (resolve(sc, env, sym, &v)) {
-    return v;
-  } else {
-    return mk_nil();
-  }
+  return not_found;
 }
 
 static inline nanoclj_cell_t * get_current_ns(nanoclj_t * sc) {
-  return decode_pointer(resolve_value(sc, sc->core_ns, sc->NS_SYM));
+  nanoclj_cell_t * var = get_var_in_ns(sc->core_ns, sc->NS_SYM);
+  return var ? decode_pointer(get_indexed_value(var, 1)) : NULL;
 }
 
 static nanoclj_val_t get_out_port(nanoclj_t * sc) {
-  return resolve_value(sc, sc->core_ns, sc->OUT_SYM);
+  nanoclj_cell_t * var = get_var_in_ns(sc->core_ns, sc->OUT_SYM);
+  return var ? get_indexed_value(var, 1) : mk_nil();
 }
 
 static nanoclj_val_t get_in_port(nanoclj_t * sc) {
-  return resolve_value(sc, sc->core_ns, sc->IN_SYM);
+  nanoclj_cell_t * var = get_var_in_ns(sc->core_ns, sc->IN_SYM);
+  return var ? get_indexed_value(var, 1) : mk_nil();
 }
 
 static inline void dump_stack_reset(nanoclj_t * sc) {
@@ -6626,7 +6615,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_EVAL:                /* main part of evaluation */
     switch (prim_type(sc->code)) {
     case T_SYMBOL:
-      if (resolve(sc, sc->envir, sc->code, &x)) {
+      x = resolve(sc, sc->envir, sc->code, mk_notfound());
+      if (is_found(x)) {
 	s_return(sc, x);
       } else if (!sc->pending_exception) {
 	symbol_t * s = decode_symbol(sc->code);
@@ -6723,7 +6713,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       nanoclj_val_t coll = first(sc, sc->args);
       if (is_cell(coll)) {
 	nanoclj_val_t v = find(sc, decode_pointer(coll), sc->code, mk_notfound());
-	if (!is_notfound(v)) s_return(sc, v);
+	if (is_found(v)) s_return(sc, v);
       }
       s_return(sc, first(sc, next(sc, sc->args)));
     }
@@ -6884,7 +6874,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  return false;
 	} else {
 	  nanoclj_val_t v = find(sc, code_cell, arg0, mk_notfound());
-	  s_return(sc, !is_notfound(v) ? v : first(sc, arg_next));
+	  s_return(sc, is_found(v) ? v : first(sc, arg_next));
 	}
       }
       break;
@@ -6900,11 +6890,11 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     /* If the hook is defined, apply it to sc->code, otherwise
        set sc->value fall thru */
     {
-      nanoclj_val_t v;
-      if (find_slot_in_env(sc->envir, sc->COMPILE_HOOK, &v)) {
+      nanoclj_cell_t * var = get_var_in_ns(sc->core_ns, sc->COMPILE_HOOK);
+      if (var) {
         s_save(sc, OP_LAMBDA1, sc->args, sc->code);
         sc->args = cons(sc, sc->code, NULL);
-        sc->code = v;
+        sc->code = get_indexed_value(var, 1);
         s_goto(sc, OP_APPLY);
       } else {
         sc->value = sc->code;
@@ -7481,7 +7471,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	if (w.as_long == sc->CATCH.as_long) {
 	  item = next(sc, item);
 	  nanoclj_val_t type_sym = first(sc, item);
-	  nanoclj_val_t typ = resolve_value(sc, sc->envir, type_sym);
+	  nanoclj_val_t typ = resolve(sc, sc->envir, type_sym, mk_nil());
 	  if (is_cell(typ) && isa(sc, decode_pointer(typ), e)) {
 	    item = next(sc, item);
 	    nanoclj_val_t sym = first(sc, item);
@@ -8071,7 +8061,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       return false;
     } else if (is_cell(arg0)) {
       nanoclj_val_t v = find(sc, decode_pointer(arg0), arg1, mk_notfound());
-      if (!is_notfound(v)) {
+      if (is_found(v)) {
 	s_return(sc, v);
       }
     }
@@ -8095,7 +8085,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     if (!unpack_args_2(sc, &arg0, &arg1)) {
       return false;
     }
-    s_retbool(is_cell(arg0) && !is_notfound(find(sc, decode_pointer(arg0), arg1, mk_notfound())));
+    s_retbool(is_cell(arg0) && is_found(find(sc, decode_pointer(arg0), arg1, mk_notfound())));
 
   case OP_AGET:
     if (!unpack_args_2_plus(sc, &arg0, &arg1, &arg_next)) {
@@ -8416,14 +8406,15 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     } else {
       nanoclj_cell_t * typ = get_type_object(sc, arg0);
       while (typ) {
-	nanoclj_val_t v;
-	if (resolve(sc, typ, arg1, &v)) {
-	  if (type(v) == T_FOREIGN_FUNCTION || type(v) == T_CLOSURE || type(v) == T_PROC) {
-	    sc->code = v;
+	nanoclj_cell_t * var = get_var_in_ns(typ, arg1);
+	if (var) {
+	  nanoclj_val_t m = get_indexed_value(var, 1);
+	  if (type(m) == T_FOREIGN_FUNCTION || type(m) == T_CLOSURE || type(m) == T_PROC) {
+	    sc->code = m;
 	    sc->args = cons(sc, arg0, arg_next);
 	    s_goto(sc, OP_APPLY);
 	  } else {
-	    s_return(sc, v);
+	    s_return(sc, m);
 	  }
 	} else {
 	  typ = next(sc, typ);
@@ -8739,7 +8730,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	} else if (tag_sv.size == 4 && memcmp(tag_sv.ptr, "uuid", 4) == 0) {
 	  s_return(sc, mk_object(sc, T_UUID, cons(sc, value, NULL)));	
 	} else {
-	  nanoclj_val_t hook = resolve_value(sc, sc->envir, sc->TAG_HOOK);
+	  nanoclj_val_t hook = resolve(sc, sc->envir, sc->TAG_HOOK, mk_nil());
 	  if (!is_nil(hook)) {
 	    sc->code = mk_pointer(cons(sc, hook, cons(sc, tag, cons(sc, value, NULL))));
 	    s_goto(sc, OP_EVAL);
@@ -10552,7 +10543,7 @@ static inline void default_exception_handler(nanoclj_t * sc) {
   if (sc->pending_exception) {
     strview_t sv0;
     nanoclj_val_t name_v = find(sc, _cons_metadata(get_type_object(sc, mk_pointer(sc->pending_exception))), sc->NAME, mk_notfound());
-    if (!is_notfound(name_v)) {
+    if (is_found(name_v)) {
       sv0 = to_strview(name_v);
     } else {
       sv0 = (strview_t){ "Unknown exception", 17 };
@@ -10619,7 +10610,7 @@ int main(int argc, const char **argv) {
       if (nanoclj_load_named_file(&sc, mk_string(&sc, argv[1]))) {
 	/* Call -main if it exists */
 	nanoclj_val_t main_sym = def_symbol(&sc, "-main");
-	nanoclj_val_t main = resolve_value(&sc, sc.envir, main_sym);
+	nanoclj_val_t main = resolve(&sc, sc.envir, main_sym, mk_nil());
 	if (!is_nil(main)) {
 	  nanoclj_call(&sc, main, mk_emptylist());
 	}
