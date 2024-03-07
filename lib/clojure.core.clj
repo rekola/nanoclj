@@ -23,6 +23,11 @@
                             )))
 (defn associative? [coll] (or (instance? clojure.lang.PersistentVector x)
                               (instance? clojure.lang.APersistentMap x)))
+
+(def some?
+  "Returns true if the argument is not nil"
+  (fn [x] (not (identical? x nil))))
+
 (defn sequential?
   "Returns true if coll is sequential (ordered)"
   [coll] (is-any-of? (type coll) clojure.lang.PersistentVector clojure.lang.Cons))
@@ -164,7 +169,7 @@
 
 ; Miscellaneous
 
-(defn ns-interns [ns] (doall (map first (reduce concat '() (car ns)))))
+(defn ns-interns [ns] (doall (map first (reduce concat '() (first ns)))))
 
 (defn new [t & args]
   "Creates an object"
@@ -555,7 +560,7 @@
                      (symbol? x) (print-fn :symbol x)
                      (var? x) (print-fn :var x)
                      (class? x) (print-fn :class x)
-                     (closure? x) (pr-inline print-fn (cons 'fn (car x)))
+                     (closure? x) (pr-inline print-fn (cons 'fn (first x)))
                      (and (image? x) (*out* :graphics)) (let [cs *cell-size*
                                                               f *window-scale-factor*
                                                               w (x :width)
@@ -985,8 +990,8 @@
 
 (defn ns-resolve
   [ns sym] (if (namespace sym)
-             ((car (find-ns (symbol (namespace sym)))) (symbol (name sym)))
-             ((car ns) sym)))
+             ((first (find-ns (symbol (namespace sym)))) (symbol (name sym)))
+             ((first ns) sym)))
 
 (defn resolve
   [sym] (ns-resolve *ns* sym))
@@ -998,7 +1003,7 @@
 
 (defn ns-map
   "Returns the var-map of namespace ns"
-  [ns] (car ns))
+  [ns] (first ns))
 
 (defn the-ns
   "Returns the namespace that the symbol x refers, or x itself, if x is a namespae"

@@ -1,14 +1,14 @@
 (def force deref)
 (def var-get second)
 
-(def car first)
-(def cdr rest)
-(def cadr second)
-(def cddr (fn [x] (rest (rest x))))
-(def caadr (fn [x] (first (second x))))
-(def cdadr (fn [x] (rest (second x))))
-(def caddr (fn [x] (car (cdr (cdr x)))))
-(def cadddr (fn [x] (car (cdr (cdr (cdr x))))))
+(def ^:private car first)
+(def ^:private cdr rest)
+(def ^:private cadr second)
+(def ^:private cddr (fn [x] (rest (rest x))))
+(def ^:private caadr (fn [x] (first (second x))))
+(def ^:private cdadr (fn [x] (rest (second x))))
+(def ^:private caddr (fn [x] (car (cdr (cdr x)))))
+(def ^:private cadddr (fn [x] (car (cdr (cdr (cdr x))))))
 
 ; (macro (my-intern- form) (cons 'def (cons (caddr form) (cons (cadddr form) '()))))
 ; (def my-intern (fn [ns name val] (let [s name] (my-intern- ns s val))))
@@ -20,10 +20,6 @@
 (def nil?
   "Returns true if the argument is nil"
   (fn [x] (identical? x nil)))
-
-(def some?
-  "Returns true if the argument is not nil"
-  (fn [x] (not (identical? x nil))))
 
 (def list? (fn [x] (instance? clojure.lang.Cons x)))
 (def zero? (fn [n] (equiv? n 0)))
@@ -148,10 +144,10 @@
 ; DEFINE-MACRO Contributed by Andy Gaynor
 (macro def-macro (fn [dform]
                    (if (symbol? (cadr dform))
-                     `(macro ~@(cdr dform))
+                     `(macro ~@(rest dform))
                      (let [form (gensym)]
                        `(macro (~(caadr dform) ~form)
-                               (apply (fn ~(cdadr dform) ~@(cddr dform)) (cdr ~form)))))))
+                               (apply (fn ~(cdadr dform) ~@(cddr dform)) (rest ~form)))))))
 
 ;;;; Utility to ease macro creation
 (def macroexpand (fn [form] ((eval (source (eval (car form)))) form)))
