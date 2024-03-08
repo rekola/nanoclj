@@ -1030,3 +1030,12 @@
 (def ^:dynamic *2)
 (def ^:dynamic *3)
 (def ^:dynamic *e)
+
+; Stubs for transient data structure operations
+
+(def transient identity)
+(def persistent! identity)
+(def pop! pop)
+(def conj! conj)
+(def assoc! assoc)
+

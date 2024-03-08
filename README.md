@@ -162,7 +162,6 @@ Windows support is in progress.
   - bound?
   - re-groups, re-matcher, re-seq, re-matches
   - assert-args
-  - pop!, conj!, persistent!
   - fnil
   - trampoline
   - shuffle, random-sample
