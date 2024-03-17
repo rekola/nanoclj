@@ -7095,7 +7095,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	    return false;
 	  }
 
-	  set_indexed_value(restore_vec, i, sym);
+	  set_indexed_value(restore_vec, i, mk_pointer(var));
 	  set_indexed_value(restore_vec, i + 1, get_indexed_value(var, 1));
 	}
 	
@@ -7149,10 +7149,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       nanoclj_cell_t * ns = get_ns_from_env(sc->envir);
 
       for (size_t i = 0; i < n; i += 2) {
-	nanoclj_val_t sym = get_indexed_value(restore_vec, i);
+	nanoclj_cell_t * var = decode_pointer(get_indexed_value(restore_vec, i));
 	nanoclj_val_t val = get_indexed_value(restore_vec, i + 1);
-	nanoclj_cell_t * var = get_var_in_ns(ns, sym);
-	if (var) set_var(sc, var, val);
+	set_var(sc, var, val);
       }
       s_return(sc, sc->value);
     }
