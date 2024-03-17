@@ -3971,29 +3971,6 @@ static inline void new_slot_in_env(nanoclj_t * sc, nanoclj_val_t variable, nanoc
   new_slot_spec_in_env(sc, sc->envir, variable, value);
 }
 
-static inline bool set_var_in_ns(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t hdl, nanoclj_val_t state, nanoclj_cell_t * meta) {
-  nanoclj_cell_t * y = decode_pointer(_car_unchecked(ns));
-  nanoclj_cell_t * var = find_var_in_hash(y, hdl);
-  if (!var) return false;
-
-  nanoclj_val_t old_state = get_indexed_value(var, 1);
-  set_indexed_value(var, 1, state);
-
-  if (meta) set_indexed_value(var, 2, mk_pointer(meta));
-  else meta = decode_pointer(get_indexed_value(var, 2));
-  
-  nanoclj_val_t watches0 = find(sc, meta, sc->WATCHES, mk_nil());
-  if (!is_nil(watches0)) {
-    nanoclj_cell_t * watches = seq(sc, decode_pointer(watches0));
-    for (; watches; watches = next(sc, watches)) {
-      nanoclj_val_t fn = first(sc, watches);
-      nanoclj_call(sc, fn, mk_pointer(cons(sc, mk_nil(), cons(sc, mk_pointer(var), cons(sc, old_state, cons(sc, state, NULL))))));
-    }
-  }
-
-  return true;
-}
-
 static inline nanoclj_cell_t * mk_hashmap(nanoclj_t * sc) {
   return get_vector_object(sc, T_HASHMAP, 0);
 }
@@ -4076,18 +4053,64 @@ static inline nanoclj_val_t def_symbol(nanoclj_t * sc, const char *name) {
   return def_symbol_from_sv(sc, T_SYMBOL, mk_strview(0), mk_strview(name));
 }
 
-static inline nanoclj_cell_t * intern_with_meta(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t sym, nanoclj_val_t val, nanoclj_cell_t * meta) {
+static inline bool set_var(nanoclj_t * sc, nanoclj_cell_t * var, nanoclj_val_t state) {
+  nanoclj_val_t old_state = get_indexed_value(var, 1);
+  set_indexed_value(var, 1, state);
+
+  nanoclj_cell_t * meta = decode_pointer(get_indexed_value(var, 2));
+  
+  nanoclj_val_t watches0 = find(sc, meta, sc->WATCHES, mk_nil());
+  if (!is_nil(watches0)) {
+    nanoclj_cell_t * watches = seq(sc, decode_pointer(watches0));
+    for (; watches; watches = next(sc, watches)) {
+      nanoclj_val_t fn = first(sc, watches);
+      nanoclj_call(sc, fn, mk_pointer(cons(sc, mk_nil(), cons(sc, mk_pointer(var), cons(sc, old_state, cons(sc, state, NULL))))));
+    }
+  }
+
+  return true;
+}
+
+static inline nanoclj_cell_t * create_var(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t sym, nanoclj_val_t val, nanoclj_cell_t * meta) {
   nanoclj_cell_t * var = mk_var(sc, sym, val, mk_pointer(meta));
   nanoclj_cell_t * x = decode_pointer(_car_unchecked(ns));
   _car_unchecked(ns) = mk_pointer(assoc(sc, x, sym, mk_pointer(var)));
   return var;
 }
 
-static inline nanoclj_cell_t * intern(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t sym, nanoclj_val_t value) {
-  nanoclj_cell_t * md = mk_hashmap(sc);
-  md = assoc(sc, md, sc->NS, mk_pointer(ns));
-  md = assoc(sc, md, sc->NAME, sym);
-  return intern_with_meta(sc, ns, sym, value, md);
+static inline nanoclj_cell_t * intern_with_meta(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t sym, nanoclj_val_t val, nanoclj_cell_t * meta) {
+  nanoclj_cell_t * var = get_var_in_ns(ns, sym);
+  if (var) {
+    nanoclj_cell_t * meta = decode_pointer(get_indexed_value(var, 2));
+    if (meta && equals(sc, find(sc, meta, sc->NS, mk_nil()), mk_pointer(ns))) {
+      set_var(sc, var, val);
+      return var;
+    } else {
+      strview_t sv = to_strview(sym);
+      fprintf(stderr, "WARNING: %.*s already refers to a Var\n", sv.size, sv.ptr);
+    }
+  }
+  return create_var(sc, ns, sym, val, meta);
+}
+
+static inline nanoclj_cell_t * intern(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_val_t sym, nanoclj_val_t val) {
+  nanoclj_cell_t * var = get_var_in_ns(ns, sym);
+  if (var) {
+    nanoclj_cell_t * meta = decode_pointer(get_indexed_value(var, 2));
+    if (meta && equals(sc, find(sc, meta, sc->NS, mk_nil()), mk_pointer(ns))) {
+      set_var(sc, var, val);
+      return var;
+    } else {
+      strview_t sv = to_strview(sym);
+      fprintf(stderr, "WARNING: %.*s already refers to a Var\n", sv.size, sv.ptr);
+    }
+  } else {
+    nanoclj_cell_t * md = mk_hashmap(sc);
+    md = assoc(sc, md, sc->NS, mk_pointer(ns));
+    md = assoc(sc, md, sc->NAME, sym);
+    var = create_var(sc, ns, sym, val, md);
+  }
+  return var;
 }
 
 static inline nanoclj_val_t intern_foreign_func(nanoclj_t * sc, nanoclj_cell_t * ns, const char * name, foreign_func fptr, int min_arity, int max_arity) {
@@ -6566,14 +6589,14 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     if (backchar(skipspace(sc, z), z) != EOF) {
       /* Set up another iteration of REPL */
       sc->save_inport = get_in_port(sc);
-      set_var_in_ns(sc, sc->core_ns, sc->IN_SYM, mk_pointer(z), NULL);
+      intern(sc, sc->core_ns, sc->IN_SYM, mk_pointer(z));
 
       s_save(sc, OP_T0LVL, NULL, mk_emptylist());
 
       save_from_C_call(sc);
       sc->args = NULL;
       Eval_Cycle(sc, OP_READ);
-      set_var_in_ns(sc, sc->core_ns, sc->IN_SYM, sc->save_inport, NULL);
+      intern(sc, sc->core_ns, sc->IN_SYM, sc->save_inport);
       if (sc->pending_exception) {
 	return false;
       }
@@ -6939,7 +6962,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_INTERN:
     if (!unpack_args_3(sc, &arg0, &arg1, &arg2)) {
       return false;
-    } else if (is_namespace(arg0) && (is_symbol(arg1) || is_alias(arg1))) {
+    } else if (is_namespace(arg0) && (is_symbol(arg1) || is_alias(arg1))) { /* alias uses intern with aliases */
       /* arg0: namespace, arg1: symbol, arg2: value */
       nanoclj_cell_t * ns = decode_pointer(arg0);
       nanoclj_cell_t * var = get_var_in_ns(ns, arg1);
@@ -7000,12 +7023,16 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_SET:
     if (!unpack_args_2(sc, &arg0, &arg1)) {
       return false;
-    } else if (set_var_in_ns(sc, get_ns_from_env(sc->envir), arg0, arg1, NULL)) {
-      s_return(sc, arg1);
     } else {
-      strview_t sv = to_strview(arg0);
-      nanoclj_val_t msg = mk_string_fmt(sc, "Use of undeclared Var %.*s", sv.size, sv.ptr);
-      nanoclj_throw(sc, mk_runtime_exception(sc, msg));
+      nanoclj_cell_t * var = get_var_in_ns(get_ns_from_env(sc->envir), arg0);
+      if (var) {
+	set_var(sc, var, arg1);
+	s_return(sc, arg1);
+      } else {
+	strview_t sv = to_strview(arg0);
+	nanoclj_val_t msg = mk_string_fmt(sc, "Use of undeclared Var %.*s", sv.size, sv.ptr);
+	nanoclj_throw(sc, mk_runtime_exception(sc, msg));
+      }
     }
 
   case OP_DO:               /* do */
@@ -7094,7 +7121,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       long long i = sc->args ? decode_integer(_car_unchecked(args)) : 0;
       nanoclj_cell_t * ns = get_ns_from_env(sc->envir);
       nanoclj_val_t sym = get_indexed_value(vec, i);
-      set_var_in_ns(sc, ns, sym, sc->value, NULL);
+      nanoclj_cell_t * var = get_var_in_ns(ns, sym);
+      if (var) set_var(sc, var, sc->value);
       
       if (i + 2 < get_size(vec)) {
 	if (args) _car_unchecked(args) = mk_int(i + 2);
@@ -7123,7 +7151,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       for (size_t i = 0; i < n; i += 2) {
 	nanoclj_val_t sym = get_indexed_value(restore_vec, i);
 	nanoclj_val_t val = get_indexed_value(restore_vec, i + 1);
-	set_var_in_ns(sc, ns, sym, val, NULL);
+	nanoclj_cell_t * var = get_var_in_ns(ns, sym);
+	if (var) set_var(sc, var, val);
       }
       s_return(sc, sc->value);
     }
