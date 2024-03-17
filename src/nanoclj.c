@@ -1110,7 +1110,7 @@ static inline nanoclj_ratio_t to_ratio(nanoclj_val_t p) {
       }
     }
   }
-  return (nanoclj_ratio_t){ NULL, NULL };
+  return (nanoclj_ratio_t){ 0 };
 }
 
 static inline nanoclj_bigint_t bignum_add(nanoclj_bigint_t a, nanoclj_bigint_t b) {
@@ -2101,8 +2101,8 @@ static inline int32_t inchar_utf8(nanoclj_cell_t * p) {
 
   int32_t c = inchar_raw(p);
   if (c < 0) return EOF;
-  uint32_t codepoint = c;
-  uint32_t b2, b3, b4;
+  int32_t codepoint = c;
+  int32_t b2, b3, b4;
   switch (utf8_sequence_length(c)) {
   case 0:
     return 0;
@@ -6566,14 +6566,14 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     if (backchar(skipspace(sc, z), z) != EOF) {
       /* Set up another iteration of REPL */
       sc->save_inport = get_in_port(sc);
-      intern(sc, sc->core_ns, sc->IN_SYM, mk_pointer(z));
+      set_var_in_ns(sc, sc->core_ns, sc->IN_SYM, mk_pointer(z), NULL);
 
       s_save(sc, OP_T0LVL, NULL, mk_emptylist());
 
       save_from_C_call(sc);
       sc->args = NULL;
       Eval_Cycle(sc, OP_READ);
-      intern(sc, sc->core_ns, sc->IN_SYM, sc->save_inport);
+      set_var_in_ns(sc, sc->core_ns, sc->IN_SYM, sc->save_inport, NULL);
       if (sc->pending_exception) {
 	return false;
       }
@@ -6942,10 +6942,15 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     } else if (is_namespace(arg0) && (is_symbol(arg1) || is_alias(arg1))) {
       /* arg0: namespace, arg1: symbol, arg2: value */
       nanoclj_cell_t * ns = decode_pointer(arg0);
-      nanoclj_cell_t * meta = update_meta_from_reader(sc, mk_hashmap(sc), tensor_peek(sc->load_stack));
-      meta = assoc(sc, meta, sc->NAME, arg1);
-      meta = assoc(sc, meta, sc->NS, mk_pointer(ns));
-      s_return(sc, mk_pointer(intern_with_meta(sc, ns, arg1, arg2, meta)));
+      nanoclj_cell_t * var = get_var_in_ns(ns, arg1);
+      if (var) {
+	set_indexed_value(var, 1, arg2);
+      } else {
+	nanoclj_cell_t * meta = update_meta_from_reader(sc, mk_hashmap(sc), tensor_peek(sc->load_stack));
+	meta = assoc(sc, meta, sc->NAME, arg1);
+	meta = assoc(sc, meta, sc->NS, mk_pointer(ns));
+	s_return(sc, mk_pointer(intern_with_meta(sc, ns, arg1, arg2, meta)));
+      }
     }
     nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Invalid arguments for tensor")));
     return false;
