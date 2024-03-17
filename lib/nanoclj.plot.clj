@@ -90,9 +90,8 @@
                 (set-font-size 10)
                 (run! draw-graph graphs))
          ]
-     (with-out cx
-       (draw)
-         ))))
+     (binding [*out* cx] (draw))
+     cx)))
 
 (defn- parse-args
   "Parses plot arguments. Arguments can contain data vectors and keyword value pairs such as :title \"Plot title\""
@@ -239,23 +238,22 @@
                 )
          ]
                                         ; Bind the canvas to *out* and draw
-     (with-out cx
-       (draw)
+     (binding [*out* cx] (draw))
 
                                         ; Add watch for re-rendering the plot if window size changes (not used)
-       (add-watch (var *window-size*) 0
-                  (fn [key ref old-ws ws]
-                    (with-out cx
-                      (resize)
-                      (flush)
-                      )))
+     (add-watch (var *window-size*) 0
+                (fn [key ref old-ws ws]
+                  (with-out cx
+                    (resize)
+                    (flush)
+                    )))
 
                                         ; Add watch for mouse over (not used yet)
-       (add-watch (var *mouse-pos*) 0
-                  (fn [key ref old-pos pos]
-                    nil
-                    ))
-       ))))
+     (add-watch (var *mouse-pos*) 0
+                (fn [key ref old-pos pos]
+                  nil
+                  ))
+     cx)))
 
 (defn scatter
   "Draws a scatter plot. Matlab style."
@@ -339,20 +337,17 @@
                           (draw-points x y))) plots)
                 )
          ]
-     (with-out cx
-       (do
-         (draw)
+     (binding [*out* cx] (draw))
          
-         (add-watch (var *window-size*) 0
-                    (fn [key ref old-ws ws]
-                      (with-out cx
-                        (resize)
-                        (flush)
-                      )))
-         
-         (add-watch (var *mouse-pos*) 0
-                    (fn [key ref old-pos pos]
-                      nil
-                      ))
-
-         )))))
+     (add-watch (var *window-size*) 0
+                (fn [key ref old-ws ws]
+                  (with-out cx
+                    (resize)
+                    (flush)
+                    )))
+     
+     (add-watch (var *mouse-pos*) 0
+                (fn [key ref old-pos pos]
+                  nil
+                  ))
+     cx)))

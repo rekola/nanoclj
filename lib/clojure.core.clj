@@ -637,14 +637,6 @@
   "Prints args into *out* using pr followed by a newline"
   [& more] (apply pr more) (newline))
 
-(def-macro (with-out new-out & body)
-  `(let ((prev-out *out*)
-         (tmp ~new-out))
-     (set! *out* tmp)
-     ~@body
-     (set! *out* prev-out)
-     tmp))
-
 (def-macro (with-out-pdf filename width height & body)
   `(let ((w (java.io.Writer ~width ~height :pdf ~filename)))
      (with-open [w w]

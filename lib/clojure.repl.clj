@@ -61,7 +61,7 @@
                           s1 (* 1.5 cell-height)
                           s2 (* 0.6 cell-height)
                           cx (clojure.java.io/writer 0 0 :gray)]
-                      (with-out cx
+                      (binding [*out* cx]
                         (set-font-size s1)
                         (let [[ label-w label-h ] (get-text-extents label)
                               y-pos (* 1.3 cell-height)]
@@ -80,8 +80,8 @@
                           (text-path label)
                           (set-color 1)
                           (stroke)
-                          (flush)
-                          )))
+                          (flush)))
+                      cx)
                     (str label \space version)))
 
 

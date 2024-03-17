@@ -26,22 +26,23 @@
   [g] (let [[cell-width h] *cell-size*
             w (* 10 cell-width)
             cx (clojure.java.io/writer w h :rgb)]
-        (image (with-out cx
-                 (move-to 0 0)
-                 (line-to w 0)
-                 (line-to w h)
-                 (line-to 0 h)
-                 (close-path)
-                 (set-color g [ 0 0 ] [ w 0 ])
-                 (fill-preserve)
-                 (set-line-width 1)
-                 (set-color (if (= *theme* :dark)
-                              [ 1 1 1 0.5 ]
-                              [ 0 0 0 0.5 ]))
-                 (stroke)
-                 ))))
+        (binding [*out* cx]
+          (move-to 0 0)
+          (line-to w 0)
+          (line-to w h)
+          (line-to 0 h)
+          (close-path)
+          (set-color g [ 0 0 ] [ w 0 ])
+          (fill-preserve)
+          (set-line-width 1)
+          (set-color (if (= *theme* :dark)
+                       [ 1 1 1 0.5 ]
+                       [ 0 0 0 0.5 ]))
+          (stroke))
+        (image cx)))
 
 (defn plot-shape
-  [shape width height] (image (with-out (clojure.java.io/writer width height :rgb)
-                                (fill shape)
-                                )))
+  [shape width height] (let [cx (clojure.java.io/writer width height :rgb)]
+                         (binding [*out* cx]
+                           (fill shape))
+                         (image cx)))
