@@ -6,6 +6,8 @@
 #define NANOCLJ_SMALL_VEC_SIZE 3
 #define NANOCLJ_SMALL_STR_SIZE 24
 #define NANOCLJ_SMALL_UINT_VEC_SIZE 6
+
+/* limit fo array-map size before switching to hash-map (must be power of two) */
 #define NANOCLJ_ARRAYMAP_LIMIT 8
 
 #define STRBUFFSIZE 256

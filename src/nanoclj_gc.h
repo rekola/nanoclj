@@ -31,8 +31,6 @@ E2:_setmark(p);
   case T_ARRAYMAP:
   case T_HASHSET:
   case T_HASHMAP:
-  case T_SORTED_HASHSET:
-  case T_SORTED_HASHMAP:
   case T_QUEUE:
   case T_MAPENTRY:
     if (_is_small(p)) {

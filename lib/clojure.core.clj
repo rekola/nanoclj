@@ -106,7 +106,7 @@
 
 (defn sorted?
   "Returns true if coll is a sorted collection"
-  [x] (or (instance? clojure.lang.PersistentTreeSet) (instance? cloure.lang.PersistentTreeMap)))
+  [x] false)
 
 (defn class?
   "Returns true if x is a Class"
@@ -320,11 +320,6 @@
   ([] (clojure.lang.PersistentHashSet))
   ([& keys] (reduce -conj (clojure.lang.PersistentHashSet) keys)))
 
-(defn sorted-set
-  "Creates a sorted hash set from the arguments"
-  ([] (clojure.lang.PersistentTreeSet))
-  ([& keys] (reduce -conj (clojure.lang.PersistentTreeSet) keys)))
-
 (defn array-map
   "Creates an array-map from the arguments"
   ([] (clojure.lang.PersistentArrayMap))
@@ -352,20 +347,6 @@
                                   (rest (rest seq))
                                   )))]
                  (f (clojure.lang.PersistentHashMap) keyvals))))
-
-(defn sorted-map
-  "Creates a sorted map from the arguments"
-  ([] (clojure.lang.PersistentTreeMap))
-  ([& keyvals] (let [f (fn [val seq]
-                         (if (empty? seq)
-                           val
-                           (recur (-conj val
-                                         (map-entry
-                                          (first seq)
-                                          (first (rest seq))))
-                                  (rest (rest seq))
-                                  )))]
-                 (f (clojure.lang.PersistentTreeMap) keyvals))))
 
 (defn list-map
   "Creates a list-map from the arguments"
