@@ -4596,12 +4596,17 @@ static inline nanoclj_cell_t * port_from_filename(nanoclj_t * sc, uint16_t type,
   } else {
     f = fopen(filename, mode);
     if (!f && filename[0] != '/') {
-      char tmp[256];
-      sprintf(tmp, "/usr/share/nanoclj/%s", filename);
-      f = fopen(tmp, mode);
-      if (!f) {
-	sprintf(tmp, "/usr/local/share/nanoclj/%s", filename);
-	f = fopen(tmp, mode);
+      nanoclj_val_t path = find(sc,  sc->context->properties, sc->JAVA_CLASS_PATH, mk_nil());
+      if (!is_nil(path)) {
+	strview_t sv = to_strview(path);
+	int idx = 0;
+	while ( !f && idx < sv.size ) {
+	  char * end = memchr(sv.ptr + idx, ':', sv.size - idx);
+	  int end_idx = end ? (int)(end - sv.ptr) : sv.size;
+	  snprintf(sc->strbuff, STRBUFFSIZE, "%.*s/%s", end_idx - idx, sv.ptr + idx, filename);
+	  f = fopen(sc->strbuff, mode);
+	  idx = end_idx + 1;
+	}
       }
     }
   }
@@ -10112,8 +10117,8 @@ static inline nanoclj_cell_t * mk_properties(nanoclj_t * sc) {
   l = cons(sc, mk_string(sc, "os.version"), l);
   l = cons(sc, mk_string(sc, os_arch), l);
   l = cons(sc, mk_string(sc, "os.arch"), l);
-  l = cons(sc, mk_nil(), l);
-  l = cons(sc, mk_string(sc, "java.class.path"), l);
+  l = cons(sc, mk_string(sc, "/usr/share/nanoclj:/usr/local/share/nanoclj"), l);
+  l = cons(sc, sc->JAVA_CLASS_PATH, l);
   l = cons(sc, mk_string(sc, term), l);
   l = cons(sc, mk_string(sc, "term"), l);
   l = cons(sc, mk_string(sc, NANOCLJ_VERSION), l);
@@ -10276,6 +10281,7 @@ bool nanoclj_init(nanoclj_t * sc) {
   sc->PRIVATE = def_keyword(sc, "private");
   sc->GEN_CLASS = def_keyword(sc, "gen-class");
   sc->EXTENDS = def_keyword(sc, "extends");
+  sc->JAVA_CLASS_PATH = mk_string(sc, "java.class.path");
   
   sc->DOT = def_symbol(sc, ".");
   sc->CATCH = def_symbol(sc, "catch");

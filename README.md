@@ -153,6 +153,7 @@ Windows support is in progress.
   - partition-by
   - memoize
   - condp
+  - load
   - when-let, letfn, if-let, if-some
   - reduced, reduced?
   - with-local-vars, var-set, find-var, alter-var-root, declare, binding, with-bindings, defonce

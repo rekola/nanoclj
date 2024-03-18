@@ -103,11 +103,11 @@ static nanoclj_val_t System_getenv(nanoclj_t * sc, nanoclj_cell_t * args) {
 }
 
 static nanoclj_val_t System_getProperty(nanoclj_t * sc, nanoclj_cell_t * args) {
-  if (args) {
-    return find(sc, sc->context->properties, first(sc, args), mk_nil());
-  } else {
-    return mk_pointer(sc->context->properties);
-  }
+  return find(sc, sc->context->properties, first(sc, args), second(sc, args));
+}
+
+static nanoclj_val_t System_getProperties(nanoclj_t * sc, nanoclj_cell_t * args) {
+  return mk_pointer(sc->context->properties);
 }
 
 static nanoclj_val_t System_setProperty(nanoclj_t * sc, nanoclj_cell_t * args) {
@@ -1342,7 +1342,8 @@ static inline void register_functions(nanoclj_t * sc) {
   intern_foreign_func(sc, System, "nanoTime", System_nanoTime, 0, 0);
   intern_foreign_func(sc, System, "gc", System_gc, 0, 0);
   intern_foreign_func(sc, System, "getenv", System_getenv, 0, 1);
-  intern_foreign_func(sc, System, "getProperty", System_getProperty, 0, 1);
+  intern_foreign_func(sc, System, "getProperty", System_getProperty, 1, 2);
+  intern_foreign_func(sc, System, "getProperties", System_getProperties, 0, 0);
   intern_foreign_func(sc, System, "setProperty", System_setProperty, 2, 2);
   intern_foreign_func(sc, System, "glob", System_glob, 1, 1);
   intern_foreign_func(sc, System, "getSystemTimes", System_getSystemTimes, 0, 0);
