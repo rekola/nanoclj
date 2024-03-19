@@ -277,6 +277,11 @@
 (defn nnext [x] (next (next x)))
 (defn nfirst [x] (next (first x)))
 
+(defn foldr [f x lst]
+  (if (empty? lst)
+    x
+    (foldr f (f x (first lst)) (rest lst))))
+
 ; Vectors
 
 (def mapv
@@ -291,9 +296,9 @@
                                              (pred (first coll)) (recur (rest coll) (conj acc (first coll)))
                                              :else (recur (rest coll) acc))))
 
-(def range (fn ([]               (iterate inc 0))
+(def range (fn ([]               (iterate inc' 0))
                ([end]            (range 0 end))
-               ([start end]      (if (-ge start end) '() (cons start (lazy-seq (range (inc start) end)))))
+               ([start end]      (if (-ge start end) '() (cons start (lazy-seq (range (inc' start) end)))))
      	       ([start end step] (if (-ge start end) '() (cons start (lazy-seq (range (+ start step) end step)))))
              ))
 

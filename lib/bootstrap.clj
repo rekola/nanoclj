@@ -10,9 +10,6 @@
 (def ^:private caddr (fn [x] (car (cdr (cdr x)))))
 (def ^:private cadddr (fn [x] (car (cdr (cdr (cdr x))))))
 
-; (macro (my-intern- form) (cons 'def (cons (caddr form) (cons (cadddr form) '()))))
-; (def my-intern (fn [ns name val] (let [s name] (my-intern- ns s val))))
-
 (def symbol clojure.lang.Symbol)
 (def vector clojure.lang.PersistentVector)
 (def cons clojure.lang.Cons)
@@ -149,39 +146,31 @@
                        `(macro (~(caadr dform) ~form)
                                (apply (fn ~(cdadr dform) ~@(cddr dform)) (rest ~form)))))))
 
-;;;; Utility to ease macro creation
-(def macroexpand (fn [form] ((eval (source (eval (car form)))) form)))
+(def -source (fn [x] (if (or (closure? x) (macro? x)) (cons 'fn (first x)) nil)))
 
-(def macro-expand-all (fn [form]
-                        (if (macro? form)
-                          (macro-expand-all (macroexpand form))
-                          form)))
+(def macroexpand-1
+  "Expands the form if it is a macro form, and returns it otherwise."
+  (fn [form] ((eval (-source (eval (first form)))) form)))
 
-(def *compile-hook* macro-expand-all)
+(def macroexpand
+  "Expands the for until it is no longer in a macro form"
+  (fn [form]
+    (let [fs (eval (first form))]
+      (if (macro? fs)
+        ((eval (-source fs)) form)
+        form))))
 
-; (macro (defn form) `(intern *ns* '~(cadr form) (fn ~(caddr form) ~(cadddr form))))
-; (macro my-def (fn [name expression] (cons 'intern (cons '*ns* (cons (symbol name) (cons 1 '()))))))
+; (def *compile-hook* macroexpand)
 
-; (macro (defn-2 form) `(intern *ns* '~(cadr form) (fn ~(cddr form))))
-; (def-macro (defn name params body) `(intern *ns* '~name (fn ~params ~body)))
-; (def-macro (defn name params & body) `(intern *ns* '~name (fn ~params ~@body)))
 (def-macro (defn name & args) (if (string? (car args))
                                 `(def ~name ~(car args) (fn ~(cadr args) ~@(cddr args)))
                                 `(def ~name (fn ~(car args) ~@(cdr args)))))
 (def-macro (defn- name & args) (if (string? (car args))
                                  `(def ^:private ~name ~(car args) (fn ~(cadr args) ~@(cddr args)))
                                  `(def ^:private ~name (fn ~(car args) ~@(cdr args)))))
-; (def-macro (my-cond & form) (if (empty? form) '() `(if ~(car form) ~(cadr form) nil)))
-; (macro (my-cond form) (if (empty? (cdr form)) '() (cons 'if (cons (cadr form) (cons (caddr form) (my-cond (cdddr form)))))))
-
 
 (def-macro (set! symbol value) `(clojure.core/-set '~symbol ~value))
 (def-macro (. instance symbol & args) `(clojure.core/-dot ~instance '~symbol ~@args))
-
-(defn foldr [f x lst]
-  (if (empty? lst)
-    x
-    (foldr f (f x (car lst)) (cdr lst))))
 
 (def-macro (case e & clauses)
   (if (empty? clauses) `(throw (new RuntimeException (str "No matching clause: " ~e)))
@@ -313,7 +302,7 @@
                     (recur y (first more) (next more))
                     (-equals? y (first more)))
                   false)))
-  
+
 (defn ==
   "Returns true if the arguments are numerically equal"
   ([x] true)

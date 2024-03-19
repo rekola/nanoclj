@@ -41,7 +41,7 @@
 
 (defn source
   "Returns the source for a macro or function"
-  [x] (if (or (closure? x) (macro? x)) (cons 'fn (car x)) nil))
+  [x] (if (or (closure? x) (macro? x)) (cons 'fn (first x)) nil))
 
 (def-macro (doc name)
   (println "-------------------------")
