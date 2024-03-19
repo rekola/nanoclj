@@ -11,7 +11,7 @@
 
 (defn equals
   "Returns true if this is equal to the other"
-  [this other] (equals? this other))
+  [this other] (= this other))
 
 (defn clone
   "Creates a clone of this, or copy if the object is immutable"

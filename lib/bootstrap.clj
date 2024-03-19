@@ -22,15 +22,15 @@
   (fn [x] (identical? x nil)))
 
 (def list? (fn [x] (instance? clojure.lang.Cons x)))
-(def zero? (fn [n] (equiv? n 0)))
+(def zero? (fn [n] (-equiv? n 0)))
 
 (def ^:private is-any-of?
   (fn
     ([x] false)
-    ([x a] (equals? x a))
-    ([x a b] (or (equals? x a) (equals? x b)))
-    ([x a b c] (or (equals? x a) (equals? x b) (equals? x c)))
-    ([x a b c & args] (or (equals? x a) (equals? x b) (equals? x c) (apply* is-any-of? (cons x args))))))
+    ([x a] (-equals? x a))
+    ([x a b] (or (-equals? x a) (-equals? x b)))
+    ([x a b c] (or (-equals? x a) (-equals? x b) (-equals? x c)))
+    ([x a b c & args] (or (-equals? x a) (-equals? x b) (-equals? x c) (apply* is-any-of? (cons x args))))))
 
 (def number?
   "Returns true if the argument is a number"
@@ -93,23 +93,23 @@
  (fn [l]
    (let [mcons (fn [f l r]
                  (if (and (list? r)
-                          (equals? (car r) 'quote)
-                          (equals? (car (cdr r)) (cdr f))
+                          (-equals? (car r) 'quote)
+                          (-equals? (car (cdr r)) (cdr f))
                           (list? l)
-                          (equals? (car l) 'quote)
-                          (equals? (car (cdr l)) (car f)))
+                          (-equals? (car l) 'quote)
+                          (-equals? (car (cdr l)) (car f)))
                    (if (or (procedure? f) (number? f) (string? f))
                      f
                      (list 'quote f))
-                   (if (equals? l vector)
+                   (if (-equals? l vector)
                      (apply l (eval r))
                      (list 'cons l r)
                      )))
          mappend (fn [f l r]
                    (if (or (empty? (cdr f))
                            (and (list? r)
-                                (equals? (car r) 'quote)
-                                (equals? (car (cdr r)) '())))
+                                (-equals? (car r) 'quote)
+                                (-equals? (car (cdr r)) '())))
                      l
                      (list 'concat l r)))
          foo (fn [level form]
@@ -118,22 +118,22 @@
                        form
                        (list 'quote form))
                
-                     (equals? 'quasiquote (car form))
+                     (-equals? 'quasiquote (car form))
                      (mcons form ''quasiquote (foo (+ level 1) (cdr form)))
                      :else (if (zero? level)
-                             (cond (equals? (car form) 'unquote) (car (cdr form))
-                                   (equals? (car form) 'unquote-splicing)
+                             (cond (-equals? (car form) 'unquote) (car (cdr form))
+                                   (-equals? (car form) 'unquote-splicing)
                                    (throw (new RuntimeException (str "Unquote-splicing wasn't in a list:" form)))
                                    (and (list? (car form))
-                                        (equals? (car (car form)) 'unquote-splicing))
+                                        (-equals? (car (car form)) 'unquote-splicing))
                                    (mappend form (car (cdr (car form)))
                                             (foo level (cdr form)))
                                    :else (mcons form (foo level (car form))
                                                 (foo level (cdr form))))
-                             (cond (equals? (car form) 'unquote)
+                             (cond (-equals? (car form) 'unquote)
                                    (mcons form ''unquote (foo (- level 1)
                                                               (cdr form)))
-                                   (equals? (car form) 'unquote-splicing)
+                                   (-equals? (car form) 'unquote-splicing)
                                    (mcons form ''unquote-splicing
                                           (foo (- level 1) (cdr form)))
                                    :else (mcons form (foo level (car form))
@@ -187,7 +187,7 @@
   (if (empty? clauses) `(throw (new RuntimeException (str "No matching clause: " ~e)))
       (if (empty? (rest clauses))
         (first clauses)
-        `(if (clojure.core/equals? ~e ~(car clauses))
+        `(if (clojure.core/-equals? ~e ~(car clauses))
            ~(cadr clauses)
            (case ~e ~@(cddr clauses))))))
   
@@ -220,44 +220,44 @@
 (defn +
   "Returns the sum of the arguments. Doesn't auto-promote longs."
   ([x] x)
-  ([x y] (add x y))
-  ([x y & more] (reduce add (add x y) more)))
+  ([x y] (-add x y))
+  ([x y & more] (reduce -add (-add x y) more)))
 
 (defn +'
   "Returns the sum of the arguments. Supports arbitrary precision."
   ([x] x)
-  ([x y] (add' x y))
-  ([x y & more] (reduce add' (add' x y) more)))
+  ([x y] (-add' x y))
+  ([x y & more] (reduce -add' (-add' x y) more)))
 
 (defn *
   "Returns the product of the arguments. Doesn't auto-promote longs."
   ([x] x)
-  ([x y] (multiply x y))
-  ([x y & more] (reduce multiply (multiply x y) more)))
+  ([x y] (-mul x y))
+  ([x y & more] (reduce -mul (-mul x y) more)))
 
 (defn *'
   "Returns the product of the arguments. Supports arbitrary precision."
   ([x] x)
-  ([x y] (multiply' x y))
-  ([x y & more] (reduce multiply' (multiply' x y) more)))
+  ([x y] (-mul' x y))
+  ([x y & more] (reduce -mul' (-mul' x y) more)))
 
 (defn -
   "Subtracts the arguments. Doesn't auto-promote longs."
-  ([x] (minus 0 x))
-  ([x y] (minus x y))
-  ([x y & more] (reduce minus (minus x y) more)))
+  ([x] (-sub 0 x))
+  ([x y] (-sub x y))
+  ([x y & more] (reduce -sub (-sub x y) more)))
 
 (defn -'
   "Subtracts the arguments. Supports arbitrary precision."
-  ([x] (minus' 0 x))
-  ([x y] (minus' x y))
-  ([x y & more] (reduce minus' (minus' x y) more)))
+  ([x] (-sub' 0 x))
+  ([x y] (-sub' x y))
+  ([x y & more] (reduce -sub' (-sub' x y) more)))
 
 (defn /
   "Divides the arguments"
-  ([x] (divide 1 x))
-  ([x y] (divide x y))
-  ([x y & more] (reduce divide (divide x y) more)))
+  ([x] (-div 1 x))
+  ([x y] (-div x y))
+  ([x y & more] (reduce -div (-div x y) more)))
 
 (defn bit-or
   "Returns a bitwise or"
@@ -285,7 +285,7 @@
 
 (defn bit-test
   "Test a bit of x at index n"
-  [x n] (if (equiv? (bit-and- x (bit-shift-left 1 n)) 0) false true))
+  [x n] (if (-equiv? (bit-and- x (bit-shift-left 1 n)) 0) false true))
 
 (defn bit-set
   "Sets a bit of x at index n"
@@ -307,66 +307,66 @@
 (defn =
   "Returns true if the arguments are equal"
   ([x] true)
-  ([x y] (equals? x y))
-  ([x y & more] (if (equals? x y)
+  ([x y] (-equals? x y))
+  ([x y & more] (if (-equals? x y)
                   (if (next more)
                     (recur y (first more) (next more))
-                    (equals? y (first more)))
+                    (-equals? y (first more)))
                   false)))
   
 (defn ==
   "Returns true if the arguments are numerically equal"
   ([x] true)
-  ([x y] (equiv? x y))
-  ([x y & more] (if (equiv? x y)
+  ([x y] (-equiv? x y))
+  ([x y & more] (if (-equiv? x y)
                   (if (next more)
                     (recur y (first more) (next more))
-                    (equiv? y (first more)))
+                    (-equiv? y (first more)))
                   false)))
 
 (defn <
   "Returns true if the arguments are in ascending order"
   ([x] true)
-  ([x y] (lt x y))
-  ([x y & more] (if (lt x y)
+  ([x y] (-lt x y))
+  ([x y & more] (if (-lt x y)
                   (if (next more)
                     (recur y (first more) (next more))
-                    (lt y (first more)))
+                    (-lt y (first more)))
                   false)))
 
 (defn >
   "Returns true if the arguments are in descending order"
   ([x] true)
-  ([x y] (gt x y))
-  ([x y & more] (if (gt x y)
+  ([x y] (-gt x y))
+  ([x y & more] (if (-gt x y)
                   (if (next more)
                     (recur y (first more) (next more))
-                    (gt y (first more)))
+                    (-gt y (first more)))
                   false)))
 
 (defn <=
   ([x] true)
-  ([x y] (le x y))
-  ([x y & more] (if (le x y)
+  ([x y] (-le x y))
+  ([x y & more] (if (-le x y)
                   (if (next more)
                     (recur y (first more) (next more))
-                    (le y (first more)))
+                    (-le y (first more)))
                   false)))
 
 (defn >=
   ([x] true)
-  ([x y] (ge x y))
-  ([x y & more] (if (ge x y)
+  ([x y] (-ge x y))
+  ([x y & more] (if (-ge x y)
                   (if (next more)
                     (recur y (first more) (next more))
-                    (ge y (first more)))
+                    (-ge y (first more)))
                   false)))
 
 (defn not=
   "Returns true if the arguments are not equal"
   ([x] false)
-  ([x y] (not (equals? x y)))
-  ([x y & more] (not (apply equals? x y more))))
+  ([x y] (not (-equals? x y)))
+  ([x y & more] (not (apply -equals? x y more))))
 
 (macro when (fn [form]
               `(if ~(cadr form) (do ~@(cddr form)))))

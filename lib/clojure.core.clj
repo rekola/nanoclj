@@ -43,7 +43,7 @@
 
 (defn seq?
   "Returns true if coll is a Sequence"
-  [coll] (or (instance? clojure.lang.Cons coll) (instance? clojure.lang.LazySeq coll) (equals? (-bit-and (-get-cell-flags coll) 1024) 1024)))
+  [coll] (or (instance? clojure.lang.Cons coll) (instance? clojure.lang.LazySeq coll) (-equals? (-bit-and (-get-cell-flags coll) 1024) 1024)))
 
 (defn seqable?
   "Returns true if coll supports seq"
@@ -56,7 +56,7 @@
 
 (defn realized?
   "Returns true if Delay or LazySeq has been realized"
-  [x] (equals? (-bit-and (-get-cell-flags x) 2048) 2048))
+  [x] (-equals? (-bit-and (-get-cell-flags x) 2048) 2048))
 
 (defn closure?
   "Returns true if argument is a closure. Note, a macro object is also a closure."
@@ -293,16 +293,16 @@
 
 (def range (fn ([]               (iterate inc 0))
                ([end]            (range 0 end))
-               ([start end]      (if (ge start end) '() (cons start (lazy-seq (range (inc start) end)))))
-     	       ([start end step] (if (ge start end) '() (cons start (lazy-seq (range (+ start step) end step)))))
+               ([start end]      (if (-ge start end) '() (cons start (lazy-seq (range (inc start) end)))))
+     	       ([start end step] (if (-ge start end) '() (cons start (lazy-seq (range (+ start step) end step)))))
              ))
 
 (defn doall [seq] (if (empty? seq) '() (cons (first seq) (doall (rest seq)))))
 (defn dorun [seq] (if (empty? seq) nil (recur (rest seq))))
 
-(defn take [n coll] (if (or (le n 0) (empty? coll)) '() (cons (first coll) (lazy-seq (take (dec n) (rest coll))))))
+(defn take [n coll] (if (or (-le n 0) (empty? coll)) '() (cons (first coll) (lazy-seq (take (dec n) (rest coll))))))
 
-(defn drop [n coll] (if (le n 0) coll (recur (dec n) (rest coll))))
+(defn drop [n coll] (if (-le n 0) coll (recur (dec n) (rest coll))))
 
 (def map
   "Returns a lazy sequence with each element mapped using f"
@@ -678,8 +678,8 @@
                     (pred (first coll)) false
                     :else (recur pred (rest coll))))
 
-(defn true? [x] (equals? x true))
-(defn false? [x] (equals? x false))
+(defn true? [x] (-equals? x true))
+(defn false? [x] (-equals? x false))
 
 ; Collections
 
