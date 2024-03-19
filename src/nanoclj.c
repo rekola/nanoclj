@@ -9945,6 +9945,9 @@ static inline void assign_proc(nanoclj_t * sc, nanoclj_cell_t * ns, enum nanoclj
   meta = assoc(sc, meta, sc->NAME, x);
   meta = assoc(sc, meta, sc->DOC, mk_string(sc, i->doc));
   meta = assoc(sc, meta, sc->FILE_KW, mk_string(sc, __FILE__));
+  if (i->name[0] == '-') {
+    meta = assoc(sc, meta, sc->PRIVATE, mk_boolean(true));
+  }
   intern_with_meta(sc, ns, x, y, meta);
 }
 

@@ -175,7 +175,7 @@
 ; (macro (my-cond form) (if (empty? (cdr form)) '() (cons 'if (cons (cadr form) (cons (caddr form) (my-cond (cdddr form)))))))
 
 
-(def-macro (set! symbol value) `(-set '~symbol ~value))
+(def-macro (set! symbol value) `(clojure.core/-set '~symbol ~value))
 (def-macro (. instance symbol & args) `(clojure.core/-dot ~instance '~symbol ~@args))
 
 (defn foldr [f x lst]
