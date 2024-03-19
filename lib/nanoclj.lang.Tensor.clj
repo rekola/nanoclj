@@ -1,6 +1,7 @@
 (ns nanoclj.lang.Tensor
   "A class that represents tensors"
-  (:gen-class))
+  (:gen-class)
+  (:refer-clojure :only (defn)))
 
 (def tensor nanoclj.lang.Tensor)
 

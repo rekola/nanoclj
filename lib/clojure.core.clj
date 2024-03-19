@@ -977,6 +977,14 @@
   "Returns the var-map of namespace ns"
   [ns] (first ns))
 
+(defn ns-refers
+  "Returns the refers of ns"
+  [ns] (into {} (filter #( not= (:ns (meta (second %))) ns) (first ns))))
+
+(defn ns-publics
+  "Returns the refers of ns"
+  [ns] (into {} (filter #( = (:ns (meta (second %))) ns) (first ns))))
+
 (defn the-ns
   "Returns the namespace that the symbol x refers, or x itself, if x is a namespae"
   [x] (if (isa? clojure.lang.Namespace x)

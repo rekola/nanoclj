@@ -1,6 +1,7 @@
 (ns java.lang.Short
   "A 16-bit integer"
-  (:gen-class))
+  (:gen-class)
+  (:refer-clojure :only ()))
 
 (def TYPE 3)
 (def MAX_VALUE 32767)

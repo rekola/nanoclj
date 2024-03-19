@@ -1,5 +1,6 @@
 (ns clojure.lang.PersistentQueue
   "A persistent queue"
-  (:gen-class))
+  (:gen-class)
+  (:refer-clojure :only ()))
 
 (def EMPTY (clojure.lang.PersistentQueue))

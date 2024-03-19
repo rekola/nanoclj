@@ -1,6 +1,7 @@
 (ns nanoclj.lang.Codepoint
   "An Unicode codepoint"
-  (:gen-class))
+  (:gen-class)
+  (:refer-clojure :only (defn = case)))
 
 (def UNASSIGNED 0)
 (def UPPERCASE_LETTER 1)
@@ -38,80 +39,80 @@
 
 (def MIN_SUPPLEMENTARY_CODE_POINT 0x100000)
 
-(defn getType
+(def getType
   "Returns the type of the Unicode character"
-  [inst] (-category inst))
-
+  clojure.core/-category)
+  
 (defn isAlphabetic
   "Returns true if codepoint is alphabetic"
-  [c] (let [cat (-category c)] (case cat
-                                 UPPERCASE_LETTER true
-                                 LOWERCASE_LETTER true
-                                 TITLECASE_LETTER true
-                                 MODIFIER_LETTER true
-                                 OTHER_LETTER true
-                                 LETTER_NUMBER true
-                                 false)))
+  [c] (let [cat (.getType c)] (case cat
+                                UPPERCASE_LETTER true
+                                LOWERCASE_LETTER true
+                                TITLECASE_LETTER true
+                                MODIFIER_LETTER true
+                                OTHER_LETTER true
+                                LETTER_NUMBER true
+                                false)))
 
 (defn isLetter
   "Returns true if codepoint is a letter"
-  [c] (let [cat (-category c)] (case cat
-                                 UPPERCASE_LETTER true
-                                 LOWERCASE_LETTER true
-                                 TITLECASE_LETTER true
-                                 MODIFIER_LETTER true
-                                 OTHER_LETTER true
-                                 false)))
+  [c] (let [cat (.getType c)] (case cat
+                                UPPERCASE_LETTER true
+                                LOWERCASE_LETTER true
+                                TITLECASE_LETTER true
+                                MODIFIER_LETTER true
+                                OTHER_LETTER true
+                                false)))
 
 (defn isLetterOrDigit
   "Returns true if codepoint is a letter"
-  [c] (let [cat (-category c)] (case cat
-                                 UPPERCASE_LETTER true
-                                 LOWERCASE_LETTER true
-                                 TITLECASE_LETTER true
-                                 DECIMAL_DIGIT_NUMBER true
-                                 false)))
+  [c] (let [cat (.getType c)] (case cat
+                                UPPERCASE_LETTER true
+                                LOWERCASE_LETTER true
+                                TITLECASE_LETTER true
+                                DECIMAL_DIGIT_NUMBER true
+                                false)))
 
 (defn isSpaceChar
   "Returns true if codepoint is a space charater"
-  [c] (let [cat (-category c)] (case cat
-                                 SPACE_SEPARATOR true
-                                 LINE_SEPARATOR true
-                                 PARAGRAPH_SEPARATOR true
-                                 false)))
+  [c] (let [cat (.getType c)] (case cat
+                                SPACE_SEPARATOR true
+                                LINE_SEPARATOR true
+                                PARAGRAPH_SEPARATOR true
+                                false)))
 
 (defn isWhitespace
   "Returns true if codepoint is whitespace"
-  [c] (let [cat (-category c)] (case cat
-                                 SPACE_SEPARATOR true
-                                 LINE_SEPARATOR true
-                                 PARAGRAPH_SEPARATOR true
-                                 CONTROL true
-                                 false)))
+  [c] (let [cat (.getType c)] (case cat
+                                SPACE_SEPARATOR true
+                                LINE_SEPARATOR true
+                                PARAGRAPH_SEPARATOR true
+                                CONTROL true
+                                false)))
 
 (defn isDigit
   "returns true if codepoint is a digit"
-  [c] (= (-category c) DECIMAL_DIGIT_NUMBER))
+  [c] (= (.getType c) DECIMAL_DIGIT_NUMBER))
 
 (defn isISOControl
   "returns true if codepoint is a digit"
-  [c] (= (-category c) CONTROL))
+  [c] (= (.getType c) CONTROL))
 
 (defn isLowerCase
   "Returns true if codepoint is in lower case"
-  [c] (= (-category c) LOWERCASE_LETTER))
+  [c] (= (.getType c) LOWERCASE_LETTER))
 
 (defn isUpperCase
   "Returns true if codepoint is in upper case"
-  [c] (= (-category c) UPPERCASE_LETTER))
+  [c] (= (.getType c) UPPERCASE_LETTER))
 
 (defn isTitleCase
   "Returns true if codepoint is in title case"
-  [c] (= (-category c) TITLECASE_LETTER))
+  [c] (= (.getType c) TITLECASE_LETTER))
 
 (defn isDefined
   "Returns true if the codepoint has been assigned a meaning in Unicode"
-  [c] (not= (-category c) UNASSIGNED))
+  [c] (not= (.getType c) UNASSIGNED))
 
 (defn isValidCodePoint
   "Returns true if codepoint is valid"
@@ -125,14 +126,14 @@
   "Returns true if the codepoint belongs to the Basic Multilingual Plane"
   [c] (and (>= 0 c) (<= c 0xffff)))
 
-(defn toTitleCase
+(def toTitleCase
   "Returns the codepoint in title case"
-  [c] (-totitle c))
+  clojure.core/-totitle)
 
-(defn toUpperCase
+(def toUpperCase
   "Returns the codepoint in upper case"
-  [c] (-toupper c))
+  clojure.core/-toupper)
 
 (defn toLowerCase
   "Returns the codepoint in lower case"
-  [c] (-tolower c))
+  clojure.core/-tolower)

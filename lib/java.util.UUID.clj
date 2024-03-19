@@ -1,6 +1,7 @@
 (ns java.util.UUID
   "A class for representing Universally Unique Identifiers"
-  (:gen-class))
+  (:gen-class)
+  (:refer-clojure :only (defn bit-and unsigned-bit-shift-right bit-shift-right aget aset . bit-or -)))
 
 (defn randomUUID
   "Creates a random UUID"

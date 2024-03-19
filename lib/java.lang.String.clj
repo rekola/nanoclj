@@ -1,6 +1,7 @@
 (ns java.lang.String
   "A class that represents a UTF8 string"
-  (:gen-class))
+  (:gen-class)
+  (:refer-clojure :only (defn empty? count < = bit-or)))
 
 (def UTF8PROC_COMPOSE 4)
 (def UTF8PROC_IGNORE 32)
@@ -13,15 +14,15 @@
 
 (defn getBytes
   "Returns the string as a byte array"
-  [s] (char-array s))
+  [s] (clojure.core/char-array s))
 
 (defn toLowerCase
   "Returns lower case version of the string"
-  [s] (utf8map s (bit-or UTF8PROC_IGNORE UTF8PROC_STRIPCC UTF8PROC_CASEFOLD UTF8PROC_COMPOSE)))
+  [s] (clojure.core/-utf8map s (bit-or UTF8PROC_IGNORE UTF8PROC_STRIPCC UTF8PROC_CASEFOLD UTF8PROC_COMPOSE)))
 
 (defn toUpperCase
   "Returns upper case version of the string"
-  [s] (clojure.core/maps -toupper s))
+  [s] (clojure.core/maps clojure.core/-toupper s))
 
 (defn isEmpty
   "Returns true if the string is empty"

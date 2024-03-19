@@ -1,14 +1,15 @@
 (ns java.io.Reader
   "A reader"
-  (:gen-class))
+  (:gen-class)
+  (:refer-clojure :only (defn)))
 
-(defn close
-  "Closes the Reader"
-  [rdr] (-close rdr))
+(def close
+  "Closes a Reader"
+  clojure.core/-close)
 
-(defn read
-  "Read a single character"
-  [rdr] (-read rdr))
+(def read
+  "Reads a single character"
+  clojure.core/-read)
 
 (defn readLine
   [this] (let [c (.read this)]
@@ -17,4 +18,4 @@
              (loop [c c acc ""]
                (if (or (= c -1) (= c 10))
                  acc
-                 (recur (.read this) (conj acc (clojure.core/char c))))))))
+                 (recur (.read this) (clojure.core/conj acc (clojure.core/char c))))))))

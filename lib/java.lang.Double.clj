@@ -1,6 +1,7 @@
 (ns java.lang.Double
   "A 64-bit floating point number"
-  (:gen-class))
+  (:gen-class)
+  (:refer-clojure :only (defn = not= == double < > +)))
 
 (def TYPE 6)
 (def BYTES 8)
@@ -40,7 +41,7 @@
 
 (defn compare
   "Compares two doubles"
-  [d1 d2] (compare d1 d2))
+  [d1 d2] (clojure.core/compare d1 d2))
 
 (defn min
   "Returns the smaller of d1 and d2"

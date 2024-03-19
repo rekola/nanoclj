@@ -154,6 +154,7 @@ Windows support is in progress.
   - memoize
   - condp
   - load
+  - replace
   - when-let, letfn, if-let, if-some
   - reduced, reduced?
   - with-local-vars, var-set, find-var, alter-var-root, declare, binding, with-bindings, defonce
@@ -170,7 +171,7 @@ Windows support is in progress.
   - unchecked-byte, unchecked-short, unchecked-char, unchecked-int, unchecked-long, unchecked-float, unchecked-double
   - vary-meta, alter-meta!, reset-meta!
   - aset-char, aset-long, amap, areduce, to-array-2d, make-array, long-array, bytes?
-  - remove-ns, create-ns, ns-imports, ns-interns, ns-refers, ns-publics, ns-aliases, ns-name, all-ns, ns-unalias, ns-unmap
+  - remove-ns, create-ns, ns-imports, ns-interns, ns-aliases, ns-name, all-ns, ns-unalias, ns-unmap
 - clojure.java.io
   - resource
   - make-parents

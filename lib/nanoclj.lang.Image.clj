@@ -1,6 +1,7 @@
 (ns nanoclj.lang.Image
   "A class that represents images"
-  (:gen-class))
+  (:gen-class)
+  (:refer-clojure :only (defn)))
 
 (def TYPE_CUSTOM 0)
 (def TYPE_BYTE_GRAY 1)

@@ -260,6 +260,9 @@ extern "C" {
     nanoclj_val_t PRIVATE;	  /* :private */
     nanoclj_val_t GEN_CLASS;	  /* :gen-class */
     nanoclj_val_t EXTENDS;        /* :extends */
+    nanoclj_val_t REFER_CLOJURE;  /* :refer-clojure */
+    nanoclj_val_t ONLY;           /* :only */
+    nanoclj_val_t EXCLUDE;        /* :exclude */
     nanoclj_val_t JAVA_CLASS_PATH;/* java.class.path */
     
     nanoclj_val_t DOT;		  /* . */

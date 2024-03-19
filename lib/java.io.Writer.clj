@@ -1,7 +1,8 @@
 (ns java.io.Writer
   "A writer"
-  (:gen-class))
+  (:gen-class)
+  (:refer-clojure :only ()))
 
-(defn close
+(def close
   "Closes the Writer"
-  [w] (-close w))
+  clojure.core/-close)

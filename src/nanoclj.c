@@ -4021,6 +4021,10 @@ static inline nanoclj_val_t def_symbol(nanoclj_t * sc, const char *name) {
   return def_symbol_from_sv(sc, T_SYMBOL, mk_strview(0), mk_strview(name));
 }
 
+static inline nanoclj_val_t def_qualified_symbol(nanoclj_t * sc, const char * ns, const char *name) {
+  return def_symbol_from_sv(sc, T_SYMBOL, mk_strview(ns), mk_strview(name));
+}
+
 static inline bool set_var(nanoclj_t * sc, nanoclj_cell_t * var, nanoclj_val_t state) {
   nanoclj_val_t old_state = get_indexed_value(var, 1);
   set_indexed_value(var, 1, state);
@@ -4189,19 +4193,22 @@ static inline nanoclj_cell_t * find_ns(nanoclj_t * sc, nanoclj_val_t name) {
   }
 }
 
-static inline void refer(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_cell_t * source_ns) {
+static inline void refer(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_cell_t * source_ns, nanoclj_cell_t * only, nanoclj_cell_t * exclude) {
   nanoclj_val_t nsv = mk_pointer(source_ns);
   nanoclj_cell_t * target_map = decode_pointer(_car_unchecked(ns));
   nanoclj_cell_t * source_map = decode_pointer(_car_unchecked(source_ns));
 
   if (_is_small(source_map)) {
     nanoclj_val_t sym = source_map->_small_tensor.vals[0];
-    nanoclj_val_t var = source_map->_small_tensor.vals[1];
-    nanoclj_cell_t * meta = decode_pointer(get_indexed_value(decode_pointer(var), 2));
-    if (meta &&
-	is_false(find(sc, meta, sc->PRIVATE, mk_boolean(false))) &&
-	equals(sc, find(sc, meta, sc->NS, mk_nil()), nsv)) {
-      target_map = assoc(sc, target_map, sym, var);
+    if ((!only || !is_nil(find(sc, only, sym, mk_nil()))) &&
+	(!exclude || is_nil(find(sc, exclude, sym, mk_nil())))) {
+      nanoclj_val_t var = source_map->_small_tensor.vals[1];
+      nanoclj_cell_t * meta = decode_pointer(get_indexed_value(decode_pointer(var), 2));
+      if (meta &&
+	  is_false(find(sc, meta, sc->PRIVATE, mk_boolean(false))) &&
+	  equals(sc, find(sc, meta, sc->NS, mk_nil()), nsv)) {
+	target_map = assoc(sc, target_map, sym, var);
+      }
     }
   } else {
     nanoclj_tensor_t * tensor = source_map->_collection.tensor;
@@ -4209,12 +4216,15 @@ static inline void refer(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_cell_t * s
     for (size_t i = 0; i < num_buckets; i++) {
       if (!tensor_hash_is_unassigned(tensor, i)) {
 	nanoclj_val_t sym = tensor_get_2d(tensor, 0, i);
-	nanoclj_val_t var = tensor_get_2d(tensor, 1, i);
-	nanoclj_cell_t * meta = decode_pointer(get_indexed_value(decode_pointer(var), 2));
-	if (meta &&
-	    is_false(find(sc, meta, sc->PRIVATE, mk_boolean(false))) &&
-	    equals(sc, find(sc, meta, sc->NS, mk_nil()), nsv)) {
-	  target_map = assoc(sc, target_map, sym, var);
+	if ((!only || !is_nil(find(sc, only, sym, mk_nil()))) &&
+	    (!exclude || is_nil(find(sc, exclude, sym, mk_nil())))) {
+	  nanoclj_val_t var = tensor_get_2d(tensor, 1, i);
+	  nanoclj_cell_t * meta = decode_pointer(get_indexed_value(decode_pointer(var), 2));
+	  if (meta &&
+	      is_false(find(sc, meta, sc->PRIVATE, mk_boolean(false))) &&
+	      equals(sc, find(sc, meta, sc->NS, mk_nil()), nsv)) {
+	    target_map = assoc(sc, target_map, sym, var);
+	  }
 	}
       }
     }
@@ -9237,6 +9247,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       nanoclj_val_t ns_sym = first(sc, code);
       nanoclj_val_t doc = mk_nil();      
       bool gen_class = false;
+      nanoclj_cell_t * only = NULL;
+      nanoclj_cell_t * exclude = NULL;
       nanoclj_cell_t * parent_class = sc->Object;
 
       code = next(sc, code);
@@ -9262,6 +9274,21 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 		parent_class = find_ns(sc, first(sc, c));
 	      }
 	    }
+	  } else if (key.as_long == sc->REFER_CLOJURE.as_long) {
+	    for (; c; c = next(sc, c)) {
+	      nanoclj_val_t key = first(sc, c);
+	      c = next(sc, c);
+	      nanoclj_val_t arg = first(sc, c);
+	      if (!is_emptylist(arg) && !is_list(arg)) {
+		Error_0(sc, "Syntax error");
+	      }
+	      nanoclj_cell_t * s = mk_collection(sc, T_HASHSET, decode_pointer(arg));
+	      if (key.as_long == sc->ONLY.as_long) {
+		only = s;
+	      } else if (key.as_long == sc->EXCLUDE.as_long) {
+		exclude = s;
+	      }
+	    }
 	  }
 	}
       }
@@ -9276,12 +9303,12 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  ns = def_namespace_with_sym(sc, ns_sym, meta);
 	}
       }
-      if (ns != sc->core_ns) refer(sc, ns, sc->core_ns);
+      if (ns != sc->core_ns) refer(sc, ns, sc->core_ns, only, exclude);
       nanoclj_val_t ns2 = mk_pointer(ns);
       intern(sc, sc->core_ns, sc->NS_SYM, ns2);
       bool r = _s_return(sc, ns2);
       sc->envir = ns;
-      return r;      
+      return r;
     }
 
   case OP_IN_NS:
@@ -9483,7 +9510,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	nanoclj_throw(sc, mk_runtime_exception(sc, msg));
 	return false;
       }
-      refer(sc, get_current_ns(sc), ns);
+      refer(sc, get_current_ns(sc), ns, NULL, NULL);
       s_return(sc, mk_nil());
     }
 
@@ -10214,7 +10241,7 @@ bool nanoclj_init(nanoclj_t * sc) {
   sc->DO = def_symbol(sc, "do");
   sc->QUOTE = def_symbol(sc, "quote");
   sc->DEREF = def_symbol(sc, "deref");
-  sc->VAR = def_symbol(sc, "var");
+  sc->VAR = def_qualified_symbol(sc, "clojure.core", "var");
   sc->QQUOTE = def_symbol(sc, "quasiquote");
   sc->UNQUOTE = def_symbol(sc, "unquote");
   sc->UNQUOTESP = def_symbol(sc, "unquote-splicing");
@@ -10281,9 +10308,12 @@ bool nanoclj_init(nanoclj_t * sc) {
   sc->PRIVATE = def_keyword(sc, "private");
   sc->GEN_CLASS = def_keyword(sc, "gen-class");
   sc->EXTENDS = def_keyword(sc, "extends");
+  sc->REFER_CLOJURE = def_keyword(sc, "refer-clojure");
+  sc->ONLY = def_keyword(sc, "only");
+  sc->EXCLUDE = def_keyword(sc, "exclude");
   sc->JAVA_CLASS_PATH = mk_string(sc, "java.class.path");
   
-  sc->DOT = def_symbol(sc, ".");
+  sc->DOT = def_qualified_symbol(sc, "clojure.core", ".");
   sc->CATCH = def_symbol(sc, "catch");
   sc->FINALLY = def_symbol(sc, "finally");
 

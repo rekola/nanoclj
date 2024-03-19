@@ -176,7 +176,7 @@
 
 
 (def-macro (set! symbol value) `(-set '~symbol ~value))
-(def-macro (. instance symbol & args) `(-dot ~instance '~symbol ~@args))
+(def-macro (. instance symbol & args) `(clojure.core/-dot ~instance '~symbol ~@args))
 
 (defn foldr [f x lst]
   (if (empty? lst)
@@ -187,7 +187,7 @@
   (if (empty? clauses) `(throw (new RuntimeException (str "No matching clause: " ~e)))
       (if (empty? (rest clauses))
         (first clauses)
-        `(if (equals? ~e ~(car clauses))
+        `(if (clojure.core/equals? ~e ~(car clauses))
            ~(cadr clauses)
            (case ~e ~@(cddr clauses))))))
   

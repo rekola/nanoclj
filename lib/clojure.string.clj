@@ -1,5 +1,6 @@
 (ns clojure.string
-  "String operations")
+  "String operations"
+  (:refer-clojure :exclude (replace reverse)))
 
 (defn blank?
   "Returns true if the argument string is blank"

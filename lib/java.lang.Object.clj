@@ -1,6 +1,7 @@
 (ns java.lang.Object
   "A base object for everything else"
-  (:gen-class))
+  (:gen-class)
+  (:refer-clojure :only (defn)))
 
 (def TYPE 7)
 

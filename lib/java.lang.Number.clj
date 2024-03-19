@@ -1,6 +1,7 @@
 (ns java.lang.Number
   "Superclass for all numeric types"
-  (:gen-class :extends java.lang.Object))
+  (:gen-class :extends java.lang.Object)
+  (:refer-clojure :only (defn)))
 
 (defn byteValue
   "Converts to byte"
