@@ -2,16 +2,16 @@
   "The REPL")
 (require 'clojure.string 'clojure.java.io 'linenoise)
 
-(defn ^:private autocomplete-strings
+(defn- autocomplete-strings
   [prefix s strings] (loop [acc [] ss strings]
                        (cond (empty? ss) acc
                              (.startsWith (first ss) s) (recur (conj acc (str prefix (first ss))) (rest ss))
                              :else (recur acc (rest ss)))))
 
-(defn ^:private autocomplete-syntax
+(defn- autocomplete-syntax
   [prefix s] (autocomplete-strings prefix s [ "if" "let" "fn" "quote" "def" "do" "cond" "lazy-seq" "and" "or" "macro" "try" "loop" "dotimes" "thread" ] ))
 
-(defn ^:private autocomplete-envir
+(defn- autocomplete-envir
   [envir prefix s coll] (if (nil? envir) coll
                             (let [f (first envir)
                                   r (autocomplete-envir (next envir) prefix s coll)
@@ -21,13 +21,13 @@
                                       (.startsWith (str (key (first f))) s) (recur (conj r (str prefix (key (first f)))) (rest f))
                                       :else (recur r (rest f)))))))
 
-(defn ^:private autocomplete-expr
+(defn- autocomplete-expr
   [prefix s] (autocomplete-envir *env* prefix s (autocomplete-syntax prefix s)))
 
-(defn ^:private autocomplete-str
+(defn- autocomplete-str
   [prefix s] (autocomplete-strings prefix s [ "http://" "https://" "ftp://" ]))
 
-(defn ^:private add-space
+(defn- add-space
   [completions] (if (= (count completions) 1) [ (str (first completions) \space ) ] completions))
 
 (defn *autocomplete-hook*
@@ -53,7 +53,7 @@
   "Returns a list of functions whose name contains str"
   [pattern] (filter (fn [s] (clojure.string/includes? (str s) pattern)) (ns-interns root)))
 
-(defn ^:private draw-banner
+(defn- draw-banner
   [label version] (if (*out* :graphics)
                     (let [v-margin 5
                           h-margin 0

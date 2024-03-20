@@ -148,20 +148,6 @@
 
 (def -source (fn [x] (if (or (closure? x) (macro? x)) (cons 'fn (first x)) nil)))
 
-(def macroexpand-1
-  "Expands the form if it is a macro form, and returns it otherwise."
-  (fn [form] ((eval (-source (eval (first form)))) form)))
-
-(def macroexpand
-  "Expands the for until it is no longer in a macro form"
-  (fn [form]
-    (let [fs (eval (first form))]
-      (if (macro? fs)
-        ((eval (-source fs)) form)
-        form))))
-
-; (def *compile-hook* macroexpand)
-
 (def-macro (defn name & args) (if (string? (car args))
                                 `(def ~name ~(car args) (fn ~(cadr args) ~@(cddr args)))
                                 `(def ~name (fn ~(car args) ~@(cdr args)))))

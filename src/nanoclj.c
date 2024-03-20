@@ -5609,8 +5609,6 @@ static inline nanoclj_cell_t * reverse_in_place(nanoclj_cell_t * p, nanoclj_cell
     sc->op = (a);                                           \
     return true; END
 
-#define s_return(sc,a) return _s_return(sc,a)
-
 static inline bool _s_return(nanoclj_t * sc, nanoclj_val_t a) { 
   sc->value = a;
   if (sc->dump <= 0) {
@@ -5629,6 +5627,9 @@ static inline bool _s_return(nanoclj_t * sc, nanoclj_val_t a) {
     return false;
   }
 }
+
+#define s_return(sc,a) return _s_return(sc,a)
+#define s_retbool(tf)    s_return(sc, mk_boolean(tf))
 
 static inline void s_rewind(nanoclj_t * sc) {
   while (sc->dump > 0) {
@@ -5707,12 +5708,12 @@ static inline nanoclj_cell_t * get_current_ns(nanoclj_t * sc) {
   return var ? decode_pointer(get_indexed_value(var, 1)) : NULL;
 }
 
-static nanoclj_val_t get_out_port(nanoclj_t * sc) {
+static inline nanoclj_val_t get_out_port(nanoclj_t * sc) {
   nanoclj_cell_t * var = get_var_in_ns(sc->core_ns, sc->OUT_SYM);
   return var ? get_indexed_value(var, 1) : mk_nil();
 }
 
-static nanoclj_val_t get_in_port(nanoclj_t * sc) {
+static inline nanoclj_val_t get_in_port(nanoclj_t * sc) {
   nanoclj_cell_t * var = get_var_in_ns(sc->core_ns, sc->IN_SYM);
   return var ? get_indexed_value(var, 1) : mk_nil();
 }
@@ -5734,8 +5735,6 @@ static inline void dump_stack_free(nanoclj_t * sc) {
   sc->dump = 0;
   sc->dump_size = 0;
 }
-
-#define s_retbool(tf)    s_return(sc, mk_boolean(tf))
 
 static inline bool destructure(nanoclj_t * sc, nanoclj_cell_t * binding, nanoclj_cell_t * y, size_t num_args, bool first_level, bool is_recur) {
   size_t n = get_size(binding);
@@ -6898,25 +6897,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     s_goto(sc, OP_EVAL);
 
   case OP_LAMBDA:              /* lambda */
-    /* If the hook is defined, apply it to sc->code, otherwise
-       set sc->value fall thru */
     {
-      nanoclj_cell_t * var = get_var_in_ns(sc->core_ns, sc->COMPILE_HOOK);
-      if (var) {
-        s_save(sc, OP_LAMBDA1, sc->args, sc->code);
-        sc->args = cons(sc, sc->code, NULL);
-        sc->code = get_indexed_value(var, 1);
-        s_goto(sc, OP_APPLY);
-      } else {
-        sc->value = sc->code;
-        /* Fallthru */
-      }
-    }
-
-  case OP_LAMBDA1:
-    {
-      x = sc->value;
-      
+      x = sc->code;
       nanoclj_val_t name = mk_nil();
       if (is_symbol(car(x)) && is_vector(cadr(x))) {
 	name = car(x);
@@ -6925,7 +6907,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	name = car(x);
 	x = mk_pointer(cdr(x));
       }
-
+      
       /* Create env frame for the closure, and add recursion point and anonymous fn name */
       nanoclj_cell_t * env = get_cell(sc, T_LIST, 0, mk_emptylist(), sc->envir, NULL);
       if (!is_nil(name)) {
@@ -10255,7 +10237,6 @@ bool nanoclj_init(nanoclj_t * sc) {
   sc->ARG_REST = def_symbol(sc, "%&");
 
   sc->TAG_HOOK = def_symbol(sc, "*default-data-reader-fn*");
-  sc->COMPILE_HOOK = def_symbol(sc, "*compile-hook*");
   sc->AUTOCOMPLETE_HOOK = def_symbol(sc, "*autocomplete-hook*");
   sc->FLUSH_ON_NEWLINE = def_symbol(sc, "*flush-on-newline*");
   sc->IN_SYM = def_symbol(sc, "*in*");

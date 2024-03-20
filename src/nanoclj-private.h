@@ -204,7 +204,6 @@ extern "C" {
     nanoclj_val_t ARG_REST;	  	  /* rest args in literal functions */
     
     nanoclj_val_t TAG_HOOK;           /* *default-data-reader-fn* */
-    nanoclj_val_t COMPILE_HOOK;       /* *compile-hook* */
     nanoclj_val_t AUTOCOMPLETE_HOOK; /* *autocomplete-hook* */
     nanoclj_val_t FLUSH_ON_NEWLINE; /* *flush-on-newline* */
     nanoclj_val_t IN_SYM;	  /* *in* */

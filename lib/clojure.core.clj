@@ -489,7 +489,7 @@
                              :class [ 0.55 0.82 0.83 ]
                              })
 
-(defn ^:private pr-inline
+(defn- pr-inline
   "Prints x to *out* in a format understandable by the Reader"
   [print-fn x] (cond (map-entry? x) (do (-print \[)
                                         (pr-inline print-fn (key x))
@@ -566,12 +566,12 @@
                                                              (-pr (nanoclj.art/plot-gradient x)))
                      :else (print-fn nil x)))
 
-(defn ^:private pr-meta
+(defn- pr-meta
   [print-fn x sep] (when *print-meta*
                      (let [m (meta x)]
                        (when m (print \^) (pr-inline print-fn m) (print sep)))))
 
-(defn ^:private pr-block
+(defn- pr-block
   [print-fn x]
   (if (image? x) (let [ws *window-size*
                        f *window-scale-factor*
@@ -599,7 +599,7 @@
   "Prints args into *out* using print followed by a newline"
   [& more] (apply print more) (newline))
 
-(defn ^:private pr-with-class
+(defn- pr-with-class
   [class v] (let [attr (get print-styles class)]
               (if attr
                 (do
@@ -647,7 +647,7 @@
 (defn read-string [s] (with-in-str s (read)))
 (defn load-string [s] (load-reader (java.io.Reader (char-array s))))
 
-(defn ^:private str-print
+(defn- str-print
   [& more] (run! #( if (coll? %) (pr-block (fn [class v] (-pr v)) %) (-str %) ) more))
 
 (defn str
@@ -1008,7 +1008,23 @@
 
 (defn refer-clojure
   [] (refer 'clojure.core))
-      
+
+; Macros
+
+(def macroexpand-1
+  "Expands the form if it is a macro form, and returns it otherwise."
+  (fn [form] ((eval (-source (eval (first form)))) form)))
+
+(def macroexpand
+  "Expands the for until it is no longer in a macro form"
+  (fn [form]
+    (if (list? form)
+      (let [fs (eval (first form))]
+        (if (macro? fs)
+          ((eval (-source fs)) form)
+          form))
+      form)))
+
 ; REPL
 
 (def ^:dynamic *1)
