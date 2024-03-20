@@ -237,7 +237,8 @@
 
 (t/is (= ((juxt numerator denominator) 2/3) [ 2 3 ]))
 (t/is (= (interleave [ :a :b :c ] (range)) '( :a 0 :b 1 :c 2 )))
-
+(t/is (= ((fnil identity :a) 1) 1))
+(t/is (= ((fnil identity :a) nil) :a))
                                         ; Namespaces
 
 (t/is (resolve 'clojure.string/upper-case))

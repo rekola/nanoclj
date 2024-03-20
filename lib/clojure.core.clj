@@ -296,11 +296,12 @@
                                              (pred (first coll)) (recur (rest coll) (conj acc (first coll)))
                                              :else (recur (rest coll) acc))))
 
-(def range (fn ([]               (iterate inc' 0))
-               ([end]            (range 0 end))
-               ([start end]      (if (-ge start end) '() (cons start (lazy-seq (range (inc' start) end)))))
-     	       ([start end step] (if (-ge start end) '() (cons start (lazy-seq (range (+ start step) end step)))))
-             ))
+(defn range
+  "Creates a lazy sequence of numbers"
+  ([]               (iterate inc' 0))
+  ([end]            (range 0 end))
+  ([start end]      (if (-ge start end) '() (cons start (lazy-seq (range (inc' start) end)))))
+  ([start end step] (if (-ge start end) '() (cons start (lazy-seq (range (+ start step) end step))))))
 
 (defn doall [seq] (if (empty? seq) '() (cons (first seq) (doall (rest seq)))))
 (defn dorun [seq] (if (empty? seq) nil (recur (rest seq))))
@@ -309,11 +310,26 @@
 
 (defn drop [n coll] (if (-le n 0) coll (recur (dec n) (rest coll))))
 
-(def map
+(defn map
   "Returns a lazy sequence with each element mapped using f"
-  (fn
-    ([f coll] (if (empty? coll) '() (cons (f (first coll)) (lazy-seq (map f (rest coll))))))
-    ([f c1 c2] (if (or (empty? c1) (empty? c2)) '() (cons (f (first c1) (first c2)) (lazy-seq (map f (rest c1) (rest c2))))))))
+  ([f coll] (if (empty? coll) '() (cons (f (first coll)) (lazy-seq (map f (rest coll))))))
+  ([f c1 c2] (if (or (empty? c1) (empty? c2)) '() (cons (f (first c1) (first c2)) (lazy-seq (map f (rest c1) (rest c2)))))))
+
+(defn fnil
+  "Creates a new function that first converts nil arguments to the provided defaul values, then calls f"
+  ([f x] (fn
+           ([a] (f (if (nil? a) x a)))
+           ([a b] (f (if (nil? a) x a) b))
+           ([a b c] (f (if (nil? a) x a) b c))
+           ([a b c & ds] (apply f (if (nil? a) x a) b c ds))))
+  ([f x y] (fn
+             ([a b] (f (if (nil? a) x a) (if (nil? b) y b)))
+             ([a b c] (f (if (nil? a) x a) (if (nil? b) y b) c))
+             ([a b c & ds] (apply f (if (nil? a) x a) (if (nil? b) y b) c ds))))
+  ([f x y z] (fn
+               ([a b] (f (if (nil? a) x a) (if (nil? b) y b)))
+               ([a b c] (f (if (nil? a) x a) (if (nil? b) y b) (if (nil? c) z c)))
+               ([a b c & ds] (apply f (if (nil? a) x a) (if (nil? b) y b) (if (nil? c) z c) ds)))))
 
 (def repeatedly (fn ([f]   (cons (f) (lazy-seq (repeatedly f))))
                     ([n f] (if (<= n 0) '() (cons (f) (lazy-seq (repeatedly (dec n) f)))))))

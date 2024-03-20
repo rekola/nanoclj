@@ -165,7 +165,6 @@ Windows support is in progress.
   - re-groups, re-matcher, re-seq, re-matches
   - assert-args
   - fnil
-  - macroexpand-all
   - trampoline
   - shuffle, random-sample
   - replace
