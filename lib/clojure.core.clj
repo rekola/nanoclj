@@ -24,9 +24,9 @@
 (defn associative? [coll] (or (instance? clojure.lang.PersistentVector x)
                               (instance? clojure.lang.APersistentMap x)))
 
-(def some?
+(defn some?
   "Returns true if the argument is not nil"
-  (fn [x] (not (identical? x nil))))
+  [x] (not (identical? x nil)))
 
 (defn sequential?
   "Returns true if coll is sequential (ordered)"
@@ -177,9 +177,11 @@
 
 (defn identity [x] x)
 
-(def some (fn [pred coll] (cond (empty? coll) false
-                                (pred (first coll)) true
-				:else (some pred (rest coll)))))
+(defn some
+  [pred coll] (cond (empty? coll) false
+                    (pred (first coll)) true
+		    :else (some pred (rest coll))))
+
 (def-macro (time body)
    `(let [ t0 (System/currentTimeMillis) ]
         (let ((e ~body))
@@ -219,23 +221,26 @@
         (pred (first coll)) (remove pred (rest coll))
         :else (cons (first coll) (remove pred (rest coll)))))
 
-(def concat (fn
-              ([] '())
-              ([x] x)
-              ([x y] (if (empty? x) y (cons (first x) (concat (rest x) y))))))
+(defn concat
+  ([] '())
+  ([x] x)
+  ([x y] (if (empty? x) y (cons (first x) (concat (rest x) y)))))
 
-(def iterate (fn [f x] (cons x (lazy-seq (iterate f (f x))))))
+(defn iterate
+  [f x] (cons x (lazy-seq (iterate f (f x)))))
 
-(def repeat (fn ([x]   (cons x (lazy-seq (repeat x))))
-                ([n x] (if (<= n 0) '() (cons x (repeat (dec n) x))))))
+(defn repeat
+  ([x]   (cons x (lazy-seq (repeat x))))
+  ([n x] (if (<= n 0) '() (cons x (repeat (dec n) x)))))
 
 (defn last
   "Returns the last element of sequence"
   [[f & r]] (if r (recur r) f))
 
-(def butlast (fn [coll] (if (next coll)
-                          (cons (first coll) (recur (next coll)))
-                          '())))
+(defn butlast
+  [coll] (if (next coll)
+           (cons (first coll) (recur (next coll)))
+           '()))
 
 (defn reverse
   "Returns the coll reversed"
@@ -284,11 +289,10 @@
 
 ; Vectors
 
-(def mapv
+(defn mapv
   "Returns a vector with each element mapped using f"
-  (fn
-    ([f coll] (loop [ coll coll acc [] ] (if (empty? coll) acc (recur (rest coll) (conj acc (f (first coll)))))))
-    ([f c1 c2] (loop [ c1 c1 c2 c2 acc [] ] (if (or (empty? c1) (empty? c2)) acc (recur (rest c1) (rest c2) (conj acc (f (first c1) (first c2)))))))))
+  ([f coll] (loop [ coll coll acc [] ] (if (empty? coll) acc (recur (rest coll) (conj acc (f (first coll)))))))
+  ([f c1 c2] (loop [ c1 c1 c2 c2 acc [] ] (if (or (empty? c1) (empty? c2)) acc (recur (rest c1) (rest c2) (conj acc (f (first c1) (first c2))))))))
 
 (defn filterv
   "Returns a vector with the elements from coll for which the pred returns true"
@@ -331,8 +335,9 @@
                ([a b c] (f (if (nil? a) x a) (if (nil? b) y b) (if (nil? c) z c)))
                ([a b c & ds] (apply f (if (nil? a) x a) (if (nil? b) y b) (if (nil? c) z c) ds)))))
 
-(def repeatedly (fn ([f]   (cons (f) (lazy-seq (repeatedly f))))
-                    ([n f] (if (<= n 0) '() (cons (f) (lazy-seq (repeatedly (dec n) f)))))))
+(defn repeatedly
+  ([f]   (cons (f) (lazy-seq (repeatedly f))))
+  ([n f] (if (<= n 0) '() (cons (f) (lazy-seq (repeatedly (dec n) f))))))
 
 ; Maps & Sets
 
@@ -408,11 +413,10 @@
                           (recur (rest ks) (m (first ks)))
                           not-found)))))
 
-(def dissoc
+(defn dissoc
   "Returns new map that does not contain the specified key. Very inefficient."
-  (fn
-    ([map] map)
-    ([map k] (reduce -conj {} (filter (fn [e] (not= (key e) k)) map)))))
+  ([map] map)
+  ([map k] (reduce -conj {} (filter (fn [e] (not= (key e) k)) map))))
 
 (defn disj
   "Removes keys from a set"
@@ -432,12 +436,11 @@
   ([m k f x y] (assoc m k (f (get m k) x y)))
   ([m k f x y z] (assoc m k (f (get m k) x y z))))
 
-(def into
+(defn into
   "Adds elements from collection from to collection to"
-  (fn
-    ([] [])
-    ([to] to)
-    ([to from] (reduce -conj to from))))
+  ([] [])
+  ([to] to)
+  ([to from] (reduce -conj to from)))
 
 (defn frequencies
   "Calculates the counts of unique elements in coll and returns them in a map"
@@ -481,7 +484,8 @@
                           (binding [*out* w]
                             (print (str content)))))
 
-(def printf (fn [& args] (-print (apply format args))))
+(defn printf
+  [& args] (-print (apply format args)))
 
 (defn newline [] (-print \newline))
 
@@ -489,8 +493,8 @@
 	              (apply println more)
                       nil))
 
-(def *print-length* nil)
-(def *print-meta* false)
+(def ^:dynamic *print-length* nil)
+(def ^:dynamic *print-meta* false)
 
 (def ^:private print-styles {:scalar [ 0.5 0.62 0.5 ]
                              :boolean [ 0.86 0.55 0.76 ]
@@ -673,11 +677,10 @@
   ([x & ys] (with-out-str (do (str-print x)
                               (run! #( str-print % ) ys)))))
 
-(def maps
+(defn maps
   "Returns a string with each element mapped using f"
-  (fn
-    ([f coll] (loop [ coll coll acc "" ] (if (empty? coll) acc (recur (rest coll) (conj acc (f (first coll)))))))
-    ([f c1 c2] (loop [ c1 c1 c2 c2 acc "" ] (if (or (empty? c1) (empty? c2)) acc (recur (rest c1) (rest c2) (conj acc (f (first c1) (first c2)))))))))
+  ([f coll] (loop [ coll coll acc "" ] (if (empty? coll) acc (recur (rest coll) (conj acc (f (first coll)))))))
+  ([f c1 c2] (loop [ c1 c1 c2 c2 acc "" ] (if (or (empty? c1) (empty? c2)) acc (recur (rest c1) (rest c2) (conj acc (f (first c1) (first c2))))))))
 
 ; Logic
 
@@ -1027,19 +1030,18 @@
 
 ; Macros
 
-(def macroexpand-1
+(defn macroexpand-1
   "Expands the form if it is a macro form, and returns it otherwise."
-  (fn [form] ((eval (-source (eval (first form)))) form)))
+  [form] ((eval (-source (eval (first form)))) form))
 
-(def macroexpand
+(defn macroexpand
   "Expands the for until it is no longer in a macro form"
-  (fn [form]
-    (if (list? form)
-      (let [fs (eval (first form))]
-        (if (macro? fs)
-          ((eval (-source fs)) form)
-          form))
-      form)))
+  [form] (if (list? form)
+           (let [fs (eval (first form))]
+             (if (macro? fs)
+               ((eval (-source fs)) form)
+               form))
+           form))
 
 ; REPL
 
