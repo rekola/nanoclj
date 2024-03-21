@@ -245,7 +245,7 @@ typedef struct {
 #define MARK         32768      /* 100000000yyxxxxx */
 #define UNMARK       32767      /* 0111111111111111 */
 
-static uint_fast16_t prim_type_extended(nanoclj_val_t value) {
+static inline uint_fast16_t prim_type_extended(nanoclj_val_t value) {
   switch (value.as_long & MASK_SIGNATURE) {
   case SIGNATURE_NIL: return T_NIL;
   case SIGNATURE_CELL: return T_CELL;
@@ -262,7 +262,7 @@ static uint_fast16_t prim_type_extended(nanoclj_val_t value) {
   return T_DOUBLE;
 }
 
-static uint_fast16_t prim_type(nanoclj_val_t value) {
+static inline uint_fast16_t prim_type(nanoclj_val_t value) {
   switch (value.as_long & MASK_SIGNATURE) {
   case SIGNATURE_NIL: return T_NIL;
   case SIGNATURE_CELL: return T_CELL;
@@ -481,11 +481,6 @@ static inline bool is_file(nanoclj_val_t p) {
   const nanoclj_cell_t * c = decode_pointer(p);
   return _type(c) == T_FILE;
 }
-static inline bool is_url(nanoclj_val_t p) {
-  if (!is_cell(p)) return false;
-  const nanoclj_cell_t * c = decode_pointer(p);
-  return _type(c) == T_URL;
-}
 static inline bool is_vector(nanoclj_val_t p) {
   if (!is_cell(p)) return false;
   const nanoclj_cell_t * c = decode_pointer(p);
@@ -543,7 +538,7 @@ static inline bool is_sequential_type(uint_fast16_t t) {
   case T_QUEUE:
   case T_LAZYSEQ:
   case T_MAPENTRY:
-  case T_VAR: 
+  case T_VAR:
     return true;
   }
   return false;

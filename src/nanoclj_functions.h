@@ -436,7 +436,7 @@ static inline nanoclj_val_t Image_load(nanoclj_t * sc, nanoclj_cell_t * args) {
   nanoclj_cell_t * meta = mk_hashmap(sc);
   meta = assoc(sc, meta, sc->WIDTH, mk_int(w));
   meta = assoc(sc, meta, sc->HEIGHT, mk_int(h));
-  if (is_string(src) || is_file(src) || is_url(src)) {
+  if (is_string_type(type(src))) {
     meta = assoc(sc, meta, sc->FILE_KW, src);
   }
   
