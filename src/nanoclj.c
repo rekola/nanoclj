@@ -154,57 +154,59 @@ enum nanoclj_types {
   T_LISTMAP = 15,
   T_STRING = 16,
   T_CLOSURE = 17,
-  T_RECUR_CLOSURE = 18,
-  T_RATIO = 19,
-  T_FOREIGN_FUNCTION = 20,
-  T_READER = 21,
-  T_WRITER = 22,
-  T_INPUT_STREAM = 23,
-  T_OUTPUT_STREAM = 24,
-  T_GZIP_INPUT_STREAM = 25,
-  T_GZIP_OUTPUT_STREAM = 26,
-  T_VECTOR = 27,
-  T_MACRO = 28,
-  T_LAZYSEQ = 29,
-  T_NAMESPACE = 30,
-  T_CLASS = 31,
-  T_MAPENTRY = 32,
-  T_ARRAYMAP = 33,
-  T_HASHMAP = 34,
-  T_HASHSET = 35,
-  T_VAR = 36,
-  T_FOREIGN_OBJECT = 37,
-  T_BIGINT = 38,
-  T_REGEX = 39,
-  T_DELAY = 40,
-  T_IMAGE = 41,
-  T_VIDEO = 42,
-  T_AUDIO = 43,
-  T_FILE = 44,
-  T_URL = 45,
-  T_DATE = 46,
-  T_UUID = 47,
-  T_QUEUE = 48,
-  T_RUNTIME_EXCEPTION = 49,
-  T_ARITY_EXCEPTION = 50,
-  T_ILLEGAL_ARG_EXCEPTION = 51,
-  T_NUM_FMT_EXCEPTION = 52,
-  T_ARITHMETIC_EXCEPTION = 53,
-  T_CLASS_CAST_EXCEPTION = 54,
-  T_ILLEGAL_STATE_EXCEPTION = 55,
-  T_FILE_NOT_FOUND_EXCEPTION = 56,
-  T_INDEX_EXCEPTION = 57,
-  T_PATTERN_SYNTAX_EXCEPTION = 58,
-  T_TENSOR = 59,
-  T_GRAPH = 60,
-  T_GRAPH_NODE = 61,
-  T_GRAPH_EDGE = 62,
-  T_GRADIENT = 63,
-  T_MESH = 64,
-  T_SHAPE = 65,
-  T_TABLE = 66,
-  T_SECURERANDOM = 67,
-  T_LAST_SYSTEM_TYPE = 68
+  T_MULTI_CLOSURE = 18,
+  T_RECUR_CLOSURE = 19,
+  T_MULTI_RECUR_CLOSURE = 20,
+  T_RATIO = 21,
+  T_FOREIGN_FUNCTION = 22,
+  T_READER = 23,
+  T_WRITER = 24,
+  T_INPUT_STREAM = 25,
+  T_OUTPUT_STREAM = 26,
+  T_GZIP_INPUT_STREAM = 27,
+  T_GZIP_OUTPUT_STREAM = 28,
+  T_VECTOR = 29,
+  T_MACRO = 30,
+  T_LAZYSEQ = 31,
+  T_NAMESPACE = 32,
+  T_CLASS = 33,
+  T_MAPENTRY = 34,
+  T_ARRAYMAP = 35,
+  T_HASHMAP = 36,
+  T_HASHSET = 37,
+  T_VAR = 38,
+  T_FOREIGN_OBJECT = 39,
+  T_BIGINT = 40,
+  T_REGEX = 41,
+  T_DELAY = 42,
+  T_IMAGE = 43,
+  T_VIDEO = 44,
+  T_AUDIO = 45,
+  T_FILE = 46,
+  T_URL = 47,
+  T_DATE = 48,
+  T_UUID = 49,
+  T_QUEUE = 50,
+  T_RUNTIME_EXCEPTION = 51,
+  T_ARITY_EXCEPTION = 52,
+  T_ILLEGAL_ARG_EXCEPTION = 53,
+  T_NUM_FMT_EXCEPTION = 54,
+  T_ARITHMETIC_EXCEPTION = 55,
+  T_CLASS_CAST_EXCEPTION = 56,
+  T_ILLEGAL_STATE_EXCEPTION = 57,
+  T_FILE_NOT_FOUND_EXCEPTION = 58,
+  T_INDEX_EXCEPTION = 59,
+  T_PATTERN_SYNTAX_EXCEPTION = 60,
+  T_TENSOR = 61,
+  T_GRAPH = 62,
+  T_GRAPH_NODE = 63,
+  T_GRAPH_EDGE = 64,
+  T_GRADIENT = 65,
+  T_MESH = 66,
+  T_SHAPE = 67,
+  T_TABLE = 68,
+  T_SECURERANDOM = 69,
+  T_LAST_SYSTEM_TYPE = 70
 };
 
 typedef struct {
@@ -516,6 +518,7 @@ static inline bool is_seqable_type(uint_fast16_t t) {
   case T_MAPENTRY:
   case T_VAR:
   case T_CLOSURE:
+  case T_MULTI_CLOSURE:
   case T_MACRO:
   case T_QUEUE:
   case T_GRAPH:
@@ -779,6 +782,7 @@ static inline nanoclj_cell_t * get_metadata(nanoclj_cell_t * c) {
     break;
   case T_LIST:
   case T_CLOSURE:
+  case T_MULTI_CLOSURE:
   case T_MACRO:
   case T_CLASS:
   case T_NAMESPACE:
@@ -814,6 +818,7 @@ static inline bool set_metadata(nanoclj_cell_t * c, nanoclj_cell_t * meta) {
     break;
   case T_LIST:
   case T_CLOSURE:
+  case T_MULTI_CLOSURE:
   case T_MACRO:
   case T_CLASS:
   case T_NAMESPACE:
@@ -2535,6 +2540,7 @@ static inline nanoclj_cell_t * seq(nanoclj_t * sc, nanoclj_cell_t * coll) {
   case T_LONG:
   case T_DATE:
   case T_CLOSURE:
+  case T_MULTI_CLOSURE:
   case T_MACRO:
     return NULL;
   case T_STRING:
@@ -2737,6 +2743,7 @@ static inline nanoclj_val_t first(nanoclj_t * sc, nanoclj_cell_t * coll) {
     coll = deref(sc, coll);
     if (!coll) return mk_nil();
   case T_CLOSURE:
+  case T_MULTI_CLOSURE:
   case T_MACRO:
   case T_LIST:
   case T_LISTMAP:
@@ -3238,6 +3245,7 @@ static inline bool equals(nanoclj_t * sc, nanoclj_val_t a0, nanoclj_val_t b0) {
     }
     case T_LIST:
     case T_CLOSURE:
+    case T_MULTI_CLOSURE:
     case T_MACRO:
     case T_LAZYSEQ:
       if (equals(sc, first(sc, a), first(sc, b))) {
@@ -6735,7 +6743,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     case T_CELL:{
       nanoclj_cell_t * code_cell = decode_pointer(sc->code);
       bool is_recur = false;
-      nanoclj_val_t params0;
       
       switch (_type(code_cell)) {
       case T_VAR:
@@ -6770,79 +6777,27 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  s_return(sc, x);
 	}
       }
-      case T_RECUR_CLOSURE:
+      case T_MULTI_RECUR_CLOSURE:
 	is_recur = true;
-      case T_CLOSURE:
-      case T_MACRO:
-      case T_LAZYSEQ:
-      case T_DELAY:
-	/* Should not accept lazyseq or delay */
-	/* make environment */
-	new_frame_in_env(sc, closure_env(code_cell));
-	x = closure_code(code_cell);
-	
-	params0 = car(x);
-	params = decode_pointer(params0);
-
-	bool found_match = false;
-	if (!params) { /* lazy-seqs etc. do not have params */
-	  sc->code = mk_pointer(cdr(x));
-	  found_match = true;
-	} else if (_type(params) == T_VECTOR) { /* Clojure style arguments */
-	  int64_t n = count(sc, sc->args);
-	  if (destructure(sc, params, sc->args, n, true, is_recur)) {
-	    sc->code = mk_pointer(cdr(x));
-	    found_match = true;
-	  }
-	} else if (_type(params) == T_LIST && is_vector(_car_unchecked(params))) { /* Clojure style multi-arity arguments */
+      case T_MULTI_CLOSURE:
+	{
+	  new_frame_in_env(sc, closure_env(code_cell));
+	  nanoclj_cell_t * codes = decode_pointer(closure_code(code_cell));
 	  size_t needed_args = count(sc, sc->args);
-	  nanoclj_cell_t * x2 = decode_pointer(x);
-	  for ( ; x2; x2 = _cdr_unchecked(x2)) {
-	    nanoclj_val_t code = _car_unchecked(x2);
-	    nanoclj_val_t vec = car(code);
+	  for ( ; codes; codes = _cdr_unchecked(codes)) {
+	    nanoclj_cell_t * code = decode_pointer(_car_unchecked(codes));
+	    nanoclj_cell_t * vec = decode_pointer(_car_unchecked(code));
 
-	    if (destructure(sc, decode_pointer(vec), sc->args, needed_args, true, is_recur)) {
-	      found_match = true;
-	      sc->code = mk_pointer(cdr(code));
-	      break;
+	    if (destructure(sc, vec, sc->args, needed_args, true, is_recur)) {
+	      code = _cdr(code);
+	      if (_cdr_unchecked(code)) {
+		s_save(sc, OP_DO, NULL, mk_pointer(_cdr_unchecked(code)));
+	      }
+	      sc->code = _car_unchecked(code);
+	      s_goto(sc, OP_EVAL);
 	    }
 	  }
-	} else {
-	  x = params0;
-	  nanoclj_cell_t * yy = sc->args;
-	  found_match = true;
-	  for ( ; is_list(x); x = mk_pointer(cdr(x)), yy = next(sc, yy)) {
-	    if (!yy) {
-	      found_match = false;
-	      break;
-	    } else {
-	      new_slot_in_env(sc, car(x), first(sc, yy));
-	    }
-	  }
-	  
-	  if (is_nil(x) || is_emptylist(x)) {
-	    /*--
-	     * if (y.as_long != sc->EMPTY.as_long) {
-	     *   Error_0(sc,"too many arguments");
-	     * }
-	     */
-	  } else if (is_symbol(x)) {
-	    new_slot_in_env(sc, x, mk_pointer(yy));
-	  } else if (type(x) == T_SYMBOL) {
-	    new_slot_in_env(sc, car_unchecked(x), mk_pointer(yy));
-	  } else {
-	    Error_0(sc, "Syntax error in closure: not a symbol");
-	  }
-	  sc->code = mk_pointer(cdr(closure_code(code_cell)));
-	}
 
-	if (found_match) {
-	  if (cdr_unchecked(sc->code)) {
-	    s_save(sc, OP_DO, NULL, mk_pointer(cdr_unchecked(sc->code)));
-	  }
-	  sc->code = car_unchecked(sc->code);
-	  s_goto(sc, OP_EVAL);
-	} else {
 	  nanoclj_val_t ns = find(sc, _cons_metadata(code_cell), sc->NS, mk_nil());
 	  nanoclj_val_t name_v = find(sc, _cons_metadata(code_cell), sc->NAME, mk_nil());
 	  nanoclj_val_t ns_name_v = mk_nil();
@@ -6851,6 +6806,68 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  }
 	  nanoclj_throw(sc, mk_arity_exception(sc, count(sc, sc->args), ns_name_v, name_v));
 	  return false;
+	}
+	
+      case T_RECUR_CLOSURE:
+	is_recur = true;
+      case T_CLOSURE:
+      case T_MACRO:
+      case T_LAZYSEQ:
+      case T_DELAY:
+	{
+	  /* Should not accept lazyseq or delay */
+	  /* make environment */
+	  new_frame_in_env(sc, closure_env(code_cell));
+	  nanoclj_cell_t * code = decode_pointer(closure_code(code_cell));
+	  nanoclj_cell_t * params = decode_pointer(_car(code));
+
+	  bool found_match = false;
+	  if (!params) { /* lazy-seqs etc. do not have params */
+	    sc->code = mk_pointer(_cdr(code));
+	    found_match = true;
+	  } else if (_type(params) == T_VECTOR) { /* Clojure style single arity arguments */
+	    int64_t n = count(sc, sc->args);
+	    if (destructure(sc, params, sc->args, n, true, is_recur)) {
+	      found_match = true;
+	    }
+	  } else {
+	    nanoclj_cell_t * yy = sc->args;
+	    found_match = true;
+	    for ( ; _is_list(params); params = _cdr(params), yy = next(sc, yy)) {
+	      if (!yy) {
+		found_match = false;
+		break;
+	      } else {
+		new_slot_in_env(sc, _car(params), first(sc, yy));
+	      }
+	    }
+	    
+	    if (params) {
+	      if (_type(params) == T_SYMBOL) {
+		new_slot_in_env(sc, _car_unchecked(params), mk_pointer(yy));
+	      } else {
+		Error_0(sc, "Syntax error in closure: not a symbol");
+	      }
+	    }
+	  }
+	  
+	  if (found_match) {
+	    code = _cdr_unchecked(code);
+	    if (_cdr_unchecked(code)) {
+	      s_save(sc, OP_DO, NULL, mk_pointer(_cdr_unchecked(code)));
+	    }
+	    sc->code = _car_unchecked(code);
+	    s_goto(sc, OP_EVAL);
+	  } else {
+	    nanoclj_val_t ns = find(sc, _cons_metadata(code_cell), sc->NS, mk_nil());
+	    nanoclj_val_t name_v = find(sc, _cons_metadata(code_cell), sc->NAME, mk_nil());
+	    nanoclj_val_t ns_name_v = mk_nil();
+	    if (is_cell(ns)) {
+	      ns_name_v = find(sc, get_metadata(decode_pointer(ns)), sc->NAME, mk_nil());
+	    }
+	    nanoclj_throw(sc, mk_arity_exception(sc, count(sc, sc->args), ns_name_v, name_v));
+	    return false;
+	  }
 	}
 
       case T_LIST:
@@ -6900,23 +6917,29 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     {
       x = sc->code;
       nanoclj_val_t name = mk_nil();
+      uint_fast16_t t = T_CLOSURE, t2 = T_RECUR_CLOSURE;
       if (is_symbol(car(x)) && is_vector(cadr(x))) {
 	name = car(x);
 	x = mk_pointer(cdr(x));
       } else if (is_symbol(car(x)) && (is_list(cadr(x)) && is_vector(caadr(x)))) {
 	name = car(x);
 	x = mk_pointer(cdr(x));
+	t = T_MULTI_CLOSURE;
+	t2 = T_MULTI_RECUR_CLOSURE;
+      } else if (is_list(car(x)) && is_vector(caar(x))) {
+	t = T_MULTI_CLOSURE;
+	t2 = T_MULTI_RECUR_CLOSURE;
       }
       
       /* Create env frame for the closure, and add recursion point and anonymous fn name */
       nanoclj_cell_t * env = get_cell(sc, T_LIST, 0, mk_emptylist(), sc->envir, NULL);
       if (!is_nil(name)) {
-	new_slot_spec_in_env(sc, env, name, mk_pointer(get_cell(sc, T_CLOSURE, 0, x, env, NULL)));
+	new_slot_spec_in_env(sc, env, name, mk_pointer(get_cell(sc, t, 0, x, env, NULL)));
       }
-      new_slot_spec_in_env(sc, env, sc->RECUR, mk_pointer(get_cell(sc, T_RECUR_CLOSURE, 0, x, env, NULL)));
+      new_slot_spec_in_env(sc, env, sc->RECUR, mk_pointer(get_cell(sc, t2, 0, x, env, NULL)));
 
       /* make closure. first is code. second is environment */
-      s_return(sc, mk_pointer(get_cell(sc, T_CLOSURE, 0, x, env, NULL)));
+      s_return(sc, mk_pointer(get_cell(sc, t, 0, x, env, NULL)));
     }
    
   case OP_QUOTE:               /* quote */
@@ -8412,11 +8435,15 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	nanoclj_cell_t * var = get_var_in_ns(typ, arg1);
 	if (var) {
 	  nanoclj_val_t m = get_indexed_value(var, 1);
-	  if (type(m) == T_FOREIGN_FUNCTION || type(m) == T_CLOSURE || type(m) == T_PROC) {
+	  switch (type(m)) {
+	  case T_FOREIGN_FUNCTION:
+	  case T_CLOSURE:
+	  case T_MULTI_CLOSURE:
+	  case T_PROC:
 	    sc->code = m;
 	    sc->args = cons(sc, arg0, arg_next);
 	    s_goto(sc, OP_APPLY);
-	  } else {
+	  default:
 	    s_return(sc, m);
 	  }
 	} else {
@@ -9209,7 +9236,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     } else if (is_cell(arg0) && is_cell(arg1)) {
       nanoclj_cell_t * c = decode_pointer(arg0);
       uint_fast16_t t = _type(c);
-      if (t == T_VAR || t == T_LIST || t == T_CLOSURE || t == T_MACRO ||
+      if (t == T_VAR || t == T_LIST || t == T_CLOSURE || t == T_MULTI_CLOSURE|| t == T_MACRO ||
 	  t == T_CLASS || t == T_NAMESPACE || t == T_FOREIGN_FUNCTION || t == T_IMAGE) {
 	nanoclj_cell_t * new_c = get_cell_x(sc, T_NIL, T_GC_ATOM, NULL, NULL, NULL);
 	memcpy(new_c, c, sizeof(nanoclj_cell_t));
@@ -10386,10 +10413,12 @@ bool nanoclj_init(nanoclj_t * sc) {
   
   /* nanoclj types */
   mk_class(sc, "nanoclj.lang.EmptyList", T_EMPTYLIST, sc->Object);
-  nanoclj_cell_t * Closure = mk_class(sc, "nanoclj.lang.Closure", T_CLOSURE, AFn);
   mk_class(sc, "nanoclj.lang.Procedure", T_PROC, AFn);
+  nanoclj_cell_t * Closure = mk_class(sc, "nanoclj.lang.Closure", T_CLOSURE, AFn);
+  mk_class(sc, "nanoclj.lang.MultiClosure", T_MULTI_CLOSURE, Closure);
   mk_class(sc, "nanoclj.lang.Macro", T_MACRO, Closure);
   mk_class(sc, "nanoclj.lang.RecurClosure", T_RECUR_CLOSURE, Closure);
+  mk_class(sc, "nanoclj.lang.MultiRecurClosure", T_MULTI_RECUR_CLOSURE, Closure);
   mk_class(sc, "nanoclj.lang.ForeignFunction", T_FOREIGN_FUNCTION, AFn);
   mk_class(sc, "nanoclj.lang.ForeignObject", T_FOREIGN_OBJECT, AFn);
   mk_class(sc, "nanoclj.lang.ListMap", T_LISTMAP, APersistentMap);
