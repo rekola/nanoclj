@@ -197,16 +197,17 @@ enum nanoclj_types {
   T_FILE_NOT_FOUND_EXCEPTION = 58,
   T_INDEX_EXCEPTION = 59,
   T_PATTERN_SYNTAX_EXCEPTION = 60,
-  T_TENSOR = 61,
-  T_GRAPH = 62,
-  T_GRAPH_NODE = 63,
-  T_GRAPH_EDGE = 64,
-  T_GRADIENT = 65,
-  T_MESH = 66,
-  T_SHAPE = 67,
-  T_TABLE = 68,
-  T_SECURERANDOM = 69,
-  T_LAST_SYSTEM_TYPE = 70
+  T_UNSUPPORTED_OPERATION_EXCEPTION = 61,
+  T_TENSOR = 62,
+  T_GRAPH = 63,
+  T_GRAPH_NODE = 64,
+  T_GRAPH_EDGE = 65,
+  T_GRADIENT = 66,
+  T_MESH = 67,
+  T_SHAPE = 68,
+  T_TABLE = 69,
+  T_SECURERANDOM = 70,
+  T_LAST_SYSTEM_TYPE = 71
 };
 
 typedef struct {
@@ -2010,6 +2011,11 @@ static inline nanoclj_val_t add_exception_source(nanoclj_t * sc, strview_t msg) 
 static inline nanoclj_cell_t * mk_runtime_exception(nanoclj_t * sc, nanoclj_val_t msg) {
   msg = add_exception_source(sc, to_strview(msg));
   return get_cell(sc, T_RUNTIME_EXCEPTION, 0, msg, NULL, NULL);
+}
+
+static inline nanoclj_cell_t * mk_unsupported_op_exception(nanoclj_t * sc, nanoclj_val_t msg) {
+  msg = add_exception_source(sc, to_strview(msg));
+  return get_cell(sc, T_UNSUPPORTED_OPERATION_EXCEPTION, 0, msg, NULL, NULL);
 }
 
 static inline nanoclj_cell_t * mk_arithmetic_exception(nanoclj_t * sc, const char * msg) {
@@ -3910,6 +3916,10 @@ static inline nanoclj_cell_t * disj(nanoclj_t * sc, nanoclj_cell_t * coll, nanoc
  * speed to out-weigh the cost of making a new map.
  */
 
+static inline void set_env(nanoclj_t * sc, nanoclj_cell_t * env) {
+  sc->envir = env;
+}
+
 static inline void new_frame_in_env(nanoclj_t * sc, nanoclj_cell_t * old_env) {
   sc->envir = get_cell(sc, T_LIST, 0, mk_emptylist(), old_env, NULL);
 }
@@ -5744,7 +5754,18 @@ static inline void dump_stack_free(nanoclj_t * sc) {
   sc->dump_size = 0;
 }
 
-static inline bool destructure(nanoclj_t * sc, nanoclj_cell_t * binding, nanoclj_cell_t * y, size_t num_args, bool first_level, bool is_recur) {
+static inline bool test_binding(nanoclj_t * sc, nanoclj_cell_t * binding, size_t num_args, bool is_recur) {
+  size_t n = get_size(binding);
+  bool multi = n >= 2 && get_indexed_value(binding, n - 2).as_long == sc->AMP.as_long;
+  if ((!multi && num_args != n) ||
+      (multi && !is_recur && num_args < n - 2) ||
+      (multi && is_recur && num_args != n - 1)) {
+    return false;
+  }
+  return true;
+}
+
+static inline bool destructure(nanoclj_t * sc, nanoclj_cell_t * binding, nanoclj_cell_t * y, bool is_recur) {
   size_t n = get_size(binding);
   
   if (n >= 2 && get_indexed_value(binding, n - 2).as_long == sc->AS.as_long) {
@@ -5753,59 +5774,43 @@ static inline bool destructure(nanoclj_t * sc, nanoclj_cell_t * binding, nanoclj
     n -= 2;
   }
 
-  if (first_level) {
-    bool multi = n >= 2 && get_indexed_value(binding, n - 2).as_long == sc->AMP.as_long;
-    if ((!multi && num_args != n) ||
-	(multi && !is_recur && num_args < n - 2) ||
-	(multi && is_recur && num_args != n - 1)) {
-      return false;
-    }
-  }
-
   for (size_t i = 0; i < n; i++, y = next(sc, y)) {
     nanoclj_val_t e = get_indexed_value(binding, i);
     if (e.as_long == sc->AMP.as_long) {
       if (++i >= n) {
+	nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Syntax error")));
 	return false;
       }
       e = get_indexed_value(binding, i);
       if (!is_recur) {
 	if (!is_cell(e)) {
 	  new_slot_in_env(sc, e, mk_pointer(y));
-	} else if (!destructure(sc, decode_pointer(e), seq(sc, y), 0, false, false)) {
+	} else if (!destructure(sc, decode_pointer(e), seq(sc, y), false)) {
 	  return false;
 	}
 	y = NULL;
 	break;
       }
     }
-    if (!first_level || y) {
-      if (e.as_long == sc->UNDERSCORE.as_long) {
-	/* ignore argument */
+    if (e.as_long == sc->UNDERSCORE.as_long) {
+      /* ignore argument */
+    } else {
+      nanoclj_val_t y2 = first(sc, y);
+      if (!is_cell(e)) {
+	new_slot_in_env(sc, e, y2);
       } else {
-	nanoclj_val_t y2 = first(sc, y);
-	if (!is_cell(e)) {
-	  new_slot_in_env(sc, e, y2);
-	} else {
-	  nanoclj_cell_t * s = NULL;
-	  if (is_cell(y2)) {
-	    s = seq(sc, decode_pointer(y2));
-	  } else if (!is_emptylist(y2) && !is_nil(y2)) {
-	    return false;
-	  }
-	  if (!destructure(sc, decode_pointer(e), s, 0, false, false)) {
-	    return false;
-	  }
+	nanoclj_cell_t * s = NULL;
+	if (is_cell(y2)) {
+	  s = seq(sc, decode_pointer(y2));
+	} else if (!is_emptylist(y2) && !is_nil(y2)) {
+	  return false;
+	}
+	if (!destructure(sc, decode_pointer(e), s, false)) {
+	  nanoclj_throw(sc, mk_unsupported_op_exception(sc, mk_string(sc, "Unsupported operation")));
+	  return false;
 	}
       }
-    } else {
-      return false;
     }
-  }
-
-  if (first_level && y) {
-    /* Too many arguments */
-    return false;
   }
   return true;
 }
@@ -5820,9 +5825,10 @@ static inline bool destructure_value(nanoclj_t * sc, nanoclj_val_t e, nanoclj_va
     if (is_cell(arg)) {
       s = seq(sc, decode_pointer(arg));
     } else if (!is_nil(arg) && !is_emptylist(arg)) {
+      nanoclj_throw(sc, mk_unsupported_op_exception(sc, mk_string(sc, "Unsupported operation")));
       return false;
     }
-    if (!destructure(sc, decode_pointer(e), s, 0, false, false)) {
+    if (!destructure(sc, decode_pointer(e), s, false)) {
       return false;
     }
   }
@@ -6781,14 +6787,18 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	is_recur = true;
       case T_MULTI_CLOSURE:
 	{
-	  new_frame_in_env(sc, closure_env(code_cell));
 	  nanoclj_cell_t * codes = decode_pointer(closure_code(code_cell));
-	  size_t needed_args = count(sc, sc->args);
+	  size_t num_args = count(sc, sc->args);
 	  for ( ; codes; codes = _cdr_unchecked(codes)) {
 	    nanoclj_cell_t * code = decode_pointer(_car_unchecked(codes));
-	    nanoclj_cell_t * vec = decode_pointer(_car_unchecked(code));
+	    nanoclj_cell_t * binding = decode_pointer(_car_unchecked(code));
 
-	    if (destructure(sc, vec, sc->args, needed_args, true, is_recur)) {
+	    if (test_binding(sc, binding, num_args, is_recur)) {
+	      new_frame_in_env(sc, closure_env(code_cell));
+	      if (!destructure(sc, binding, sc->args, is_recur)) {
+		return false;
+	      }
+	      
 	      code = _cdr(code);
 	      if (_cdr_unchecked(code)) {
 		s_save(sc, OP_DO, NULL, mk_pointer(_cdr_unchecked(code)));
@@ -6817,23 +6827,26 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	{
 	  /* Should not accept lazyseq or delay */
 	  /* make environment */
-	  new_frame_in_env(sc, closure_env(code_cell));
 	  nanoclj_cell_t * code = decode_pointer(closure_code(code_cell));
 	  nanoclj_cell_t * params = decode_pointer(_car(code));
 
 	  bool found_match = false;
 	  if (!params) { /* lazy-seqs etc. do not have params */
-	    sc->code = mk_pointer(_cdr(code));
+	    set_env(sc, closure_env(code_cell));
 	    found_match = true;
 	  } else if (_type(params) == T_VECTOR) { /* Clojure style single arity arguments */
-	    int64_t n = count(sc, sc->args);
-	    if (destructure(sc, params, sc->args, n, true, is_recur)) {
+	    if (test_binding(sc, params, count(sc, sc->args), is_recur)) {
+	      new_frame_in_env(sc, closure_env(code_cell));
+	      if (!destructure(sc, params, sc->args, is_recur)) {
+		return false;
+	      }
 	      found_match = true;
 	    }
 	  } else {
+	    new_frame_in_env(sc, closure_env(code_cell));
 	    nanoclj_cell_t * yy = sc->args;
 	    found_match = true;
-	    for ( ; _is_list(params); params = _cdr(params), yy = next(sc, yy)) {
+	    for ( ; _is_list(params); params = _cdr_unchecked(params), yy = next(sc, yy)) {
 	      if (!yy) {
 		found_match = false;
 		break;
@@ -7229,7 +7242,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_LOOP1:{
     nanoclj_cell_t * vec = decode_pointer(car(sc->code));
     long long i = sc->args ? decode_integer(_car_unchecked(sc->args)) : 0;
-    destructure_value(sc, get_indexed_value(vec, i), sc->value);
+    if (!destructure_value(sc, get_indexed_value(vec, i), sc->value)) {
+      return false;
+    }
     
     if (i + 2 < get_size(vec)) {
       nanoclj_cell_t * args = sc->args;
@@ -7350,7 +7365,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     nanoclj_cell_t * vec = decode_pointer(car(sc->code));
     nanoclj_cell_t * args = sc->args;
     long long i = args ? decode_integer(_car_unchecked(args)) : 0;
-    destructure_value(sc, get_indexed_value(vec, i), sc->value);
+    if (!destructure_value(sc, get_indexed_value(vec, i), sc->value)) {
+      return false;
+    }
     
     if (i + 2 < get_size(vec)) {
       if (args) _car_unchecked(args) = mk_int(i + 2);
@@ -10448,6 +10465,7 @@ bool nanoclj_init(nanoclj_t * sc) {
   mk_class(sc, "java.util.UUID", T_UUID, sc->Object);
   mk_class(sc, "java.util.regex.Pattern", T_REGEX, sc->Object);
   sc->SecureRandom = mk_class(sc, "java.security.SecureRandom", T_SECURERANDOM, sc->Object);
+  mk_class(sc, "java.lang.UnsupportedOperationException", T_UNSUPPORTED_OPERATION_EXCEPTION, RuntimeException);
   mk_class(sc, "java.lang.ArithmeticException", T_ARITHMETIC_EXCEPTION, RuntimeException);
   mk_class(sc, "java.lang.IndexOutOfBoundsException", T_INDEX_EXCEPTION, RuntimeException);
   sc->UnknownHostException = mk_class(sc, "java.net.UnknownHostException", gentypeid(sc), sc->IOException);
