@@ -992,11 +992,6 @@
 (defn resolve
   [sym] (ns-resolve *ns* sym))
 
-(def-macro (var symbol) `(or (and (namespace '~symbol)
-                                  (ns-resolve (find-ns (symbol (namespace '~symbol))) (symbol (name '~symbol))))
-                             (resolve '~symbol)
-                             (throw (new java.lang.RuntimeException (str "Use of undeclared Var " '~symbol)))))
-
 (defn ns-map
   "Returns the var-map of namespace ns"
   [ns] (first ns))

@@ -6943,7 +6943,41 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
    
   case OP_QUOTE:               /* quote */
-    s_return(sc, car(sc->code));
+    {
+      nanoclj_cell_t * code = decode_pointer(sc->code);
+      if (!code) {
+	Error_0(sc, "Syntax error");
+      }
+      s_return(sc, _car_unchecked(code));
+    }
+
+  case OP_VAR:
+    {
+      nanoclj_cell_t * code = decode_pointer(sc->code);
+      if (code) {
+	nanoclj_val_t arg = _car(code);
+	if (is_symbol(arg)) {
+	  symbol_t * s = decode_symbol(arg);
+	  nanoclj_cell_t * var = NULL;
+	  if (s->ns.size) {
+	    nanoclj_cell_t * ns = find_ns(sc, s->ns_sym);
+	    if (ns) var = get_var_in_ns(ns, s->name_sym);
+	  } else {
+	    nanoclj_cell_t * ns = get_ns_from_env(sc->envir);
+	    var = get_var_in_ns(ns, arg);
+	  }
+	  if (var) {
+	    s_return(sc, mk_pointer(var));
+	  } else {
+	    strview_t sv = to_strview(arg);
+	    nanoclj_val_t msg = mk_string_fmt(sc, "Unable to resolve var: %.*s in this context", sv.size, sv.ptr);
+	    nanoclj_throw(sc, mk_runtime_exception(sc, msg));
+	    return false;
+	  }
+	}
+      }
+      Error_0(sc, "Syntax error");
+    }
 
   case OP_INTERN:
     if (!unpack_args_3(sc, &arg0, &arg1, &arg2)) {
@@ -7000,26 +7034,37 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     
   case OP_DEF1:                /* def */
     {
-      strview_t sv = to_strview(sc->code);
       meta = sc->args;
       nanoclj_cell_t * ns = get_ns_from_env(sc->envir);
       s_return(sc, mk_pointer(intern_with_meta(sc, ns, sc->code, sc->value, meta)));
     }
 
-  case OP_SET:
-    if (!unpack_args_2(sc, &arg0, &arg1)) {
-      return false;
-    } else {
-      nanoclj_cell_t * var = get_var_in_ns(get_ns_from_env(sc->envir), arg0);
-      if (var) {
-	set_var(sc, var, arg1);
-	s_return(sc, arg1);
-      } else {
-	strview_t sv = to_strview(arg0);
-	nanoclj_val_t msg = mk_string_fmt(sc, "Use of undeclared Var %.*s", sv.size, sv.ptr);
-	nanoclj_throw(sc, mk_runtime_exception(sc, msg));
+  case OP_SET0:
+    {
+      nanoclj_cell_t * code = decode_pointer(sc->code);
+      if (code) {
+	nanoclj_val_t sym = _car(code);
+	code = _cdr(code);
+	if (code) {
+	  nanoclj_cell_t * var = get_var_in_ns(get_ns_from_env(sc->envir), sym);
+	  if (var) {
+	    s_save(sc, OP_SET1, var, mk_emptylist());
+	    sc->code = _car(code);
+	    s_goto(sc, OP_EVAL);
+	  } else {
+	    strview_t sv = to_strview(sym);
+	    nanoclj_val_t msg = mk_string_fmt(sc, "Use of undeclared Var %.*s", sv.size, sv.ptr);
+	    nanoclj_throw(sc, mk_runtime_exception(sc, msg));
+	    return false;
+	  }
+	}
       }
+      Error_0(sc, "Syntax error");
     }
+
+  case OP_SET1:
+    set_var(sc, sc->args, sc->value);
+    s_return(sc, sc->value);
 
   case OP_DO:               /* do */
     if (!is_list(sc->code)) {
@@ -7456,7 +7501,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	meta = mk_hashmap(sc);
       }
       if (!is_symbol(x) || decode_symbol(x)->ns.size) {
-	Error_0(sc, "Variable is not an uniqualified symbol");
+	Error_0(sc, "Variable is not an unqualified symbol");
       }
       meta = update_meta_from_reader(sc, meta, tensor_peek(sc->load_stack));
       meta = assoc(sc, meta, sc->NAME, x);
@@ -8421,39 +8466,58 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
     s_return(sc, mk_pointer(get_type_object(sc, arg0)));
 
-  case OP_DOT:
-    if (!unpack_args_2_plus(sc, &arg0, &arg1, &arg_next)) {
-      return false;
-    } else if (is_nil(arg0)) {
-      nanoclj_throw(sc, sc->NullPointerException);
-      return false;
-    } else if (!is_symbol(arg1)) {
-      Error_0(sc, "Unknown dot form");
-    } else {
-      nanoclj_cell_t * typ = get_type_object(sc, arg0);
-      while (typ) {
-	nanoclj_cell_t * var = get_var_in_ns(typ, arg1);
-	if (var) {
-	  nanoclj_val_t m = get_indexed_value(var, 1);
-	  switch (type(m)) {
-	  case T_FOREIGN_FUNCTION:
-	  case T_CLOSURE:
-	  case T_MULTI_CLOSURE:
-	  case T_PROC:
-	    sc->code = m;
-	    sc->args = cons(sc, arg0, arg_next);
-	    s_goto(sc, OP_APPLY);
-	  default:
-	    s_return(sc, m);
-	  }
-	} else {
-	  typ = next(sc, typ);
+  case OP_DOT0:
+    {
+      nanoclj_cell_t * code = decode_pointer(sc->code);
+      if (code) {
+	nanoclj_val_t instance = _car_unchecked(code);
+	if (is_nil(instance)) {
+	  nanoclj_throw(sc, sc->NullPointerException);
+	  return false;
 	}
+	s_save(sc, OP_DOT1, NULL, mk_pointer(_cdr_unchecked(code)));
+	sc->code = instance;
+	s_goto(sc, OP_EVAL);
       }
-      strview_t sv = to_strview(arg1);
-      nanoclj_val_t msg = mk_string_fmt(sc, "%.*s is not a function", sv.size, sv.ptr);
-      nanoclj_throw(sc, mk_runtime_exception(sc, msg));
-      return false;
+      Error_0(sc, "Syntax error 1");
+    }
+
+  case OP_DOT1:
+    {
+      nanoclj_cell_t * code = decode_pointer(sc->code);
+      if (code) {
+	nanoclj_val_t sym = _car(code);
+	if (!is_symbol(sym)) {
+	  Error_0(sc, "Unknown dot form");
+	}
+	nanoclj_val_t instance = sc->value;
+	nanoclj_cell_t * args = _cdr(code);
+	nanoclj_cell_t * typ = get_type_object(sc, instance);
+	while (typ) {
+	  nanoclj_cell_t * var = get_var_in_ns(typ, sym);
+	  if (var) {
+	    nanoclj_val_t m = get_indexed_value(var, 1);
+	    switch (type(m)) {
+	    case T_FOREIGN_FUNCTION:
+	    case T_CLOSURE:
+	    case T_MULTI_CLOSURE:
+	    case T_PROC:
+	      sc->code = m;
+	      sc->args = cons(sc, instance, args);
+	      s_goto(sc, OP_APPLY);
+	    default:
+	      s_return(sc, m);
+	    }
+	  } else {
+	    typ = next(sc, typ);
+	  }
+	}
+	strview_t sv = to_strview(sym);
+	nanoclj_val_t msg = mk_string_fmt(sc, "%.*s is not a function", sv.size, sv.ptr);
+	nanoclj_throw(sc, mk_runtime_exception(sc, msg));
+	return false;
+      }
+      Error_0(sc, "Syntax error");
     }
 
   case OP_INSTANCEP:
@@ -10230,6 +10294,7 @@ bool nanoclj_init(nanoclj_t * sc) {
 
   assign_syntax(sc, "fn", OP_LAMBDA);
   assign_syntax(sc, "quote", OP_QUOTE);
+  assign_syntax(sc, "var", OP_VAR);
   assign_syntax(sc, "def", OP_DEF0);
   assign_syntax(sc, "if", OP_IF0);
   assign_syntax(sc, "do", OP_DO);
@@ -10247,14 +10312,21 @@ bool nanoclj_init(nanoclj_t * sc) {
   assign_syntax(sc, "with-redefs", OP_WITH_REDEFS0);
   assign_syntax(sc, "binding", OP_WITH_REDEFS0);
   assign_syntax(sc, "ns", OP_NS);
-
+  assign_syntax(sc, ".", OP_DOT0);
+  assign_syntax(sc, "set!", OP_SET0);
+  
   /* initialization of global nanoclj_val_ts to special symbols */
   sc->LAMBDA = def_symbol(sc, "fn");
   sc->DO = def_symbol(sc, "do");
   sc->QUOTE = def_symbol(sc, "quote");
-  sc->DEREF = def_symbol(sc, "deref");
-  sc->VAR = def_qualified_symbol(sc, "clojure.core", "var");
+  sc->VAR = def_symbol(sc, "var");
   sc->QQUOTE = def_symbol(sc, "quasiquote");
+  sc->DOT = def_symbol(sc, ".");
+  
+  sc->CATCH = def_symbol(sc, "catch");
+  sc->FINALLY = def_symbol(sc, "finally");
+
+  sc->DEREF = def_qualified_symbol(sc, "clojure.core", "deref");
   sc->UNQUOTE = def_symbol(sc, "unquote");
   sc->UNQUOTESP = def_symbol(sc, "unquote-splicing");
 
@@ -10324,10 +10396,6 @@ bool nanoclj_init(nanoclj_t * sc) {
   sc->EXCLUDE = def_keyword(sc, "exclude");
   sc->JAVA_CLASS_PATH = mk_string(sc, "java.class.path");
   
-  sc->DOT = def_qualified_symbol(sc, "clojure.core", ".");
-  sc->CATCH = def_symbol(sc, "catch");
-  sc->FINALLY = def_symbol(sc, "finally");
-
   sc->EMPTYVEC = mk_vector(sc, 0);
   sc->EMPTYMAP = get_vector_object(sc, T_ARRAYMAP, 0);
   sc->EMPTYSET = get_vector_object(sc, T_HASHSET, 0);

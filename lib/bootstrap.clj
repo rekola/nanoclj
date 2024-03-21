@@ -155,9 +155,6 @@
                                  `(def ^:private ~name ~(car args) (fn ~(cadr args) ~@(cddr args)))
                                  `(def ^:private ~name (fn ~(car args) ~@(cdr args)))))
 
-(def-macro (set! symbol value) `(clojure.core/-set '~symbol ~value))
-(def-macro (. instance symbol & args) `(clojure.core/-dot ~instance '~symbol ~@args))
-
 (def-macro (case e & clauses)
   (if (empty? clauses) `(throw (new RuntimeException (str "No matching clause: " ~e)))
       (if (empty? (rest clauses))

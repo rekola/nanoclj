@@ -197,6 +197,9 @@ extern "C" {
     nanoclj_val_t QQUOTE;             /* pointer to symbol quasiquote */
     nanoclj_val_t UNQUOTE;            /* pointer to symbol unquote */
     nanoclj_val_t UNQUOTESP;          /* pointer to symbol unquote-splicing */
+    nanoclj_val_t DOT;		  /* . */
+    nanoclj_val_t CATCH;
+    nanoclj_val_t FINALLY;
 
     nanoclj_val_t ARG1;		  /* first arg in literal functions */
     nanoclj_val_t ARG2;		  /* second arg in literal functions */
@@ -264,9 +267,6 @@ extern "C" {
     nanoclj_val_t EXCLUDE;        /* :exclude */
     nanoclj_val_t JAVA_CLASS_PATH;/* java.class.path */
     
-    nanoclj_val_t DOT;		  /* . */
-    nanoclj_val_t CATCH;
-    nanoclj_val_t FINALLY;
     nanoclj_cell_t * EMPTYVEC, * EMPTYSET, * EMPTYMAP;
     
     nanoclj_val_t save_inport;
