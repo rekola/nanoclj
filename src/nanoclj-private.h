@@ -183,89 +183,9 @@ extern "C" {
     nanoclj_cell_t * MalformedURLException;
     
     nanoclj_cell_t sink;	      /* when mem. alloc. fails */
-    nanoclj_tensor_t * oblist;         /* pointer to symbol table */
     nanoclj_tensor_t * namespaces;
     nanoclj_cell_t * core_ns;		/* pointer to the core ns */
     nanoclj_tensor_t * types;
-
-/* global pointers to special symbols */
-    nanoclj_val_t LAMBDA;             /* pointer to syntax lambda */
-    nanoclj_val_t DO;                 /* pointer to syntax do */
-    nanoclj_val_t QUOTE;              /* pointer to syntax quote */
-    nanoclj_val_t DEREF;		  /* pointer to symbol deref */
-    nanoclj_val_t VAR;		  /* pointer to symbol var */
-    nanoclj_val_t QQUOTE;             /* pointer to symbol quasiquote */
-    nanoclj_val_t UNQUOTE;            /* pointer to symbol unquote */
-    nanoclj_val_t UNQUOTESP;          /* pointer to symbol unquote-splicing */
-    nanoclj_val_t DOT;		  /* . */
-    nanoclj_val_t CATCH;
-    nanoclj_val_t FINALLY;
-
-    nanoclj_val_t ARG1;		  /* first arg in literal functions */
-    nanoclj_val_t ARG2;		  /* second arg in literal functions */
-    nanoclj_val_t ARG3;		  /* third arg in literal functions */
-    nanoclj_val_t ARG_REST;	  	  /* rest args in literal functions */
-    
-    nanoclj_val_t TAG_HOOK;           /* *default-data-reader-fn* */
-    nanoclj_val_t AUTOCOMPLETE_HOOK; /* *autocomplete-hook* */
-    nanoclj_val_t FLUSH_ON_NEWLINE; /* *flush-on-newline* */
-    nanoclj_val_t IN_SYM;	  /* *in* */
-    nanoclj_val_t OUT_SYM;	  /* *out* */
-    nanoclj_val_t ERR;		  /* *err* */
-    nanoclj_val_t NS_SYM;	  /* *ns* */
-    nanoclj_val_t FILE_SYM;       /* *file* */
-    nanoclj_val_t ENV;	  	  /* *env* */
-    nanoclj_val_t CELL_SIZE;      /* *cell-size* */
-    nanoclj_val_t WINDOW_SIZE;    /* *window-size* */
-    nanoclj_val_t WINDOW_SCALE_F;   /* *window-scale-factor* */
-    nanoclj_val_t MOUSE_POS;      /* *mouse-pos* */
-    nanoclj_val_t THEME;	  /* *theme* */
-    
-    nanoclj_val_t RECUR;		  /* recur */
-    nanoclj_val_t AMP;		  /* & */
-    nanoclj_val_t UNDERSCORE;         /* _ */
-    nanoclj_val_t AS;		  /* :as */
-    nanoclj_val_t DOC;		  /* :doc */
-    nanoclj_val_t WIDTH;	  /* :width */
-    nanoclj_val_t HEIGHT;	  /* :height */
-    nanoclj_val_t CHANNELS;	  /* :channels */
-    nanoclj_val_t GRAPHICS;	  /* :graphics */
-    nanoclj_val_t WATCHES;	  /* :watches */
-    nanoclj_val_t NAME;		  /* :name */
-    nanoclj_val_t TYPE;		  /* :type */
-    nanoclj_val_t LINE;		  /* :line */
-    nanoclj_val_t COLUMN;	  /* :column */
-    nanoclj_val_t FILE_KW;	  /* :file */
-    nanoclj_val_t NS;		  /* :ns */
-    nanoclj_val_t INLINE;	  /* :inline */
-    nanoclj_val_t BLOCK;	  /* :block */
-    nanoclj_val_t GRAY;		  /* :gray */
-    nanoclj_val_t RGB;		  /* :rgb */
-    nanoclj_val_t RGBA;		  /* :rgba */
-    nanoclj_val_t ITALIC;         /* :italic */
-    nanoclj_val_t BOLD;           /* :bold */
-    nanoclj_val_t PDF;	          /* :pdf */
-    nanoclj_val_t POSITION;	  /* :position */
-    nanoclj_val_t EDGES;	  /* :edges */
-    nanoclj_val_t SOURCE;         /* :source */
-    nanoclj_val_t TARGET;         /* :target */
-    nanoclj_val_t DATA;		  /* :data */
-    nanoclj_val_t HAIR;	          /* :hair */
-    nanoclj_val_t INT;	 	  /* :int */
-    nanoclj_val_t FLOAT;	  /* :float */
-    nanoclj_val_t DOUBLE;	  /* :double */
-    nanoclj_val_t BYTE;	          /* :byte */
-    nanoclj_val_t SHORT;          /* :short */
-    nanoclj_val_t BOOLEAN;        /* :boolean */
-    nanoclj_val_t RELOAD;         /* :reload */
-    nanoclj_val_t IMPORT;	  /* :import */
-    nanoclj_val_t PRIVATE;	  /* :private */
-    nanoclj_val_t GEN_CLASS;	  /* :gen-class */
-    nanoclj_val_t EXTENDS;        /* :extends */
-    nanoclj_val_t REFER_CLOJURE;  /* :refer-clojure */
-    nanoclj_val_t ONLY;           /* :only */
-    nanoclj_val_t EXCLUDE;        /* :exclude */
-    nanoclj_val_t JAVA_CLASS_PATH;/* java.class.path */
     
     nanoclj_cell_t * EMPTYVEC, * EMPTYSET, * EMPTYMAP;
     

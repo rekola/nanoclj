@@ -434,10 +434,10 @@ static inline nanoclj_val_t Image_load(nanoclj_t * sc, nanoclj_cell_t * args) {
   }
 
   nanoclj_cell_t * meta = mk_hashmap(sc);
-  meta = assoc(sc, meta, sc->WIDTH, mk_int(w));
-  meta = assoc(sc, meta, sc->HEIGHT, mk_int(h));
+  meta = assoc(sc, meta, kw_width, mk_int(w));
+  meta = assoc(sc, meta, kw_height, mk_int(h));
   if (is_string_type(type(src))) {
-    meta = assoc(sc, meta, sc->FILE_KW, src);
+    meta = assoc(sc, meta, kw_file, src);
   }
   
   nanoclj_internal_format_t f;
@@ -712,12 +712,12 @@ static inline nanoclj_val_t Geo_load(nanoclj_t * sc, nanoclj_cell_t * args) {
 
   nanoclj_cell_t * r = NULL;
 
-  nanoclj_val_t type_key = def_keyword(sc, "type");
-  nanoclj_val_t geom_key = def_keyword(sc, "geometry");
-  nanoclj_val_t prop_key = def_keyword(sc, "properties");
-  nanoclj_val_t coord_key = def_keyword(sc, "coordinates");
-  nanoclj_val_t bbox_key = def_keyword(sc, "bbox");
-  nanoclj_val_t id_key = def_keyword(sc, "id");
+  nanoclj_val_t type_key = def_keyword("type");
+  nanoclj_val_t geom_key = def_keyword("geometry");
+  nanoclj_val_t prop_key = def_keyword("properties");
+  nanoclj_val_t coord_key = def_keyword("coordinates");
+  nanoclj_val_t bbox_key = def_keyword("bbox");
+  nanoclj_val_t id_key = def_keyword("id");
 
   nanoclj_val_t point_id = mk_string(sc, "Point");
   nanoclj_val_t linestring_id = mk_string(sc, "LineString");
@@ -1001,7 +1001,7 @@ static inline nanoclj_val_t create_xml_node(nanoclj_t * sc, xmlNode * input) {
   nanoclj_val_t tag = mk_nil();
   if (input->type == XML_ELEMENT_NODE) {
     nanoclj_cell_t * content = 0, * attrs = 0;
-    nanoclj_val_t tag = def_keyword(sc, (const char *)input->name);
+    nanoclj_val_t tag = def_keyword((const char *)input->name);
     xmlNode * cur_node = input->children;
     for (; cur_node; cur_node = cur_node->next) {
       nanoclj_val_t child = create_xml_node(sc, cur_node);
@@ -1019,7 +1019,7 @@ static inline nanoclj_val_t create_xml_node(nanoclj_t * sc, xmlNode * input) {
 	attrs = mk_hashmap(sc);
 	retain(sc, attrs);
       }
-      attrs = assoc(sc, attrs, def_keyword(sc, (const char *)attribute->name), mk_string(sc, (const char *)value));
+      attrs = assoc(sc, attrs, def_keyword((const char *)attribute->name), mk_string(sc, (const char *)value));
       retain(sc, attrs);
       xmlFree(value);
     }
@@ -1027,12 +1027,12 @@ static inline nanoclj_val_t create_xml_node(nanoclj_t * sc, xmlNode * input) {
     output = mk_hashmap(sc);
     retain(sc, output);
 
-    output = assoc(sc, output, def_keyword(sc, "tag"), tag);
+    output = assoc(sc, output, def_keyword("tag"), tag);
     if (content) {
-      output = assoc(sc, output, def_keyword(sc, "content"), mk_pointer(content));
+      output = assoc(sc, output, def_keyword("content"), mk_pointer(content));
     }
     if (attrs) {
-      output = assoc(sc, output, def_keyword(sc, "attrs"), mk_pointer(attrs));
+      output = assoc(sc, output, def_keyword("attrs"), mk_pointer(attrs));
     }
   } else if (input->type == XML_TEXT_NODE) {
     const char * text = (const char *)input->content;
@@ -1125,9 +1125,9 @@ static inline nanoclj_val_t clojure_data_csv_read_csv(nanoclj_t * sc, nanoclj_ce
 static nanoclj_t * linenoise_sc = NULL;
 
 static inline void completion(const char *input, linenoiseCompletions *lc) {
-  nanoclj_cell_t * ns = find_ns(linenoise_sc, def_symbol(linenoise_sc, "clojure.repl"));
+  nanoclj_cell_t * ns = find_ns(linenoise_sc, def_symbol("clojure.repl"));
   if (ns) {
-    nanoclj_cell_t * var = get_var_in_ns(ns, linenoise_sc->AUTOCOMPLETE_HOOK);
+    nanoclj_cell_t * var = get_var_in_ns(ns, sym_autocomplete_hook);
     if (var) {
       nanoclj_val_t f = get_indexed_value(var, 1);
       nanoclj_val_t args = mk_pointer(cons(linenoise_sc, mk_string(linenoise_sc, input), NULL));
@@ -1239,7 +1239,7 @@ static bool * errorcheck_callback(const char * buf, size_t len) {
 static inline void mouse_motion_callback(int x, int y) {
   double f = linenoise_sc->window_scale_factor;
   nanoclj_val_t p = mk_vector_2d(linenoise_sc, x / f, y / f);
-  intern(linenoise_sc, linenoise_sc->core_ns, linenoise_sc->MOUSE_POS, p);
+  intern(linenoise_sc, linenoise_sc->core_ns, sym_mouse_pos, p);
   if (linenoise_sc->pending_exception) {
     linenoiseTerminate();
   }
@@ -1365,8 +1365,8 @@ static inline void register_functions(nanoclj_t * sc) {
   intern_foreign_func(sc, Math, "round", Math_round, 1, 1);
   intern_foreign_func(sc, Math, "random", Math_random, 0, 0);
   
-  intern(sc, Math, def_symbol(sc, "E"), mk_double(M_E));
-  intern(sc, Math, def_symbol(sc, "PI"), mk_double(M_PI));
+  intern(sc, Math, def_symbol("E"), mk_double(M_E));
+  intern(sc, Math, def_symbol("PI"), mk_double(M_PI));
 
   intern_foreign_func(sc, sc->Double, "doubleToLongBits", Double_doubleToLongBits, 1, 1);
   intern_foreign_func(sc, sc->Double, "doubleToRawLongBits", Double_doubleToRawLongBits, 1, 1);

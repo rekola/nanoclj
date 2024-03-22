@@ -45,6 +45,11 @@
 
 (t/is (= (+ 1/2 1/2) 1))
 (t/is (= (- 10 10/3) 20/3))
+
+(t/is (= (min 100 10) 10))
+(t/is (= (max 100 10) 100))
+(t/is (= (min -10N 10) -10N))
+(t/is (= (max -10000000000000000000000000000N 0) 0))
                                         ; Bigints
 
 (t/is (instance? clojure.lang.BigInt 1N))

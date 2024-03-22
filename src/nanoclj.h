@@ -92,7 +92,6 @@ extern "C" {
     nanoclj_cell_t * (*cons) (nanoclj_t * sc, nanoclj_val_t head, nanoclj_cell_t * tail);
     nanoclj_val_t (*mk_integer) (nanoclj_t * sc, long long num);
     nanoclj_val_t (*mk_double) (double num);
-    nanoclj_val_t (*mk_symbol) (nanoclj_t * sc, const char *name);
     nanoclj_val_t (*mk_string) (nanoclj_t * sc, const char *str);
     nanoclj_val_t (*mk_codepoint) (int c);
     nanoclj_val_t (*mk_vector) (nanoclj_t * sc, size_t len);
@@ -123,7 +122,7 @@ extern "C" {
     bool (*is_macro) (nanoclj_val_t p);
     bool (*is_mapentry) (nanoclj_val_t p);
     nanoclj_val_t (*eval_string) (nanoclj_t * sc, const char *input, size_t len);
-    nanoclj_val_t (*def_symbol) (nanoclj_t * sc, const char *name);
+    nanoclj_val_t (*def_symbol) (const char *name);
   };
 #endif
   

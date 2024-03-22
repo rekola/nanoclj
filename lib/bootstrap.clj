@@ -81,12 +81,12 @@
     ([f a b c args] (apply* f (list* a b c args)))
     ([f a b c d & args] (apply* f (cons a (cons b (cons c (cons d (spread args)))))))))
 
-;; The following quasiquote macro is due to Eric S. Tiedemann.
+;; The following syntax-quote macro is due to Eric S. Tiedemann.
 ;;   Copyright 1988 by Eric S. Tiedemann; all rights reserved.
 ;;
 ;; Subsequently modified to handle vectors: D. Souflis
 
-(macro quasiquote
+(macro syntax-quote
  (fn [l]
    (let [mcons (fn [f l r]
                  (if (and (list? r)
@@ -115,8 +115,8 @@
                        form
                        (list 'quote form))
                
-                     (-equals? 'quasiquote (car form))
-                     (mcons form ''quasiquote (foo (+ level 1) (cdr form)))
+                     (-equals? 'syntax-quote (car form))
+                     (mcons form ''syntax-quote (foo (+ level 1) (cdr form)))
                      :else (if (zero? level)
                              (cond (-equals? (car form) 'unquote) (car (cdr form))
                                    (-equals? (car form) 'unquote-splicing)
@@ -180,13 +180,13 @@
 (defn max
   "Returns the maximum of the arguments"
   ([x] x)
-  ([x y] (if (gt x y) x y))
+  ([x y] (if (-gt x y) x y))
   ([x y & args] (reduce max (max x y) args)))
 
 (defn min
   "Returns the minimum of the arguments"
   ([x] x)
-  ([x y] (if (lt x y) x y))
+  ([x y] (if (-lt x y) x y))
   ([x y & args] (reduce min (min x y) args)))
 
 (defn +
