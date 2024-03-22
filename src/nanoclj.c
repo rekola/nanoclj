@@ -4107,10 +4107,6 @@ static inline nanoclj_val_t def_symbol(const char *name) {
   return def_symbol_from_sv(T_SYMBOL, mk_strview(0), mk_strview(name));
 }
 
-static inline nanoclj_val_t def_qualified_symbol(const char * ns, const char *name) {
-  return def_symbol_from_sv(T_SYMBOL, mk_strview(ns), mk_strview(name));
-}
-
 static inline bool set_var(nanoclj_t * sc, nanoclj_cell_t * var, nanoclj_val_t state) {
   nanoclj_val_t old_state = get_indexed_value(var, 1);
   set_indexed_value(var, 1, state);
@@ -4228,6 +4224,27 @@ static inline nanoclj_cell_t * get_ns_from_env(nanoclj_cell_t * env) {
   }
   exit(1);
   return NULL; // not reached
+}
+
+static inline nanoclj_val_t _S(const char * name) {
+  uint16_t t = T_SYMBOL;
+  if (name[0] == ':') {
+    t = T_KEYWORD;
+    name++;
+  }
+  strview_t ns_sv = mk_strview(0), name_sv;
+  const char * p = strchr(name, '/');
+  if (p && p > name) {
+    ns_sv = (strview_t){ name, p - name };
+    name_sv = mk_strview(p + 1);
+  } else {
+    name_sv = mk_strview(name);
+  }
+  if (name_sv.size == 0) {
+    return mk_nil();
+  } else {
+    return def_symbol_from_sv(t, ns_sv, name_sv);
+  }
 }
 
 /* get new symbol or keyword. % is aliased to %1 */
@@ -6127,7 +6144,7 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
 
   case T_MAPENTRY:
     return mk_mapentry(sc, first(sc, args), second(sc, args));
-        
+    
   case T_SYMBOL:
   case T_KEYWORD:
   case T_ALIAS:
@@ -9185,7 +9202,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	  if (is_keyword(md)) {
 	    md2 = assoc(sc, md2, md, mk_boolean(true));
 	  } else if (is_string(md)) {
-	    md2 = assoc(sc, md2, def_keyword("tag"), md);
+	    md2 = assoc(sc, md2, _S(":tag"), md);
 	  } else {
 	    nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Metadata must be Symbol, Keyword, String or Map")));
 	    return false;
@@ -10419,81 +10436,81 @@ bool nanoclj_init(nanoclj_t * sc) {
   /* initialization of global nanoclj_val_ts to special symbols */
 
   if (def_symbols) {
-    sym_recur = def_symbol("recur");
-    sym_amp = def_symbol("&");
-    sym_underscore = def_symbol("_");
-    sym_env = def_symbol("*env*");
-    sym_arg1 = def_symbol("%1");
-    sym_arg2 = def_symbol("%2");
-    sym_arg3 = def_symbol("%3");
-    sym_arg_next = def_symbol("%&");
+    sym_recur = _S("recur");
+    sym_amp = _S("&");
+    sym_underscore = _S("_");
+    sym_env = _S("*env*");
+    sym_arg1 = _S("%1");
+    sym_arg2 = _S("%2");
+    sym_arg3 = _S("%3");
+    sym_arg_next = _S("%&");
 
-    sym_tag_hook = def_symbol("*default-data-reader-fn*");
-    sym_autocomplete_hook = def_symbol("*autocomplete-hook*");
-    sym_flush_on_newline = def_symbol("*flush-on-newline*");
-    sym_in = def_symbol("*in*");
-    sym_out = def_symbol("*out*");
-    sym_err = def_symbol("*err*");
-    sym_ns = def_symbol("*ns*");
-    sym_file = def_symbol("*file*");
-    sym_cell_size = def_symbol("*cell-size*");
-    sym_window_size = def_symbol("*window-size*");
-    sym_window_scale_f = def_symbol("*window-scale-factor*");
-    sym_mouse_pos = def_symbol("*mouse-pos*");
-    sym_theme = def_symbol("*theme*");
+    sym_tag_hook = _S("*default-data-reader-fn*");
+    sym_autocomplete_hook = _S("*autocomplete-hook*");
+    sym_flush_on_newline = _S("*flush-on-newline*");
+    sym_in = _S("*in*");
+    sym_out = _S("*out*");
+    sym_err = _S("*err*");
+    sym_ns = _S("*ns*");
+    sym_file = _S("*file*");
+    sym_cell_size = _S("*cell-size*");
+    sym_window_size = _S("*window-size*");
+    sym_window_scale_f = _S("*window-scale-factor*");
+    sym_mouse_pos = _S("*mouse-pos*");
+    sym_theme = _S("*theme*");
 
-    sym_fn = def_symbol("fn");
-    sym_quote = def_symbol("quote");
-    sym_deref = def_qualified_symbol("clojure.core", "deref");
-    sym_var = def_symbol("var");
-    sym_syntax_quote = def_symbol("syntax-quote");
-    sym_unquote = def_symbol("unquote");
-    sym_unquotesp = def_symbol("unquote-splicing");
-    sym_dot = def_symbol(".");
-    sym_catch = def_symbol("catch");
-    sym_finally = def_symbol("finally");
+    sym_fn = _S("fn");
+    sym_quote = _S("quote");
+    sym_deref = _S("clojure.core/deref");
+    sym_var = _S("var");
+    sym_syntax_quote = _S("syntax-quote");
+    sym_unquote = _S("unquote");
+    sym_unquotesp = _S("unquote-splicing");
+    sym_dot = _S(".");
+    sym_catch = _S("catch");
+    sym_finally = _S("finally");
 
-    kw_as = def_keyword("as");
-    kw_doc = def_keyword("doc");
-    kw_width = def_keyword("width");
-    kw_height = def_keyword("height");
-    kw_channels = def_keyword("channels");
-    kw_graphics = def_keyword("graphics");
-    kw_watches = def_keyword("watches");
-    kw_name = def_keyword("name");
-    kw_type = def_keyword("type");
-    kw_line = def_keyword("line");
-    kw_column = def_keyword("column");
-    kw_file = def_keyword("file");
-    kw_ns = def_keyword("ns");
-    kw_inline = def_keyword("inline");
-    kw_block = def_keyword("block");
-    kw_gray = def_keyword("gray");
-    kw_rgb = def_keyword("rgb");
-    kw_rgba = def_keyword("rgba");
-    kw_italic = def_keyword("italic");
-    kw_bold = def_keyword("bold");
-    kw_pdf = def_keyword("pdf");
-    kw_position = def_keyword("position");
-    kw_edges = def_keyword("edges");
-    kw_source = def_keyword("source");
-    kw_target = def_keyword("target");
-    kw_data = def_keyword("data");
-    kw_hair = def_keyword("hair");
-    kw_int = def_keyword("int");
-    kw_float = def_keyword("float");
-    kw_double = def_keyword("double");
-    kw_byte = def_keyword("byte");
-    kw_short = def_keyword("short");
-    kw_boolean = def_keyword("boolean");
-    kw_reload = def_keyword("reload");
-    kw_import = def_keyword("import");
-    kw_private = def_keyword("private");
-    kw_gen_class = def_keyword("gen-class");
-    kw_extends = def_keyword("extends");
-    kw_refer_clojure = def_keyword("refer-clojure");
-    kw_only = def_keyword("only");
-    kw_exclude = def_keyword("exclude");
+    kw_as = _S(":as");
+    kw_doc = _S(":doc");
+    kw_width = _S(":width");
+    kw_height = _S(":height");
+    kw_channels = _S(":channels");
+    kw_graphics = _S(":graphics");
+    kw_watches = _S(":watches");
+    kw_name = _S(":name");
+    kw_type = _S(":type");
+    kw_line = _S(":line");
+    kw_column = _S(":column");
+    kw_file = _S(":file");
+    kw_ns = _S(":ns");
+    kw_inline = _S(":inline");
+    kw_block = _S(":block");
+    kw_gray = _S(":gray");
+    kw_rgb = _S(":rgb");
+    kw_rgba = _S(":rgba");
+    kw_italic = _S(":italic");
+    kw_bold = _S(":bold");
+    kw_pdf = _S(":pdf");
+    kw_position = _S(":position");
+    kw_edges = _S(":edges");
+    kw_source = _S(":source");
+    kw_target = _S(":target");
+    kw_data = _S(":data");
+    kw_hair = _S(":hair");
+    kw_int = _S(":int");
+    kw_float = _S(":float");
+    kw_double = _S(":double");
+    kw_byte = _S(":byte");
+    kw_short = _S(":short");
+    kw_boolean = _S(":boolean");
+    kw_reload = _S(":reload");
+    kw_import = _S(":import");
+    kw_private = _S(":private");
+    kw_gen_class = _S(":gen-class");
+    kw_extends = _S(":extends");
+    kw_refer_clojure = _S(":refer-clojure");
+    kw_only = _S(":only");
+    kw_exclude = _S(":exclude");
     
     str_java_class_path = mk_string(sc, "java.class.path");
   }
@@ -10623,9 +10640,9 @@ bool nanoclj_init(nanoclj_t * sc) {
   sc->context->properties = mk_properties(sc);
   
   if (sc->bg_color.red < 128 && sc->bg_color.green < 128 && sc->bg_color.blue < 128) {
-    intern(sc, sc->core_ns, sym_theme, def_keyword("dark"));
+    intern(sc, sc->core_ns, sym_theme, _S(":dark"));
   } else {
-    intern(sc, sc->core_ns, sym_theme, def_keyword("bright"));
+    intern(sc, sc->core_ns, sym_theme, _S(":bright"));
   }
 
   sc->tests_passed = 0;
@@ -10810,7 +10827,7 @@ int main(int argc, const char **argv) {
   nanoclj_set_output_port_file(&sc, stdout);
   nanoclj_set_error_port_file(&sc, stderr);
 #if USE_DL
-  intern(&sc, sc.core_ns, def_symbol("load-extension"),
+  intern(&sc, sc.core_ns, _S("load-extension"),
 	 mk_foreign_func(&sc, scm_load_ext, 0, -1, NULL));
 #endif
 
@@ -10819,7 +10836,7 @@ int main(int argc, const char **argv) {
     nanoclj_val_t value = mk_string(&sc, argv[i]);
     args = cons(&sc, value, args);
   }
-  intern(&sc, sc.core_ns, def_symbol("*command-line-args*"), mk_pointer(args));
+  intern(&sc, sc.core_ns, _S("*command-line-args*"), mk_pointer(args));
 
   size_t num_errors = 0;
   int rv = 0;
@@ -10834,7 +10851,7 @@ int main(int argc, const char **argv) {
     } else if (argc >= 2) {
       if (nanoclj_load_named_file(&sc, mk_string(&sc, argv[1]))) {
 	/* Call -main if it exists */
-	nanoclj_val_t main_sym = def_symbol("-main");
+	nanoclj_val_t main_sym = _S("-main");
 	nanoclj_val_t main = resolve(&sc, sc.envir, main_sym, mk_nil());
 	if (!is_nil(main)) {
 	  nanoclj_call(&sc, main, mk_emptylist());

@@ -712,12 +712,12 @@ static inline nanoclj_val_t Geo_load(nanoclj_t * sc, nanoclj_cell_t * args) {
 
   nanoclj_cell_t * r = NULL;
 
-  nanoclj_val_t type_key = def_keyword("type");
-  nanoclj_val_t geom_key = def_keyword("geometry");
-  nanoclj_val_t prop_key = def_keyword("properties");
-  nanoclj_val_t coord_key = def_keyword("coordinates");
-  nanoclj_val_t bbox_key = def_keyword("bbox");
-  nanoclj_val_t id_key = def_keyword("id");
+  nanoclj_val_t type_key = _S(":type");
+  nanoclj_val_t geom_key = _S(":geometry");
+  nanoclj_val_t prop_key = _S(":properties");
+  nanoclj_val_t coord_key = _S(":coordinates");
+  nanoclj_val_t bbox_key = _S(":bbox");
+  nanoclj_val_t id_key = _S(":id");
 
   nanoclj_val_t point_id = mk_string(sc, "Point");
   nanoclj_val_t linestring_id = mk_string(sc, "LineString");
@@ -1027,12 +1027,12 @@ static inline nanoclj_val_t create_xml_node(nanoclj_t * sc, xmlNode * input) {
     output = mk_hashmap(sc);
     retain(sc, output);
 
-    output = assoc(sc, output, def_keyword("tag"), tag);
+    output = assoc(sc, output, _S(":tag"), tag);
     if (content) {
-      output = assoc(sc, output, def_keyword("content"), mk_pointer(content));
+      output = assoc(sc, output, _S(":content"), mk_pointer(content));
     }
     if (attrs) {
-      output = assoc(sc, output, def_keyword("attrs"), mk_pointer(attrs));
+      output = assoc(sc, output, _S(":attrs"), mk_pointer(attrs));
     }
   } else if (input->type == XML_TEXT_NODE) {
     const char * text = (const char *)input->content;
