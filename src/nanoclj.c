@@ -246,6 +246,7 @@ typedef struct {
 
 /* globals */
 static nanoclj_tensor_t * g_oblist = NULL;
+atomic_int g_gentypeid_cnt = T_LAST_SYSTEM_TYPE;
 
 static nanoclj_val_t sym_recur;
 static nanoclj_val_t sym_amp;
@@ -1488,15 +1489,25 @@ static inline char * alloc_c_str(strview_t sv) {
 #include "nanoclj_cairo.h"
 #endif
 
+struct {
+  nanoclj_cell_t ** alloc_seg;
+  nanoclj_val_t * cell_seg;
+  int n_seg_reserved;
+  int last_cell_seg;
+  nanoclj_cell_t * free_cell; /* pointer to top of free cells */
+  long fcells; /* # of free cells */
+  size_t num_instances;
+  nanoclj_t * instances[256];
+} g_allocator = { NULL, NULL, 0, -1, NULL, 0, 0 };
+
 /* allocate new cell segment */
-static inline int alloc_cellseg(nanoclj_t * sc, int n) {
-  nanoclj_shared_context_t * context = sc->context;
+static inline int alloc_cellseg(int n) {
   nanoclj_val_t p;
 
-  if (context->last_cell_seg + 1 >= context->n_seg_reserved) {
-    context->n_seg_reserved = (context->n_seg_reserved + 1) * 2;
-    context->alloc_seg = realloc(context->alloc_seg, n * sizeof(nanoclj_cell_t *));
-    context->cell_seg = realloc(context->cell_seg, n * sizeof(nanoclj_val_t));
+  if (g_allocator.last_cell_seg + 1 >= g_allocator.n_seg_reserved) {
+    g_allocator.n_seg_reserved = (g_allocator.n_seg_reserved + 1) * 2;
+    g_allocator.alloc_seg = realloc(g_allocator.alloc_seg, n * sizeof(nanoclj_cell_t *));
+    g_allocator.cell_seg = realloc(g_allocator.cell_seg, n * sizeof(nanoclj_val_t));
   }
   
   for (int k = 0; k < n; k++) {
@@ -1504,17 +1515,17 @@ static inline int alloc_cellseg(nanoclj_t * sc, int n) {
     if (!cp) {
       return k;
     }
-    long i = ++context->last_cell_seg;
-    context->alloc_seg[i] = cp;
+    long i = ++g_allocator.last_cell_seg;
+    g_allocator.alloc_seg[i] = cp;
     /* insert new segment in address order */
     nanoclj_val_t newp = mk_pointer(cp);
-    context->cell_seg[i] = newp;
-    while (i > 0 && context->cell_seg[i - 1].as_long > context->cell_seg[i].as_long) {
-      p = context->cell_seg[i];
-      context->cell_seg[i] = context->cell_seg[i - 1];
-      context->cell_seg[--i] = p;
+    g_allocator.cell_seg[i] = newp;
+    while (i > 0 && g_allocator.cell_seg[i - 1].as_long > g_allocator.cell_seg[i].as_long) {
+      p = g_allocator.cell_seg[i];
+      g_allocator.cell_seg[i] = g_allocator.cell_seg[i - 1];
+      g_allocator.cell_seg[--i] = p;
     }
-    context->fcells += CELL_SEGSIZE;
+    g_allocator.fcells += CELL_SEGSIZE;
     nanoclj_val_t last = mk_pointer(decode_pointer(newp) + CELL_SEGSIZE - 1);
     for (p = newp; p.as_long <= last.as_long; p = mk_pointer(decode_pointer(p) + 1)) {
       cell_type(p) = 0;
@@ -1523,11 +1534,11 @@ static inline int alloc_cellseg(nanoclj_t * sc, int n) {
       car_unchecked(p) = mk_emptylist();
     }
     /* insert new cells in address order on free list */
-    if (!context->free_cell || decode_pointer(p) < context->free_cell) {
-      set_cdr(last, context->free_cell);
-      context->free_cell = decode_pointer(newp);
+    if (!g_allocator.free_cell || decode_pointer(p) < g_allocator.free_cell) {
+      set_cdr(last, g_allocator.free_cell);
+      g_allocator.free_cell = decode_pointer(newp);
     } else {
-      nanoclj_cell_t * p = context->free_cell;
+      nanoclj_cell_t * p = g_allocator.free_cell;
       while (_cdr(p) && decode_pointer(newp) > _cdr(p)) {
         p = _cdr(p);
       }
@@ -1583,7 +1594,7 @@ static inline int port_close(nanoclj_cell_t * p) {
   return r;
 }
 
-static inline void finalize_cell(nanoclj_t * sc, nanoclj_cell_t * a) {
+static inline void finalize_cell(nanoclj_cell_t * a) {
   if (_is_small(a)) {
     return;
   }
@@ -1624,25 +1635,22 @@ static inline void finalize_cell(nanoclj_t * sc, nanoclj_cell_t * a) {
 
 /* get new cell.  parameter a, b is marked by gc. */
 
-static inline nanoclj_cell_t * get_cell_x(nanoclj_t * sc, uint16_t type_id, uint16_t flags, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_cell_t * c) {
-  nanoclj_shared_context_t * context = sc->context;
-
-  if (!context->free_cell) {
-    const int min_to_be_recovered = context->last_cell_seg * 8;
-    gc(sc, a, b, c);
-    if (!context->free_cell || context->fcells < min_to_be_recovered) {
+static inline nanoclj_cell_t * get_cell_x(uint16_t type_id, uint16_t flags, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_cell_t * c) {
+  if (!g_allocator.free_cell) {
+    const int min_to_be_recovered = g_allocator.last_cell_seg * 8;
+    gc(a, b, c);
+    if (!g_allocator.free_cell || g_allocator.fcells < min_to_be_recovered) {
       /* if only a few recovered, get more to avoid fruitless gc's */
-      alloc_cellseg(sc, 1);
-      if (!context->free_cell) {
-	sc->pending_exception = sc->OutOfMemoryError;
+      alloc_cellseg(1);
+      if (!g_allocator.free_cell) {
 	return NULL;
       }
     }
   }
 
-  nanoclj_cell_t * x = context->free_cell;
-  context->free_cell = _cdr_unchecked(x);
-  --context->fcells;
+  nanoclj_cell_t * x = g_allocator.free_cell;
+  g_allocator.free_cell = _cdr_unchecked(x);
+  --g_allocator.fcells;
 
   x->type = type_id;
   x->flags = flags;
@@ -1655,12 +1663,14 @@ static inline nanoclj_cell_t * get_cell_x(nanoclj_t * sc, uint16_t type_id, uint
    Tehom */
 
 static inline void retain(nanoclj_t * sc, nanoclj_cell_t * recent) {
-  nanoclj_cell_t * holder = get_cell_x(sc, T_LIST, 0, recent, NULL, NULL);
+  nanoclj_cell_t * holder = get_cell_x(T_LIST, 0, recent, NULL, NULL);
   if (holder) {
     _car_unchecked(holder) = mk_pointer(recent);
     _cdr_unchecked(holder) = decode_pointer(_car_unchecked(&sc->sink));
     _cons_metadata(holder) = NULL;
     _car_unchecked(&sc->sink) = mk_pointer(holder);
+  } else {
+    sc->pending_exception = sc->OutOfMemoryError;
   }
 }
 
@@ -1673,7 +1683,7 @@ static inline void retain_value(nanoclj_t * sc, nanoclj_val_t recent) {
 
 static inline nanoclj_cell_t * get_cell(nanoclj_t * sc, uint16_t type, uint16_t flags,
 					nanoclj_val_t head, nanoclj_cell_t * tail, nanoclj_cell_t * meta) {
-  nanoclj_cell_t * cell = get_cell_x(sc, type, flags, is_cell(head) ? decode_pointer(head) : NULL, tail, meta);
+  nanoclj_cell_t * cell = get_cell_x(type, flags, is_cell(head) ? decode_pointer(head) : NULL, tail, meta);
   if (cell) {
     _car_unchecked(cell) = head;
     _cdr_unchecked(cell) = tail;
@@ -1682,13 +1692,15 @@ static inline nanoclj_cell_t * get_cell(nanoclj_t * sc, uint16_t type, uint16_t 
 #if RETAIN_ALLOCS
     retain(sc, cell);
 #endif
+  } else {
+    sc->pending_exception = sc->OutOfMemoryError;
   }
   return cell;
 }
 
 /* Creates a foreign function. For infinite arity, set max_arity to -1. */
 static inline nanoclj_val_t mk_foreign_func(nanoclj_t * sc, foreign_func f, int min_arity, int max_arity, nanoclj_cell_t * meta) {
-  nanoclj_cell_t * x = get_cell_x(sc, T_FOREIGN_FUNCTION, T_GC_ATOM, NULL, NULL, meta);
+  nanoclj_cell_t * x = get_cell_x(T_FOREIGN_FUNCTION, T_GC_ATOM, NULL, NULL, meta);
   if (x) {
     _ff_unchecked(x) = f;
     _min_arity_unchecked(x) = min_arity;
@@ -1698,18 +1710,22 @@ static inline nanoclj_val_t mk_foreign_func(nanoclj_t * sc, foreign_func f, int 
 #if RETAIN_ALLOCS
     retain(sc, x);
 #endif
+  } else {
+    sc->pending_exception = sc->OutOfMemoryError;
   }
   return mk_pointer(x);
 }
 
 static inline nanoclj_val_t mk_date(nanoclj_t * sc, long long num) {
-  nanoclj_cell_t * x = get_cell_x(sc, T_DATE, T_GC_ATOM, NULL, NULL, NULL);
+  nanoclj_cell_t * x = get_cell_x(T_DATE, T_GC_ATOM, NULL, NULL, NULL);
   if (x) {
     _lvalue_unchecked(x) = num;
     
 #if RETAIN_ALLOCS
     retain(sc, x);
 #endif
+  } else {
+    sc->pending_exception = sc->OutOfMemoryError;
   }
   return mk_pointer(x);
 }
@@ -1719,13 +1735,15 @@ static inline nanoclj_val_t mk_long(nanoclj_t * sc, long long num) {
   if (num >= INT_MIN && num <= INT_MAX) {
     return mk_long_prim(num);
   } else {
-    nanoclj_cell_t * x = get_cell_x(sc, T_LONG, T_GC_ATOM | T_SMALL | 1, NULL, NULL, NULL);
+    nanoclj_cell_t * x = get_cell_x(T_LONG, T_GC_ATOM | T_SMALL | 1, NULL, NULL, NULL);
     if (x) {
       _lvalue_unchecked(x) = num;
 
 #if RETAIN_ALLOCS
       retain(sc, x);
 #endif
+    } else {
+      sc->pending_exception = sc->OutOfMemoryError;
     }
     return mk_pointer(x);
   }
@@ -1762,7 +1780,7 @@ static inline void graph_array_append_edge(nanoclj_graph_array_t * g, uint32_t s
 }
 
 static inline nanoclj_cell_t * mk_graph(nanoclj_t * sc, uint16_t type, uint32_t offset, uint32_t size, nanoclj_graph_array_t * ga) {
-  nanoclj_cell_t * x = get_cell_x(sc, type, T_GC_ATOM, NULL, NULL, NULL);
+  nanoclj_cell_t * x = get_cell_x(type, T_GC_ATOM, NULL, NULL, NULL);
   if (x) {
     ga->refcnt++;
     _graph_unchecked(x) = ga;
@@ -1821,7 +1839,7 @@ static inline void normalize_ratio_mutate(nanoclj_tensor_t * num, nanoclj_tensor
 }
 
 static inline nanoclj_cell_t * mk_image_with_tensor(nanoclj_t * sc, nanoclj_tensor_t * tensor, nanoclj_cell_t * meta) {
-  nanoclj_cell_t * x = get_cell_x(sc, T_IMAGE, T_GC_ATOM, NULL, NULL, meta);
+  nanoclj_cell_t * x = get_cell_x(T_IMAGE, T_GC_ATOM, NULL, NULL, meta);
   if (x) {
     tensor->refcnt++;
     x->_image.tensor = tensor;
@@ -1848,7 +1866,7 @@ static inline nanoclj_cell_t * mk_image(nanoclj_t * sc, int32_t width, int32_t h
 
 static inline nanoclj_cell_t * mk_object_from_tensor(nanoclj_t * sc, uint16_t type, size_t offset, size_t size, nanoclj_tensor_t * tensor) {
   if (tensor) {
-    nanoclj_cell_t * x = get_cell_x(sc, type, T_GC_ATOM, NULL, NULL, NULL);
+    nanoclj_cell_t * x = get_cell_x( type, T_GC_ATOM, NULL, NULL, NULL);
     if (x) {
       tensor->refcnt++;
       x->_collection.tensor = tensor;
@@ -1868,7 +1886,7 @@ static inline nanoclj_cell_t * mk_object_from_tensor(nanoclj_t * sc, uint16_t ty
 
 static inline nanoclj_cell_t * mk_bigint_from_tensor(nanoclj_t * sc, int sign, nanoclj_tensor_t * tensor) {
   if (tensor) {
-    nanoclj_cell_t * x = get_cell_x(sc, T_BIGINT, T_GC_ATOM, NULL, NULL, NULL);
+    nanoclj_cell_t * x = get_cell_x(T_BIGINT, T_GC_ATOM, NULL, NULL, NULL);
     if (x) {
       tensor->refcnt++;
       x->_collection.tensor = tensor;
@@ -1888,7 +1906,7 @@ static inline nanoclj_cell_t * mk_bigint_from_tensor(nanoclj_t * sc, int sign, n
 }
 
 static inline nanoclj_cell_t * mk_bigint_from_long(nanoclj_t * sc, long long a) {
-  nanoclj_cell_t * x = get_cell_x(sc, T_BIGINT, T_GC_ATOM | T_SMALL | (a < 0 ? T_NEGATIVE : 0), NULL, NULL, NULL);
+  nanoclj_cell_t * x = get_cell_x(T_BIGINT, T_GC_ATOM | T_SMALL | (a < 0 ? T_NEGATIVE : 0), NULL, NULL, NULL);
   if (x) {
     if (a == LLONG_MIN) {
       x->flags |= 2;
@@ -1918,7 +1936,7 @@ static inline nanoclj_cell_t * mk_ratio_from_tensor(nanoclj_t * sc, int sign, na
       return mk_bigint_from_tensor(sc, sign, num);
     }
 
-    nanoclj_cell_t * x = get_cell_x(sc, T_RATIO, T_GC_ATOM | (sign < 0 ? T_NEGATIVE : 0), NULL, NULL, NULL);
+    nanoclj_cell_t * x = get_cell_x(T_RATIO, T_GC_ATOM | (sign < 0 ? T_NEGATIVE : 0), NULL, NULL, NULL);
     if (x) {
       num->refcnt++;
       den->refcnt++;
@@ -1943,7 +1961,7 @@ static inline nanoclj_cell_t * mk_ratio_long(nanoclj_t * sc, long long num, long
 }
 
 static inline nanoclj_cell_t * mk_audio(nanoclj_t * sc, size_t frames, uint8_t channels, int32_t sample_rate) {
-  nanoclj_cell_t * x = get_cell_x(sc, T_AUDIO, T_GC_ATOM, NULL, NULL, NULL);
+  nanoclj_cell_t * x = get_cell_x(T_AUDIO, T_GC_ATOM, NULL, NULL, NULL);
   if (x) {
     nanoclj_tensor_t * tensor = mk_tensor_2d(nanoclj_f32, channels, frames);
     x->_audio.tensor = tensor;
@@ -1981,13 +1999,15 @@ static inline void initialize_collection(nanoclj_cell_t * c, int32_t offset, int
 }
 
 static inline nanoclj_cell_t * get_collection_object(nanoclj_t * sc, int32_t t, int32_t offset, int32_t size, nanoclj_tensor_t * store, nanoclj_cell_t * meta) {
-  nanoclj_cell_t * x = get_cell_x(sc, t, T_GC_ATOM, NULL, NULL, meta);
+  nanoclj_cell_t * x = get_cell_x(t, T_GC_ATOM, NULL, NULL, meta);
   if (x) {
     initialize_collection(x, offset, size, store, meta);
     
 #if RETAIN_ALLOCS
     retain(sc, x);
 #endif
+  } else {
+    sc->pending_exception = sc->OutOfMemoryError;
   }
   return x;
 }
@@ -1996,13 +2016,36 @@ static inline nanoclj_cell_t * get_string_object(nanoclj_t * sc, int32_t t, cons
   nanoclj_tensor_t * s = 0;
   if (len + padding > NANOCLJ_SMALL_STR_SIZE) {
     s = mk_tensor_1d_padded(nanoclj_i8, len, padding);
-    if (!s) return NULL;
+    if (!s) {
+      sc->pending_exception = sc->OutOfMemoryError;
+      return NULL;
+    }
   }
   nanoclj_cell_t * x = get_collection_object(sc, t, 0, len, s, NULL);
   if (x && str) {
     memcpy(get_ptr(x), str, len);
   }
   return x;
+}
+
+/* get new string or nil */
+static inline nanoclj_val_t _T(const char *str) {
+  if (str) {
+    size_t len = strlen(str);
+    nanoclj_tensor_t * s = 0;
+    if (len > NANOCLJ_SMALL_STR_SIZE) {
+      s = mk_tensor_1d_padded(nanoclj_i8, len, 0);
+      if (!s) return mk_nil();
+    }
+    nanoclj_cell_t * x = get_cell_x(T_STRING, T_GC_ATOM, NULL, NULL, NULL);
+    if (x) {
+      initialize_collection(x, 0, len, s, NULL);
+      memcpy(get_ptr(x), str, len);
+    }
+    return mk_pointer(x);
+  } else {
+    return mk_nil();
+  }
 }
 
 /* get new string */
@@ -2319,7 +2362,10 @@ static inline nanoclj_cell_t * get_vector_object_with_tensor_type(nanoclj_t * sc
     } else {
       store = mk_tensor_1d(tensor_type, size);
     }
-    if (!store) return NULL;
+    if (!store) {
+      sc->pending_exception = sc->OutOfMemoryError;
+      return NULL;
+    }
   }
   return get_collection_object(sc, t, 0, size, store, meta);
 }
@@ -2470,15 +2516,16 @@ static inline nanoclj_val_t eval(nanoclj_t * sc, const nanoclj_cell_t * obj) {
 /* Sequence handling */
 
 static inline nanoclj_cell_t * subvec(nanoclj_t * sc, nanoclj_cell_t * vec, size_t start, size_t end) {
+  nanoclj_cell_t * new_vec;
   if (_is_small(vec)) {
-    nanoclj_cell_t * new_vec = get_vector_object(sc, vec->type, end - start);
+    new_vec = get_vector_object(sc, vec->type, end - start);
     if (end > start) {
       memcpy(get_ptr(new_vec), get_ptr(vec) + start * sizeof(nanoclj_val_t), (end - start) * sizeof(nanoclj_val_t));
     }
-    return new_vec;
   } else {
-    return get_collection_object(sc, vec->type, _offset_unchecked(vec) + start, end - start, _tensor_unchecked(vec), NULL);
+    new_vec = get_collection_object(sc, vec->type, _offset_unchecked(vec) + start, end - start, _tensor_unchecked(vec), NULL);
   }
+  return new_vec;
 }
 
 static inline nanoclj_cell_t * remove_prefix(nanoclj_t * sc, nanoclj_cell_t * coll, size_t n) {
@@ -2561,7 +2608,7 @@ static inline nanoclj_cell_t * rseq(nanoclj_t * sc, nanoclj_cell_t * coll) {
     size_t old_offset = _offset_unchecked(coll);
 
     nanoclj_cell_t * new_vec = get_collection_object(sc, _type(coll), old_offset, old_size, s, NULL);
-    _set_rseq(new_vec);
+    if (new_vec) _set_rseq(new_vec);
     return new_vec;
   }
 }
@@ -2761,7 +2808,7 @@ static inline nanoclj_cell_t * rest(nanoclj_t * sc, nanoclj_cell_t * coll) {
 	size_t offset = tensor_hash_rest(tensor, _offset_unchecked(coll), _size_unchecked(coll));
 	if (tensor_is_valid_offset(tensor, offset)) {
 	  coll = get_collection_object(sc, typ, offset, _size_unchecked(coll), tensor, NULL);
-	  _set_seq(coll);
+	  if (coll) _set_seq(coll);
 	  return coll;
 	}
       } else if (get_size(coll) >= 2) {
@@ -3849,10 +3896,14 @@ static inline nanoclj_cell_t * vector_conjoin(nanoclj_t * sc, nanoclj_cell_t * v
 static inline nanoclj_cell_t * assoc(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t key, nanoclj_val_t value) {
   uint16_t t = _type(coll);
   if (t == T_LISTMAP) {
-    nanoclj_cell_t * new_coll = get_cell_x(sc, t, 0, NULL, NULL, NULL);
-    new_coll->_cons.car = key;
-    new_coll->_cons.value = value;
-    new_coll->_cons.cdr = coll;
+    nanoclj_cell_t * new_coll = get_cell_x(t, 0, NULL, NULL, NULL);
+    if (new_coll) {
+      new_coll->_cons.car = key;
+      new_coll->_cons.value = value;
+      new_coll->_cons.cdr = coll;
+    } else {
+      sc->pending_exception = sc->OutOfMemoryError;
+    }
     return new_coll;
   }
   size_t j = find_index(sc, coll, key);
@@ -4009,10 +4060,14 @@ static inline nanoclj_val_t inc_slot_in_frame(nanoclj_cell_t * f, nanoclj_val_t 
 }
 
 static inline nanoclj_cell_t * new_slot_spec_in_frame(nanoclj_t * sc, nanoclj_cell_t * frame, nanoclj_val_t sym, nanoclj_val_t value) {
-  nanoclj_cell_t * slot = get_cell_x(sc, T_LISTMAP, 0, NULL, NULL, NULL);
-  slot->_cons.car = sym;
-  slot->_cons.value = value;
-  slot->_cons.cdr = frame;
+  nanoclj_cell_t * slot = get_cell_x(T_LISTMAP, 0, NULL, NULL, NULL);
+  if (slot) {
+    slot->_cons.car = sym;
+    slot->_cons.value = value;
+    slot->_cons.cdr = frame;
+  } else {
+    sc->pending_exception = sc->OutOfMemoryError;
+  }
   return slot;
 }
 
@@ -4182,25 +4237,26 @@ static inline nanoclj_val_t intern_foreign_func(nanoclj_t * sc, nanoclj_cell_t *
 static inline nanoclj_cell_t * mk_class_with_meta(nanoclj_t * sc, nanoclj_val_t sym, int type_id, nanoclj_cell_t * parent_type, nanoclj_cell_t * md) {
   nanoclj_cell_t * s = get_vector_object(sc, T_HASHMAP, 0);
   nanoclj_cell_t * t0 = get_cell(sc, type_id, T_TYPE, mk_pointer(s), parent_type, md);
-  nanoclj_val_t t = mk_pointer(t0);
-  
-  while (sc->types->ne[0] <= (size_t)type_id) {
-    tensor_mutate_push(sc->types, mk_nil());
-  }
-  tensor_mutate_set(sc->types, type_id, t);
-  
-  sc->namespaces = tensor_hash_mutate_set(sc->namespaces, hasheq(sym, sc), sc->namespaces->ne[1], sym, t, sc, hasheq);
-
-  /* Create aliases for java.lang.* */
-  strview_t sv = to_strview(sym);
-  if (strview_ncmp(sv, 10, "java.lang.") == 0) {
-    strview_t short_sv = strview_remove_prefix(sv, 10);
-    if (short_sv.size) {
-      nanoclj_val_t short_sym = def_symbol_from_sv(T_SYMBOL, mk_strview(0), short_sv);
-      sc->namespaces = tensor_hash_mutate_set(sc->namespaces, hasheq(short_sym, sc), sc->namespaces->ne[1], short_sym, t, sc, hasheq);
+  if (t0) {
+    nanoclj_val_t t = mk_pointer(t0);
+    
+    while (sc->types->ne[0] <= (size_t)type_id) {
+      tensor_mutate_push(sc->types, mk_nil());
+    }
+    tensor_mutate_set(sc->types, type_id, t);
+    
+    sc->namespaces = tensor_hash_mutate_set(sc->namespaces, hasheq(sym, sc), sc->namespaces->ne[1], sym, t, sc, hasheq);
+    
+    /* Create aliases for java.lang.* */
+    strview_t sv = to_strview(sym);
+    if (strview_ncmp(sv, 10, "java.lang.") == 0) {
+      strview_t short_sv = strview_remove_prefix(sv, 10);
+      if (short_sv.size) {
+	nanoclj_val_t short_sym = def_symbol_from_sv(T_SYMBOL, mk_strview(0), short_sv);
+	sc->namespaces = tensor_hash_mutate_set(sc->namespaces, hasheq(short_sym, sc), sc->namespaces->ne[1], short_sym, t, sc, hasheq);
+      }
     }
   }
-  
   return t0;
 }
 
@@ -4365,36 +4421,21 @@ static inline nanoclj_cell_t * update_meta_from_reader(nanoclj_t * sc, nanoclj_c
 }
 
 static inline nanoclj_val_t gensym(nanoclj_t * sc, strview_t prefix) {
-  nanoclj_val_t x;
-  char name[256];
-  nanoclj_shared_context_t * ctx = sc->context;
-
-  nanoclj_mutex_lock( &(ctx->mutex) );
-
-  nanoclj_val_t r = mk_nil();
-  for (; ctx->gensym_cnt < LONG_MAX; ctx->gensym_cnt++) {
-    size_t len = snprintf(name, 256, "%.*s%ld", prefix.size, prefix.ptr, ctx->gensym_cnt);
+  strview_t ns_sv = mk_strview(0);
+  while ( 1 ) {
+    size_t len = snprintf(sc->strbuff, STRBUFFSIZE, "%.*s%ld", prefix.size, prefix.ptr, sc->gensym_cnt++);
 
     /* first check oblist */
-    strview_t ns_sv = mk_strview(0);
-    strview_t name_sv = { name, len };
-    x = oblist_find_item(T_SYMBOL, ns_sv, name_sv);
+    strview_t name_sv = { sc->strbuff, len };
+    nanoclj_val_t x = oblist_find_item(T_SYMBOL, ns_sv, name_sv);
     if (is_nil(x)) {
-      r = oblist_add_item(mk_symbol(T_SYMBOL, ns_sv, name_sv, 0));
-      break;
+      return oblist_add_item(mk_symbol(T_SYMBOL, ns_sv, name_sv, 0));
     }
   }
-
-  nanoclj_mutex_unlock( &(ctx->mutex) );
-  return r;
 }
 
 static inline int gentypeid(nanoclj_t * sc) {
-  nanoclj_shared_context_t * ctx = sc->context;
-  nanoclj_mutex_lock( &(ctx->mutex) );
-  int id = sc->context->gentypeid_cnt++;
-  nanoclj_mutex_unlock( &(ctx->mutex) );
-  return id;
+  return g_gentypeid_cnt++;
 }
 
 static inline bool is_numeric_token(const char * q) {
@@ -4583,7 +4624,7 @@ static inline nanoclj_val_t mk_sharp_const(char *name) {
 /* ========== Routines for Reading ========== */
 
 static inline nanoclj_cell_t * get_port_object(nanoclj_t * sc, uint16_t type, nanoclj_port_type_t port_type) {
-  nanoclj_cell_t * x = get_cell_x(sc, type, T_GC_ATOM, NULL, NULL, NULL);
+  nanoclj_cell_t * x = get_cell_x(type, T_GC_ATOM, NULL, NULL, NULL);
   if (x) {
     nanoclj_port_rep_t * pr = malloc(sizeof(nanoclj_port_rep_t));
     if (pr) {
@@ -4619,7 +4660,7 @@ static inline int http_open_thread(nanoclj_t * sc, strview_t sv, atomic_int * rc
   d->fd = pipefd[1];
   d->rc = rc;
 
-  nanoclj_cell_t * prop = sc->context->properties;
+  nanoclj_cell_t * prop = sc->properties;
   
   nanoclj_val_t v;
   d->useragent = alloc_c_str(to_strview(find(sc, prop, mk_string(sc, "http.agent"), mk_nil())));
@@ -4709,7 +4750,7 @@ static inline nanoclj_cell_t * port_from_filename(nanoclj_t * sc, uint16_t type,
   } else {
     f = fopen(filename, mode);
     if (!f && filename[0] != '/') {
-      nanoclj_val_t path = find(sc,  sc->context->properties, str_java_class_path, mk_nil());
+      nanoclj_val_t path = find(sc,  sc->properties, str_java_class_path, mk_nil());
       if (!is_nil(path)) {
 	strview_t sv = to_strview(path);
 	int idx = 0;
@@ -5997,14 +6038,20 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
 	ls = ((uint64_t)b[8] << 56) | ((uint64_t)b[9] << 48) | ((uint64_t)b[10] << 40) | ((uint64_t)b[11] << 32) |
 	  ((uint64_t)b[12] << 24) | ((uint64_t)b[13] << 16) | ((uint64_t)b[14] << 8) | b[15];
       }
-      nanoclj_cell_t * c = get_cell_x(sc, T_UUID, T_GC_ATOM | T_SMALL | 2, NULL, NULL, NULL);
-      c->_small_tensor.longs[0] = ls;
-      c->_small_tensor.longs[1] = ms;
+      nanoclj_cell_t * c = get_cell_x(T_UUID, T_GC_ATOM | T_SMALL | 2, NULL, NULL, NULL);
+      if (c) {
+	c->_small_tensor.longs[0] = ls;
+	c->_small_tensor.longs[1] = ms;
+      }
       return mk_pointer(c);
     }
 
   case T_SECURERANDOM:
-    return mk_pointer(get_cell_x(sc, T_SECURERANDOM, T_GC_ATOM, NULL, NULL, NULL));
+    {
+      nanoclj_cell_t * x = get_cell_x(T_SECURERANDOM, T_GC_ATOM, NULL, NULL, NULL);
+      if (!x) sc->pending_exception = sc->OutOfMemoryError;
+      return mk_pointer(x);
+    }
 
   case T_VECTOR:
   case T_ARRAYMAP:
@@ -6132,10 +6179,12 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
 	args = next(sc, args);
 	if (args) {
 	  y = first(sc, args);
-	  nanoclj_cell_t * c2 = get_cell_x(sc, t, T_GC_ATOM, NULL, NULL, NULL);
-	  c2->_cons.car = x;
-	  c2->_cons.value = y;
-	  c2->_cons.cdr = c;
+	  nanoclj_cell_t * c2 = get_cell_x(t, T_GC_ATOM, NULL, NULL, NULL);
+	  if (c2) {
+	    c2->_cons.car = x;
+	    c2->_cons.value = y;
+	    c2->_cons.cdr = c;
+	  }
 	  c = c2;
 	}
       }
@@ -6590,7 +6639,7 @@ static inline void update_current_file(nanoclj_t * sc, nanoclj_cell_t * p) {
     nanoclj_port_rep_t * pr = _rep_unchecked(p);
     intern(sc, sc->core_ns, sym_file, mk_string(sc, pr->stdio.filename));
   } else {
-    intern(sc, sc->core_ns, sym_file, mk_string(sc, "NO_SOURCE_PATH"));
+    intern(sc, sc->core_ns, sym_file, _T("NO_SOURCE_PATH"));
   }
 }
 
@@ -9416,9 +9465,11 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       uint_fast16_t t = _type(c);
       if (t == T_VAR || t == T_LIST || t == T_CLOSURE || t == T_MULTI_CLOSURE|| t == T_MACRO ||
 	  t == T_CLASS || t == T_NAMESPACE || t == T_FOREIGN_FUNCTION || t == T_IMAGE) {
-	nanoclj_cell_t * new_c = get_cell_x(sc, T_NIL, T_GC_ATOM, NULL, NULL, NULL);
-	memcpy(new_c, c, sizeof(nanoclj_cell_t));
-	set_metadata(new_c, decode_pointer(arg1));
+	nanoclj_cell_t * new_c = get_cell_x(T_NIL, T_GC_ATOM, NULL, NULL, NULL);
+	if (new_c) {
+	  memcpy(new_c, c, sizeof(nanoclj_cell_t));
+	  set_metadata(new_c, decode_pointer(arg1));
+	}
 	s_return(sc, mk_pointer(new_c));
       }
     }
@@ -9432,7 +9483,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	return false;
       }
       nanoclj_val_t ns_sym = first(sc, code);
-      nanoclj_val_t doc = mk_nil();      
+      nanoclj_val_t doc = mk_nil();
       bool gen_class = false;
       nanoclj_cell_t * only = NULL;
       nanoclj_cell_t * exclude = NULL;
@@ -9595,7 +9646,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       x = decode_symbol(arg0)->ns_sym;
       s_return(sc, is_nil(x) ? x : mk_string_from_sv(sc, to_strview(x))); 
     } else {
-      nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Invalid argument")));
+      nanoclj_throw(sc, mk_illegal_arg_exception(sc, _T("Invalid argument")));
       return false;
     }
     
@@ -10359,6 +10410,8 @@ bool nanoclj_init(nanoclj_t * sc) {
   static_assert(sizeof(nanoclj_cell_t) == 32, "Cell size is invalid");
   static_assert(sizeof(nanoclj_val_t) == 8, "Val size is invalid");
 
+  g_allocator.instances[g_allocator.num_instances++] = sc;  
+  
   bool def_symbols = false;
   if (!g_oblist) {
     g_oblist = mk_tensor_hash(1, 0, 4096);
@@ -10369,21 +10422,8 @@ bool nanoclj_init(nanoclj_t * sc) {
   sc->vptr = &vtbl;
 #endif
 
-  sc->context = malloc(sizeof(nanoclj_shared_context_t));
-  if (!sc->context) {
-    return false;
-  }
-  sc->context->mutex = nanoclj_mutex_create();
-  sc->context->gensym_cnt = 0;
-  sc->context->gentypeid_cnt = T_LAST_SYSTEM_TYPE;
-  sc->context->fcells = 0;
-  sc->context->free_cell = NULL;
-  sc->context->last_cell_seg = -1;
-  sc->context->properties = NULL;
-  sc->context->n_seg_reserved = 0;
-  sc->context->alloc_seg = NULL;
-  sc->context->cell_seg = NULL;
-
+  sc->gensym_cnt = 0;
+  
   sc->save_inport = mk_nil();
   sc->core_ns = sc->envir = NULL;
 
@@ -10393,7 +10433,7 @@ bool nanoclj_init(nanoclj_t * sc) {
   sc->load_stack = mk_tensor_1d(nanoclj_val, 0);
   sc->types = mk_tensor_1d(nanoclj_val, 0);
 
-  if (alloc_cellseg(sc, FIRST_CELLSEGS) != FIRST_CELLSEGS) {
+  if (alloc_cellseg(FIRST_CELLSEGS) != FIRST_CELLSEGS) {
     return false;
   }
   dump_stack_initialize(sc);
@@ -10512,7 +10552,7 @@ bool nanoclj_init(nanoclj_t * sc) {
     kw_only = _S(":only");
     kw_exclude = _S(":exclude");
     
-    str_java_class_path = mk_string(sc, "java.class.path");
+    str_java_class_path = _T("java.class.path");
   }
   
   sc->EMPTYVEC = mk_vector(sc, 0);
@@ -10637,7 +10677,7 @@ bool nanoclj_init(nanoclj_t * sc) {
   sc->term_graphics = td.gfx;
   sc->term_colors = td.color;
   
-  sc->context->properties = mk_properties(sc);
+  sc->properties = mk_properties(sc);
   
   if (sc->bg_color.red < 128 && sc->bg_color.green < 128 && sc->bg_color.blue < 128) {
     intern(sc, sc->core_ns, sym_theme, _S(":dark"));
@@ -10700,17 +10740,11 @@ void nanoclj_deinit(nanoclj_t * sc) {
   sc->rdbuff = sc->load_stack = sc->types = NULL;
 }
 
-void nanoclj_deinit_shared(nanoclj_t * sc, nanoclj_shared_context_t * ctx) {
-  ctx->properties = NULL;
-  gc(sc, NULL, NULL, NULL);
-
-  nanoclj_mutex_destroy(&(ctx->mutex));
-  for (int i = 0; i <= sc->context->last_cell_seg; i++) {
-    free(ctx->alloc_seg[i]);
-  }
-  ctx->last_cell_seg = -1;
-  free(ctx);
-  sc->context = NULL;
+void nanoclj_deinit_allocator() {
+  for (int i = 0; i <= g_allocator.last_cell_seg; i++) {
+    free(g_allocator.alloc_seg[i]);
+  }  
+  g_allocator.last_cell_seg = -1;
 }
 
 void nanoclj_deinit_oblist(nanoclj_t * sc) {
@@ -10885,7 +10919,7 @@ int main(int argc, const char **argv) {
 
   nanoclj_deinit_oblist(&sc);
   nanoclj_deinit(&sc);
-  nanoclj_deinit_shared(&sc, sc.context);
+  nanoclj_deinit_allocator();
 
   return rv;
 }

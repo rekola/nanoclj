@@ -180,9 +180,7 @@ static void mark_thread(nanoclj_t * sc) {
 }
 
 /* garbage collection. parameter a, b is marked. */
-static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_cell_t * c) {
-  nanoclj_shared_context_t * ctx = sc->context;
-
+static void gc_instance(nanoclj_t * sc) {
 #if GC_VERBOSE
   putstr(sc, "gc...", get_err_port(sc));
 #endif
@@ -190,8 +188,7 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_c
   /* mark system globals */
   if (sc->core_ns) mark(sc->core_ns);
   
-  if (ctx->properties) mark(ctx->properties);
-
+  mark(sc->properties);
   mark(sc->OutOfMemoryError);
   mark(sc->NullPointerException);
 
@@ -215,14 +212,20 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_c
   }
 
   mark_thread(sc);
-  
+}
+
+static void gc(nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_cell_t * c) {
   /* mark variables a, b, c */
   if (a) mark(a);
   if (b) mark(b);
   if (c) mark(c);
 
+  for (size_t i = 0; i < g_allocator.num_instances; i++) {
+    gc_instance(g_allocator.instances[i]);
+  }
+
   /* garbage collect */
-  ctx->fcells = 0;
+  g_allocator.fcells = 0;
   nanoclj_cell_t * free_cell = NULL;
   
   /* free-list is kept sorted by address so as to maintain consecutive
@@ -231,8 +234,8 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_c
      free-list in sorted order.
    */
   
-  for (int_fast32_t i = ctx->last_cell_seg; i >= 0; i--) {
-    nanoclj_cell_t * min_p = decode_pointer(ctx->cell_seg[i]);
+  for (int_fast32_t i = g_allocator.last_cell_seg; i >= 0; i--) {
+    nanoclj_cell_t * min_p = decode_pointer(g_allocator.cell_seg[i]);
     nanoclj_cell_t * p = min_p + CELL_SEGSIZE;
     
     while (--p >= min_p) {
@@ -241,26 +244,25 @@ static void gc(nanoclj_t * sc, nanoclj_cell_t * a, nanoclj_cell_t * b, nanoclj_c
       } else {
         /* reclaim cell */
         if (p->type != 0 || p->flags != 0) {
-	  finalize_cell(sc, p);
+	  finalize_cell(p);
           p->type = 0;
 	  p->flags = 0;
 	  _cons_metadata(p) = NULL;
           _set_car(p, mk_emptylist());
         }
-        ++ctx->fcells;
+        ++g_allocator.fcells;
 	_set_cdr(p, free_cell);
         free_cell = p;
       }
     }
   }
 
-  ctx->free_cell = free_cell;
+  g_allocator.free_cell = free_cell;
   
 #if GC_VERBOSE
-  char msg[80];
-  sprintf(msg,80,"done: %ld cells were recovered.\n", ctx->fcells);
-  putstr(sc, msg, get_err_port(sc));
+  fprintf(stderr,"done: %ld cells were recovered.\n", g_allocator.fcells);
 #endif
 }
+
 
 #endif

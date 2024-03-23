@@ -141,19 +141,6 @@ extern "C" {
     nanoclj_val_t code;
   } dump_stack_frame_t;
 
-  typedef struct {
-    nanoclj_mutex_t mutex;
-    /* arrays for segments */
-    nanoclj_cell_t ** alloc_seg;
-    nanoclj_val_t * cell_seg;
-    int n_seg_reserved;
-    int last_cell_seg;
-    nanoclj_cell_t * free_cell;      /* pointer to top of free cells */
-    long fcells;                  /* # of free cells */
-    size_t gensym_cnt, gentypeid_cnt;
-    nanoclj_cell_t * properties;
-  } nanoclj_shared_context_t;
-
   struct nanoclj_s {
 
 /* We use 4 registers. */
@@ -162,7 +149,9 @@ extern "C" {
     nanoclj_val_t code;               /* register for current code */
     size_t dump;               /* stack register for next evaluation */
 
-    nanoclj_shared_context_t * context;
+    size_t gensym_cnt;
+
+    nanoclj_cell_t * properties;
     
     nanoclj_cell_t * pending_exception;		/* pending exception */
 

@@ -71,7 +71,7 @@ static nanoclj_val_t System_nanoTime(nanoclj_t * sc, nanoclj_cell_t * args) {
 }
 
 static nanoclj_val_t System_gc(nanoclj_t * sc, nanoclj_cell_t * args) {
-  gc(sc, NULL, NULL, NULL);
+  gc(NULL, NULL, NULL);
   return (nanoclj_val_t)kTRUE;
 }
 
@@ -103,18 +103,18 @@ static nanoclj_val_t System_getenv(nanoclj_t * sc, nanoclj_cell_t * args) {
 }
 
 static nanoclj_val_t System_getProperty(nanoclj_t * sc, nanoclj_cell_t * args) {
-  return find(sc, sc->context->properties, first(sc, args), second(sc, args));
+  return find(sc, sc->properties, first(sc, args), second(sc, args));
 }
 
 static nanoclj_val_t System_getProperties(nanoclj_t * sc, nanoclj_cell_t * args) {
-  return mk_pointer(sc->context->properties);
+  return mk_pointer(sc->properties);
 }
 
 static nanoclj_val_t System_setProperty(nanoclj_t * sc, nanoclj_cell_t * args) {
   nanoclj_val_t key = first(sc, args);
   nanoclj_val_t val = second(sc, args);
 
-  sc->context->properties = assoc(sc, sc->context->properties, key, val);
+  sc->properties = assoc(sc, sc->properties, key, val);
   return mk_nil();
 }
 
