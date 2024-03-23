@@ -245,7 +245,9 @@ typedef struct {
 #define UNMARK       32767      /* 0111111111111111 */
 
 /* globals */
-static nanoclj_tensor_t * g_oblist = NULL;
+nanoclj_tensor_t * g_oblist = NULL;
+pthread_rwlock_t g_oblist_rwlock = PTHREAD_RWLOCK_INITIALIZER;
+
 atomic_int g_gentypeid_cnt = T_LAST_SYSTEM_TYPE;
 
 static nanoclj_val_t sym_recur;
@@ -3783,14 +3785,19 @@ static inline void ok_to_freely_gc(nanoclj_t * sc) {
 /* ========== oblist implementation  ========== */
 
 static inline nanoclj_val_t oblist_add_item(nanoclj_val_t v) {
+  pthread_rwlock_wrlock(&g_oblist_rwlock);
   g_oblist = tensor_hash_mutate_set(g_oblist, prim_hasheq(v), g_oblist->ne[0], v, mk_nil(), NULL, prim_hasheq);
+  pthread_rwlock_unlock(&g_oblist_rwlock);
   return v;
 }
 
 static inline nanoclj_val_t oblist_find_item(uint16_t type, strview_t ns, strview_t name) {
   uint_fast32_t h = get_interned_hash(type, ns, name);
+
+  pthread_rwlock_rdlock(&g_oblist_rwlock);
   size_t num_buckets = tensor_hash_get_bucket_count(g_oblist);
   size_t location = tensor_hash_get_bucket(h, num_buckets);
+  nanoclj_val_t r = mk_nil();
   while ( 1 ) {
     if (tensor_hash_is_unassigned(g_oblist, location)) {
       break;
@@ -3798,21 +3805,23 @@ static inline nanoclj_val_t oblist_find_item(uint16_t type, strview_t ns, strvie
       nanoclj_val_t y = tensor_get(g_oblist, location);
       if (prim_type(y) == type) {
 	if (type == T_REGEX) {
-	  regex_t * r = decode_regex(y);
-	  if (strview_eq(name, r->pattern)) {
-	    return y;
+	  regex_t * re = decode_regex(y);
+	  if (strview_eq(name, re->pattern)) {
+	    r = y;
+	    break;
 	  }
 	} else {
 	  symbol_t * s = decode_symbol(y);
 	  if (strview_eq(ns, s->ns) && strview_eq(name, s->name)) {
-	    return y;
+	    r = y;
 	  }
 	}
       }
       if (++location == num_buckets) location = 0;
     }
   }
-  return mk_nil();
+  pthread_rwlock_unlock(&g_oblist_rwlock);
+  return r;
 }
 
 /* Copies a cell */
@@ -10410,7 +10419,7 @@ bool nanoclj_init(nanoclj_t * sc) {
   static_assert(sizeof(nanoclj_cell_t) == 32, "Cell size is invalid");
   static_assert(sizeof(nanoclj_val_t) == 8, "Val size is invalid");
 
-  g_allocator.instances[g_allocator.num_instances++] = sc;  
+  g_allocator.instances[g_allocator.num_instances++] = sc;
   
   bool def_symbols = false;
   if (!g_oblist) {
@@ -10768,7 +10777,8 @@ void nanoclj_deinit_oblist(nanoclj_t * sc) {
   }
   tensor_free(sc->oblist);
   sc->oblist = NULL;
-  #endif
+  pthread_rwlock_destroy(&g_oblist_rwlock);
+#endif
 }
 
 bool nanoclj_load_named_file(nanoclj_t * sc, nanoclj_val_t filename) {
