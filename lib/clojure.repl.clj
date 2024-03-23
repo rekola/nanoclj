@@ -57,7 +57,7 @@
   [label version] (if (*out* :graphics)
                     (let [v-margin 5
                           h-margin 0
-                          [cell-width cell-height] *cell-size*
+                          [cell-width cell-height] (:cell-size *out*)
                           s1 (* 1.5 cell-height)
                           s2 (* 0.6 cell-height)
                           cx (clojure.java.io/writer 0 0 :gray)]

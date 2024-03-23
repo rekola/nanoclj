@@ -23,7 +23,7 @@
    })
 
 (defn plot-gradient
-  [g] (let [[cell-width h] *cell-size*
+  [g] (let [[cell-width h] (:cell-size *out*)
             w (* 10 cell-width)
             cx (clojure.java.io/writer w h :rgb)]
         (binding [*out* cx]

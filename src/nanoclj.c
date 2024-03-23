@@ -273,9 +273,6 @@ static nanoclj_val_t sym_out;
 static nanoclj_val_t sym_err;
 static nanoclj_val_t sym_ns;
 static nanoclj_val_t sym_file;
-static nanoclj_val_t sym_cell_size;
-static nanoclj_val_t sym_window_size;
-static nanoclj_val_t sym_window_scale_f;
 static nanoclj_val_t sym_mouse_pos;
 static nanoclj_val_t sym_theme;
     
@@ -320,6 +317,9 @@ static nanoclj_val_t kw_refer_clojure;
 static nanoclj_val_t kw_only;
 static nanoclj_val_t kw_exclude;
 static nanoclj_val_t kw_as;
+static nanoclj_val_t kw_window_size;
+static nanoclj_val_t kw_cell_size;
+static nanoclj_val_t kw_scale_factor;
 
 static nanoclj_val_t str_java_class_path;
 
@@ -3578,6 +3578,19 @@ static inline nanoclj_val_t find(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_
       return c != -1 ? mk_int(c) : mk_nil();
     } else if (key.as_long == kw_graphics.as_long) {
       return mk_boolean(sc->term_graphics != nanoclj_no_gfx);
+    } else {
+      if (_port_type_unchecked(coll) == port_file) {
+	nanoclj_port_rep_t * pr = _rep_unchecked(coll);
+	if (key.as_long == kw_window_size.as_long) {
+	  return mk_vector_2d(sc, pr->stdio.window_width / pr->stdio.window_scale_factor,
+			      pr->stdio.window_height / pr->stdio.window_scale_factor);
+	} else if (key.as_long == kw_cell_size.as_long) {
+	  return mk_vector_2d(sc, pr->stdio.window_width / pr->stdio.window_columns / pr->stdio.window_scale_factor,
+			      pr->stdio.window_height / pr->stdio.window_lines / pr->stdio.window_scale_factor);
+	} else if (key.as_long == kw_scale_factor.as_long) {
+	  return mk_double(pr->stdio.window_scale_factor);
+	}
+      }
     }
     break;
 
@@ -4698,6 +4711,9 @@ static inline nanoclj_cell_t * port_rep_from_file(nanoclj_t * sc, uint16_t type,
   pr->stdio.bg = sc->bg_color;
   pr->stdio.backchars[0] = pr->stdio.backchars[1] = -1;
   pr->stdio.rc = rc;
+  pr->stdio.window_lines = pr->stdio.window_columns = 0;
+  pr->stdio.window_width = pr->stdio.window_height = 0;
+  pr->stdio.window_scale_factor = 1.0f;
 
   nanoclj_cell_t * var = get_var_in_ns(sc->core_ns, sym_flush_on_newline);
   if (var && is_true(get_indexed_value(var, 1))) {
@@ -4891,7 +4907,7 @@ static inline void putchars(nanoclj_t * sc, const char *s, size_t len, nanoclj_c
     fwrite(s, 1, len, pr->stdio.file);
     const char * end = s + len;
     while (s < end) {
-      update_cursor(decode_utf8(s), out, sc->window_columns);
+      update_cursor(decode_utf8(s), out, pr->stdio.window_columns);
       s = utf8_next(s);
     }
   }
@@ -4967,16 +4983,18 @@ static inline void set_font_face(nanoclj_val_t family, bool is_italic, bool is_b
 }
 
 static inline void set_linear_gradient(nanoclj_t * sc, nanoclj_tensor_t * tensor, nanoclj_cell_t * p0, nanoclj_cell_t * p1, nanoclj_val_t out) {
-  float f = sc->window_scale_factor;
   nanoclj_port_rep_t * pr = rep_unchecked(out);
   switch (port_type_unchecked(out)) {
   case port_file:
     break;
   case port_canvas:
 #if NANOCLJ_HAS_CANVAS
-    canvas_set_linear_gradient(pr->canvas.impl, tensor,
-			       to_double(get_indexed_value(p0, 0)) * f, to_double(get_indexed_value(p0, 1)) * f,
-			       to_double(get_indexed_value(p1, 0)) * f, to_double(get_indexed_value(p1, 1)) * f);
+    {
+      float f = pr->canvas.window_scale_factor;
+      canvas_set_linear_gradient(pr->canvas.impl, tensor,
+				 to_double(get_indexed_value(p0, 0)) * f, to_double(get_indexed_value(p0, 1)) * f,
+				 to_double(get_indexed_value(p1, 0)) * f, to_double(get_indexed_value(p1, 1)) * f);
+    }
 #endif
     break;
   }
@@ -6269,13 +6287,17 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
 #if NANOCLJ_HAS_CANVAS
 	  nanoclj_tensor_t * tensor = NULL;
 	  void * canvas = NULL;
+	  float scale = 1.0f;
 	  if (channels) {
+	    nanoclj_val_t out = get_out_port(sc);
+	    if (is_writable(out) && port_type_unchecked(out) == port_file) {
+	      nanoclj_port_rep_t * pr = rep_unchecked(out);
+	      scale = pr->stdio.window_scale_factor;
+	    }
 	    if (channels == 3 && fill_color.alpha == 0) {
 	      fill_color = sc->bg_color;
 	    }
-	    tensor = mk_canvas_backing_tensor((int)(to_double(x) * sc->window_scale_factor),
-					      (int)(to_double(y) * sc->window_scale_factor),
-					      channels);
+	    tensor = mk_canvas_backing_tensor((int)(to_double(x) * scale), (int)(to_double(y) * scale), channels);
 	    tensor->refcnt++;
 	    canvas = mk_canvas(tensor, sc->fg_color, fill_color);
 	  } else if (pdf_fn.size) {
@@ -6285,8 +6307,11 @@ static inline nanoclj_val_t mk_object(nanoclj_t * sc, uint_fast16_t t, nanoclj_c
 				   mk_color3i(0, 0, 0), fill_color);
 	  }
 	  nanoclj_cell_t * port = get_port_object(sc, t, port_canvas);
-	  _rep_unchecked(port)->canvas.impl = canvas;
-	  _rep_unchecked(port)->canvas.data = tensor;
+	  nanoclj_port_rep_t * pr = _rep_unchecked(port);
+	  pr->canvas.impl = canvas;
+	  pr->canvas.data = tensor;
+	  pr->canvas.window_scale_factor = scale;
+	  
 	  if (canvas_has_error(canvas)) {
 	    return nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, canvas_get_error_text(canvas))));
 	  } else {
@@ -8651,7 +8676,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	sc->code = instance;
 	s_goto(sc, OP_EVAL);
       }
-      Error_0(sc, "Syntax error 1");
+      Error_0(sc, "Syntax error");
     }
 
   case OP_DOT1:
@@ -9866,7 +9891,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	return false;
       } else if (port_type_unchecked(x) == port_canvas) {
 #if NANOCLJ_HAS_CANVAS
-	canvas_set_font_size(rep_unchecked(x)->canvas.impl, to_double(arg0) * sc->window_scale_factor);
+	nanoclj_port_rep_t * pr = rep_unchecked(x);
+	canvas_set_font_size(pr->canvas.impl, to_double(arg0) * pr->canvas.window_scale_factor);
       }
 #endif
       s_return(sc, mk_nil());
@@ -9879,8 +9905,9 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     x = get_out_port(sc);
     if (is_writable(x) && port_type_unchecked(x) == port_canvas) {
 #if NANOCLJ_HAS_CANVAS
-      double w = arg0.as_long == kw_hair.as_long ? 1 : to_double(arg0) * sc->window_scale_factor;
-      canvas_set_line_width(rep_unchecked(x)->canvas.impl, w);
+      nanoclj_port_rep_t * pr = rep_unchecked(x);
+      double w = arg0.as_long == kw_hair.as_long ? 1 : to_double(arg0) * pr->canvas.window_scale_factor;
+      canvas_set_line_width(pr->canvas.impl, w);
 #endif
     }
     s_return(sc, mk_nil());
@@ -9892,7 +9919,10 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 #if NANOCLJ_HAS_CANVAS
     x = get_out_port(sc);
     if (is_writable(x) && port_type_unchecked(x) == port_canvas) {
-      canvas_move_to(rep_unchecked(x)->canvas.impl, to_double(arg0) * sc->window_scale_factor, to_double(arg1) * sc->window_scale_factor);
+      nanoclj_port_rep_t * pr = rep_unchecked(x);
+      canvas_move_to(pr->canvas.impl,
+		     to_double(arg0) * pr->canvas.window_scale_factor,
+		     to_double(arg1) * pr->canvas.window_scale_factor);
     }
 #endif
     s_return(sc, mk_nil());
@@ -9904,7 +9934,10 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 #if NANOCLJ_HAS_CANVAS
     x = get_out_port(sc);
     if (is_writable(x) && port_type_unchecked(x) == port_canvas) {
-      canvas_line_to(rep_unchecked(x)->canvas.impl, to_double(arg0) * sc->window_scale_factor, to_double(arg1) * sc->window_scale_factor);
+      nanoclj_port_rep_t * pr = rep_unchecked(x);
+      canvas_line_to(pr->canvas.impl,
+		     to_double(arg0) * pr->canvas.window_scale_factor,
+		     to_double(arg1) * pr->canvas.window_scale_factor);
     }
 #endif
     s_return(sc, mk_nil());
@@ -9916,8 +9949,10 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 #if NANOCLJ_HAS_CANVAS
     x = get_out_port(sc);
     if (is_writable(x) && port_type_unchecked(x) == port_canvas) {
-      canvas_arc(rep_unchecked(x)->canvas.impl, to_double(arg0) * sc->window_scale_factor, to_double(arg1) * sc->window_scale_factor,
-		 to_double(arg2) * sc->window_scale_factor, to_double(arg3), to_double(arg4));
+      nanoclj_port_rep_t * pr = rep_unchecked(x);
+      canvas_arc(pr->canvas.impl, to_double(arg0) * pr->canvas.window_scale_factor,
+		 to_double(arg1) * pr->canvas.window_scale_factor,
+		 to_double(arg2) * pr->canvas.window_scale_factor, to_double(arg3), to_double(arg4));
     }
 #endif
     s_return(sc, mk_nil());
@@ -10003,9 +10038,10 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 #if NANOCLJ_HAS_CANVAS
     x = get_out_port(sc);
     if (is_writable(x) && port_type_unchecked(x) == port_canvas) {
+      nanoclj_port_rep_t * pr = rep_unchecked(x);
       double width, height;
-      canvas_get_text_extents(rep_unchecked(x)->canvas.impl, to_strview(arg0), &width, &height);
-      s_return(sc, mk_vector_2d(sc, width / sc->window_scale_factor, height / sc->window_scale_factor));
+      canvas_get_text_extents(pr->canvas.impl, to_strview(arg0), &width, &height);
+      s_return(sc, mk_vector_2d(sc, width / pr->canvas.window_scale_factor, height / pr->canvas.window_scale_factor));
     }
 #endif
     s_return(sc, mk_nil());
@@ -10069,8 +10105,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 #if NANOCLJ_HAS_CANVAS
     if (is_writable(x) && port_type_unchecked(x) == port_canvas) {
       nanoclj_port_rep_t * pr = rep_unchecked(x);
-      pr->canvas.data = mk_canvas_backing_tensor((int)(to_double(arg0) * sc->window_scale_factor),
-						 (int)(to_double(arg1) * sc->window_scale_factor),
+      pr->canvas.data = mk_canvas_backing_tensor((int)(to_double(arg0) * pr->canvas.window_scale_factor),
+						 (int)(to_double(arg1) * pr->canvas.window_scale_factor),
 						 canvas_get_chan(pr->canvas.impl));
       pr->canvas.impl = mk_canvas(pr->canvas.data, sc->fg_color, sc->bg_color);
     }
@@ -10199,31 +10235,22 @@ static inline void assign_proc(nanoclj_t * sc, nanoclj_cell_t * ns, enum nanoclj
 }
 
 static inline void update_window_info(nanoclj_t * sc, nanoclj_cell_t * out) {
-  nanoclj_val_t size = mk_nil(), cell_size = mk_nil();
-
-  sc->window_lines = 0;
-  sc->window_columns = 0;
-  
   if (_is_writable(out) && _port_type_unchecked(out) == port_file) {
     nanoclj_port_rep_t * pr = _rep_unchecked(out);
     FILE * fh = pr->stdio.file;
     int lines, cols, width, height;
     if (get_window_size(stdin, fh, &cols, &lines, &width, &height)) {
       double f = width / cols >= 14 ? 2.0 : 1.0;
-      sc->window_columns = cols;
-      sc->window_lines = lines;
-      sc->window_scale_factor = f;
-      size = mk_vector_2d(sc, width / f, height / f);
-      cell_size = mk_vector_2d(sc, width / cols / f, height / lines / f);
+      pr->stdio.window_columns = cols;
+      pr->stdio.window_lines = lines;
+      pr->stdio.window_scale_factor = f;
+      pr->stdio.window_width = width;
+      pr->stdio.window_height = height;
     }
 
     pr->stdio.fg = sc->fg_color;
     pr->stdio.bg = sc->bg_color;
   }
-  
-  intern(sc, sc->core_ns, sym_window_size, size);
-  intern(sc, sc->core_ns, sym_cell_size, cell_size);
-  intern(sc, sc->core_ns, sym_window_scale_f, mk_double(sc->window_scale_factor));
 }
 
 /* initialization of nanoclj_t */
@@ -10502,9 +10529,6 @@ bool nanoclj_init(nanoclj_t * sc) {
     sym_err = _S("*err*");
     sym_ns = _S("*ns*");
     sym_file = _S("*file*");
-    sym_cell_size = _S("*cell-size*");
-    sym_window_size = _S("*window-size*");
-    sym_window_scale_f = _S("*window-scale-factor*");
     sym_mouse_pos = _S("*mouse-pos*");
     sym_theme = _S("*theme*");
 
@@ -10560,6 +10584,9 @@ bool nanoclj_init(nanoclj_t * sc) {
     kw_refer_clojure = _S(":refer-clojure");
     kw_only = _S(":only");
     kw_exclude = _S(":exclude");
+    kw_cell_size = _S(":cell-size");
+    kw_window_size = _S(":window-size");
+    kw_scale_factor = _S(":scale-factor");
     
     str_java_class_path = _T("java.class.path");
   }
@@ -10677,9 +10704,6 @@ bool nanoclj_init(nanoclj_t * sc) {
 
   register_functions(sc);
 
-  sc->window_scale_factor = 1.0;
-  sc->window_lines = sc->window_columns = 0;
-
   nanoclj_termdata_t td = get_termdata(stdin, stdout);
   sc->fg_color = td.fg;
   sc->bg_color = td.bg;
@@ -10718,7 +10742,6 @@ void nanoclj_set_output_port_callback(nanoclj_t * sc,
 				      ) {
   nanoclj_val_t p = mk_writer_from_callback(sc, text, color, restore, image);
   intern(sc, sc->core_ns, sym_out, p);
-  intern(sc, sc->core_ns, sym_window_size, mk_nil());
 }
 
 void nanoclj_set_error_port_callback(nanoclj_t * sc, void (*text) (const char *, size_t, void *)) {

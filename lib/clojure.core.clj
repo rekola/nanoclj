@@ -567,8 +567,8 @@
                      (var? x) (print-fn :var x)
                      (class? x) (print-fn :class x)
                      (closure? x) (pr-inline print-fn (cons 'fn (first x)))
-                     (and (image? x) (*out* :graphics)) (let [cs *cell-size*
-                                                              f *window-scale-factor*
+                     (and (image? x) (*out* :graphics)) (let [cs (:cell-size *out*)
+                                                              f (:scale-factor *out*)
                                                               w (x :width)
                                                               h (x :height)
                                                               ww (* (cs 0) f)
@@ -593,8 +593,8 @@
 
 (defn- pr-block
   [print-fn x]
-  (if (image? x) (let [ws *window-size*
-                       f *window-scale-factor*
+  (if (image? x) (let [ws (:window-size *out*)
+                       f (:scale-factor *out*)
                        w (x :width)
                        h (x :height)
                        ww (* (ws 0) f)

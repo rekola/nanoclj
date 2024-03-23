@@ -55,6 +55,8 @@ extern "C" {
       int32_t num_states;
       nanoclj_term_state_t states[256];
       int32_t backchars[2];
+      int window_lines, window_columns, window_width, window_height;
+      float window_scale_factor;
     } stdio;
     struct {
       size_t read_pos;
@@ -72,6 +74,7 @@ extern "C" {
     struct {
       void * impl;
       nanoclj_tensor_t * data;
+      float window_scale_factor;
     } canvas;
   } nanoclj_port_rep_t;
 
@@ -196,8 +199,6 @@ extern "C" {
     
     nanoclj_graphics_t term_graphics;
     nanoclj_colortype_t term_colors;
-    int window_lines, window_columns;
-    double window_scale_factor;
     nanoclj_color_t fg_color, bg_color;
 
     size_t tests_passed, tests_failed;

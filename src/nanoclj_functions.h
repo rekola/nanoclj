@@ -460,7 +460,7 @@ static inline nanoclj_val_t Image_resize(nanoclj_t * sc, nanoclj_cell_t * args) 
   imageview_t iv = to_imageview(first(sc, args));
   nanoclj_val_t target_w0 = second(sc, args), target_h0 = third(sc, args);
   if (!iv.ptr || !is_number(target_w0) || !is_number(target_h0)) {
-    return nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Invalid type")));
+    return nanoclj_throw(sc, mk_illegal_arg_exception(sc, _T("Invalid arguments")));
   }
 
   int target_w = to_int(target_w0), target_h = to_int(target_h0);
@@ -1237,8 +1237,7 @@ static bool * errorcheck_callback(const char * buf, size_t len) {
 }
 
 static inline void mouse_motion_callback(int x, int y) {
-  double f = linenoise_sc->window_scale_factor;
-  nanoclj_val_t p = mk_vector_2d(linenoise_sc, x / f, y / f);
+  nanoclj_val_t p = mk_vector_2d(linenoise_sc, x, y);
   intern(linenoise_sc, linenoise_sc->core_ns, sym_mouse_pos, p);
   if (linenoise_sc->pending_exception) {
     linenoiseTerminate();

@@ -36,7 +36,7 @@
 (defn graph-plot
   "Plots a graph"
   ([& graphs]
-   (let [width (*window-size* 0)
+   (let [width ((:window-size *out*) 0)
          height (int (/ width 3))
          margin-top 10
          margin-bottom 10
@@ -105,7 +105,7 @@
   ([& args]
    (let [args (parse-args (seq args))
                                         ; Set plot variables
-         width (*window-size* 0)
+         width ((:window-size *out*) 0)
          height (int (/ width 3.0))
          title (get args :title)
          margin-top (if title 30 15)
@@ -240,14 +240,6 @@
                                         ; Bind the canvas to *out* and draw
      (binding [*out* cx] (draw))
 
-                                        ; Add watch for re-rendering the plot if window size changes (not used)
-     (add-watch (var *window-size*) 0
-                (fn [key ref old-ws ws]
-                  (with-out cx
-                    (resize)
-                    (flush)
-                    )))
-
                                         ; Add watch for mouse over (not used yet)
      (add-watch (var *mouse-pos*) 0
                 (fn [key ref old-pos pos]
@@ -258,7 +250,7 @@
 (defn scatter
   "Draws a scatter plot. Matlab style."
   ([& args]
-   (let [width (*window-size* 0)
+   (let [width ((:window-size *out*) 0)
          height (int (/ width 3))
          box-color ((theme-colors *theme*) :box)
          plots (map #( conj (vec %1) %2 ) (partition 2 args) plot-colors)
@@ -338,13 +330,6 @@
                 )
          ]
      (binding [*out* cx] (draw))
-         
-     (add-watch (var *window-size*) 0
-                (fn [key ref old-ws ws]
-                  (with-out cx
-                    (resize)
-                    (flush)
-                    )))
      
      (add-watch (var *mouse-pos*) 0
                 (fn [key ref old-pos pos]

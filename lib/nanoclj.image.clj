@@ -1,5 +1,6 @@
 (ns nanoclj.image
-  "Image processing operations")
+  "Image processing operations"
+  (:refer-clojure :only (defn)))
 
 (defn gaussian-blur
   "Applies gaussian blur to image"
@@ -10,7 +11,7 @@
 
 (defn load
   "Loads an image"
-  [fn] (Image/load fn))
+  [fn] (nanoclj.lang.Image/load fn))
 
 (defn save
   "Saves an image"
