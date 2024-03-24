@@ -7097,17 +7097,23 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_LAMBDA:              /* lambda */
     {
       nanoclj_cell_t * code = decode_pointer(sc->code);
+      if (!code) {
+	Error_0(sc, "Syntax error");
+      }
       nanoclj_val_t name = mk_nil();
       bool is_multi = false;
-      if (is_symbol(_car(code)) && is_vector(_cadr(code))) {
-	name = _car(code);
+      nanoclj_val_t f = _car(code);
+      if (is_symbol(f) && is_vector(_cadr(code))) {
+	name = f;
 	code = _cdr(code);
-      } else if (is_symbol(_car(code)) && (is_list(_cadr(code)) && is_vector(_caadr(code)))) {
-	name = _car(code);
+      } else if (is_symbol(f) && (is_list(_cadr(code)) && is_vector(_caadr(code)))) {
+	name = f;
 	code = _cdr(code);
 	is_multi = true;
-      } else if (is_list(_car(code)) && is_vector(_caar(code))) {
+      } else if (is_list(f) && is_vector(_caar(code))) {
 	is_multi = true;
+      } else if (is_emptylist(f) || is_nil(f)) {
+	Error_0(sc, "Syntax error");
       }
 
       if (is_multi) {
