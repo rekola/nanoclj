@@ -7197,6 +7197,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     nanoclj_throw(sc, mk_illegal_arg_exception(sc, mk_string(sc, "Invalid arguments for tensor")));
     return false;
 
+  case OP_DEFONCE:
   case OP_DEF0:                /* def */
     {
       nanoclj_cell_t * code = decode_pointer(sc->code);
@@ -7215,9 +7216,14 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       if (!is_symbol(x) || decode_symbol(x)->ns.size) {
 	Error_0(sc, "Variable is not an unqualified symbol");
       }
+      nanoclj_cell_t * ns = get_ns_from_env(sc->envir);
+      if (sc->op == OP_DEFONCE && get_var_in_ns(ns, x)) {
+	s_return(sc, mk_nil());
+      }
+
       meta = update_meta_from_reader(sc, meta, tensor_peek(sc->load_stack));
       meta = assoc(sc, meta, kw_name, x);
-      meta = assoc(sc, meta, kw_ns, mk_pointer(get_ns_from_env(sc->envir)));
+      meta = assoc(sc, meta, kw_ns, mk_pointer(ns));
       
       nanoclj_cell_t * code2 = next(sc, code);
       if (code2) {
@@ -9515,6 +9521,19 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
     Error_0(sc, "Cannot set metadata");
 
+  case OP_RESET_META:
+    if (!unpack_args_2_not_nil(sc, &arg0, &arg1)) {
+      return false;
+    } else if (is_cell(arg0) && is_cell(arg1)) {
+      nanoclj_cell_t * c = decode_pointer(arg0);
+      uint_fast16_t t = _type(c);
+      if (t == T_VAR || t == T_CLASS || t == T_NAMESPACE) {
+	set_metadata(c, decode_pointer(arg1));
+	s_return(sc, arg1);
+      }
+    }
+    Error_0(sc, "Cannot set metadata");
+
   case OP_NS:
     {
       nanoclj_cell_t * code = decode_pointer(sc->code);
@@ -10495,6 +10514,7 @@ bool nanoclj_init(nanoclj_t * sc) {
   assign_syntax(sc, "fn", OP_LAMBDA);
   assign_syntax(sc, "quote", OP_QUOTE);
   assign_syntax(sc, "var", OP_VAR);
+  assign_syntax(sc, "defonce", OP_DEFONCE);
   assign_syntax(sc, "def", OP_DEF0);
   assign_syntax(sc, "if", OP_IF0);
   assign_syntax(sc, "do", OP_DO);
