@@ -1012,6 +1012,10 @@
   "Returns the refers of ns"
   [ns] (into {} (filter #( = (:ns (meta (second %))) ns) (first ns))))
 
+(defn ns-name
+  "Returns the name of the namespace"
+  [ns] (:name (meta ns)))
+
 (defn the-ns
   "Returns the namespace that the symbol x refers, or x itself, if x is a namespae"
   [x] (if (isa? clojure.lang.Namespace x)
