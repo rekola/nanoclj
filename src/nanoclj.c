@@ -247,6 +247,7 @@ typedef struct {
 /* globals */
 nanoclj_tensor_t * g_oblist = NULL;
 pthread_rwlock_t g_oblist_rwlock = PTHREAD_RWLOCK_INITIALIZER;
+atomic_int g_oblist_refcnt = 0;
 
 atomic_int g_gentypeid_cnt = T_LAST_SYSTEM_TYPE;
 
@@ -4043,11 +4044,12 @@ static inline nanoclj_cell_t * conjoin(nanoclj_t * sc, nanoclj_cell_t * coll, na
 }
 
 static inline nanoclj_cell_t * disj(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t key) {
-  uint16_t t = _type(coll);
-  size_t j = find_index(sc, coll, key);
-  if (j == NPOS) return coll;
+  /* Not implemented */
+  return coll;
+}
 
-  
+static inline nanoclj_cell_t * dissoc(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t key) {
+  /* Not implemented */
   return coll;
 }
 
@@ -8461,10 +8463,28 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
   case OP_DISJ:
     if (!unpack_args_2(sc, &arg0, &arg1)) {
       return false;
-    } else if (is_cell(arg0) || is_nil(arg0)) {
+    } else if (is_nil(arg0)) {
       s_return(sc, arg0);
+    } else if (is_cell(arg0)) {
+      nanoclj_cell_t * coll = decode_pointer(arg0);
+      if (is_set_type(_type(coll))) {
+	s_return(sc, mk_pointer(disj(sc, coll, arg1)));
+      }
     }
     Error_0(sc, "No protocol method ICollection.-disjoin defined for type");
+    
+  case OP_DISSOC:
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
+      return false;
+    } else if (is_nil(arg0)) {
+      s_return(sc, arg0);
+    } else if (is_cell(arg0)) {
+      nanoclj_cell_t * coll = decode_pointer(arg0);
+      if (is_map_type(_type(coll))) {
+	s_return(sc, mk_pointer(dissoc(sc, coll, arg1)));
+      }
+    }
+    Error_0(sc, "No protocol method ICollection.-dissoc defined for type");
 
   case OP_COUNT:
     if (!unpack_args_1(sc, &arg0)) {
@@ -9538,100 +9558,6 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     }
     Error_0(sc, "Cannot set metadata");
     
-  case OP_NS:
-    {
-      nanoclj_cell_t * code = decode_pointer(sc->code);
-      if (!code) {
-	throw_invalid_arity_for_op(sc);
-	return false;
-      }
-      nanoclj_val_t ns_sym = first(sc, code);
-      nanoclj_val_t doc = mk_nil();
-      bool gen_class = false;
-      nanoclj_cell_t * only = NULL;
-      nanoclj_cell_t * exclude = NULL;
-      nanoclj_cell_t * parent_class = sc->Object;
-
-      code = next(sc, code);
-      if (code) {
-	nanoclj_val_t arg = first(sc, code);
-	if (is_string(arg)) {
-	  doc = arg;
-	  code = next(sc, code);
-	}
-      }
-      for (; code; code = next(sc, code)) {
-	nanoclj_val_t arg = first(sc, code);
-	if (is_list(arg)) {
-	  nanoclj_cell_t * c = decode_pointer(arg);
-	  nanoclj_val_t key = first(sc, c);
-	  c = next(sc, c);
-	  if (key.as_long == kw_gen_class.as_long) {
-	    gen_class = true;
-	    for (; c; c = next(sc, c)) {
-	      nanoclj_val_t key = first(sc, c);
-	      if (key.as_long == kw_extends.as_long) {
-		c = next(sc, c);
-		parent_class = find_ns(sc, first(sc, c));
-	      }
-	    }
-	  } else if (key.as_long == kw_refer_clojure.as_long) {
-	    for (; c; c = next(sc, c)) {
-	      nanoclj_val_t key = first(sc, c);
-	      c = next(sc, c);
-	      nanoclj_val_t arg = first(sc, c);
-	      if (!is_emptylist(arg) && !is_list(arg)) {
-		Error_0(sc, "Syntax error");
-	      }
-	      nanoclj_cell_t * s = mk_collection(sc, T_HASHSET, decode_pointer(arg));
-	      if (key.as_long == kw_only.as_long) {
-		only = s;
-	      } else if (key.as_long == kw_exclude.as_long) {
-		exclude = s;
-	      }
-	    }
-	  }
-	}
-      }
-      nanoclj_cell_t * ns = find_ns(sc, ns_sym);
-      if (!ns) {
-	nanoclj_cell_t * meta = update_meta_from_reader(sc, mk_hashmap(sc), tensor_peek(sc->load_stack));
-	meta = assoc(sc, meta, kw_name, ns_sym);
-	if (!is_nil(doc)) meta = assoc(sc, meta, kw_doc, doc);
-	if (gen_class) {
-	  ns = mk_class_with_meta(sc, ns_sym, gentypeid(sc), parent_class, meta);
-	} else {
-	  ns = def_namespace_with_sym(sc, ns_sym, meta);
-	}
-      }
-      if (ns != sc->core_ns) refer(sc, ns, sc->core_ns, only, exclude);
-      nanoclj_val_t ns2 = mk_pointer(ns);
-      intern(sc, sc->core_ns, sym_ns, ns2);
-      bool r = _s_return(sc, ns2);
-      sc->envir = ns;
-      return r;
-    }
-
-  case OP_CREATE_NS:
-  case OP_IN_NS:
-    if (!unpack_args_1(sc, &arg0)) {
-      return false;
-    } else {
-      nanoclj_cell_t * ns = find_ns(sc, arg0);
-      if (!ns) {
-	nanoclj_cell_t * meta = update_meta_from_reader(sc, mk_hashmap(sc), tensor_peek(sc->load_stack));
-	meta = assoc(sc, meta, kw_name, arg0);
-	ns = def_namespace_with_sym(sc, arg0, meta);
-      }
-      nanoclj_val_t ns2 = mk_pointer(ns);
-      bool r = _s_return(sc, ns2);
-      if (sc->op == OP_IN_NS) {
-	intern(sc, sc->core_ns, sym_ns, ns2);
-	sc->envir = ns;
-      }
-      return r;
-    }
-    
   case OP_RE_FIND:
   case OP_RE_FIND_INDEX:
     if (!unpack_args_2_not_nil(sc, &arg0, &arg1)) {
@@ -9818,6 +9744,107 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       s_return(sc, mk_nil());
     }
 
+  case OP_NS:
+    {
+      nanoclj_cell_t * code = decode_pointer(sc->code);
+      if (!code) {
+	throw_invalid_arity_for_op(sc);
+	return false;
+      }
+      nanoclj_val_t ns_sym = first(sc, code);
+      nanoclj_val_t doc = mk_nil();
+      bool gen_class = false;
+      nanoclj_cell_t * only = NULL;
+      nanoclj_cell_t * exclude = NULL;
+      nanoclj_cell_t * parent_class = sc->Object;
+
+      code = next(sc, code);
+      if (code) {
+	nanoclj_val_t arg = first(sc, code);
+	if (is_string(arg)) {
+	  doc = arg;
+	  code = next(sc, code);
+	}
+      }
+      for (; code; code = next(sc, code)) {
+	nanoclj_val_t arg = first(sc, code);
+	if (is_list(arg)) {
+	  nanoclj_cell_t * c = decode_pointer(arg);
+	  nanoclj_val_t key = first(sc, c);
+	  c = next(sc, c);
+	  if (key.as_long == kw_gen_class.as_long) {
+	    gen_class = true;
+	    for (; c; c = next(sc, c)) {
+	      nanoclj_val_t key = first(sc, c);
+	      if (key.as_long == kw_extends.as_long) {
+		c = next(sc, c);
+		parent_class = find_ns(sc, first(sc, c));
+	      }
+	    }
+	  } else if (key.as_long == kw_refer_clojure.as_long) {
+	    for (; c; c = next(sc, c)) {
+	      nanoclj_val_t key = first(sc, c);
+	      c = next(sc, c);
+	      nanoclj_val_t arg = first(sc, c);
+	      if (!is_emptylist(arg) && !is_list(arg)) {
+		Error_0(sc, "Syntax error");
+	      }
+	      nanoclj_cell_t * s = mk_collection(sc, T_HASHSET, decode_pointer(arg));
+	      if (key.as_long == kw_only.as_long) {
+		only = s;
+	      } else if (key.as_long == kw_exclude.as_long) {
+		exclude = s;
+	      }
+	    }
+	  }
+	}
+      }
+      nanoclj_cell_t * ns = find_ns(sc, ns_sym);
+      if (!ns) {
+	nanoclj_cell_t * meta = update_meta_from_reader(sc, mk_hashmap(sc), tensor_peek(sc->load_stack));
+	meta = assoc(sc, meta, kw_name, ns_sym);
+	if (!is_nil(doc)) meta = assoc(sc, meta, kw_doc, doc);
+	if (gen_class) {
+	  ns = mk_class_with_meta(sc, ns_sym, gentypeid(sc), parent_class, meta);
+	} else {
+	  ns = def_namespace_with_sym(sc, ns_sym, meta);
+	}
+      }
+      if (ns != sc->core_ns) refer(sc, ns, sc->core_ns, only, exclude);
+      nanoclj_val_t ns2 = mk_pointer(ns);
+      intern(sc, sc->core_ns, sym_ns, ns2);
+      bool r = _s_return(sc, ns2);
+      sc->envir = ns;
+      return r;
+    }
+
+  case OP_CREATE_NS:
+  case OP_IN_NS:
+    if (!unpack_args_1(sc, &arg0)) {
+      return false;
+    } else {
+      nanoclj_cell_t * ns = find_ns(sc, arg0);
+      if (!ns) {
+	nanoclj_cell_t * meta = update_meta_from_reader(sc, mk_hashmap(sc), tensor_peek(sc->load_stack));
+	meta = assoc(sc, meta, kw_name, arg0);
+	ns = def_namespace_with_sym(sc, arg0, meta);
+      }
+      nanoclj_val_t ns2 = mk_pointer(ns);
+      bool r = _s_return(sc, ns2);
+      if (sc->op == OP_IN_NS) {
+	intern(sc, sc->core_ns, sym_ns, ns2);
+	sc->envir = ns;
+      }
+      return r;
+    }
+
+  case OP_REMOVE_NS:
+    if (!unpack_args_1(sc, &arg0)) {
+      return false;
+    } else {
+      s_return(sc, mk_nil()); /* Not implemented */
+    }
+    
   case OP_FIND_NS:
     if (!unpack_args_1(sc, &arg0)) {
       return false;
@@ -10485,6 +10512,7 @@ bool nanoclj_init(nanoclj_t * sc) {
     g_oblist = mk_tensor_hash(1, 0, 4096);
     def_symbols = true;
   }
+  g_oblist_refcnt++;
   
 #if USE_INTERFACE
   sc->vptr = &vtbl;
@@ -10790,6 +10818,43 @@ void nanoclj_set_external_data(nanoclj_t * sc, void *p) {
   sc->ext_data = p;
 }
 
+static void nanoclj_deinit_oblist() {
+  int64_t num_buckets = tensor_hash_get_bucket_count(g_oblist);
+  int64_t * sparse_indices = g_oblist->sparse_indices;
+  for (int64_t offset = 0; offset < num_buckets; offset++) {
+    if (sparse_indices[offset] != -1) {
+      nanoclj_val_t v = tensor_get(g_oblist, offset);
+      switch (prim_type(v)) {
+      case T_SYMBOL:
+      case T_KEYWORD:
+      case T_ALIAS:
+	free_symbol(decode_symbol(v));
+	break;
+      case T_REGEX:
+	free_regex(decode_regex(v));
+	break;
+      }
+    }
+  }
+  tensor_free(g_oblist);
+  g_oblist = NULL;
+  g_oblist_refcnt = 0;
+  pthread_rwlock_destroy(&g_oblist_rwlock);
+}
+
+static void nanoclj_deinit_allocator() {
+  for (int i = 0; i <= g_allocator.last_cell_seg; i++) {
+    free(g_allocator.alloc_seg[i]);
+  }
+  g_allocator.alloc_seg = NULL;
+  g_allocator.cell_seg = NULL;
+  g_allocator.n_seg_reserved = 0;
+  g_allocator.last_cell_seg = -1;
+  g_allocator.free_cell = NULL;
+  g_allocator.fcells = 0;
+  g_allocator.num_instances = 0;
+}
+
 void nanoclj_deinit(nanoclj_t * sc) {
   sc->core_ns = NULL;
   dump_stack_free(sc);
@@ -10803,38 +10868,18 @@ void nanoclj_deinit(nanoclj_t * sc) {
   tensor_free(sc->load_stack);
   tensor_free(sc->types);
   sc->rdbuff = sc->load_stack = sc->types = NULL;
-}
 
-void nanoclj_deinit_allocator() {
-  for (int i = 0; i <= g_allocator.last_cell_seg; i++) {
-    free(g_allocator.alloc_seg[i]);
-  }  
-  g_allocator.last_cell_seg = -1;
-}
-
-void nanoclj_deinit_oblist(nanoclj_t * sc) {
-#if 0
-  int64_t num_buckets = tensor_hash_get_bucket_count(sc->oblist);
-  int64_t * sparse_indices = sc->oblist->sparse_indices;
-  for (int64_t offset = 0; offset < num_buckets; offset++) {
-    if (sparse_indices[offset] != -1) {
-      nanoclj_val_t v = tensor_get(sc->oblist, offset);
-      switch (prim_type(v)) {
-      case T_SYMBOL:
-      case T_KEYWORD:
-      case T_ALIAS:
-	free_symbol(decode_symbol(v));
-	break;
-      case T_REGEX:
-	free_regex(decode_regex(v));
-	break;
-      }
-    }
+  if (--g_oblist_refcnt == 0) {
+    nanoclj_deinit_oblist();
   }
-  tensor_free(sc->oblist);
-  sc->oblist = NULL;
-  pthread_rwlock_destroy(&g_oblist_rwlock);
-#endif
+
+  size_t i = 0;
+  for (; i < g_allocator.num_instances && g_allocator.instances[i] != sc; i++) { }
+  if (i < g_allocator.num_instances) {
+    if (i + 1 < g_allocator.num_instances) g_allocator.instances[i] = g_allocator.instances[g_allocator.num_instances - 1];
+    if (--g_allocator.num_instances == 0) nanoclj_deinit_allocator();
+    
+  }
 }
 
 bool nanoclj_load_named_file(nanoclj_t * sc, nanoclj_val_t filename) {
@@ -10983,9 +11028,7 @@ int main(int argc, const char **argv) {
     if (rv) fprintf(stderr, "Tests failed.\n");
   }
 
-  nanoclj_deinit_oblist(&sc);
   nanoclj_deinit(&sc);
-  nanoclj_deinit_allocator();
 
   return rv;
 }
