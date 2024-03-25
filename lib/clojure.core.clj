@@ -442,6 +442,14 @@
   ([to] to)
   ([to from] (reduce -conj to from)))
 
+(defn select-keys
+  "Returns a new map based on the input map with just the keys in keyseq"
+  [map keyseq] (if (empty? keyseq) {}
+                   (loop [ acc {} keyval (find map (first keyseq)) keyseq (next keyseq) ]
+                     (if keyseq
+                       (recur (-conj acc keyval) (find map (first keyseq)) (next keyseq))
+                       (-conj acc keyval)))))
+
 (defn frequencies
   "Calculates the counts of unique elements in coll and returns them in a map"
   [coll] (reduce (fn [counts x] (assoc counts x (inc (get counts x 0)))) {} coll))

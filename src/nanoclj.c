@@ -3997,17 +3997,21 @@ static inline nanoclj_cell_t * conjoin(nanoclj_t * sc, nanoclj_cell_t * coll, na
     } else {
       return coll;
     }
-  } else if (is_map_type(t) && is_cell(new_value)) {
-    nanoclj_cell_t * c = decode_pointer(new_value);
-    uint_fast16_t arg_type = _type(c);
-    if (arg_type == T_VECTOR || arg_type == T_MAPENTRY) {
-      return assoc(sc, coll, first(sc, c), second(sc, c));
-    } else if (is_map_type(arg_type)) {
-      for (; c; c = next(sc, c)) {
-	nanoclj_cell_t * mapentry = decode_pointer(first(sc, c));
-	coll = assoc(sc, coll, first(sc, mapentry), second(sc, mapentry));
-      }
+  } else if (is_map_type(t)) {
+    if (is_nil(new_value) || is_emptylist(new_value)) {
       return coll;
+    } else if (is_cell(new_value)) {
+      nanoclj_cell_t * c = decode_pointer(new_value);
+      uint_fast16_t arg_type = _type(c);
+      if (arg_type == T_VECTOR || arg_type == T_MAPENTRY) {
+	return assoc(sc, coll, first(sc, c), second(sc, c));
+      } else if (is_map_type(arg_type)) {
+	for (; c; c = next(sc, c)) {
+	  nanoclj_cell_t * mapentry = decode_pointer(first(sc, c));
+	  coll = assoc(sc, coll, first(sc, mapentry), second(sc, mapentry));
+	}
+	return coll;
+      }
     }
   } else if (is_vector_type(t) || t == T_TENSOR) {
     if (t == T_VECTOR && is_cell(new_value)) {

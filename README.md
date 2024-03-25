@@ -160,7 +160,6 @@ Windows support is in progress.
   - with-local-vars, var-set, find-var, alter-var-root, declare, binding, with-bindings
   - sequence, subseq, rsubseq
   - make-hierarchy, ancestors, supers, bases, underive
-  - select-keys
   - re-groups, re-matcher, re-seq, re-matches
   - assert-args
   - trampoline
