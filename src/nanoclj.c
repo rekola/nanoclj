@@ -9537,7 +9537,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       }
     }
     Error_0(sc, "Cannot set metadata");
-
+    
   case OP_NS:
     {
       nanoclj_cell_t * code = decode_pointer(sc->code);
@@ -9612,6 +9612,7 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       return r;
     }
 
+  case OP_CREATE_NS:
   case OP_IN_NS:
     if (!unpack_args_1(sc, &arg0)) {
       return false;
@@ -9623,9 +9624,11 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	ns = def_namespace_with_sym(sc, arg0, meta);
       }
       nanoclj_val_t ns2 = mk_pointer(ns);
-      intern(sc, sc->core_ns, sym_ns, ns2);
       bool r = _s_return(sc, ns2);
-      sc->envir = ns;
+      if (sc->op == OP_IN_NS) {
+	intern(sc, sc->core_ns, sym_ns, ns2);
+	sc->envir = ns;
+      }
       return r;
     }
     
