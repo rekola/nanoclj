@@ -1052,3 +1052,13 @@
 (def pop! pop)
 (def conj! conj)
 (def assoc! assoc)
+
+(defn bound?
+  "Returns true if all the Vars given as arguments are bound.
+   In nanoclj, Vars are always bound."
+  [& vars] true)
+
+(defn thread-bound?
+  "Returns true if all the Vars given as arguments have thread-local
+   bindings (i.e. set! works)"
+  [& vars] true)
