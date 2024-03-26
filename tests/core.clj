@@ -1,3 +1,4 @@
+(ns test.core)
 (require '[ clojure.test :as t ]
          'clojure.java.io
          'clojure.string)

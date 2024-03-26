@@ -1,3 +1,4 @@
+(ns test.xml)
 (require '[ clojure.test :as t ]
          '[ clojure.xml :as xml ])
 

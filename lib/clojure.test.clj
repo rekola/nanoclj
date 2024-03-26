@@ -7,4 +7,4 @@
        (println "FAIL in (" *file* ")")
        (println "expected: " (pr-str '~arg))
        (println "  actual: " r))
-     (-is r)))
+     (clojure.core/-is r)))

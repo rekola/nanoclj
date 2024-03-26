@@ -1,3 +1,4 @@
+(ns test.numeric-tower)
 (require '[ clojure.test :as t ]
          '[ clojure.math.numeric-tower :as towr ])
 

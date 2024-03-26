@@ -1,3 +1,4 @@
+(ns test.string)
 (require '[ clojure.test :as t ]
          '[ clojure.string :as str ])
 

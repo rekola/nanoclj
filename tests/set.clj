@@ -1,3 +1,4 @@
+(ns test.set)
 (require '[ clojure.test :as t ]
          '[ clojure.set :as s ])
 

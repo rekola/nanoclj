@@ -1,3 +1,4 @@
+(ns test.csv)
 (require '[ clojure.test :as t ]
          '[ clojure.data.csv :as csv ]
          '[ clojure.java.io :as io ])
