@@ -54,7 +54,7 @@ enabled. The following terminals have been tested:
 | mlterm | OK | ? | linenoise output flickers when updated, no undercurls |
 | Konsole | OK | ? | True color images, but on HiDPI system images are upscaled |
 | contour | Inline image layout doesn't work | ? | |
-| xterm | No true color	| OK | No undercurls, Sixel support must be enabled in `.Xresources` |
+| xterm | No true color	| OK | No undercurls, Sixel support must be enabled in `.Xresources`, and images have maximum size 1000x1000 |
 | Black Box | Inline image layout doesn't work | ? | On HiDPI system the images are upscaled, and the terminal and the flatpak system use too much CPU time when idling. |
 | Alacritty | None | ? | |
 | GNOME Terminal | None | ? | Sixel support is not enabled by default |

@@ -874,12 +874,8 @@ static inline nanoclj_cell_t * get_metadata(nanoclj_cell_t * c) {
 static inline bool set_metadata(nanoclj_cell_t * c, nanoclj_cell_t * meta) {
   switch (_type(c)) {
   case T_VAR:
-    if (_is_small(c)) {
-      c->_small_tensor.vals[2] = mk_pointer(meta);
-    } else {
-      tensor_mutate_set_2d(c->_collection.tensor, 2, _offset_unchecked(c), mk_pointer(meta));
-    }
-    return false;
+    c->_small_tensor.vals[2] = mk_pointer(meta);
+    return true;
   case T_VECTOR:
   case T_ARRAYMAP:
   case T_HASHMAP:
@@ -3961,7 +3957,7 @@ static inline nanoclj_cell_t * assoc(nanoclj_t * sc, nanoclj_cell_t * coll, nano
 	nanoclj_tensor_t * tensor = coll->_collection.tensor;
 	nanoclj_val_t vec[2] = { key, value };
 	tensor = tensor_push_vec(tensor, old_size, &vec[0]);
-	coll = get_collection_object(sc, t, _offset_unchecked(coll), old_size + 1, tensor, NULL);
+	coll = get_collection_object(sc, t, _offset_unchecked(coll), old_size + 1, tensor, meta);
       } else {
 	nanoclj_tensor_t * old_tensor = coll->_collection.tensor;
 	nanoclj_tensor_t * tensor = mk_tensor_hash(2, 2, 2 * NANOCLJ_ARRAYMAP_LIMIT);
@@ -8735,9 +8731,14 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	    case T_CLOSURE:
 	    case T_MULTI_CLOSURE:
 	    case T_PROC:
-	      sc->code = m;
-	      sc->args = cons(sc, instance, args);
-	      s_goto(sc, OP_APPLY);
+	      if (args) {
+		sc->code = mk_pointer(cons(sc, m, cons(sc, instance, args)));
+		s_goto(sc, OP_EVAL);
+	      } else {
+		sc->code = m;
+		sc->args = cons(sc, instance, NULL);
+		s_goto(sc, OP_APPLY);
+	      }
 	    default:
 	      s_return(sc, m);
 	    }
@@ -9528,31 +9529,34 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     s_return(sc, mk_nil());
 
   case OP_WITH_META:
-    if (!unpack_args_2_not_nil(sc, &arg0, &arg1)) {
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
       return false;
-    } else if (is_cell(arg0) && is_cell(arg1)) {
+    } else if (is_nil(arg0)) {
+      nanoclj_throw(sc, sc->NullPointerException);
+      return false;
+    } else if (is_nil(arg1)) {
+      s_return(sc, arg0);
+    } else if (is_cell(arg0)) {
       nanoclj_cell_t * c = decode_pointer(arg0);
-      uint_fast16_t t = _type(c);
-      if (t == T_VAR || t == T_LIST || t == T_CLOSURE || t == T_MULTI_CLOSURE|| t == T_MACRO ||
-	  t == T_CLASS || t == T_NAMESPACE || t == T_FOREIGN_FUNCTION || t == T_IMAGE) {
-	nanoclj_cell_t * new_c = get_cell_x(T_NIL, T_GC_ATOM, NULL, NULL, NULL);
-	if (new_c) {
-	  memcpy(new_c, c, sizeof(nanoclj_cell_t));
-	  set_metadata(new_c, decode_pointer(arg1));
+      nanoclj_cell_t * new_c = get_cell_x(T_NIL, T_GC_ATOM, NULL, NULL, NULL);
+      if (new_c) {
+	memcpy(new_c, c, sizeof(nanoclj_cell_t));
+	if (set_metadata(new_c, decode_pointer(arg1))) {
+	  s_return(sc, mk_pointer(new_c));
 	}
-	s_return(sc, mk_pointer(new_c));
       }
     }
     Error_0(sc, "Cannot set metadata");
 
   case OP_RESET_META:
-    if (!unpack_args_2_not_nil(sc, &arg0, &arg1)) {
+    if (!unpack_args_2(sc, &arg0, &arg1)) {
       return false;
-    } else if (is_cell(arg0) && is_cell(arg1)) {
+    } else if (is_nil(arg0)) {
+      nanoclj_throw(sc, sc->NullPointerException);
+      return false;
+    } else if (is_cell(arg0) && (is_nil(arg1) || is_cell(arg1))) {
       nanoclj_cell_t * c = decode_pointer(arg0);
-      uint_fast16_t t = _type(c);
-      if (t == T_VAR || t == T_CLASS || t == T_NAMESPACE) {
-	set_metadata(c, decode_pointer(arg1));
+      if (_type(c) == T_VAR && set_metadata(c, decode_pointer(arg1))) {
 	s_return(sc, arg1);
       }
     }
