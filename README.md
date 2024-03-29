@@ -154,7 +154,6 @@ Windows support is in progress.
   - memoize
   - condp
   - load
-  - replace
   - when-let, letfn, if-let, if-some
   - reduced, reduced?
   - with-local-vars, var-set, find-var, alter-var-root, declare, binding, with-bindings

@@ -28,6 +28,12 @@
 (t/is (.equals 0.0 0.0))
 (t/is (not (.equals 0.0 -0.0)))
 
+                                        ; Collections
+
+(t/is (coll? {}))
+(t/is (coll? #{}))
+(t/is (coll? '()))
+
                                         ; Boxed Longs
 
 (t/is (not (= 0 java.lang.Long/MAX_VALUE)))
@@ -145,6 +151,12 @@
 (t/is (= (vector-of :int 1.0 2.0 3.0) [ 1 2 3 ]))
 (t/is (= (vector-of :float 1.0 2.0 3.0) [ 1.0 2.0 3.0 ]))
 (t/is (= (vector-of :double 1.0 2.0 3.0) [ 1.0 2.0 3.0 ]))
+
+(t/is (= (dedupe '( 10 10 10 1 1 9 :a :a 4 2 2 )) '( 10 1 9 :a 4 2 )))
+
+(t/is (= (replace { :A :B } '(:A :B :C :A)) '(:B :C :B :B)))
+(t/is (= (replace { :C 1 } [:A :B :C :A]) [:A :B 1 :A]))
+(t/is (= (replace [:zeroth :first :second :third :fourth] [0 2 4 0]) [:zeroth :second :fourth :zeroth]))
 
                                         ; Printing and str
 

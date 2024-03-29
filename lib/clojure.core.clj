@@ -804,6 +804,17 @@
                                                (lazy-seq (f (first coll) (rest coll))))))]
                      (f (first coll) (rest coll))))))
 
+(defn replace
+  "Replaces elements from coll using smap"
+  [smap coll] (if (empty? coll) coll
+                  (loop [acc (if (vector? coll) [] '())
+                         item (first coll)
+                         replacement (smap item)
+                         seq (next coll)]
+                    (if seq
+                      (recur (conj acc (or replacement item)) (first seq) (smap (first seq)) (next seq))
+                      (conj acc (or replacement item))))))
+
 ; Parsing and printing
 
 (defn char-escape-string
