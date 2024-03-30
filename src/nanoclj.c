@@ -2349,18 +2349,17 @@ static inline size_t bit_ceil(size_t a) {
   return result;
 }
 
+static inline nanoclj_tensor_t * create_tensor_for_type(int_fast16_t t, nanoclj_tensor_type_t val_type, size_t size) {
+  if (t == T_HASHSET) return mk_tensor_hash(1, 0, bit_ceil(2 * size));
+  else if (t == T_HASHMAP) return mk_tensor_hash(2, 2, bit_ceil(2 * size));
+  else if (t == T_ARRAYMAP) return mk_tensor_2d_padded(nanoclj_val, 2, 0, size);
+  else return mk_tensor_1d(val_type, size);
+}
+
 static inline nanoclj_cell_t * get_vector_object_with_tensor_type(nanoclj_t * sc, int_fast16_t t, nanoclj_tensor_type_t tensor_type, size_t size, nanoclj_cell_t * meta) {
   nanoclj_tensor_t * store = NULL;
   if (size > NANOCLJ_SMALL_VEC_SIZE || (size > 1 && is_map_type(t)) || tensor_type != nanoclj_val || meta) {
-    if (t == T_HASHSET) {
-      store = mk_tensor_hash(1, 0, bit_ceil(2 * size));
-    } else if (t == T_HASHMAP) {
-      store = mk_tensor_hash(2, 2, bit_ceil(2 * size));
-    } else if (t == T_ARRAYMAP) {
-      store = mk_tensor_2d_padded(nanoclj_val, 2, 0, size);
-    } else {
-      store = mk_tensor_1d(tensor_type, size);
-    }
+    store = create_tensor_for_type(t, tensor_type, size);
     if (!store) {
       sc->pending_exception = sc->OutOfMemoryError;
       return NULL;
@@ -3912,6 +3911,39 @@ static inline nanoclj_cell_t * vector_conjoin(nanoclj_t * sc, nanoclj_cell_t * v
   }
 }
 
+static inline nanoclj_cell_t * copy_or_upgrade_so(nanoclj_t * sc, nanoclj_cell_t * coll0, size_t added_size) {
+  if (_is_small(coll0)) {
+    uint_fast16_t t = _type(coll0);
+    size_t size = get_size(coll0);
+    nanoclj_tensor_t * tensor = create_tensor_for_type(t, nanoclj_val, size + added_size);
+    if (!tensor) {
+      sc->pending_exception = sc->OutOfMemoryError;
+      return NULL;
+    }
+    nanoclj_cell_t * coll = get_collection_object(sc, t, 0, size + added_size, tensor, NULL);
+    if (size > 0) {
+      nanoclj_val_t * values = &(coll0->_small_tensor.vals[0]);
+      if (t == T_VECTOR) {
+	for (size_t i = 0; i < size; i++) {
+	  tensor = tensor_push(tensor, i, values[i]);
+    	}
+      } else if (t == T_HASHSET) {
+	for (size_t i = 0; i < size; i++) {
+	  tensor = tensor_hash_mutate_set(tensor, hasheq(values[i], sc), i, values[i], mk_nil(), sc, hasheq);
+	}
+      } else if (t == T_ARRAYMAP) {
+	tensor = tensor_push_vec(tensor, 0, &values[0]);
+      } else {
+	tensor = tensor_hash_mutate_set(tensor, hasheq(values[0], sc), 0, values[0], values[1], sc, hasheq);
+      }
+      coll->_collection.tensor = tensor;
+    }
+    return coll;
+  } else {
+    return copy_cell(sc, coll0);
+  }
+}
+
 static inline nanoclj_cell_t * assoc(nanoclj_t * sc, nanoclj_cell_t * coll, nanoclj_val_t key, nanoclj_val_t value) {
   uint16_t t = _type(coll);
   if (t == T_LISTMAP) {
@@ -3936,18 +3968,13 @@ static inline nanoclj_cell_t * assoc(nanoclj_t * sc, nanoclj_cell_t * coll, nano
 	coll->_small_tensor.vals[0] = key;
 	coll->_small_tensor.vals[1] = value;
       } else {
-	nanoclj_val_t old_key = coll->_small_tensor.vals[0], old_val = coll->_small_tensor.vals[1];
-	coll = get_vector_object(sc, t, 2);
+	coll = copy_or_upgrade_so(sc, coll, 1);
 	nanoclj_tensor_t * tensor = coll->_collection.tensor;
 	if (t == T_ARRAYMAP) {
-	  nanoclj_val_t vec1[2] = { old_key, old_val }, vec2[2] = { key, value };
-	  tensor = tensor_push_vec(tensor, 0, &vec1[0]);
-	  coll->_collection.tensor = tensor_push_vec(tensor, 1, &vec2[0]);
+	  nanoclj_val_t vec[2] = { key, value };
+	  coll->_collection.tensor = tensor_push_vec(tensor, 1, &vec[0]);
 	} else {
-	  uint32_t h0 = hasheq(old_key, sc);
-	  uint32_t h1 = hasheq(key, sc);
-	  tensor = tensor_hash_mutate_set(tensor, h0, 0, old_key, old_val, sc, hasheq);
-	  coll->_collection.tensor = tensor_hash_mutate_set(tensor, h1, 1, key, value, sc, hasheq);
+	  coll->_collection.tensor = tensor_hash_mutate_set(tensor, hasheq(key, sc), 1, key, value, sc, hasheq);
 	}
       }
     } else if (t == T_ARRAYMAP) {
@@ -9311,12 +9338,17 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     {
       nanoclj_val_t md = _car(sc->args);
       nanoclj_val_t obj = sc->value;
+      nanoclj_cell_t * coll = NULL;
       if (is_symbol(obj)) {
-	obj = mk_pointer(get_cell(sc, T_SYMBOL, 0, obj, NULL, NULL));
+	coll = get_cell(sc, T_SYMBOL, 0, obj, NULL, NULL);
+      } else if (is_cell(obj)) {
+	coll = decode_pointer(obj);
       }
-      if (is_cell(obj)) {
+      bool r = false;
+      if (coll) {
+	if (_is_small(coll)) coll = copy_or_upgrade_so(sc, coll, 0);
 	if (is_cell(md) && is_map_type(type(md))) {
-	  set_metadata(decode_pointer(obj), decode_pointer(md));
+	  r = set_metadata(coll, decode_pointer(md));
 	} else {
 	  nanoclj_cell_t * md2 = mk_hashmap(sc);
 	  if (is_keyword(md)) {
@@ -9327,13 +9359,14 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	    nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Metadata must be Symbol, Keyword, String or Map")));
 	    return false;
   	  }
-	  if (md2 && !set_metadata(decode_pointer(obj), md2)) {
-	    nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Cannot set metadata")));
-	    return false;
-	  }
+	  if (md2) r = set_metadata(coll, md2);
 	}
       }
-      s_return(sc, obj);
+      if (!r) {
+	nanoclj_throw(sc, mk_runtime_exception(sc, mk_string(sc, "Cannot set metadata")));
+	return false;
+      }
+      s_return(sc, mk_pointer(coll));
     }
 
   case OP_SEQ:
@@ -9536,14 +9569,10 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
       return false;
     } else if (is_nil(arg1)) {
       s_return(sc, arg0);
-    } else if (is_cell(arg0)) {
-      nanoclj_cell_t * c = decode_pointer(arg0);
-      nanoclj_cell_t * new_c = get_cell_x(T_NIL, T_GC_ATOM, NULL, NULL, NULL);
-      if (new_c) {
-	memcpy(new_c, c, sizeof(nanoclj_cell_t));
-	if (set_metadata(new_c, decode_pointer(arg1))) {
-	  s_return(sc, mk_pointer(new_c));
-	}
+    } else if (is_cell(arg0) && is_cell(arg1)) {
+      nanoclj_cell_t * coll = copy_or_upgrade_so(sc, decode_pointer(arg0), 0);
+      if (set_metadata(coll, decode_pointer(arg1))) {
+	s_return(sc, mk_pointer(coll));
       }
     }
     Error_0(sc, "Cannot set metadata");
