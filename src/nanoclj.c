@@ -71,33 +71,35 @@
 #include "nanoclj_bigint.h"
 
 /* Parsing tokens */
-#define TOK_EOF		(-1)
-#define TOK_LPAREN  	0
-#define TOK_RPAREN  	1
-#define TOK_RCURLY  	2
-#define TOK_RSQUARE 	3
-#define TOK_AMP    	4
-#define TOK_PRIMITIVE  	5
-#define TOK_QUOTE   	6
-#define TOK_DEREF   	7
-#define TOK_COMMENT 	8
-#define TOK_DQUOTE  	9
-#define TOK_BQUOTE  	10
-#define TOK_UNQUOTE   	11
-#define TOK_ATMARK  	12
-#define TOK_TAG     	13
-#define TOK_CHAR_CONST	14
-#define TOK_SHARP_CONST	15
-#define TOK_VEC     	16
-#define TOK_MAP	    	17
-#define TOK_SET	    	18
-#define TOK_FN      	19
-#define TOK_FN_DOT	20
-#define TOK_REGEX   	21
-#define TOK_IGNORE  	22
-#define TOK_VAR	    	23
-#define TOK_DOT		24
-#define TOK_META	25
+typedef enum {
+  TOK_EOF = -1,
+  TOK_LPAREN = 0,
+  TOK_RPAREN = 1,
+  TOK_RCURLY = 2,
+  TOK_RSQUARE = 3,
+  TOK_AMP = 4,
+  TOK_PRIMITIVE = 5,
+  TOK_QUOTE = 6,
+  TOK_DEREF = 7,
+  TOK_COMMENT = 8,
+  TOK_DQUOTE = 9,
+  TOK_BQUOTE = 10,
+  TOK_UNQUOTE = 11,
+  TOK_ATMARK = 12,
+  TOK_TAG = 13,
+  TOK_CHAR_CONST = 14,
+  TOK_SHARP_CONST = 15,
+  TOK_VEC = 16,
+  TOK_MAP = 17,
+  TOK_SET = 18,
+  TOK_FN = 19,
+  TOK_FN_DOT = 20,
+  TOK_REGEX = 21,
+  TOK_IGNORE = 22,
+  TOK_VAR = 23,
+  TOK_DOT = 24,
+  TOK_META = 25,
+} nanoclj_token_t;
 
 #define BACKQUOTE 	'`'
 #define DELIMITERS  	"()[]{}\";\f\t\v\n\r, "
@@ -245,11 +247,10 @@ typedef struct {
 #define UNMARK       32767      /* 0111111111111111 */
 
 /* globals */
-nanoclj_tensor_t * g_oblist = NULL;
-pthread_rwlock_t g_oblist_rwlock = PTHREAD_RWLOCK_INITIALIZER;
-atomic_int g_oblist_refcnt = 0;
+static nanoclj_tensor_t * g_oblist = NULL;
+static pthread_rwlock_t g_oblist_rwlock = PTHREAD_RWLOCK_INITIALIZER;
 
-atomic_int g_gentypeid_cnt = T_LAST_SYSTEM_TYPE;
+static atomic_size_t g_gentypeid_cnt = T_LAST_SYSTEM_TYPE;
 
 static nanoclj_val_t sym_recur;
 static nanoclj_val_t sym_amp;
@@ -276,7 +277,7 @@ static nanoclj_val_t sym_ns;
 static nanoclj_val_t sym_file;
 static nanoclj_val_t sym_mouse_pos;
 static nanoclj_val_t sym_theme;
-    
+
 static nanoclj_val_t kw_doc;
 static nanoclj_val_t kw_width;
 static nanoclj_val_t kw_height;
@@ -790,7 +791,6 @@ static inline nanoclj_tensor_t * get_tensor(nanoclj_cell_t * c) {
   case T_ARRAYMAP:
   case T_HASHMAP:
   case T_HASHSET:
-  case T_VAR:
   case T_QUEUE:
   case T_STRING:
   case T_FILE:
@@ -799,6 +799,7 @@ static inline nanoclj_tensor_t * get_tensor(nanoclj_cell_t * c) {
   case T_SHAPE:
   case T_BIGINT:
   case T_TENSOR:
+  case T_MESH:
     return c->_collection.tensor;
   case T_IMAGE:
     return c->_image.tensor;
@@ -3871,46 +3872,6 @@ static inline nanoclj_cell_t * copy_as_empty(nanoclj_t * sc, nanoclj_cell_t * c)
   return get_vector_object_with_tensor_type(sc, _type(c), nanoclj_val, 0, meta);
 }
 
-static inline nanoclj_cell_t * vector_conjoin(nanoclj_t * sc, nanoclj_cell_t * vec, nanoclj_val_t new_value) {
-  size_t old_size = get_size(vec);
-  uint16_t t = _type(vec);
-  if (_is_small(vec)) {
-    nanoclj_cell_t * new_vec = get_vector_object(sc, t, old_size + 1);
-    if (t == T_HASHSET && !_is_small(new_vec)) {
-      nanoclj_tensor_t * tensor = new_vec->_collection.tensor;
-      for (size_t i = 0; i < old_size; i++) {
-	nanoclj_val_t v = get_indexed_value(vec, i);
-	uint32_t h = hasheq(v, sc);
-	tensor = tensor_hash_mutate_set(tensor, h, i, v, mk_nil(), sc, hasheq);
-      }
-      uint32_t h = hasheq(new_value, sc);
-      new_vec->_collection.tensor = tensor_hash_mutate_set(tensor, h, old_size, new_value, mk_nil(), sc, hasheq);
-    } else {
-      memcpy(get_ptr(new_vec), _smalldata_unchecked(vec), old_size * sizeof(nanoclj_val_t));
-      set_indexed_value(new_vec, old_size, new_value);
-    }
-    return new_vec;
-  } else if (t == T_HASHSET) {
-    uint32_t h = hasheq(new_value, sc);
-    nanoclj_tensor_t * tensor = tensor_hash_mutate_set(vec->_collection.tensor, h, old_size, new_value, mk_nil(), sc, hasheq);
-    return get_collection_object(sc, t, _offset_unchecked(vec), old_size + 1, tensor, vec->_collection.meta);
-  } else {
-    size_t old_offset = _offset_unchecked(vec);
-    nanoclj_tensor_t * tensor = _tensor_unchecked(vec);
-    switch (tensor->type) {
-    case nanoclj_boolean: tensor = tensor_push_i8(tensor, old_offset + old_size, is_true(new_value) ? 1 : 0); break;
-    case nanoclj_i8: tensor = tensor_push_i8(tensor, old_offset + old_size, to_int(new_value)); break;
-    case nanoclj_i16: tensor = tensor_push_i16(tensor, old_offset + old_size, to_int(new_value)); break;
-    case nanoclj_i32: tensor = tensor_push_i32(tensor, old_offset + old_size, to_int(new_value)); break;
-    case nanoclj_f32: tensor = tensor_push_f32(tensor, old_offset + old_size, to_double(new_value)); break;
-    case nanoclj_f64: tensor = tensor_push_f64(tensor, old_offset + old_size, to_double(new_value)); break;
-    case nanoclj_val: tensor = tensor_push(tensor, old_offset + old_size, new_value); break;
-    }
-    if (!tensor) return NULL;
-    return get_collection_object(sc, t, old_offset, old_size + 1, tensor, vec->_collection.meta);
-  }
-}
-
 static inline nanoclj_cell_t * copy_or_upgrade_so(nanoclj_t * sc, nanoclj_cell_t * coll0, size_t added_size) {
   if (_is_small(coll0)) {
     uint_fast16_t t = _type(coll0);
@@ -3941,6 +3902,42 @@ static inline nanoclj_cell_t * copy_or_upgrade_so(nanoclj_t * sc, nanoclj_cell_t
     return coll;
   } else {
     return copy_cell(sc, coll0);
+  }
+}
+
+static inline nanoclj_cell_t * vector_conjoin(nanoclj_t * sc, nanoclj_cell_t * vec, nanoclj_val_t new_value) {
+  size_t old_size = get_size(vec);
+  uint16_t t = _type(vec);
+  if (_is_small(vec)) {
+    nanoclj_cell_t * new_vec;
+    if (t == T_HASHSET && old_size + 1 > NANOCLJ_SMALL_VEC_SIZE) {
+      new_vec = copy_or_upgrade_so(sc, vec, 1);
+      uint32_t h = hasheq(new_value, sc);
+      new_vec->_collection.tensor = tensor_hash_mutate_set(new_vec->_collection.tensor, h, old_size, new_value, mk_nil(), sc, hasheq);
+    } else {
+      new_vec = get_vector_object(sc, t, old_size + 1);
+      memcpy(get_ptr(new_vec), _smalldata_unchecked(vec), old_size * sizeof(nanoclj_val_t));
+      set_indexed_value(new_vec, old_size, new_value);
+    }
+    return new_vec;
+  } else if (t == T_HASHSET) { // combine
+    uint32_t h = hasheq(new_value, sc);
+    nanoclj_tensor_t * tensor = tensor_hash_mutate_set(vec->_collection.tensor, h, old_size, new_value, mk_nil(), sc, hasheq);
+    return get_collection_object(sc, t, _offset_unchecked(vec), old_size + 1, tensor, vec->_collection.meta);
+  } else {
+    size_t old_offset = _offset_unchecked(vec);
+    nanoclj_tensor_t * tensor = _tensor_unchecked(vec);
+    switch (tensor->type) {
+    case nanoclj_boolean: tensor = tensor_push_i8(tensor, old_offset + old_size, is_true(new_value) ? 1 : 0); break;
+    case nanoclj_i8: tensor = tensor_push_i8(tensor, old_offset + old_size, to_int(new_value)); break;
+    case nanoclj_i16: tensor = tensor_push_i16(tensor, old_offset + old_size, to_int(new_value)); break;
+    case nanoclj_i32: tensor = tensor_push_i32(tensor, old_offset + old_size, to_int(new_value)); break;
+    case nanoclj_f32: tensor = tensor_push_f32(tensor, old_offset + old_size, to_double(new_value)); break;
+    case nanoclj_f64: tensor = tensor_push_f64(tensor, old_offset + old_size, to_double(new_value)); break;
+    case nanoclj_val: tensor = tensor_push(tensor, old_offset + old_size, new_value); break;
+    }
+    if (!tensor) return NULL;
+    return get_collection_object(sc, t, old_offset, old_size + 1, tensor, vec->_collection.meta);
   }
 }
 
@@ -10545,7 +10542,7 @@ bool nanoclj_init(nanoclj_t * sc) {
     g_oblist = mk_tensor_hash(1, 0, 4096);
     def_symbols = true;
   }
-  g_oblist_refcnt++;
+  g_oblist->refcnt++;
   
 #if USE_INTERFACE
   sc->vptr = &vtbl;
@@ -10578,6 +10575,7 @@ bool nanoclj_init(nanoclj_t * sc) {
   _cons_metadata(&(sc->sink)) = NULL;
   
   sc->namespaces = mk_tensor_hash(2, 2, 16);
+  sc->namespaces->refcnt++;
 
   assign_syntax(sc, "fn", OP_LAMBDA);
   assign_syntax(sc, "quote", OP_QUOTE);
@@ -10852,26 +10850,29 @@ void nanoclj_set_external_data(nanoclj_t * sc, void *p) {
 }
 
 static void nanoclj_deinit_oblist() {
-  int64_t num_buckets = tensor_hash_get_bucket_count(g_oblist);
-  int64_t * sparse_indices = g_oblist->sparse_indices;
-  for (int64_t offset = 0; offset < num_buckets; offset++) {
-    if (sparse_indices[offset] != -1) {
-      nanoclj_val_t v = tensor_get(g_oblist, offset);
-      switch (prim_type(v)) {
-      case T_SYMBOL:
-      case T_KEYWORD:
-      case T_ALIAS:
-	free_symbol(decode_symbol(v));
-	break;
-      case T_REGEX:
-	free_regex(decode_regex(v));
-	break;
+  if (g_oblist->refcnt == 1) {
+    int64_t num_buckets = tensor_hash_get_bucket_count(g_oblist);
+    int64_t * sparse_indices = g_oblist->sparse_indices;
+    for (int64_t offset = 0; offset < num_buckets; offset++) {
+      if (sparse_indices[offset] != -1) {
+	nanoclj_val_t v = tensor_get(g_oblist, offset);
+	switch (prim_type(v)) {
+	case T_SYMBOL:
+	case T_KEYWORD:
+	case T_ALIAS:
+	  free_symbol(decode_symbol(v));
+	  break;
+	case T_REGEX:
+	  free_regex(decode_regex(v));
+	  break;
+	}
       }
     }
+    tensor_free(g_oblist);
+    g_oblist = NULL;
+  } else {
+    tensor_free(g_oblist);
   }
-  tensor_free(g_oblist);
-  g_oblist = NULL;
-  g_oblist_refcnt = 0;
   pthread_rwlock_destroy(&g_oblist_rwlock);
 }
 
@@ -10902,9 +10903,7 @@ void nanoclj_deinit(nanoclj_t * sc) {
   tensor_free(sc->types);
   sc->rdbuff = sc->load_stack = sc->types = NULL;
 
-  if (--g_oblist_refcnt == 0) {
-    nanoclj_deinit_oblist();
-  }
+  nanoclj_deinit_oblist();
 
   size_t i = 0;
   for (; i < g_allocator.num_instances && g_allocator.instances[i] != sc; i++) { }
