@@ -19,10 +19,20 @@ static inline size_t tensor_get_cell_size(nanoclj_tensor_type_t t) {
 }
 
 static inline void tensor_free(nanoclj_tensor_t * tensor) {
-  if (tensor && (tensor->refcnt == 0 || --(tensor->refcnt) == 0)) {
+  if (tensor) {
     free(tensor->sparse_indices);
     free(tensor->data);
     free(tensor);
+  }
+}
+
+static inline void tensor_release(nanoclj_tensor_t * tensor) {
+  if (tensor) {
+    if (tensor->refcnt == 0) {
+      fprintf(stderr, "invalid refcnt dims = %d, dt = %d, s = %s\n", tensor->n_dims, (int)tensor->type, tensor->sparse_indices ? "yes" : "no");
+    } else if (--(tensor->refcnt) == 0) {
+      tensor_free(tensor);
+    }
   }
 }
 
@@ -331,6 +341,10 @@ static inline nanoclj_tensor_t * tensor_resize(nanoclj_tensor_t * tensor, int64_
       tensor = mk_tensor_1d_padded(old_tensor->type, old_tensor->ne[0], size);
       if (!tensor) return NULL;
       memcpy(tensor->data, old_tensor->data, old_tensor->ne[0] * old_tensor->nb[0]);
+#if 0
+      tensor_release(old_tensor);
+#endif
+      tensor->refcnt++;
     }
     tensor->ne[0] = size;
     break;
@@ -340,6 +354,10 @@ static inline nanoclj_tensor_t * tensor_resize(nanoclj_tensor_t * tensor, int64_
       tensor = mk_tensor_2d_padded(old_tensor->type, old_tensor->ne[0], old_tensor->ne[1], size);
       if (!tensor) return NULL;
       memcpy(tensor->data, old_tensor->data, old_tensor->ne[1] * tensor->nb[1]);
+#if 0
+      tensor_release(old_tensor);
+#endif
+      tensor->refcnt++;
     }
     tensor->ne[1] = size;
     break;
@@ -904,8 +922,10 @@ static inline nanoclj_tensor_t * mk_tensor_hash(int64_t dims, size_t payload_siz
   } else {
     t = mk_tensor_2d_padded(nanoclj_val, payload_size, 0, initial_size);
   }
-  t->sparse_indices = malloc(initial_size * sizeof(int64_t));
-  for (int64_t i = 0; i < initial_size; i++) t->sparse_indices[i] = -1;
+  if (t) {
+    t->sparse_indices = malloc(initial_size * sizeof(int64_t));
+    for (int64_t i = 0; i < initial_size; i++) t->sparse_indices[i] = -1;
+  }
   return t;
 }
 
@@ -967,7 +987,8 @@ static inline nanoclj_tensor_t * tensor_hash_mutate_set(nanoclj_tensor_t * tenso
 	_tensor_hash_mutate_set(tensor, hash, tensor->ne[tensor->n_dims - 1], old_key, old_val);
       }
     }
-    if (!old_tensor->refcnt) tensor_free(old_tensor);
+    tensor_release(old_tensor);
+    tensor->refcnt++;
   }
 
   _tensor_hash_mutate_set(tensor, hash, val_index, key, val);

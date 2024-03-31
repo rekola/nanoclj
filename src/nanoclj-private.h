@@ -29,7 +29,38 @@ extern "C" {
     port_canvas,
     port_z
   } nanoclj_port_type_t;
-  
+
+  /* Parsing tokens */
+  typedef enum {
+    TOK_EOF = -1,
+    TOK_LPAREN = 0,
+    TOK_RPAREN = 1,
+    TOK_RCURLY = 2,
+    TOK_RSQUARE = 3,
+    TOK_AMP = 4,
+    TOK_PRIMITIVE = 5,
+    TOK_QUOTE = 6,
+    TOK_DEREF = 7,
+    TOK_COMMENT = 8,
+    TOK_DQUOTE = 9,
+    TOK_BQUOTE = 10,
+    TOK_UNQUOTE = 11,
+    TOK_ATMARK = 12,
+    TOK_TAG = 13,
+    TOK_CHAR_CONST = 14,
+    TOK_SHARP_CONST = 15,
+    TOK_VEC = 16,
+    TOK_MAP = 17,
+    TOK_SET = 18,
+    TOK_FN = 19,
+    TOK_FN_DOT = 20,
+    TOK_REGEX = 21,
+    TOK_IGNORE = 22,
+    TOK_VAR = 23,
+    TOK_DOT = 24,
+    TOK_META = 25,
+  } nanoclj_token_t;
+
   /* operator code */
   enum nanoclj_opcode {
 #define _OP_DEF(A,B,OP) OP,
@@ -154,6 +185,7 @@ extern "C" {
     size_t gensym_cnt;
 
     nanoclj_cell_t * properties;
+    nanoclj_cell_t * namespaces;
     
     nanoclj_cell_t * pending_exception;		/* pending exception */
 
@@ -174,7 +206,6 @@ extern "C" {
     nanoclj_cell_t * MalformedURLException;
     
     nanoclj_cell_t sink;	      /* when mem. alloc. fails */
-    nanoclj_tensor_t * namespaces;
     nanoclj_cell_t * core_ns;		/* pointer to the core ns */
     nanoclj_tensor_t * types;
     
@@ -186,7 +217,7 @@ extern "C" {
     char strbuff[STRBUFFSIZE];
     nanoclj_tensor_t * rdbuff;
 
-    int tok;
+    nanoclj_token_t tok;
     nanoclj_val_t value;
     enum nanoclj_opcode op;
 

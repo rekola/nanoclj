@@ -70,37 +70,6 @@
 #include "nanoclj_tensor.h"
 #include "nanoclj_bigint.h"
 
-/* Parsing tokens */
-typedef enum {
-  TOK_EOF = -1,
-  TOK_LPAREN = 0,
-  TOK_RPAREN = 1,
-  TOK_RCURLY = 2,
-  TOK_RSQUARE = 3,
-  TOK_AMP = 4,
-  TOK_PRIMITIVE = 5,
-  TOK_QUOTE = 6,
-  TOK_DEREF = 7,
-  TOK_COMMENT = 8,
-  TOK_DQUOTE = 9,
-  TOK_BQUOTE = 10,
-  TOK_UNQUOTE = 11,
-  TOK_ATMARK = 12,
-  TOK_TAG = 13,
-  TOK_CHAR_CONST = 14,
-  TOK_SHARP_CONST = 15,
-  TOK_VEC = 16,
-  TOK_MAP = 17,
-  TOK_SET = 18,
-  TOK_FN = 19,
-  TOK_FN_DOT = 20,
-  TOK_REGEX = 21,
-  TOK_IGNORE = 22,
-  TOK_VAR = 23,
-  TOK_DOT = 24,
-  TOK_META = 25,
-} nanoclj_token_t;
-
 #define BACKQUOTE 	'`'
 #define DELIMITERS  	"()[]{}\";\f\t\v\n\r, "
 #define NPOS		((size_t)-1)
@@ -1574,7 +1543,7 @@ static inline int port_close(nanoclj_cell_t * p) {
     }
     break;
   case port_string:
-    tensor_free(pr->string.data);
+    tensor_release(pr->string.data);
     break;
   case port_z:
     inflateEnd(&(pr->z.strm));
@@ -1583,7 +1552,7 @@ static inline int port_close(nanoclj_cell_t * p) {
 #if NANOCLJ_HAS_CANVAS
     canvas_free(pr->canvas.impl);
 #endif
-    tensor_free(pr->canvas.data);
+    tensor_release(pr->canvas.data);
     break;
   case port_free:
     break;
@@ -1598,7 +1567,7 @@ static inline void finalize_cell(nanoclj_cell_t * a) {
   if (_is_small(a)) {
     return;
   }
-  tensor_free(get_tensor(a));
+  tensor_release(get_tensor(a));
 
   switch (_type(a)) {
   case T_READER:
@@ -1625,8 +1594,8 @@ static inline void finalize_cell(nanoclj_cell_t * a) {
     }
     break;
   case T_RATIO:
-    tensor_free(a->_ratio.numerator);
-    tensor_free(a->_ratio.denominator);
+    tensor_release(a->_ratio.numerator);
+    tensor_release(a->_ratio.denominator);
     break;
   }
 }
@@ -1932,7 +1901,7 @@ static inline nanoclj_cell_t * mk_bigint_from_long(nanoclj_t * sc, long long a) 
 static inline nanoclj_cell_t * mk_ratio_from_tensor(nanoclj_t * sc, int sign, nanoclj_tensor_t * num, nanoclj_tensor_t * den) {
   if (num && den) {
     if (tensor_is_identity(den)) {
-      tensor_free(den);
+      if (!den->refcnt) tensor_free(den);
       return mk_bigint_from_tensor(sc, sign, num);
     }
 
@@ -3070,7 +3039,7 @@ static inline nanoclj_val_t fifth(nanoclj_t * sc, nanoclj_cell_t * a) {
 #include "nanoclj_curl.h"
 #endif
 
-static uint32_t prim_hasheq(nanoclj_val_t v) {
+static uint32_t prim_hasheq(nanoclj_val_t v, void * context) {
   switch (prim_type(v)) {
   case T_EMPTYLIST:
     return -2017569654;
@@ -3259,7 +3228,7 @@ static uint32_t hasheq(nanoclj_val_t v, void * d) {
     c->hasheq = h;
     return h;
   } else {
-    return prim_hasheq(v);
+    return prim_hasheq(v, NULL);
   }
 }
 
@@ -3796,7 +3765,7 @@ static inline void ok_to_freely_gc(nanoclj_t * sc) {
 
 static inline nanoclj_val_t oblist_add_item(nanoclj_val_t v) {
   pthread_rwlock_wrlock(&g_oblist_rwlock);
-  g_oblist = tensor_hash_mutate_set(g_oblist, prim_hasheq(v), g_oblist->ne[0], v, mk_nil(), NULL, prim_hasheq);
+  g_oblist = tensor_hash_mutate_set(g_oblist, prim_hasheq(v, NULL), g_oblist->ne[0], v, mk_nil(), NULL, prim_hasheq);
   pthread_rwlock_unlock(&g_oblist_rwlock);
   return v;
 }
@@ -4282,6 +4251,11 @@ static inline nanoclj_val_t intern_foreign_func(nanoclj_t * sc, nanoclj_cell_t *
   return fn;
 }
 
+static inline void register_ns(nanoclj_t * sc, nanoclj_val_t sym, nanoclj_cell_t * ns) {
+  sc->namespaces->_collection.tensor = tensor_hash_mutate_set(sc->namespaces->_collection.tensor, hasheq(sym, sc), get_size(sc->namespaces), sym, mk_pointer(ns), sc, hasheq);
+  sc->namespaces->_collection.size++;
+}
+  
 static inline nanoclj_cell_t * mk_class_with_meta(nanoclj_t * sc, nanoclj_val_t sym, int type_id, nanoclj_cell_t * parent_type, nanoclj_cell_t * md) {
   nanoclj_cell_t * s = get_vector_object(sc, T_HASHMAP, 0);
   nanoclj_cell_t * t0 = get_cell(sc, type_id, T_TYPE, mk_pointer(s), parent_type, md);
@@ -4293,7 +4267,7 @@ static inline nanoclj_cell_t * mk_class_with_meta(nanoclj_t * sc, nanoclj_val_t 
     }
     tensor_mutate_set(sc->types, type_id, t);
     
-    sc->namespaces = tensor_hash_mutate_set(sc->namespaces, hasheq(sym, sc), sc->namespaces->ne[1], sym, t, sc, hasheq);
+    register_ns(sc, sym, t0);
     
     /* Create aliases for java.lang.* */
     strview_t sv = to_strview(sym);
@@ -4301,7 +4275,7 @@ static inline nanoclj_cell_t * mk_class_with_meta(nanoclj_t * sc, nanoclj_val_t 
       strview_t short_sv = strview_remove_prefix(sv, 10);
       if (short_sv.size) {
 	nanoclj_val_t short_sym = def_symbol_from_sv(T_SYMBOL, mk_strview(0), short_sv);
-	sc->namespaces = tensor_hash_mutate_set(sc->namespaces, hasheq(short_sym, sc), sc->namespaces->ne[1], short_sym, t, sc, hasheq);
+	register_ns(sc, short_sym, t0);
       }
     }
   }
@@ -4383,21 +4357,7 @@ static inline nanoclj_val_t def_symbol_or_keyword(nanoclj_t * sc, const char *na
 }
 
 static inline nanoclj_cell_t * find_ns(nanoclj_t * sc, nanoclj_val_t name) {
-  uint_fast32_t h = hasheq(name, sc);
-  size_t num_buckets = tensor_hash_get_bucket_count(sc->namespaces);
-  size_t location = tensor_hash_get_bucket(h, num_buckets);
-  while ( 1 ) {
-    if (tensor_hash_is_unassigned(sc->namespaces, location)) {
-      return NULL;
-    } else {
-      nanoclj_val_t y = tensor_get_2d(sc->namespaces, 0, location);
-      if (equals(sc, y, name)) {
-	return decode_pointer(tensor_get_2d(sc->namespaces, 1, location));
-      } else if (++location == num_buckets) {
-	location = 0;
-      }
-    }
-  }
+  return decode_pointer(find(sc, sc->namespaces, name, mk_nil()));
 }
 
 static inline void refer(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_cell_t * source_ns, nanoclj_cell_t * only, nanoclj_cell_t * exclude) {
@@ -4441,12 +4401,9 @@ static inline void refer(nanoclj_t * sc, nanoclj_cell_t * ns, nanoclj_cell_t * s
 
 static inline nanoclj_cell_t * def_namespace_with_sym(nanoclj_t *sc, nanoclj_val_t sym, nanoclj_cell_t * md) {
   nanoclj_cell_t * s = get_vector_object(sc, T_HASHMAP, 0);
-  nanoclj_cell_t * ns0 = get_cell(sc, T_NAMESPACE, 0, mk_pointer(s), NULL, md);
-  nanoclj_val_t ns = mk_pointer(ns0);
-    
-  sc->namespaces = tensor_hash_mutate_set(sc->namespaces, hasheq(sym, sc), sc->namespaces->ne[1], sym, ns, sc, hasheq);
-
-  return ns0;
+  nanoclj_cell_t * ns = get_cell(sc, T_NAMESPACE, 0, mk_pointer(s), NULL, md);
+  register_ns(sc, sym, ns);
+  return ns;
 }
 
 static inline nanoclj_cell_t * def_namespace(nanoclj_t * sc, const char *name, const char *file) {
@@ -9133,11 +9090,8 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
 	} else {
 	  s_return(sc, x);
 	}
-	
-      default:
-	Error_0(sc, "Illegal token");
       }
-      break;
+      Error_0(sc, "Illegal token");
     }
     Error_0(sc, "Not a reader");
 
@@ -10574,8 +10528,7 @@ bool nanoclj_init(nanoclj_t * sc) {
   _cdr_unchecked(&(sc->sink)) = NULL;
   _cons_metadata(&(sc->sink)) = NULL;
   
-  sc->namespaces = mk_tensor_hash(2, 2, 16);
-  sc->namespaces->refcnt++;
+  sc->namespaces = get_collection_object(sc, T_HASHMAP, 0, 0, create_tensor_for_type(T_HASHMAP, nanoclj_val, 16), NULL);
 
   assign_syntax(sc, "fn", OP_LAMBDA);
   assign_syntax(sc, "quote", OP_QUOTE);
@@ -10871,7 +10824,7 @@ static void nanoclj_deinit_oblist() {
     tensor_free(g_oblist);
     g_oblist = NULL;
   } else {
-    tensor_free(g_oblist);
+    tensor_release(g_oblist);
   }
   pthread_rwlock_destroy(&g_oblist_rwlock);
 }

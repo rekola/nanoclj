@@ -189,6 +189,7 @@ static void gc_instance(nanoclj_t * sc) {
   if (sc->core_ns) mark(sc->core_ns);
   
   mark(sc->properties);
+  mark(sc->namespaces);
   mark(sc->OutOfMemoryError);
   mark(sc->NullPointerException);
 
@@ -196,18 +197,6 @@ static void gc_instance(nanoclj_t * sc) {
   if (sc->types) {
     for (int64_t i = 0; i < sc->types->ne[0]; i++) {
       mark_value(tensor_get(sc->types, i));
-    }
-  }
-
-  if (sc->namespaces) {
-    int64_t num_buckets = tensor_hash_get_bucket_count(sc->namespaces);
-    for (int64_t offset = 0; offset < num_buckets; offset++) {
-      if (!tensor_hash_is_unassigned(sc->namespaces, offset)) {
-	for (int64_t i = 0; i < sc->namespaces->ne[0]; i++) {
-	  nanoclj_val_t v = tensor_get_2d(sc->namespaces, i, offset);
-	  if (is_cell(v)) mark(decode_pointer(v));
-	}
-      }
     }
   }
 
