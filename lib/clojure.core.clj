@@ -1027,7 +1027,7 @@
 
 (defn ns-publics
   "Returns the refers of ns"
-  [ns] (into {} (filter #( = (:ns (meta (second %))) ns) (first ns))))
+  [ns] (into {} (filter #( and (= (:ns (meta (second %))) ns) (not (:private (meta (second %))))) (first ns))))
 
 (defn ns-name
   "Returns the name of the namespace"
