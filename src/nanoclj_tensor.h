@@ -29,7 +29,9 @@ static inline void tensor_free(nanoclj_tensor_t * tensor) {
 static inline void tensor_release(nanoclj_tensor_t * tensor) {
   if (tensor) {
     if (tensor->refcnt == 0) {
+#if 0
       fprintf(stderr, "invalid refcnt dims = %d, dt = %d, s = %s\n", tensor->n_dims, (int)tensor->type, tensor->sparse_indices ? "yes" : "no");
+#endif
     } else if (--(tensor->refcnt) == 0) {
       tensor_free(tensor);
     }
