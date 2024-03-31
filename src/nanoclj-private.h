@@ -13,7 +13,6 @@
 #define STRBUFFSIZE 256
 
 #include <zlib.h>
-#include <stdatomic.h>
 
 #ifdef __cplusplus
 extern "C" {
