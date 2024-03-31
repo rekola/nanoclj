@@ -9828,12 +9828,12 @@ static inline bool opexe(nanoclj_t * sc, enum nanoclj_opcode op) {
     } else {
       s_return(sc, mk_nil()); /* Not implemented */
     }
-    
-  case OP_FIND_NS:
-    if (!unpack_args_1(sc, &arg0)) {
+
+  case OP_ALL_NS:
+    if (!unpack_args_0(sc)) {
       return false;
     } else {
-      s_return(sc, mk_pointer(find_ns(sc, arg0)));
+      s_return(sc, mk_pointer(sc->namespaces));
     }
     
   case OP_FIND_KEYWORD:

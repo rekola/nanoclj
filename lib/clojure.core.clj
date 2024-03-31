@@ -1005,6 +1005,10 @@
 
 ; Namespaces and classes
 
+(defn find-ns
+  "Returns the namespace with the symbol x or nil"
+  [x] ((-all-ns) x))
+
 (defn ns-resolve
   [ns sym] (if (namespace sym)
              ((first (find-ns (symbol (namespace sym)))) (symbol (name sym)))
@@ -1046,7 +1050,12 @@
              (refer ns-sym)))
 
 (defn refer-clojure
+  "Refers clojure.core"
   [] (refer 'clojure.core))
+
+(defn all-ns
+  "Returns a sequence of all namespaces"
+  [] (reduce #(if (isa? clojure.lang.Namespace (second %2)) (conj %1 (second %2)) %1) '() (-all-ns)))
 
 ; Macros
 
