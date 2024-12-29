@@ -3,6 +3,8 @@
 
 struct nanoclj_cell_t;
 typedef struct nanoclj_cell_t nanoclj_cell_t;
+typedef struct nanoclj_tensor_s nanoclj_tensor_t;
+typedef struct nanoclj_graph_array_s nanoclj_graph_array_t;
 
 #define NANOCLJ_MAX_DIMS 3
 
@@ -120,9 +122,5 @@ typedef struct {
 typedef struct {
   size_t num_rows, num_columns;
 } nanoclj_table_t;
-
-typedef struct nanoclj_tensor_s nanoclj_tensor_t;
-
-typedef struct nanoclj_graph_array_s nanoclj_graph_array_t;
 
 #endif
