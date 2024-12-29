@@ -73,41 +73,9 @@ extern "C" {
     nanoclj_color_t fg;
     nanoclj_color_t bg;
   } nanoclj_term_state_t;
-  
-  typedef union {
-    struct {
-      FILE *file;
-      char *filename;
-      atomic_int *rc;
-      nanoclj_display_mode_t mode;
-      nanoclj_color_t fg;
-      nanoclj_color_t bg;
-      int32_t num_states;
-      nanoclj_term_state_t states[256];
-      int32_t backchars[2];
-      int window_lines, window_columns, window_width, window_height;
-      float window_scale_factor;
-    } stdio;
-    struct {
-      size_t read_pos;
-      nanoclj_tensor_t * data;
-    } string;
-    struct {
-      void (*text) (const char *, size_t, void*);
-      void (*color) (double r, double g, double b, void*);
-      void (*restore) (void*);
-      void (*image) (imageview_t, void*);
-    } callback;
-    struct {
-      z_stream strm;
-    } z;
-    struct {
-      void * impl;
-      nanoclj_tensor_t * data;
-      float window_scale_factor;
-    } canvas;
-  } nanoclj_port_rep_t;
 
+  typedef union nanoclj_port_rep nanoclj_port_rep_t;
+  
 /* cell structure */
   struct nanoclj_cell_t {
     uint32_t hasheq;

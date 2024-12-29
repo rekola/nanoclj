@@ -5,6 +5,18 @@
 #include "nanoclj_char.h"
 #include "nanoclj_types.h"
 
+#include <stdatomic.h>
+
+struct nanoclj_tensor_s {
+  int n_dims;
+  int64_t ne[NANOCLJ_MAX_DIMS]; /* number of elements */
+  size_t nb[NANOCLJ_MAX_DIMS + 1]; /* stride in bytes */
+  int64_t * sparse_indices;
+  void * data;
+  nanoclj_tensor_type_t type;
+  atomic_size_t refcnt;
+};
+
 static inline size_t tensor_get_cell_size(nanoclj_tensor_type_t t) {
   switch (t) {
   case nanoclj_boolean: return sizeof(uint8_t);

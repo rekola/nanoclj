@@ -1,9 +1,11 @@
 #ifndef _NANOCLJ_PRIM_H_
 #define _NANOCLJ_PRIM_H_
 
-#include "nanoclj_types.h"
-
 #include <math.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* Masks for NaN packing */
 #define MASK_SIGN		UINT64_C(0x8000)
@@ -49,75 +51,81 @@ static inline bool is_emptylist(nanoclj_val_t v) {
   return v.as_long == kEMPTY;
 }
 
+static inline nanoclj_val_t mk_val_from_long(uint64_t l) {
+  nanoclj_val_t v;
+  v.as_long = l;
+  return v;
+}
+
 static inline nanoclj_val_t mk_nil() {
-  return (nanoclj_val_t)kNIL;
+  return mk_val_from_long(kNIL);  
 }
 
 static inline nanoclj_val_t mk_notfound() {
-  return (nanoclj_val_t)kNOTFOUND;
+  return mk_val_from_long(kNOTFOUND);
 }
 
 static inline nanoclj_val_t mk_byte(int8_t n) {
-  return (nanoclj_val_t)(SIGNATURE_INTEGER | (UINT64_C(0) << 32) | (uint32_t)(int32_t)n);
+  return mk_val_from_long(SIGNATURE_INTEGER | (UINT64_C(0) << 32) | (uint32_t)(int32_t)n);
 }
 
 static inline nanoclj_val_t mk_short(int16_t n) {
-  return (nanoclj_val_t)(SIGNATURE_INTEGER | (UINT64_C(1) << 32) | (uint32_t)(int32_t)n);
+  return mk_val_from_long(SIGNATURE_INTEGER | (UINT64_C(1) << 32) | (uint32_t)(int32_t)n);
 }
 
 static inline nanoclj_val_t mk_int(int32_t num) {
-  return (nanoclj_val_t)(SIGNATURE_INTEGER | (UINT64_C(2) << 32) | (uint32_t)num);
+  return mk_val_from_long(SIGNATURE_INTEGER | (UINT64_C(2) << 32) | (uint32_t)num);
 }
 
 static inline nanoclj_val_t mk_long_prim(int32_t num) {
-  return (nanoclj_val_t)(SIGNATURE_INTEGER | (UINT64_C(3) << 32) | (uint32_t)num);
+  return mk_val_from_long(SIGNATURE_INTEGER | (UINT64_C(3) << 32) | (uint32_t)num);
 }
 
 /* Creates a primitive for utf8 codepoint */
 static inline nanoclj_val_t mk_codepoint(int c) {
-  return (nanoclj_val_t)(SIGNATURE_CODEPOINT | (uint32_t)c);
+  return mk_val_from_long(SIGNATURE_CODEPOINT | (uint32_t)c);
 }
 
 static inline nanoclj_val_t mk_proc(uint32_t op) {
-  return (nanoclj_val_t)(SIGNATURE_PROC | op);
+  return mk_val_from_long(SIGNATURE_PROC | op);
 }
 
 static inline nanoclj_val_t mk_emptylist() {
-  return (nanoclj_val_t)SIGNATURE_EMPTYLIST;
+  return mk_val_from_long(SIGNATURE_EMPTYLIST);
 }
 
 static inline nanoclj_val_t mk_boolean(bool b) {
-  nanoclj_val_t v;
-  v.as_long = b ? kTRUE : kFALSE;
-  return v;
+  return mk_val_from_long(b ? kTRUE : kFALSE);
 }
 
-static inline nanoclj_val_t mk_double(double n) {
-  return (nanoclj_val_t)n;
+static inline nanoclj_val_t mk_double(double d) {
+  nanoclj_val_t v;
+  v.as_double = d;
+  return v;
 }
 
 static inline nanoclj_val_t mk_pointer(const nanoclj_cell_t * ptr) {
   if (ptr) {
-    return (nanoclj_val_t)(SIGNATURE_CELL | (uint64_t)ptr);
+    return mk_val_from_long(SIGNATURE_CELL | (uint64_t)ptr);
   } else {
     return mk_nil();
   }
 }
 
 static inline nanoclj_val_t mk_symbol_pointer(void * ptr) {
-  return (nanoclj_val_t)(SIGNATURE_SYMBOL | (uint64_t)ptr);
+  return mk_val_from_long(SIGNATURE_SYMBOL | (uint64_t)ptr);
 }
 
 static inline nanoclj_val_t mk_keyword_pointer(void * ptr) {
-  return (nanoclj_val_t)(SIGNATURE_KEYWORD | (uint64_t)ptr);
+  return mk_val_from_long(SIGNATURE_KEYWORD | (uint64_t)ptr);
 }
 
 static inline nanoclj_val_t mk_alias_pointer(void * ptr) {
-  return (nanoclj_val_t)(SIGNATURE_ALIAS | (uint64_t)ptr);
+  return mk_val_from_long(SIGNATURE_ALIAS | (uint64_t)ptr);
 }
 
 static inline nanoclj_val_t mk_regex_pointer(void * ptr) {
-  return (nanoclj_val_t)(SIGNATURE_REGEX | (uint64_t)ptr);
+  return mk_val_from_long(SIGNATURE_REGEX | (uint64_t)ptr);
 }
 
 static inline nanoclj_val_t mk_list(const nanoclj_cell_t * ptr) {
@@ -165,4 +173,7 @@ static inline bool is_found(nanoclj_val_t v) {
   return v.as_long != kNOTFOUND;
 }
 
+#ifdef __cplusplus
+}
+#endif
 #endif

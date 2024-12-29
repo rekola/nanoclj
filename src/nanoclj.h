@@ -78,7 +78,6 @@ extern "C" {
   nanoclj_val_t mk_boolean(nanoclj_t * sc, int v);
   nanoclj_val_t mk_integer(nanoclj_t * sc, long long num);
   nanoclj_val_t mk_double(nanoclj_t * sc, double num);
-  nanoclj_val_t mk_symbol(nanoclj_t * sc, const char *name);
   nanoclj_val_t gensym(nanoclj_t * sc);
   nanoclj_val_t mk_string(nanoclj_t * sc, const char *str);
   nanoclj_val_t mk_codepoint(nanoclj_t * sc, int c);
@@ -96,7 +95,6 @@ extern "C" {
     nanoclj_val_t (*mk_codepoint) (int c);
     nanoclj_val_t (*mk_vector) (nanoclj_t * sc, size_t len);
     nanoclj_val_t (*mk_foreign_func) (nanoclj_t * sc, foreign_func f, int min_arity, int max_arity, nanoclj_cell_t * meta);
-    nanoclj_val_t (*mk_boolean) (bool b);
     
     bool (*is_string) (nanoclj_val_t p);
     strview_t (*to_strview) (nanoclj_val_t p);

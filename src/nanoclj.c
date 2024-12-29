@@ -203,6 +203,47 @@ typedef struct {
   int fd;
 } http_load_t;
 
+union nanoclj_port_rep {
+  struct {
+    FILE *file;
+    char *filename;
+    atomic_int *rc;
+    nanoclj_display_mode_t mode;
+    nanoclj_color_t fg;
+    nanoclj_color_t bg;
+    int32_t num_states;
+    nanoclj_term_state_t states[256];
+    int32_t backchars[2];
+    int window_lines, window_columns, window_width, window_height;
+    float window_scale_factor;
+  } stdio;
+  struct {
+    size_t read_pos;
+    nanoclj_tensor_t * data;
+  } string;
+  struct {
+    void (*text) (const char *, size_t, void*);
+    void (*color) (double r, double g, double b, void*);
+    void (*restore) (void*);
+    void (*image) (imageview_t, void*);
+  } callback;
+  struct {
+    z_stream strm;
+  } z;
+  struct {
+    void * impl;
+    nanoclj_tensor_t * data;
+    float window_scale_factor;
+  } canvas;
+};
+
+struct nanoclj_graph_array_s {
+  atomic_size_t refcnt;
+  uint32_t num_nodes, num_edges, reserved_nodes, reserved_edges;
+  nanoclj_node_t * nodes;
+  nanoclj_edge_t * edges;
+};
+
 #define T_NEGATIVE     128	/* 000000001yyxxxxx */
 #define T_TYPE	       256	/* 000000010yyxxxxx */
 
@@ -388,7 +429,7 @@ static inline uint32_t get_interned_hash(uint_fast16_t t, strview_t ns, strview_
   }
 }
 
-static inline nanoclj_val_t mk_symbol(uint16_t t, strview_t ns, strview_t name, int_fast16_t syntax) {
+static inline nanoclj_val_t mk_symbol_object(uint16_t t, strview_t ns, strview_t name, int_fast16_t syntax) {
   char * ns_str = malloc(ns.size);
   memcpy(ns_str, ns.ptr, ns.size);
 
@@ -4143,7 +4184,7 @@ static inline nanoclj_val_t def_symbol_from_sv(uint16_t t, strview_t ns, strview
   /* first check oblist */
   nanoclj_val_t x = oblist_find_item(t, ns, name);
   if (is_nil(x)) {
-    x = oblist_add_item(mk_symbol(t, ns, name, 0));
+    x = oblist_add_item(mk_symbol_object(t, ns, name, 0));
     if (ns.size || t == T_KEYWORD) {
       symbol_t * s = decode_symbol(x);
       s->ns_sym = def_symbol_from_sv(T_SYMBOL, mk_strview(0), ns);
@@ -4434,7 +4475,7 @@ static inline nanoclj_val_t gensym(nanoclj_t * sc, strview_t prefix) {
     strview_t name_sv = { sc->strbuff, len };
     nanoclj_val_t x = oblist_find_item(T_SYMBOL, ns_sv, name_sv);
     if (is_nil(x)) {
-      return oblist_add_item(mk_symbol(T_SYMBOL, ns_sv, name_sv, 0));
+      return oblist_add_item(mk_symbol_object(T_SYMBOL, ns_sv, name_sv, 0));
     }
   }
 }
@@ -10260,7 +10301,7 @@ static void Eval_Cycle(nanoclj_t * sc, enum nanoclj_opcode op) {
 static inline void assign_syntax(nanoclj_t * sc, const char *name, unsigned int syntax) {
   strview_t ns_sv = mk_strview(0);
   strview_t name_sv = { name, strlen(name) };
-  oblist_add_item(mk_symbol(T_SYMBOL, ns_sv, name_sv, syntax));
+  oblist_add_item(mk_symbol_object(T_SYMBOL, ns_sv, name_sv, syntax));
 }
 
 static inline void assign_proc(nanoclj_t * sc, nanoclj_cell_t * ns, enum nanoclj_opcode op, opcode_info * i) {
@@ -10351,7 +10392,6 @@ static struct nanoclj_interface vtbl = {
   mk_codepoint,
   nanoclj_mk_vector,
   mk_foreign_func,
-  mk_boolean,
 
   is_string,
   to_strview,

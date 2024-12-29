@@ -1,8 +1,6 @@
 #ifndef _NANOCLJ_TYPES_H_
 #define _NANOCLJ_TYPES_H_
 
-#include <stdatomic.h>
-
 struct nanoclj_cell_t;
 typedef struct nanoclj_cell_t nanoclj_cell_t;
 
@@ -32,16 +30,6 @@ typedef enum {
   nanoclj_bgr8_32,
   nanoclj_bgra8
 } nanoclj_internal_format_t;
-
-typedef struct {
-  int n_dims;
-  int64_t ne[NANOCLJ_MAX_DIMS]; /* number of elements */
-  size_t nb[NANOCLJ_MAX_DIMS + 1]; /* stride in bytes */
-  int64_t * sparse_indices;
-  void * data;
-  nanoclj_tensor_type_t type;
-  atomic_size_t refcnt;
-} nanoclj_tensor_t;
 
 typedef struct {
   nanoclj_tensor_t * tensor;
@@ -130,14 +118,11 @@ typedef struct {
 } nanoclj_edge_t;
 
 typedef struct {
-  atomic_size_t refcnt;
-  uint32_t num_nodes, num_edges, reserved_nodes, reserved_edges;
-  nanoclj_node_t * nodes;
-  nanoclj_edge_t * edges;
-} nanoclj_graph_array_t;
-
-typedef struct {
   size_t num_rows, num_columns;
 } nanoclj_table_t;
+
+typedef struct nanoclj_tensor_s nanoclj_tensor_t;
+
+typedef struct nanoclj_graph_array_s nanoclj_graph_array_t;
 
 #endif
