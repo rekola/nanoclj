@@ -94,10 +94,10 @@ Interpreter::eval(const std::string & expression) {
 
 void
 Interpreter::print_value(nanoclj_val_t v) {
-  nanoclj_cell_t * q = sc_->vptr->cons(sc_, sc_->QUOTE, sc_->vptr->cons(sc_, v, NULL));
+  nanoclj_cell_t * q = sc_->vptr->cons(sc_, sc_->vptr->def_symbol("quote"), sc_->vptr->cons(sc_, v, NULL));
   nanoclj_cell_t * c =
     sc_->vptr->cons(sc_,
-		    sc_->vptr->def_symbol(sc_, "prn"),
+		    sc_->vptr->def_symbol("prn"),
 		    sc_->vptr->cons(sc_, mk_pointer(q), NULL));
   nanoclj_eval(sc_, mk_pointer(c));
   if (sc_->pending_exception) {
